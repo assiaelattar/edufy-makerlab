@@ -1,0 +1,964 @@
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car } from 'lucide-react';
+import { AppProvider, useAppContext } from './context/AppContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider, useNotifications } from './context/NotificationContext';
+import { getEnabledModules } from './services/moduleRegistry';
+import { DashboardView } from './views/DashboardView';
+import { StudentsView } from './views/StudentsView';
+import { ClassesView } from './views/ClassesView';
+import { ProgramsView } from './views/ProgramsView';
+import { FinanceView } from './views/FinanceView';
+import { ExpensesView } from './views/ExpensesView';
+import { ToolsView } from './views/ToolsView';
+import { SettingsView } from './views/SettingsView';
+import { StudentDetailsView } from './views/StudentDetailsView';
+import { ActivityDetailsView } from './views/ActivityDetailsView';
+import { WorkshopsView } from './views/WorkshopsView';
+import { PublicBookingView } from './views/PublicBookingView';
+import { AbsenceView } from './views/AbsenceView';
+import { TeamView } from './views/TeamView';
+import { MarketingView } from './views/MarketingView';
+import { LearningView } from './views/LearningView';
+import { ToolkitView } from './views/ToolkitView';
+import { MediaView } from './views/MediaView';
+import { PickupView } from './views/PickupView';
+import { ParentDashboardView } from './views/ParentDashboardView';
+import { TestDesignView } from './views/TestDesignView';
+import { LoginView } from './views/LoginView';
+import { Modal } from './components/Modal';
+import { Logo } from './components/Logo';
+import { NotificationDropdown } from './components/NotificationDropdown';
+import { DevRoleSwitcher } from './components/DevRoleSwitcher';
+import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'firebase/firestore';
+import { db } from './services/firebase';
+import { formatCurrency, compressImage, calculateAge } from './utils/helpers';
+import { getStudentTheme } from './utils/theme';
+
+const StudentNavigation = ({ currentView, navigateTo, theme, signOut }: { currentView: string, navigateTo: any, theme: any, signOut: any }) => {
+    const menuItems = [
+        { id: 'dashboard', icon: Home, label: 'Lobby' },
+        { id: 'learning', icon: BookOpen, label: 'Studio' },
+        { id: 'toolkit', icon: Box, label: 'Toolbox' },
+        { id: 'media', icon: Camera, label: 'Gallery' },
+    ];
+
+    return (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
+            <div className={`
+                ${theme.bgCard} ${theme.rounded} p-2 shadow-2xl flex justify-between items-center border border-white/10 backdrop-blur-xl
+            `}>
+                {menuItems.map(item => {
+                    const isActive = currentView === item.id;
+                    const Icon = item.icon;
+                    return (
+                        <button
+                            key={item.id}
+                            onClick={() => navigateTo(item.id)}
+                            className={`
+                                flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-300 w-16
+                                ${isActive ? theme.primaryColor + ' bg-white/10 scale-110' : 'text-slate-500 hover:text-slate-300'}
+                            `}
+                        >
+                            <Icon size={isActive ? 28 : 24} strokeWidth={isActive ? 2.5 : 2} />
+                            {isActive && <span className="text-[9px] font-bold mt-1 uppercase tracking-wide">{item.label}</span>}
+                        </button>
+                    )
+                })}
+
+                {/* Settings / Logout Mini Menu */}
+                <button onClick={() => navigateTo('settings')} className="flex flex-col items-center justify-center p-3 rounded-xl text-slate-600 hover:text-slate-400 w-16">
+                    <Settings size={22} />
+                </button>
+            </div>
+        </div>
+    );
+}
+
+const AppContent = () => {
+    const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, t } = useAppContext();
+    const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser } = useAuth();
+    const { requestPermission } = useNotifications();
+
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // --- STUDENT THEME LOGIC ---
+    const isStudent = userProfile?.role === 'student';
+    const isParent = userProfile?.role === 'parent';
+
+    const currentStudent = useMemo(() => {
+        if (!isStudent || !userProfile) return null;
+        return students.find(s => s.email === userProfile.email || s.loginInfo?.email === userProfile.email);
+    }, [students, userProfile, isStudent]);
+
+    const studentAge = useMemo(() => currentStudent ? calculateAge(currentStudent.birthDate) : 12, [currentStudent]);
+    const studentTheme = getStudentTheme(studentAge);
+
+    // --- ENROLLMENT WIZARD STATE ---
+    const [isEnrollmentModalOpen, setIsEnrollmentModalOpen] = useState(false);
+    const [quickEnrollStudentId, setQuickEnrollStudentId] = useState<string | null>(null);
+    const [enrollmentStep, setEnrollmentStep] = useState(1);
+    const [isSubmittingEnrollment, setIsSubmittingEnrollment] = useState(false);
+
+    // --- PAYMENT MODAL STATE ---
+    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+    const [paymentForm, setPaymentForm] = useState({
+        studentId: '',
+        enrollmentId: '',
+        amount: 0,
+        method: 'cash' as 'cash' | 'check' | 'virement',
+        date: new Date().toISOString().split('T')[0],
+        // Check specific
+        checkNumber: '',
+        bankName: '',
+        depositDate: '',
+        // Virement specific
+        proofUrl: '' // Base64 string
+    });
+    const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+    const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // --- ENROLLMENT FORM DATA ---
+    const [enrollStudentForm, setEnrollStudentForm] = useState({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
+    const [enrollProgramForm, setEnrollProgramForm] = useState({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '' });
+    const [negotiatedPrice, setNegotiatedPrice] = useState<number>(0);
+
+    // Multi-Payment State for Enrollment
+    const [enrollPayments, setEnrollPayments] = useState<any[]>([]);
+    const [currentEnrollPayment, setCurrentEnrollPayment] = useState({
+        amount: '',
+        method: 'cash',
+        checkNumber: '',
+        bankName: '',
+        depositDate: '',
+        date: new Date().toISOString().split('T')[0]
+    });
+
+    // Helper to get selected program details for enrollment
+    const selectedProgram = useMemo(() => programs.find(p => p.id === enrollProgramForm.programId), [programs, enrollProgramForm.programId]);
+    const selectedPack = useMemo(() => selectedProgram?.packs.find(p => p.name === enrollProgramForm.packName), [selectedProgram, enrollProgramForm.packName]);
+    const selectedGrade = useMemo(() => selectedProgram?.grades.find(g => g.id === enrollProgramForm.gradeId), [selectedProgram, enrollProgramForm.gradeId]);
+
+    const standardTuition = useMemo(() => {
+        if (!selectedProgram || !selectedPack) return 0;
+        return selectedProgram.type === 'Regular Program' ? (selectedPack.priceAnnual || 0) : (selectedPack.price || 0);
+    }, [selectedProgram, selectedPack]);
+
+    // Sync negotiated price with standard price when pack changes
+    useEffect(() => {
+        setNegotiatedPrice(standardTuition);
+    }, [standardTuition]);
+
+    // Initialize Enrollment Wizard
+    useEffect(() => {
+        if (isEnrollmentModalOpen) {
+            setEnrollmentStep(quickEnrollStudentId ? 2 : 1);
+            setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
+            setEnrollProgramForm({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '' });
+            setEnrollPayments([]);
+            setCurrentEnrollPayment({ amount: '', method: 'cash', checkNumber: '', bankName: '', depositDate: '', date: new Date().toISOString().split('T')[0] });
+        }
+    }, [isEnrollmentModalOpen, quickEnrollStudentId]);
+
+    // Calculate totals from added payments list
+    const totalPayingNow = useMemo(() => enrollPayments.reduce((sum, p) => sum + Number(p.amount), 0), [enrollPayments]);
+
+    const remainingBalance = negotiatedPrice - totalPayingNow;
+    const discountAmount = standardTuition - negotiatedPrice;
+    const discountPercent = standardTuition > 0 ? Math.round((discountAmount / standardTuition) * 100) : 0;
+
+    // --- PAYMENT HANDLERS ---
+
+    const handleOpenPaymentModal = (studentId?: string) => {
+        setPaymentForm({
+            studentId: studentId || '',
+            enrollmentId: '',
+            amount: 0,
+            method: 'cash',
+            date: new Date().toISOString().split('T')[0],
+            checkNumber: '',
+            bankName: '',
+            depositDate: '',
+            proofUrl: ''
+        });
+
+        // If student provided, try to find active enrollment
+        if (studentId) {
+            const activeEnrollment = enrollments.find(e => e.studentId === studentId && e.status === 'active');
+            if (activeEnrollment) {
+                setPaymentForm(prev => ({
+                    ...prev,
+                    studentId,
+                    enrollmentId: activeEnrollment.id,
+                    amount: activeEnrollment.balance // Pre-fill remaining balance
+                }));
+            }
+        } else {
+            setPaymentSearchQuery('');
+        }
+
+        setIsPaymentModalOpen(true);
+    };
+
+    const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const compressed = await compressImage(file);
+            setPaymentForm(prev => ({ ...prev, proofUrl: compressed }));
+        } catch (err) {
+            console.error(err);
+            alert("Error uploading proof.");
+        }
+    };
+
+    const handleSubmitPayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!db) return;
+        if (!paymentForm.enrollmentId) { alert("Please select a student/enrollment"); return; }
+
+        setIsSubmittingPayment(true);
+        try {
+            const enrollment = enrollments.find(e => e.id === paymentForm.enrollmentId);
+            if (!enrollment) throw new Error("Enrollment not found");
+
+            // Determine Status based on Method
+            let status = 'paid'; // Default for Cash
+            if (paymentForm.method === 'check') status = 'check_received';
+            if (paymentForm.method === 'virement') status = 'pending_verification';
+
+            // Record Payment
+            await addDoc(collection(db, 'payments'), {
+                enrollmentId: paymentForm.enrollmentId,
+                studentName: enrollment.studentName,
+                amount: Number(paymentForm.amount),
+                date: paymentForm.date,
+                method: paymentForm.method,
+                status: status,
+                // Optional fields based on method
+                checkNumber: paymentForm.method === 'check' ? paymentForm.checkNumber : null,
+                bankName: paymentForm.method === 'check' ? paymentForm.bankName : null,
+                depositDate: paymentForm.method === 'check' ? paymentForm.depositDate : null,
+                proofUrl: paymentForm.method === 'virement' ? paymentForm.proofUrl : null,
+
+                session: settings.academicYear, // Tag with Current Session
+                createdAt: serverTimestamp()
+            });
+
+            // IMPORTANT: Only update balance immediately if CASH.
+            // Checks and Virements update balance when status changes to 'paid'/'verified'.
+            if (status === 'paid') {
+                const newPaid = (enrollment.paidAmount || 0) + Number(paymentForm.amount);
+                const newBalance = (enrollment.totalAmount || 0) - newPaid;
+
+                await updateDoc(doc(db, 'enrollments', enrollment.id), {
+                    paidAmount: newPaid,
+                    balance: newBalance
+                });
+            }
+
+            setIsPaymentModalOpen(false);
+            alert("Payment recorded successfully!");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to record payment");
+        } finally {
+            setIsSubmittingPayment(false);
+        }
+    };
+
+    // --- ENROLLMENT HANDLER ---
+    const handleAddEnrollmentPayment = () => {
+        if (!currentEnrollPayment.amount || Number(currentEnrollPayment.amount) <= 0) return;
+        setEnrollPayments([...enrollPayments, { ...currentEnrollPayment, id: Date.now() }]);
+        // Reset form
+        setCurrentEnrollPayment({
+            amount: '',
+            method: 'cash',
+            checkNumber: '',
+            bankName: '',
+            depositDate: '',
+            date: new Date().toISOString().split('T')[0]
+        });
+    };
+
+    const handleRemoveEnrollmentPayment = (id: number) => {
+        setEnrollPayments(enrollPayments.filter(p => p.id !== id));
+    };
+
+    const handleFinishEnrollment = async () => {
+        if (!db) return;
+        setIsSubmittingEnrollment(true);
+        try {
+            let finalStudentId = quickEnrollStudentId;
+            let studentName = enrollStudentForm.name;
+
+            // 1. Create Student if New
+            if (!finalStudentId) {
+                const sRef = await addDoc(collection(db, 'students'), {
+                    ...enrollStudentForm,
+                    status: 'active',
+                    createdAt: serverTimestamp()
+                });
+                finalStudentId = sRef.id;
+            } else {
+                // If quick enrolling existing student, fetch name
+                const existingStudent = students.find(s => s.id === finalStudentId);
+                if (existingStudent) studentName = existingStudent.name;
+            }
+
+            // 1.5 Generate Student Account (Auto-Provisioning)
+            try {
+                // NAME PARSING LOGIC FOR CUSTOM EMAIL
+                const names = studentName.trim().split(' ');
+                const firstNameChar = names[0].charAt(0).toLowerCase();
+                const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
+
+                // Format: w.fakir@makerlab.academy
+                const username = `${firstNameChar}.${lastName}`;
+                const email = `${username}@makerlab.academy`;
+                const password = Math.random().toString(36).slice(-6);
+
+                // Create Auth User
+                const uid = await createSecondaryUser(email, password);
+
+                // Create User Profile Doc
+                await setDoc(doc(db, 'users', uid), {
+                    uid,
+                    email,
+                    name: studentName,
+                    role: 'student',
+                    status: 'active',
+                    createdAt: serverTimestamp()
+                });
+
+                // Link credentials to Student Doc
+                await updateDoc(doc(db, 'students', finalStudentId), {
+                    loginInfo: {
+                        username,
+                        email,
+                        initialPassword: password, // Store initially for printing cards
+                        uid
+                    }
+                });
+
+            } catch (e) {
+                console.error("Failed to auto-generate student account:", e);
+                // Proceed with enrollment even if account gen fails
+            }
+
+            // 2. Create Enrollment
+            const selectedGroup = selectedGrade?.groups.find(g => g.id === enrollProgramForm.groupId);
+
+            // Handle Second Group (DIY)
+            let secondGroupData = {};
+            if (enrollProgramForm.secondGroupId) {
+                const diyGrade = selectedProgram?.grades.find(g => g.groups.some(grp => grp.id === enrollProgramForm.secondGroupId));
+                const diyGroup = diyGrade?.groups.find(g => g.id === enrollProgramForm.secondGroupId);
+                if (diyGroup) {
+                    secondGroupData = {
+                        secondGroupId: diyGroup.id,
+                        secondGroupName: diyGroup.name,
+                        secondGroupTime: `${diyGroup.day} ${diyGroup.time}`
+                    };
+                }
+            }
+
+            // Calculate Initial Paid Amount (Only CASH counts as cleared immediately)
+            const initialCleared = enrollPayments
+                .filter(p => p.method === 'cash')
+                .reduce((sum, p) => sum + Number(p.amount), 0);
+
+            const enrollmentRef = await addDoc(collection(db, 'enrollments'), {
+                studentId: finalStudentId,
+                studentName: studentName,
+                programId: selectedProgram?.id,
+                programName: selectedProgram?.name,
+                packName: selectedPack?.name,
+                gradeId: selectedGrade?.id,
+                gradeName: selectedGrade?.name,
+                groupId: selectedGroup?.id,
+                groupName: selectedGroup?.name,
+                groupTime: selectedGroup ? `${selectedGroup.day} ${selectedGroup.time}` : null,
+                ...secondGroupData,
+                paymentPlan: enrollProgramForm.paymentPlan,
+                totalAmount: negotiatedPrice, // Use the Negotiated Price
+                discountAmount: discountAmount > 0 ? discountAmount : 0, // Store discount
+                paidAmount: initialCleared,
+                balance: negotiatedPrice - initialCleared,
+                status: 'active',
+                startDate: new Date().toISOString(),
+                session: settings.academicYear, // Tag with Current Session
+                createdAt: serverTimestamp()
+            });
+
+            // 3. Record All Payments
+            for (const p of enrollPayments) {
+                await addDoc(collection(db, 'payments'), {
+                    enrollmentId: enrollmentRef.id,
+                    studentName: studentName,
+                    amount: Number(p.amount),
+                    date: p.date || new Date().toISOString(),
+                    method: p.method,
+                    checkNumber: p.checkNumber || null,
+                    bankName: p.bankName || null,
+                    depositDate: p.depositDate || null,
+                    status: p.method === 'cash' ? 'paid' : 'check_received',
+                    session: settings.academicYear,
+                    createdAt: serverTimestamp()
+                });
+            }
+
+            setIsEnrollmentModalOpen(false);
+            alert("Enrollment Successful! Student account created.");
+        } catch (err) {
+            console.error(err);
+            alert("Error processing enrollment.");
+        } finally {
+            setIsSubmittingEnrollment(false);
+        }
+    };
+
+    // Permission-based Module Filtering
+    const modules = getEnabledModules().filter(m => !m.requiredPermission || can(m.requiredPermission));
+
+    // Routing
+    if (window.location.search.includes('mode=booking')) return <PublicBookingView />;
+    if (authLoading || appLoading || (user && !userProfile)) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+    if (!user) return <LoginView />;
+
+    const renderView = () => {
+        switch (currentView) {
+            case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
+            case 'students': return <StudentsView onAddStudent={() => { setQuickEnrollStudentId(null); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setQuickEnrollStudentId(id || null); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
+            case 'classes': return <ClassesView />;
+            case 'programs': return <ProgramsView />;
+            case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;
+            case 'expenses': return <ExpensesView />;
+            case 'tools': return <ToolsView />;
+            case 'settings': return <SettingsView />;
+            case 'student-details': return <StudentDetailsView onEditStudent={() => { }} onQuickEnroll={(id) => { setQuickEnrollStudentId(id); setIsEnrollmentModalOpen(true); }} onRecordPayment={(id) => handleOpenPaymentModal(id)} />;
+            case 'activity-details': return <ActivityDetailsView />;
+            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setIsEnrollmentModalOpen(true); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); }} />;
+            case 'attendance': return <AbsenceView />;
+            case 'team': return <TeamView />;
+            case 'marketing': return <MarketingView />;
+            case 'learning': return <LearningView />;
+            case 'toolkit': return <ToolkitView />;
+            case 'media': return <MediaView />;
+            case 'pickup': return <PickupView />;
+            case 'parent-dashboard': return <ParentDashboardView />;
+            case 'test-design': return <TestDesignView />;
+            default: return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
+        }
+    };
+
+    // --- PARENT LAYOUT ---
+    if (isParent) {
+        return (
+            <div className="min-h-[100dvh] bg-slate-50 text-slate-800 font-sans selection:bg-indigo-500/30">
+                <ParentDashboardView />
+            </div>
+        );
+    }
+
+    // --- STUDENT LAYOUT ---
+    if (isStudent) {
+        return (
+            <div className="flex h-[100dvh] bg-slate-50 font-sans overflow-hidden selection:bg-[#FFC107]/30">
+                {/* Desktop Sidebar */}
+                <aside className="hidden md:flex w-64 bg-[#2D2B6B] flex-col text-white shrink-0 rounded-r-[3rem] relative z-20 shadow-2xl">
+                    {/* User Profile */}
+                    <div className="p-8 pb-4">
+                        <div className="flex items-center gap-3 bg-[#3D3B7B] p-2 rounded-full pr-6 w-max border border-white/10">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFC107] to-amber-600 flex items-center justify-center text-[#2D2B6B] font-black border-2 border-white">
+                                {userProfile?.name?.charAt(0) || 'S'}
+                            </div>
+                            <span className="font-medium text-sm truncate max-w-[100px]">{userProfile?.name?.split(' ')[0]}</span>
+                        </div>
+                    </div>
+
+                    {/* Navigation */}
+                    <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto custom-scrollbar">
+                        {[
+                            { id: 'dashboard', icon: Home, label: 'Lobby' },
+                            { id: 'learning', icon: BookOpen, label: 'Studio' },
+                            { id: 'toolkit', icon: Box, label: 'Toolbox' },
+                            { id: 'media', icon: Camera, label: 'Gallery' },
+                        ].map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => navigateTo(item.id as ViewState)}
+                                className={`w-full flex items-center gap-4 px-6 py-4 rounded-l-full transition-all relative group ${currentView === item.id
+                                    ? 'bg-[#FFC107] text-[#2D2B6B] font-bold translate-x-4 shadow-lg'
+                                    : 'text-slate-300 hover:text-white hover:bg-white/5'
+                                    }`}
+                            >
+                                <item.icon size={20} strokeWidth={currentView === item.id ? 2.5 : 2} className="shrink-0" />
+                                <span className="truncate">{item.label}</span>
+                                {currentView === item.id && (
+                                    <div className="absolute right-4 w-2 h-2 rounded-full bg-[#2D2B6B] animate-pulse" />
+                                )}
+                            </button>
+                        ))}
+                    </nav>
+
+                    {/* Bottom Actions */}
+                    <div className="p-6 mt-auto space-y-2">
+                        <button onClick={() => navigateTo('settings')} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm font-medium">
+                            <Settings size={18} /> Settings
+                        </button>
+                        <button onClick={signOut} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-sm font-medium">
+                            <LogOut size={18} /> Sign Out
+                        </button>
+                    </div>
+                </aside>
+
+                {/* Main Content Area */}
+                <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+                    {/* Mobile Header */}
+                    <header className="md:hidden p-4 flex justify-between items-center bg-[#2D2B6B] text-white shrink-0 z-30 shadow-lg rounded-b-3xl mx-2 mt-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-[#FFC107] flex items-center justify-center text-[#2D2B6B] font-bold">
+                                {settings.academyName.charAt(0)}
+                            </div>
+                            <span className="font-bold">{settings.academyName}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <NotificationDropdown />
+                            <button onClick={signOut} className="p-2 text-slate-300 hover:text-white"><LogOut size={20} /></button>
+                        </div>
+                    </header>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 pb-32 md:pb-8">
+                        <div className="max-w-6xl mx-auto">
+                            {renderView()}
+                        </div>
+                    </div>
+
+                    {/* Mobile Bottom Dock (Hidden on Desktop) */}
+                    <div className="md:hidden">
+                        <StudentNavigation currentView={currentView} navigateTo={navigateTo} theme={studentTheme} signOut={signOut} />
+                    </div>
+                </main>
+            </div>
+        );
+    }
+
+    // --- ADMIN LAYOUT (Standard) ---
+    return (
+        <div className="flex min-h-[100dvh] bg-slate-950 text-slate-200 font-sans">
+            {/* Mobile Overlay */}
+            {isMobileMenuOpen && <div className="fixed inset-0 bg-black/80 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />}
+
+            {/* Sidebar */}
+            <aside className={`fixed md:sticky top-0 left-0 z-50 h-full w-72 bg-slate-900 border-r border-slate-800 transform transition-transform duration-300 ease-out shadow-2xl ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+                <div className="flex flex-col h-full">
+                    <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-950 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg border border-slate-800 overflow-hidden">
+                            {settings.logoUrl ? <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" /> : <Logo className="w-8 h-8" />}
+                        </div>
+                        <div>
+                            <h1 className="font-bold text-white leading-tight truncate max-w-[160px]">{settings.academyName}</h1>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Academy ERP</p>
+                        </div>
+                        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden ml-auto text-slate-400"><X size={24} /></button>
+                    </div>
+
+                    <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
+                        {modules.map(module => (
+                            <button
+                                key={module.id}
+                                onClick={() => { navigateTo(module.id); setIsMobileMenuOpen(false); }}
+                                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${currentView === module.id ? `bg-${module.color}-950/30 text-${module.color}-400 border border-${module.color}-900/50 shadow-lg` : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                            >
+                                <module.icon className={`w-5 h-5 transition-colors ${currentView === module.id ? `text-${module.color}-400` : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                {t(`menu.${module.id}`) || module.label}
+                            </button>
+                        ))}
+                    </nav>
+
+                    <div className="p-4 border-t border-slate-800 bg-slate-950/30">
+                        <div className="flex justify-end mb-2 px-2"><NotificationDropdown /></div>
+                        <div className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-slate-900/50 p-2 rounded-lg transition-colors">
+                            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-slate-300">
+                                {userProfile?.name?.charAt(0) || user.email?.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold text-white truncate">{userProfile?.name || 'User'}</div>
+                                <div className="text-xs text-slate-500 truncate capitalize">{userProfile?.role.replace('_', ' ')}</div>
+                            </div>
+                        </div>
+                        <button onClick={signOut} className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-red-400 hover:bg-slate-800 text-xs font-medium"><LogOut size={14} /> {t('menu.signout')}</button>
+                        <button onClick={() => navigateTo('test-design')} className="w-full mt-2 p-2 rounded-lg bg-indigo-900/50 text-indigo-400 text-xs font-bold border border-indigo-500/30 hover:bg-indigo-900 hover:text-white transition-colors">🎨 Test Design</button>
+                    </div>
+                </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 min-w-0 flex flex-col h-[100dvh] overflow-hidden">
+                <header className="md:hidden bg-slate-900 border-b border-slate-800 p-4 flex items-center justify-between shrink-0 sticky top-0 z-30 pt-safe-top">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-400 hover:text-white p-1"><Menu size={24} /></button>
+                        <span className="font-bold text-white truncate max-w-[150px] text-lg">{settings.academyName}</span>
+                        <div className="ml-auto"><NotificationDropdown /></div>
+                    </div>
+                </header>
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 relative scroll-smooth pb-24 md:pb-8">
+                    {renderView()}
+                </div>
+            </main>
+
+            {/* --- GLOBAL PAYMENT MODAL --- */}
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record Payment" size="md">
+                {/* ... (Payment Modal Content - No Changes) ... */}
+                <form onSubmit={handleSubmitPayment} className="space-y-5">
+
+                    {/* Student Selector (Combobox) */}
+                    <div className="relative">
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Select Student & Program</label>
+                        {paymentForm.studentId && paymentForm.enrollmentId ? (
+                            <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                <div>
+                                    <div className="text-white font-bold text-sm">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.studentName}</div>
+                                    <div className="text-xs text-slate-400">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.programName}</div>
+                                </div>
+                                <button type="button" onClick={() => setPaymentForm({ ...paymentForm, studentId: '', enrollmentId: '' })} className="text-xs text-blue-400 hover:text-blue-300 font-medium">Change</button>
+                            </div>
+                        ) : (
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                                <input
+                                    type="text"
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none"
+                                    placeholder="Search active student..."
+                                    value={paymentSearchQuery}
+                                    onChange={(e) => { setPaymentSearchQuery(e.target.value); setIsDropdownOpen(true); }}
+                                    onFocus={() => setIsDropdownOpen(true)}
+                                />
+                                {isDropdownOpen && paymentSearchQuery && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 custom-scrollbar">
+                                        {enrollments
+                                            .filter(e => {
+                                                if (e.status !== 'active') return false;
+                                                const student = students.find(s => s.id === e.studentId);
+                                                if (!student || student.status === 'inactive') return false;
+
+                                                return e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase());
+                                            })
+                                            .map(enrollment => (
+                                                <button
+                                                    key={enrollment.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPaymentForm({ ...paymentForm, studentId: enrollment.studentId, enrollmentId: enrollment.id, amount: enrollment.balance });
+                                                        setIsDropdownOpen(false);
+                                                        setPaymentSearchQuery('');
+                                                    }}
+                                                    className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-none"
+                                                >
+                                                    <div className="font-bold text-white text-sm">{enrollment.studentName}</div>
+                                                    <div className="flex justify-between text-xs text-slate-400">
+                                                        <span>{enrollment.programName}</span>
+                                                        <span className={enrollment.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}>Due: {formatCurrency(enrollment.balance)}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        {enrollments.filter(e => e.status === 'active' && e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase())).length === 0 && (
+                                            <div className="p-3 text-slate-500 text-xs text-center">No active enrollments found.</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Payment Details */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Amount (MAD)</label>
+                            <input required type="number" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
+                            <input required type="date" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={paymentForm.date} onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })} />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Payment Method</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {['cash', 'check', 'virement'].map(m => (
+                                <button
+                                    key={m}
+                                    type="button"
+                                    onClick={() => setPaymentForm({ ...paymentForm, method: m as any })}
+                                    className={`py-2 rounded-lg text-xs font-bold capitalize border transition-all ${paymentForm.method === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+                                >
+                                    {m === 'virement' ? 'Transfer' : m}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Method Specific Fields */}
+                    {paymentForm.method === 'check' && (
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={paymentForm.checkNumber} onChange={e => setPaymentForm({ ...paymentForm, checkNumber: e.target.value })} placeholder="e.g. 739201" /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={paymentForm.bankName} onChange={e => setPaymentForm({ ...paymentForm, bankName: e.target.value })} placeholder="e.g. BMCE" /></div>
+                            </div>
+                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Deposit Date (Encaissement)</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={paymentForm.depositDate} onChange={e => setPaymentForm({ ...paymentForm, depositDate: e.target.value })} /></div>
+                        </div>
+                    )}
+
+                    {paymentForm.method === 'virement' && (
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
+                            <div>
+                                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Proof of Transfer (Screenshot)</label>
+                                <div className="flex items-center gap-3">
+                                    <label className="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors">
+                                        <Upload size={14} /> Upload Image
+                                        <input type="file" accept="image/*" className="hidden" onChange={handleProofUpload} />
+                                    </label>
+                                    {paymentForm.proofUrl && (
+                                        <div className="text-emerald-400 text-xs flex items-center gap-1"><ImageIcon size={14} /> Image Attached</div>
+                                    )}
+                                </div>
+                                {paymentForm.proofUrl && (
+                                    <div className="mt-2 w-full h-24 bg-slate-900 rounded border border-slate-800 overflow-hidden">
+                                        <img src={paymentForm.proofUrl} className="w-full h-full object-cover" alt="Proof" />
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Disclaimer */}
+                    <div className="bg-blue-950/20 p-3 rounded-lg border border-blue-900/30 flex gap-3 items-start">
+                        <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+                        <p className="text-xs text-blue-200/80">
+                            {paymentForm.method === 'cash'
+                                ? "Cash payments are immediately marked as PAID and will update the student's balance."
+                                : paymentForm.method === 'check'
+                                    ? "Checks are recorded as RECEIVED. Balance updates only after the check clears (Encaissé)."
+                                    : "Transfers are recorded as PENDING. Verify the transfer in dashboard to update balance."
+                            }
+                        </p>
+                    </div>
+
+                    <button type="submit" disabled={isSubmittingPayment} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                        {isSubmittingPayment ? 'Processing...' : 'Confirm Payment'}
+                    </button>
+                </form>
+            </Modal>
+
+            {/* --- ENROLLMENT WIZARD MODAL (Enhanced) --- */}
+            <Modal isOpen={isEnrollmentModalOpen} onClose={() => setIsEnrollmentModalOpen(false)} title="Student Enrollment" size="lg">
+                {/* ... (Enrollment Modal Content - No Changes) ... */}
+                <div className="flex flex-col h-full">
+                    {/* Wizard Steps Header */}
+                    <div className="flex items-center justify-between mb-6 px-4">
+                        <div className={`flex-1 text-center border-b-2 pb-2 ${enrollmentStep >= 1 ? 'border-blue-500 text-blue-400 font-bold' : 'border-slate-800 text-slate-600'}`}>1. Student</div>
+                        <div className={`flex-1 text-center border-b-2 pb-2 ${enrollmentStep >= 2 ? 'border-blue-500 text-blue-400 font-bold' : 'border-slate-800 text-slate-600'}`}>2. Program</div>
+                        <div className={`flex-1 text-center border-b-2 pb-2 ${enrollmentStep >= 3 ? 'border-blue-500 text-blue-400 font-bold' : 'border-slate-800 text-slate-600'}`}>3. Payments</div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-1">
+                        {/* STEP 1: STUDENT INFO */}
+                        {enrollmentStep === 1 && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div><label className="text-xs text-slate-400 block mb-1">Full Name *</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.name} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, name: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1">Parent Phone *</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.parentPhone} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, parentPhone: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1">Date of Birth</label><input type="date" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.birthDate} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, birthDate: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1">School</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.school} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, school: e.target.value })} /></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* STEP 2: PROGRAM SELECTION */}
+                        {enrollmentStep === 2 && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs text-slate-400 block mb-1">Select Program</label>
+                                    <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.programId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, programId: e.target.value, packName: '', gradeId: '', groupId: '' })}>
+                                        <option value="">-- Choose Program --</option>
+                                        {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    </select>
+                                </div>
+
+                                {selectedProgram && (
+                                    <>
+                                        <div>
+                                            <label className="text-xs text-slate-400 block mb-1">Select Pack</label>
+                                            <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.packName} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, packName: e.target.value })}>
+                                                <option value="">-- Choose Pack --</option>
+                                                {selectedProgram.packs.map(p => <option key={p.name} value={p.name}>{p.name} - {formatCurrency(p.price || p.priceAnnual || 0)}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs text-slate-400 block mb-1">Level / Grade</label>
+                                                <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.gradeId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, gradeId: e.target.value, groupId: '' })}>
+                                                    <option value="">-- Choose Level --</option>
+                                                    {selectedProgram.grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs text-slate-400 block mb-1">Group / Time</label>
+                                                <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.groupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, groupId: e.target.value })}>
+                                                    <option value="">-- Choose Group --</option>
+                                                    {selectedGrade?.groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.day} {g.time})</option>)}
+                                                </select>
+                                            </div>
+                                        </div>
+
+                                        {/* Secondary / DIY Slot Selection */}
+                                        <div className="pt-4 border-t border-slate-800 mt-2">
+                                            <label className="text-xs text-slate-400 block mb-1">Secondary Workshop (DIY) - Optional</label>
+                                            <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.secondGroupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, secondGroupId: e.target.value })}>
+                                                <option value="">-- None --</option>
+                                                {selectedProgram.grades.flatMap(g => g.groups).map(g => (
+                                                    <option key={g.id} value={g.id}>{g.name} ({g.day} {g.time})</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* STEP 3: PAYMENT (Multi-Entry + Negotiated Price) */}
+                        {enrollmentStep === 3 && (
+                            <div className="space-y-4">
+                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-4 space-y-3">
+                                    {/* Price Negotiation Field */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-xs text-slate-400 font-bold uppercase">Final Negotiated Price (MAD)</label>
+                                            {discountAmount > 0 && (
+                                                <span className="bg-emerald-950/50 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-900 flex items-center gap-1">
+                                                    <TrendingDown size={10} /> Discount Applied: -{formatCurrency(discountAmount)} ({discountPercent}%)
+                                                </span>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="number"
+                                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-bold text-lg focus:border-blue-500 outline-none"
+                                            value={negotiatedPrice}
+                                            onChange={e => setNegotiatedPrice(Number(e.target.value))}
+                                        />
+                                        {standardTuition !== negotiatedPrice && (
+                                            <div className="text-xs text-slate-500 mt-1 text-right">
+                                                Standard Price: <span className="line-through">{formatCurrency(standardTuition)}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="h-px bg-slate-800"></div>
+
+                                    <div className="flex justify-between text-sm text-emerald-400 mb-1">
+                                        <span>Total Paying Now</span>
+                                        <span>{formatCurrency(totalPayingNow)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm">
+                                        <span className="text-slate-400">Remaining Balance</span>
+                                        <span className={`${remainingBalance > 0 ? 'text-red-400' : 'text-slate-500'} font-bold`}>{formatCurrency(remainingBalance)}</span>
+                                    </div>
+                                </div>
+
+                                {/* Payment List */}
+                                {enrollPayments.length > 0 && (
+                                    <div className="space-y-2 mb-4">
+                                        <label className="text-xs text-slate-500 uppercase tracking-wider font-bold">Payments to Record</label>
+                                        {enrollPayments.map((p, idx) => (
+                                            <div key={p.id} className="flex justify-between items-center bg-slate-900 p-2 rounded border border-slate-800 text-sm">
+                                                <div>
+                                                    <div className="font-bold text-white">{formatCurrency(p.amount)} <span className="text-slate-500 font-normal text-xs capitalize">via {p.method}</span></div>
+                                                    {p.method === 'check' && <div className="text-[10px] text-slate-400">Check #{p.checkNumber} • Deposit: {p.depositDate}</div>}
+                                                </div>
+                                                <button onClick={() => handleRemoveEnrollmentPayment(p.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Add Payment Form */}
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+                                    <div className="text-xs font-bold text-blue-400 mb-3 uppercase tracking-wider flex items-center gap-2"><Plus size={12} /> Add Payment</div>
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div><label className="text-[10px] text-slate-500 block mb-1">Amount</label><input type="number" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm font-bold" value={currentEnrollPayment.amount} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, amount: e.target.value })} placeholder="0.00" /></div>
+                                            <div><label className="text-[10px] text-slate-500 block mb-1">Method</label><select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={currentEnrollPayment.method} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, method: e.target.value })}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank Transfer</option></select></div>
+                                        </div>
+
+                                        {currentEnrollPayment.method === 'check' && (
+                                            <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2 animate-in slide-in-from-top-1">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" placeholder="Check No." value={currentEnrollPayment.checkNumber} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, checkNumber: e.target.value })} /></div>
+                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" placeholder="Bank Name" value={currentEnrollPayment.bankName} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, bankName: e.target.value })} /></div>
+                                                </div>
+                                                <div><label className="text-[10px] text-slate-500 block mb-1">Deposit Date</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" value={currentEnrollPayment.depositDate} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, depositDate: e.target.value })} /></div>
+                                            </div>
+                                        )}
+
+                                        <button onClick={handleAddEnrollmentPayment} disabled={!currentEnrollPayment.amount} className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded transition-colors disabled:opacity-50">Add to List</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Wizard Footer */}
+                    <div className="flex justify-between pt-4 border-t border-slate-800 mt-4">
+                        {enrollmentStep > 1 ? (
+                            <button onClick={() => setEnrollmentStep(s => s - 1)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Back</button>
+                        ) : (
+                            <button onClick={() => setIsEnrollmentModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancel</button>
+                        )}
+
+                        {enrollmentStep < 3 ? (
+                            <button
+                                onClick={() => {
+                                    if (enrollmentStep === 1 && !enrollStudentForm.name && !quickEnrollStudentId) return alert("Name is required");
+                                    if (enrollmentStep === 2 && !enrollProgramForm.programId) return alert("Program is required");
+                                    setEnrollmentStep(s => s + 1);
+                                }}
+                                className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold flex items-center gap-2"
+                            >
+                                Next Step <ChevronRight size={16} />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleFinishEnrollment}
+                                disabled={isSubmittingEnrollment}
+                                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold flex items-center gap-2"
+                            >
+                                {isSubmittingEnrollment ? 'Processing...' : 'Confirm Enrollment'} <CheckCircle2 size={16} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </Modal>
+            <DevRoleSwitcher />
+        </div>
+    );
+};
+
+const App = () => {
+    return (
+        <AuthProvider>
+            <NotificationProvider>
+                <AppProvider>
+                    <AppContent />
+                </AppProvider>
+            </NotificationProvider>
+        </AuthProvider>
+    );
+};
+
+export default App;

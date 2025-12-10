@@ -1,0 +1,77 @@
+App.tsx(452,18): error TS2678: Type '"parent-dashboard"' is not comparable to type 'ViewState'.
+App.tsx(453,18): error TS2678: Type '"test-design"' is not comparable to type 'ViewState'.
+App.tsx(493,59): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ViewState'.
+App.tsx(595,59): error TS2345: Argument of type '"test-design"' is not assignable to parameter of type 'ViewState'.
+components/NotificationDropdown.tsx(117,67): error TS2339: Property 'link' does not exist on type 'Notification'.
+context/AppContext.tsx(165,24): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(firestore: Firestore, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'Firestore'.
+      Type 'undefined' is not assignable to type 'Firestore'.
+  Overload 2 of 3, '(reference: CollectionReference<unknown, DocumentData>, path?: string | undefined, ...pathSegments: string[]): DocumentReference<unknown, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'CollectionReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'CollectionReference<unknown, DocumentData>'.
+  Overload 3 of 3, '(reference: DocumentReference<unknown, DocumentData>, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'DocumentReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'DocumentReference<unknown, DocumentData>'.
+template.tsx(137,18): error TS7031: Binding element 'name' implicitly has an 'any' type.
+template.tsx(137,24): error TS7031: Binding element 'unlocked' implicitly has an 'any' type.
+template.tsx(146,21): error TS7031: Binding element 'skill' implicitly has an 'any' type.
+template.tsx(167,31): error TS7006: Parameter 'project' implicitly has an 'any' type.
+template.tsx(169,49): error TS7006: Parameter 't' implicitly has an 'any' type.
+template.tsx(174,36): error TS7006: Parameter 'project' implicitly has an 'any' type.
+template.tsx(186,13): error TS2345: Argument of type '(prevUser: { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }) => { xp: any; level: number; nextLevelXp: number; badges: any[]; skills: any[]; }' is not assignable to parameter of type 'SetStateAction<{ level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }>'.
+  Type '(prevUser: { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }) => { xp: any; level: number; nextLevelXp: number; badges: any[]; skills: any[]; }' is not assignable to type '(prevState: { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }) => { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }'.
+    Call signature return types '{ xp: any; level: number; nextLevelXp: number; badges: any[]; skills: any[]; }' and '{ level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }' are incompatible.
+      The types of 'badges' are incompatible between these types.
+        Type 'any[]' is not assignable to type 'never[]'.
+          Type 'any' is not assignable to type 'never'.
+template.tsx(201,33): error TS7006: Parameter 'projectId' implicitly has an 'any' type.
+template.tsx(201,44): error TS7006: Parameter 'taskId' implicitly has an 'any' type.
+template.tsx(348,67): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ emerald: string; pink: string; cyan: string; violet: string; amber: string; }'.
+  No index signature with a parameter of type 'string' was found on type '{ emerald: string; pink: string; cyan: string; violet: string; amber: string; }'.
+template.tsx(372,52): error TS2339: Property 'onerror' does not exist on type 'EventTarget'.
+template.tsx(372,77): error TS2339: Property 'src' does not exist on type 'EventTarget'.
+template.tsx(378,111): error TS7053: Element implicitly has an 'any' type because expression of type 'string' can't be used to index type '{ coding: string; "game design": string; robotics: string; vr: string; business: string; }'.
+  No index signature with a parameter of type 'string' was found on type '{ coding: string; "game design": string; robotics: string; vr: string; business: string; }'.
+template.tsx(414,49): error TS2339: Property 'onerror' does not exist on type 'EventTarget'.
+template.tsx(414,74): error TS2339: Property 'src' does not exist on type 'EventTarget'.
+views/DashboardView.tsx(140,51): error TS2367: This comparison appears to be unintentional because the types '"published" | "planning" | "building" | "testing" | "delivered" | "submitted" | "changes_requested"' and '"draft"' have no overlap.
+views/LearningView.tsx(395,38): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(firestore: Firestore, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'Firestore'.
+      Type 'undefined' is not assignable to type 'Firestore'.
+  Overload 2 of 3, '(reference: CollectionReference<unknown, DocumentData>, path?: string | undefined, ...pathSegments: string[]): DocumentReference<unknown, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'CollectionReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'CollectionReference<unknown, DocumentData>'.
+  Overload 3 of 3, '(reference: DocumentReference<unknown, DocumentData>, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'DocumentReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'DocumentReference<unknown, DocumentData>'.
+views/LearningView.tsx(534,42): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(firestore: Firestore, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'Firestore'.
+      Type 'undefined' is not assignable to type 'Firestore'.
+  Overload 2 of 3, '(reference: CollectionReference<unknown, DocumentData>, path?: string | undefined, ...pathSegments: string[]): DocumentReference<unknown, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'CollectionReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'CollectionReference<unknown, DocumentData>'.
+  Overload 3 of 3, '(reference: DocumentReference<unknown, DocumentData>, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'DocumentReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'DocumentReference<unknown, DocumentData>'.
+views/LearningView.tsx(872,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+views/LearningView.tsx(2152,21): error TS2322: Type '{ id: string; name: string; }[]' is not assignable to type 'Grade[]'.
+  Property 'groups' is missing in type '{ id: string; name: string; }' but required in type 'Grade'.
+views/LearningView.tsx(2378,151): error TS2339: Property 'bg' does not exist on type '{ label: string; colorHex: string; icon: any; bgSoft: string; border: string; text: string; gradient: string; kanbanHeader: string; }'.
+views/LearningView.tsx(2388,78): error TS2339: Property 'skills' does not exist on type 'StudentProject'.
+views/LearningView.tsx(2388,103): error TS7006: Parameter 'skill' implicitly has an 'any' type.
+views/LearningView.tsx(2388,110): error TS7006: Parameter 'i' implicitly has an 'any' type.
+views/LearningView.tsx(2393,78): error TS2339: Property 'skills' does not exist on type 'StudentProject'.
+views/LearningView.tsx(2393,96): error TS2339: Property 'skills' does not exist on type 'StudentProject'.
+views/LearningView.tsx(2395,87): error TS2339: Property 'skills' does not exist on type 'StudentProject'.
+views/ParentDashboardView.tsx(47,53): error TS2367: This comparison appears to be unintentional because the types '"published" | "planning" | "building" | "testing" | "delivered" | "submitted" | "changes_requested"' and '"in_progress"' have no overlap.
+views/ParentDashboardView.tsx(306,50): error TS2367: This comparison appears to be unintentional because the types '"published" | "planning" | "building" | "testing" | "delivered" | "submitted" | "changes_requested"' and '"in_progress"' have no overlap.
+views/StudentDetailsView.tsx(479,29): error TS2322: Type '(view: ViewState, params?: ViewParams | undefined) => void' is not assignable to type '(view: string, params: any) => void'.
+  Types of parameters 'view' and 'view' are incompatible.
+    Type 'string' is not assignable to type 'ViewState'.
+views/StudentDetailsView.tsx(499,29): error TS2322: Type '(view: ViewState, params?: ViewParams | undefined) => void' is not assignable to type '(view: string, params: any) => void'.
+  Types of parameters 'view' and 'view' are incompatible.
+    Type 'string' is not assignable to type 'ViewState'.

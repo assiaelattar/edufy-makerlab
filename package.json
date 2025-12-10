@@ -1,0 +1,28 @@
+{
+  "name": "stemflow-erp",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build && cp manifest.json dist/",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@types/qrcode.react": "^1.0.5",
+    "date-fns": "^4.1.0",
+    "firebase": "^10.8.0",
+    "lucide-react": "^0.344.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.56",
+    "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^7.2.4"
+  }
+}

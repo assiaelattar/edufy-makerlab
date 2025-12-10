@@ -1,0 +1,51 @@
+App.tsx(493,59): error TS2345: Argument of type 'string' is not assignable to parameter of type 'ViewState'.
+context/AppContext.tsx(165,24): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(firestore: Firestore, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'Firestore'.
+      Type 'undefined' is not assignable to type 'Firestore'.
+  Overload 2 of 3, '(reference: CollectionReference<unknown, DocumentData>, path?: string | undefined, ...pathSegments: string[]): DocumentReference<unknown, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'CollectionReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'CollectionReference<unknown, DocumentData>'.
+  Overload 3 of 3, '(reference: DocumentReference<unknown, DocumentData>, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'DocumentReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'DocumentReference<unknown, DocumentData>'.
+template.tsx(210,13): error TS2345: Argument of type '(prevUser: { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }) => { xp: number; level: number; nextLevelXp: number; badges: string[]; skills: string[]; }' is not assignable to parameter of type 'SetStateAction<{ level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }>'.
+  Type '(prevUser: { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }) => { xp: number; level: number; nextLevelXp: number; badges: string[]; skills: string[]; }' is not assignable to type '(prevState: { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }) => { level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }'.
+    Call signature return types '{ xp: number; level: number; nextLevelXp: number; badges: string[]; skills: string[]; }' and '{ level: number; xp: number; nextLevelXp: number; badges: never[]; skills: never[]; }' are incompatible.
+      The types of 'badges' are incompatible between these types.
+        Type 'string[]' is not assignable to type 'never[]'.
+          Type 'string' is not assignable to type 'never'.
+views/DashboardView.tsx(140,51): error TS2367: This comparison appears to be unintentional because the types '"published" | "planning" | "building" | "testing" | "delivered" | "submitted" | "changes_requested"' and '"draft"' have no overlap.
+views/LearningView.tsx(395,38): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(firestore: Firestore, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'Firestore'.
+      Type 'undefined' is not assignable to type 'Firestore'.
+  Overload 2 of 3, '(reference: CollectionReference<unknown, DocumentData>, path?: string | undefined, ...pathSegments: string[]): DocumentReference<unknown, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'CollectionReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'CollectionReference<unknown, DocumentData>'.
+  Overload 3 of 3, '(reference: DocumentReference<unknown, DocumentData>, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'DocumentReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'DocumentReference<unknown, DocumentData>'.
+views/LearningView.tsx(534,42): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(firestore: Firestore, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'Firestore'.
+      Type 'undefined' is not assignable to type 'Firestore'.
+  Overload 2 of 3, '(reference: CollectionReference<unknown, DocumentData>, path?: string | undefined, ...pathSegments: string[]): DocumentReference<unknown, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'CollectionReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'CollectionReference<unknown, DocumentData>'.
+  Overload 3 of 3, '(reference: DocumentReference<unknown, DocumentData>, path: string, ...pathSegments: string[]): DocumentReference<DocumentData, DocumentData>', gave the following error.
+    Argument of type 'Firestore | undefined' is not assignable to parameter of type 'DocumentReference<unknown, DocumentData>'.
+      Type 'undefined' is not assignable to type 'DocumentReference<unknown, DocumentData>'.
+views/LearningView.tsx(872,17): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+views/LearningView.tsx(2152,21): error TS2322: Type '{ id: string; name: string; }[]' is not assignable to type 'Grade[]'.
+  Property 'groups' is missing in type '{ id: string; name: string; }' but required in type 'Grade'.
+views/LearningView.tsx(2395,79): error TS18048: 'project.skills' is possibly 'undefined'.
+views/ParentDashboardView.tsx(47,53): error TS2367: This comparison appears to be unintentional because the types '"published" | "planning" | "building" | "testing" | "delivered" | "submitted" | "changes_requested"' and '"in_progress"' have no overlap.
+views/ParentDashboardView.tsx(306,50): error TS2367: This comparison appears to be unintentional because the types '"published" | "planning" | "building" | "testing" | "delivered" | "submitted" | "changes_requested"' and '"in_progress"' have no overlap.
+views/StudentDetailsView.tsx(479,29): error TS2322: Type '(view: ViewState, params?: ViewParams | undefined) => void' is not assignable to type '(view: string, params: any) => void'.
+  Types of parameters 'view' and 'view' are incompatible.
+    Type 'string' is not assignable to type 'ViewState'.
+views/StudentDetailsView.tsx(499,29): error TS2322: Type '(view: ViewState, params?: ViewParams | undefined) => void' is not assignable to type '(view: string, params: any) => void'.
+  Types of parameters 'view' and 'view' are incompatible.
+    Type 'string' is not assignable to type 'ViewState'.
