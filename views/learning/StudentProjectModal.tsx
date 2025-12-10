@@ -3,9 +3,17 @@ import { Modal } from '../../components/Modal';
 import { StudentProject, StationType, ProcessTemplate, Badge } from '../../types';
 import { STATION_THEMES } from '../../utils/theme';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
-import { ClipboardList, Zap, Beaker, Award, ListChecks, Lock, Trash2, Plus, Play, ArrowRight, ArrowLeft, CheckSquare, GitCommit, X, History, RotateCcw, Link as LinkIcon, Sparkles, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ClipboardList, Zap, Beaker, Award, ListChecks, Lock, Trash2, Plus, Play, ArrowRight, ArrowLeft, CheckSquare, GitCommit, X, History, RotateCcw, Link as LinkIcon, Sparkles, Loader2, Image as ImageIcon, Layout, Target, Settings, Crown, ChevronRight, Clock, CheckCircle2, Flag, Video, Trophy, Star } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 import { generateProjectImage } from '../../services/geminiImageGen';
+
+// Visual mapping for templates (simulating the rich UI data from TestView)
+const TEMPLATE_VISUALS: Record<string, { icon: any, color: string }> = {
+    'design-thinking': { icon: '🎨', color: 'from-pink-500 to-rose-500' },
+    'engineering-process': { icon: '⚙️', color: 'from-blue-500 to-cyan-500' },
+    'scientific-method': { icon: '🧬', color: 'from-emerald-500 to-teal-500' },
+    'default': { icon: '🚀', color: 'from-violet-500 to-purple-500' }
+};
 
 interface StudentProjectModalProps {
     isOpen: boolean;
@@ -29,13 +37,14 @@ interface StudentProjectModalProps {
     apiConfig?: { googleApiKey?: string };
     isWorkflowLocked?: boolean;
     badges: Badge[];
+    handleSubmitForReview?: () => Promise<void>;
 }
 
 export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     isOpen, onClose, projectForm, setProjectForm, activeProject, currentTheme,
     workspaceTab, setWorkspaceTab, selectedWorkflowId, handleWorkflowChange,
     processTemplates, handleSaveProject, handleStartBuilding, handleMoveStep,
-    handleAddStep, handleDeleteStep, newStepTitle, setNewStepTitle, apiConfig, isWorkflowLocked, badges
+    handleAddStep, handleDeleteStep, newStepTitle, setNewStepTitle, apiConfig, isWorkflowLocked, badges, handleSubmitForReview
 }) => {
     const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
@@ -46,6 +55,27 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     const [selectedStepId, setSelectedStepId] = React.useState<string>('');
     const [evidenceLink, setEvidenceLink] = React.useState('');
     const [isGenerating, setIsGenerating] = React.useState(false);
+
+    // Wizard State
+    const [wizardStep, setWizardStep] = React.useState(1);
+    const [scrolled, setScrolled] = React.useState(false);
+
+    // Scroll Effect
+    React.useEffect(() => {
+        const handleScroll = () => {
+            // Check internal scroll container if possible, or just default to false for now inside modal
+            // For modal, we might attach to the scrollable div ref, but let's keep state ready.
+        };
+        // We'll attach this to the specific div later
+    }, []);
+
+    const handleNext = () => setWizardStep(prev => prev + 1);
+    const handleBack = () => setWizardStep(prev => prev - 1);
+
+    // Validation
+    const isStep1Valid = (projectForm.title?.length || 0) > 3;
+    const isStep2Valid = !!selectedWorkflowId;
+    const isStep3Valid = (projectForm.steps?.length || 0) > 0;
 
     const handleCommit = async () => {
         if (!commitMessage.trim()) return;
@@ -84,6 +114,61 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             setProjectForm({ ...projectForm, steps: snapshot });
             setIsHistoryModalOpen(false);
         }
+    };
+
+    const renderKanbanColumn = (status: 'todo' | 'doing' | 'done', title: string, icon: any, colorClass: string, bgClass: string) => {
+        const steps = projectForm.steps?.filter((s) => s.status === status) || [];
+
+        return (
+            <div className={`flex-1 flex flex-col ${bgClass} backdrop-blur-md border border-white/40 rounded-[2.5rem] min-h-[500px] transition-all duration-500 shadow-xl overflow-hidden`}>
+                <div className={`p-6 border-b border-white/20 font-black text-sm uppercase tracking-wider text-center flex items-center justify-center gap-2 ${colorClass}`}>
+                    <div className="p-2 bg-white/50 rounded-lg shadow-sm">{icon}</div>
+                    {title}
+                    <span className="bg-white/50 px-2 py-0.5 rounded-full text-[10px] font-bold">{steps.length}</span>
+                </div>
+
+                <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
+                    {steps.length === 0 && (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-400/50 text-sm font-bold italic gap-2">
+                            <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center opacity-50">
+                                <Plus size={20} />
+                            </div>
+                            <span>No tasks here</span>
+                        </div>
+                    )}
+                    {steps.map((step, idx) => (
+                        <div
+                            key={step.id}
+                            style={{ animationDelay: `${idx * 100}ms` }}
+                            className="bg-white/80 hover:bg-white border-2 border-white p-5 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-300 group relative animate-in slide-in-from-bottom-2 fill-mode-backwards"
+                        >
+                            <p className="font-bold text-slate-700 mb-4 text-lg leading-tight">{step.title}</p>
+
+                            <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                                {status === 'doing' && (
+                                    <>
+                                        <button onClick={() => handleMoveStep(step.id, 'todo')} className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors" title="Move Back"><ArrowLeft size={18} /></button>
+                                        <button onClick={() => handleMoveStep(step.id, 'done')} className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95">
+                                            Done <CheckSquare size={16} />
+                                        </button>
+                                    </>
+                                )}
+                                {status === 'todo' && (
+                                    <button onClick={() => handleMoveStep(step.id, 'doing')} className="w-full py-3 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95">
+                                        Start Mission <ArrowRight size={16} />
+                                    </button>
+                                )}
+                                {status === 'done' && (
+                                    <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full">
+                                        <CheckCircle2 size={14} /> Completed
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -175,271 +260,371 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                         {workspaceTab === 'mission' && (
                             <>
                                 {projectForm.status === 'planning' ? (
-                                    <div className="flex flex-col h-full overflow-y-auto custom-scrollbar pr-2 relative z-10">
-                                        <div className="mb-8 shrink-0 text-center md:text-left">
-                                            <h3 className={studioClass("text-3xl md:text-4xl font-black mb-2 flex items-center justify-center md:justify-start gap-4", STUDIO_THEME.text.primary)}>
-                                                <div className="p-3 bg-gradient-to-br from-amber-400 to-amber-600 rounded-2xl shadow-lg shadow-amber-500/20 transform -rotate-3">
-                                                    <ClipboardList size={32} className="text-white" strokeWidth={2.5} />
+                                    <div className="flex flex-col h-full relative z-10">
+                                        {/* WIZARD PROGRESS TABLET (Floating) */}
+                                        <div className="absolute top-4 left-0 right-0 z-20 flex justify-center pointer-events-none">
+                                            <div className="bg-white/80 backdrop-blur-md px-6 py-2 rounded-full shadow-sm border border-slate-200/60 flex items-center gap-6 text-xs font-black uppercase tracking-wider text-slate-400 pointer-events-auto">
+                                                <div className={`transition-colors ${wizardStep >= 1 ? 'text-indigo-600' : ''} flex items-center gap-2`}>
+                                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${wizardStep >= 1 ? 'border-indigo-600 bg-indigo-50' : 'border-slate-300'}`}>1</span> Identity
                                                 </div>
-                                                Plan Your Mission 📋
-                                            </h3>
-                                            <p className="text-slate-500 text-lg font-medium">Break down your big idea into small steps!</p>
+                                                <div className={`w-8 h-0.5 rounded-full ${wizardStep >= 2 ? 'bg-amber-500' : 'bg-slate-200'}`}></div>
+                                                <div className={`transition-colors ${wizardStep >= 2 ? 'text-amber-500' : ''} flex items-center gap-2`}>
+                                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${wizardStep >= 2 ? 'border-amber-500 bg-amber-50' : 'border-slate-300'}`}>2</span> Strategy
+                                                </div>
+                                                <div className={`w-8 h-0.5 rounded-full ${wizardStep >= 3 ? 'bg-emerald-500' : 'bg-slate-200'}`}></div>
+                                                <div className={`transition-colors ${wizardStep >= 3 ? 'text-emerald-500' : ''} flex items-center gap-2`}>
+                                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${wizardStep >= 3 ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300'}`}>3</span> Blueprint
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-6">
-                                            <div className="space-y-6">
-                                                {!isWorkflowLocked && (
-                                                    <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
-                                                        <label className={LABEL_CLASS}>1. Choose a Strategy</label>
-                                                        <select
-                                                            className={INPUT_CLASS}
-                                                            value={selectedWorkflowId}
-                                                            onChange={e => handleWorkflowChange(e.target.value)}
-                                                        >
-                                                            <option value="">Select a Workflow...</option>
-                                                            {processTemplates.map(w => (
-                                                                <option key={w.id} value={w.id}>{w.name}</option>
-                                                            ))}
-                                                        </select>
+                                        <div className="flex-1 overflow-y-auto custom-scrollbar p-8 pt-20 pb-32">
+                                            {/* STEP 1: IDENTITY */}
+                                            {wizardStep === 1 && (
+                                                <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 fill-mode-backwards max-w-4xl mx-auto">
+                                                    <div className="text-center mb-10">
+                                                        <h1 className="text-5xl md:text-6xl font-black text-slate-900 mb-4 tracking-tight">
+                                                            The <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600 animate-pulse">Spark</span> ✨
+                                                        </h1>
+                                                        <p className="text-xl text-slate-500 font-medium max-w-xl mx-auto">
+                                                            Every great invention starts with a tiny spark. <br />What will you bring to life today?
+                                                        </p>
                                                     </div>
-                                                )}
 
-                                                <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
-                                                    <label className={LABEL_CLASS}>2. Project Details</label>
-                                                    <div className="space-y-4">
-                                                        <input
-                                                            className={INPUT_CLASS}
-                                                            value={projectForm.title}
-                                                            onChange={e => setProjectForm({ ...projectForm, title: e.target.value })}
-                                                            placeholder="Name your project..."
-                                                        />
-                                                        <textarea
-                                                            className={`${INPUT_CLASS} h-32 resize-none`}
-                                                            value={projectForm.description}
-                                                            onChange={e => setProjectForm({ ...projectForm, description: e.target.value })}
-                                                            placeholder="What are you going to build?"
-                                                        />
+                                                    <div className="bg-white/60 backdrop-blur-xl border border-white/60 p-8 rounded-[2.5rem] shadow-xl relative overflow-hidden group hover:bg-white/80 transition-all duration-500">
+                                                        {/* Decorative Blobs */}
+                                                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+
+                                                        {/* Title Input */}
+                                                        <div className="mb-8 relative z-10">
+                                                            <label className={LABEL_CLASS}>Project Title</label>
+                                                            <input
+                                                                className="w-full text-4xl md:text-5xl font-black bg-transparent border-b-2 border-slate-200/60 py-3 outline-none focus:border-indigo-600 transition-all text-slate-800 placeholder:text-slate-300"
+                                                                placeholder="My Big Idea..."
+                                                                value={projectForm.title || ''}
+                                                                onChange={e => setProjectForm({ ...projectForm, title: e.target.value })}
+                                                                autoFocus
+                                                            />
+                                                            {projectForm.title && (
+                                                                <div className="absolute right-0 top-1/2 -translate-y-1/2 text-emerald-500 animate-in zoom-in spin-in-180 duration-500">
+                                                                    <CheckCircle2 size={32} className="drop-shadow-md" fill="white" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="grid md:grid-cols-2 gap-8 relative z-10">
+                                                            {/* Description */}
+                                                            <div className="group/desc">
+                                                                <label className={LABEL_CLASS}>The Concept</label>
+                                                                <div className="relative">
+                                                                    <textarea
+                                                                        className="w-full h-48 bg-white/50 border-2 border-white rounded-3xl p-5 font-medium text-slate-600 outline-none focus:border-indigo-500 focus:bg-white focus:shadow-lg transition-all resize-none text-lg leading-relaxed"
+                                                                        placeholder="I want to build a robot that can..."
+                                                                        value={projectForm.description || ''}
+                                                                        onChange={e => setProjectForm({ ...projectForm, description: e.target.value })}
+                                                                    />
+                                                                    <div className="absolute bottom-4 right-4 text-slate-300 opacity-0 group-hover/desc:opacity-100 transition-opacity">
+                                                                        <Settings size={18} className="animate-spin-slow" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Cover Image */}
+                                                            <div>
+                                                                <label className={LABEL_CLASS}>Cover Art</label>
+                                                                <div className="relative w-full h-48 bg-gradient-to-br from-slate-100 to-slate-200 rounded-3xl overflow-hidden border-4 border-white shadow-inner group/img hover:shadow-xl hover:scale-[1.02] transition-all duration-500">
+                                                                    {projectForm.mediaUrls?.[0] ? (
+                                                                        <img src={projectForm.mediaUrls[0]} className="w-full h-full object-cover transition-transform duration-1000 group-hover/img:scale-110" />
+                                                                    ) : (
+                                                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-2">
+                                                                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm">
+                                                                                <ImageIcon size={20} className="opacity-50" />
+                                                                            </div>
+                                                                            <span className="text-xs font-bold opacity-60">AI Generator Ready</span>
+                                                                        </div>
+                                                                    )}
+
+                                                                    {isGenerating && (
+                                                                        <div className="absolute inset-0 bg-black/40 backdrop-blur-md flex flex-col items-center justify-center text-white z-20 animate-in fade-in">
+                                                                            <Loader2 size={32} className="animate-spin mb-2 text-[#FFC107]" />
+                                                                            <span className="font-bold animate-pulse tracking-widest text-xs">DREAMING...</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        if (!projectForm.title) return;
+                                                                        setIsGenerating(true);
+                                                                        const result = await generateProjectImage(
+                                                                            projectForm.title,
+                                                                            projectForm.station || 'general',
+                                                                            projectForm.description || '',
+                                                                            apiConfig?.googleApiKey
+                                                                        );
+                                                                        setIsGenerating(false);
+                                                                        if (result.success && result.url) {
+                                                                            const newUrls = [...(projectForm.mediaUrls || [])];
+                                                                            newUrls[0] = result.url;
+                                                                            setProjectForm({ ...projectForm, mediaUrls: newUrls });
+                                                                        }
+                                                                    }}
+                                                                    disabled={!projectForm.title || isGenerating}
+                                                                    className="mt-3 w-full py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 rounded-2xl text-white font-bold shadow-lg shadow-fuchsia-500/20 hover:shadow-fuchsia-500/40 hover:-translate-y-1 active:translate-y-0 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed group/btn overflow-hidden relative"
+                                                                >
+                                                                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover/btn:translate-y-0 transition-transform duration-300"></div>
+                                                                    <Sparkles size={18} className="animate-pulse" />
+                                                                    {isGenerating ? 'Dreaming...' : 'Generate Magic Cover'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                            )}
 
-                                                <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
-                                                    <label className={LABEL_CLASS}>3. Project Cover</label>
-                                                    <div className="space-y-4">
-                                                        <div className="flex gap-2">
+                                            {/* STEP 2: STRATEGY */}
+                                            {wizardStep === 2 && (
+                                                <div className="animate-in fade-in slide-in-from-right-8 duration-500 fill-mode-backwards max-w-5xl mx-auto">
+                                                    <div className="text-center mb-10">
+                                                        <h1 className="text-5xl md:text-6xl font-black text-slate-900 mb-4 drop-shadow-sm">
+                                                            The <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600">Strategy</span> 🧭
+                                                        </h1>
+                                                        <p className="text-2xl text-slate-500 font-medium max-w-2xl mx-auto">
+                                                            Every mission needs a plan. Choose your path wisely.
+                                                        </p>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative pb-32">
+                                                        {processTemplates.map((template, idx) => {
+                                                            const isSelected = selectedWorkflowId === template.id;
+                                                            // Simple mapping heuristic or default
+                                                            const visualKey = Object.keys(TEMPLATE_VISUALS).find(k => template.id.toLowerCase().includes(k)) || 'default';
+                                                            const visual = TEMPLATE_VISUALS[visualKey];
+
+                                                            return (
+                                                                <div
+                                                                    key={template.id}
+                                                                    onClick={() => handleWorkflowChange(template.id)}
+                                                                    style={{ animationDelay: `${idx * 100}ms` }}
+                                                                    className={`
+                                                                        cursor-pointer p-8 rounded-[2.5rem] border-2 transition-all duration-500 relative overflow-hidden group hover:-translate-y-2 animate-in slide-in-from-bottom-4 fill-mode-backwards
+                                                                        ${isSelected
+                                                                            ? 'border-transparent bg-white shadow-2xl scale-[1.03] z-10 ring-4 ring-amber-500/20'
+                                                                            : 'border-white/50 bg-white/40 hover:bg-white hover:shadow-xl hover:border-amber-200/50'
+                                                                        }
+                                                                    `}
+                                                                >
+                                                                    <div className={`absolute inset-0 bg-gradient-to-br ${visual.color} opacity-0 group-hover:opacity-5 transition-opacity duration-500`}></div>
+
+                                                                    <div className="flex items-start justify-between mb-6 relative z-10">
+                                                                        <div className={`text-4xl p-4 bg-white/60 rounded-3xl shadow-sm backdrop-blur-sm transition-transform duration-500 ${isSelected ? 'scale-110 rotate-3' : 'group-hover:scale-110'}`}>
+                                                                            {visual.icon}
+                                                                        </div>
+                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${isSelected ? 'bg-amber-500 text-white scale-100' : 'bg-slate-200 text-transparent scale-0 group-hover:scale-100'}`}>
+                                                                            <CheckSquare size={16} strokeWidth={3} />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <h3 className={`text-2xl font-black mb-3 transition-colors ${isSelected ? 'text-slate-800' : 'text-slate-600 group-hover:text-slate-800'}`}>{template.name}</h3>
+                                                                    <p className="text-base text-slate-500 font-medium leading-relaxed">{template.description}</p>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* STEP 3: BLUEPRINT */}
+                                            {wizardStep === 3 && (
+                                                <div className="animate-in fade-in slide-in-from-right-8 duration-500 h-[calc(100vh-340px)] flex flex-col relative z-20">
+                                                    <div className="text-center mb-8 shrink-0">
+                                                        <h1 className="text-5xl md:text-6xl font-black text-slate-900 mb-4 drop-shadow-sm">
+                                                            The <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">Blueprint</span> 📝
+                                                        </h1>
+                                                        <p className="text-2xl text-slate-500 font-medium">Break it down via small, conquerable steps.</p>
+                                                    </div>
+
+                                                    <div className="flex-1 bg-white/60 backdrop-blur-2xl border border-white/60 rounded-[3rem] shadow-2xl overflow-hidden flex flex-col relative mb-4">
+                                                        <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-50"></div>
+
+                                                        <div className="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar pb-40">
+                                                            {(!projectForm.steps || projectForm.steps.length === 0) && (
+                                                                <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 gap-4">
+                                                                    <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center animate-bounce">
+                                                                        <ListChecks size={48} className="text-slate-300" />
+                                                                    </div>
+                                                                    <div className="text-center">
+                                                                        <p className="font-black text-2xl text-slate-300">Blank Canvas</p>
+                                                                        <p className="font-medium text-slate-400">Add your first mission step below</p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {projectForm.steps?.map((step, index) => (
+                                                                <div
+                                                                    key={step.id}
+                                                                    className="bg-white p-5 rounded-2xl border-2 border-slate-100 shadow-sm flex items-center gap-5 group hover:border-emerald-200 hover:shadow-lg hover:-translate-x-1 transition-all duration-300 animate-in slide-in-from-bottom-4 fill-mode-backwards"
+                                                                    style={{ animationDelay: `${index * 50}ms` }}
+                                                                >
+                                                                    <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center font-black text-lg shadow-sm group-hover:rotate-6 transition-transform">
+                                                                        {index + 1}
+                                                                    </div>
+                                                                    <span className="flex-1 font-bold text-slate-700 text-lg">{step.title}</span>
+                                                                    <button onClick={() => handleDeleteStep(step.id)} className="p-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
+                                                                        <Trash2 size={20} />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="p-6 bg-white/80 border-t border-slate-100 flex gap-4 backdrop-blur-md absolute bottom-0 left-0 right-0 z-10 w-full">
                                                             <input
-                                                                className={INPUT_CLASS}
-                                                                value={projectForm.mediaUrls?.[0] || ''}
-                                                                onChange={e => {
-                                                                    const newUrls = [...(projectForm.mediaUrls || [])];
-                                                                    newUrls[0] = e.target.value;
-                                                                    setProjectForm({ ...projectForm, mediaUrls: newUrls });
-                                                                }}
-                                                                placeholder="Image URL..."
+                                                                className="flex-1 bg-slate-50 border-2 border-slate-200 rounded-2xl px-6 py-4 font-bold text-lg text-slate-700 outline-none focus:border-emerald-500 focus:bg-white focus:shadow-lg transition-all placeholder:text-slate-400"
+                                                                placeholder="Add a step (e.g., 'Sketch ideas')"
+                                                                value={newStepTitle}
+                                                                onChange={e => setNewStepTitle(e.target.value)}
+                                                                onKeyDown={e => e.key === 'Enter' && handleAddStep()}
+                                                                autoFocus
                                                             />
                                                             <button
-                                                                onClick={async () => {
-                                                                    if (!projectForm.title) {
-                                                                        alert("Please enter a title first!");
-                                                                        return;
-                                                                    }
-                                                                    setIsGenerating(true);
-                                                                    setIsGenerating(true);
-                                                                    const result = await generateProjectImage(
-                                                                        projectForm.title,
-                                                                        projectForm.station || 'general',
-                                                                        apiConfig?.googleApiKey
-                                                                    );
-                                                                    setIsGenerating(false);
-
-                                                                    if (result.success && result.url) {
-                                                                        const newUrls = [...(projectForm.mediaUrls || [])];
-                                                                        newUrls[0] = result.url;
-                                                                        setProjectForm({ ...projectForm, mediaUrls: newUrls });
-                                                                    } else {
-                                                                        alert(`Image Generation Failed:\n${result.error}`);
-                                                                    }
-                                                                }}
-                                                                disabled={isGenerating}
-                                                                className="px-4 py-2 bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white rounded-xl font-bold shadow-lg shadow-fuchsia-500/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                onClick={handleAddStep}
+                                                                disabled={!newStepTitle.trim()}
+                                                                className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl font-black shadow-xl shadow-emerald-500/30 transition-all disabled:opacity-50 hover:-translate-y-1"
                                                             >
-                                                                {isGenerating ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
-                                                                {isGenerating ? 'Dreaming...' : 'Auto-Generate'}
+                                                                <Plus size={28} />
                                                             </button>
-                                                        </div>
-
-                                                        {/* Preview Area */}
-                                                        <div className="relative w-full h-48 bg-slate-100 rounded-xl overflow-hidden border-2 border-slate-200 flex items-center justify-center group">
-                                                            {projectForm.mediaUrls?.[0] ? (
-                                                                <img src={projectForm.mediaUrls[0]} alt="Cover" className="w-full h-full object-cover" />
-                                                            ) : (
-                                                                <div className="text-slate-400 flex flex-col items-center gap-2">
-                                                                    <ImageIcon size={32} />
-                                                                    <span className="text-sm font-bold">No Cover Image</span>
-                                                                </div>
-                                                            )}
-
-                                                            {/* Loading Overlay */}
-                                                            {isGenerating && (
-                                                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white z-10 animate-in fade-in">
-                                                                    <Loader2 size={40} className="animate-spin mb-2 text-[#FFC107]" />
-                                                                    <span className="font-bold animate-pulse">AI is dreaming... 🍌</span>
-                                                                </div>
-                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
+                                            )}
+                                        </div>
 
-                                                {/* POTENTIAL BADGES */}
-                                                <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
-                                                    <label className={LABEL_CLASS}>Potential Rewards 🏆</label>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {badges.filter(b => b.criteria.target === 'all' || b.criteria.target === projectForm.station).map(badge => (
-                                                            <div key={badge.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs font-bold" title={badge.description}>
-                                                                <Award size={14} className={`text-${badge.color}-500`} />
-                                                                {badge.name}
+                                        {/* NAV BAR */}
+                                        <div className="absolute bottom-6 left-0 right-0 z-40 flex justify-center gap-4 pointer-events-none">
+                                            {wizardStep > 1 && (
+                                                <button
+                                                    onClick={handleBack}
+                                                    className="pointer-events-auto px-8 py-4 bg-white/90 backdrop-blur-xl border-2 border-slate-100 text-slate-600 rounded-3xl font-bold hover:bg-white hover:border-slate-300 hover:scale-105 active:scale-95 transition-all shadow-xl flex items-center gap-2 drop-shadow-lg"
+                                                >
+                                                    <ArrowLeft size={20} /> Back
+                                                </button>
+                                            )}
+                                            {wizardStep < 3 ? (
+                                                <button
+                                                    onClick={handleNext}
+                                                    disabled={wizardStep === 1 ? !isStep1Valid : !isStep2Valid}
+                                                    className="pointer-events-auto px-10 py-4 bg-indigo-600 text-white rounded-3xl font-black text-lg hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-600/40 flex items-center gap-3 disabled:opacity-50 disabled:scale-100 disabled:cursor-not-allowed group"
+                                                >
+                                                    Next Step <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={handleStartBuilding}
+                                                    disabled={!isStep3Valid}
+                                                    className="pointer-events-auto px-12 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-3xl font-black text-lg hover:brightness-110 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/40 flex items-center gap-3 disabled:opacity-50 group"
+                                                >
+                                                    Start Building 🚀
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col h-full bg-slate-50 relative overflow-hidden p-0">
+                                        {/* Animated Background */}
+                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/50 via-slate-50 to-emerald-50/50 pointer-events-none"></div>
+
+                                        {/* MISSION CONTROL HEADER */}
+                                        {projectForm.status !== 'published' && (
+                                            <div className="flex justify-between items-center px-8 py-6 shrink-0 relative z-10 bg-white/50 backdrop-blur-sm border-b border-slate-200/60">
+                                                <h3 className="text-3xl font-black text-slate-800 flex items-center gap-3">
+                                                    <div className="p-3 bg-white rounded-2xl shadow-sm border border-slate-100">
+                                                        <Zap size={24} className="text-amber-500 fill-amber-500" />
+                                                    </div>
+                                                    Mission Control 🚀
+                                                </h3>
+                                                <div className="flex items-center gap-4">
+                                                    <button
+                                                        onClick={() => setIsCommitModalOpen(true)}
+                                                        className="bg-white hover:bg-slate-50 text-slate-600 px-6 py-3 rounded-2xl font-bold border-2 border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-2"
+                                                    >
+                                                        <GitCommit size={20} /> Commit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const allDone = projectForm.steps?.every(s => s.status === 'done');
+                                                            if (!allDone) {
+                                                                if (!confirm("Not all steps are done! Are you sure you want to finish the mission?")) return;
+                                                            }
+                                                            if (handleSubmitForReview) {
+                                                                handleSubmitForReview();
+                                                            } else {
+                                                                // Fallback for previews or missing prop
+                                                                handleSaveProject(false);
+                                                            }
+                                                        }}
+                                                        className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-8 py-3 rounded-2xl font-black shadow-lg shadow-indigo-500/30 transition-all flex items-center gap-2 hover:scale-105 active:scale-95"
+                                                    >
+                                                        Mission Complete <Flag size={20} fill="currentColor" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* KANBAN BOARD */}
+                                        {projectForm.status !== 'published' && (
+                                            <div className="flex-1 overflow-hidden p-8 flex flex-col lg:flex-row gap-6 relative z-10">
+                                                {renderKanbanColumn('todo', 'Ready for Launch', <ListChecks size={20} className="text-indigo-600" />, 'text-indigo-600', 'bg-indigo-50/50')}
+                                                {renderKanbanColumn('doing', 'In Flight', <Loader2 size={20} className="text-amber-500 animate-spin-slow" />, 'text-amber-600', 'bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100')}
+                                                {renderKanbanColumn('done', 'Mission Accomplished', <Trophy size={20} className="text-emerald-500" />, 'text-emerald-600', 'bg-emerald-50/50')}
+                                            </div>
+                                        )}
+
+                                        {/* PRESENTATION OVERLAY (Moved inside) */}
+                                        {projectForm.status === 'published' && (
+                                            <div className="absolute inset-0 bg-slate-50 z-50 flex flex-col animate-in fade-in slide-in-from-bottom-10">
+                                                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center max-w-2xl mx-auto">
+                                                    <div className="w-32 h-32 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mb-8 shadow-xl shadow-indigo-500/30 animate-bounce">
+                                                        <Sparkles size={64} className="text-white" />
+                                                    </div>
+                                                    <h2 className="text-4xl md:text-5xl font-black text-slate-800 mb-6 leading-tight">Mission Accomplished! 🚀</h2>
+                                                    <p className="text-xl text-slate-500 font-medium mb-12">
+                                                        Your project is published and live! Now, it's time to show the world what you built.
+                                                        Record a presentation and paste the link below.
+                                                    </p>
+
+                                                    <div className="w-full bg-white p-8 rounded-2xl shadow-xl border-2 border-slate-100">
+                                                        <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-4 text-left">
+                                                            Presentation Video Link
+                                                        </label>
+                                                        <div className="flex gap-4">
+                                                            <div className="relative flex-1">
+                                                                <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                                <input
+                                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+                                                                    placeholder="https://youtube.com/..."
+                                                                    value={projectForm.presentationUrl || ''}
+                                                                    onChange={e => setProjectForm({ ...projectForm, presentationUrl: e.target.value })}
+                                                                />
                                                             </div>
-                                                        ))}
-                                                        {badges.filter(b => b.criteria.target === 'all' || b.criteria.target === projectForm.station).length === 0 && (
-                                                            <div className="text-slate-400 text-sm italic">No specific badges for this mission yet.</div>
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (projectForm.presentationUrl) {
+                                                                        setProjectForm({ ...projectForm, isPresentationCompleted: true });
+                                                                        handleSaveProject(false);
+                                                                    }
+                                                                }}
+                                                                disabled={!projectForm.presentationUrl}
+                                                                className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl font-black text-lg shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            >
+                                                                Complete <CheckSquare size={24} strokeWidth={3} />
+                                                            </button>
+                                                        </div>
+                                                        {projectForm.isPresentationCompleted && (
+                                                            <div className="mt-6 p-4 bg-emerald-100 text-emerald-700 rounded-xl font-bold flex items-center gap-2 animate-in fade-in">
+                                                                <CheckSquare size={20} /> Presentation Submitted!
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
                                             </div>
-
-                                            <div className={studioClass("flex flex-col border-2 overflow-hidden shadow-sm h-[500px] lg:h-auto", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
-                                                <div className="p-5 border-b-2 border-slate-100 bg-slate-50/50 shrink-0 flex justify-between items-center">
-                                                    <h4 className={studioClass("font-black text-lg flex items-center gap-2", STUDIO_THEME.text.primary)}>
-                                                        <ListChecks size={24} className="text-amber-500" />
-                                                        Building Steps
-                                                    </h4>
-                                                    <span className="bg-white border border-slate-200 text-slate-500 text-xs font-bold px-3 py-1 rounded-full">{projectForm.steps?.length || 0} Steps</span>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-                                                    {projectForm.steps?.length === 0 && (
-                                                        <div className="flex flex-col items-center justify-center h-full text-center p-8 opacity-50">
-                                                            <ListChecks size={48} className="text-slate-300 mb-4" />
-                                                            <p className="text-slate-400 font-bold text-lg">No steps yet!</p>
-                                                            <p className="text-slate-400">Add your first step below to get started.</p>
-                                                        </div>
-                                                    )}
-                                                    {projectForm.steps?.map((step, idx) => {
-                                                        const colors = [
-                                                            'from-cyan-400 to-cyan-500',
-                                                            'from-pink-400 to-pink-500',
-                                                            'from-orange-400 to-orange-500',
-                                                            'from-yellow-400 to-yellow-500'
-                                                        ];
-                                                        const colorClass = colors[idx % colors.length];
-
-                                                        return (
-                                                            <div key={step.id} className="flex items-center gap-4 p-4 bg-white border-2 border-slate-100 rounded-xl group hover:border-indigo-200 transition-all shadow-sm hover:shadow-md hover:scale-[1.01]">
-                                                                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colorClass} flex items-center justify-center text-lg text-white font-black shadow-sm shrink-0 transform -rotate-3 group-hover:rotate-0 transition-transform`}>{idx + 1}</div>
-                                                                <span className={studioClass("flex-1 text-base font-bold", STUDIO_THEME.text.primary)}>{step.title}</span>
-                                                                {step.isLocked ? <Lock size={20} className="text-slate-300" /> : <button onClick={() => handleDeleteStep(step.id)} className="text-slate-400 hover:text-red-500 p-3 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={20} /></button>}
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                                <div className="p-4 border-t-2 border-slate-100 bg-slate-50/50 flex gap-3 shrink-0">
-                                                    <input
-                                                        className={INPUT_CLASS}
-                                                        placeholder="Type a step here..."
-                                                        value={newStepTitle}
-                                                        onChange={e => setNewStepTitle(e.target.value)}
-                                                        onKeyDown={e => e.key === 'Enter' && handleAddStep()}
-                                                    />
-                                                    <button onClick={handleAddStep} className="bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-white px-6 py-4 rounded-xl font-black shadow-lg transition-all active:scale-95 hover:shadow-amber-500/20">
-                                                        <Plus size={24} strokeWidth={3} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex justify-center pt-6 mt-auto border-t-2 border-slate-200 shrink-0 pb-4">
-                                            <button onClick={handleStartBuilding} className="w-full md:w-auto px-12 py-5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white rounded-2xl font-black text-xl shadow-2xl shadow-emerald-500/30 flex items-center justify-center gap-4 transition-all active:scale-95 transform hover:-translate-y-1">
-                                                Start Building 🚀 <Play size={24} fill="currentColor" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 relative z-10">
-                                        <div className="flex justify-between items-center mb-6 shrink-0">
-                                            <h3 className={studioClass("text-3xl font-black flex items-center gap-3", STUDIO_THEME.text.primary)}>
-                                                <Zap size={32} className="text-amber-500 fill-amber-500" />
-                                                Building Zone
-                                            </h3>
-                                            <button onClick={() => handleSaveProject(false)} className="md:hidden px-6 py-3 bg-white text-indigo-600 rounded-xl font-bold text-sm border-2 border-slate-200 shadow-sm">
-                                                Save Progress
-                                            </button>
-                                        </div>
-
-                                        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-4 pb-2">
-                                            {/* To Do Column */}
-                                            <div className="flex-1 flex flex-col bg-white border-2 border-slate-200 rounded-[2rem] min-h-[200px] shadow-sm">
-                                                <div className="p-5 border-b-2 border-slate-200 bg-slate-50 font-black text-sm uppercase text-slate-600 tracking-wider text-center flex items-center justify-center gap-2">
-                                                    <div className="w-3 h-3 rounded-full bg-slate-400"></div> TO DO
-                                                </div>
-                                                <div className="flex-1 p-5 space-y-4 overflow-y-auto custom-scrollbar">
-                                                    {projectForm.steps?.filter(s => s.status === 'todo').map(step => (
-                                                        <div key={step.id} className="bg-slate-50 border-2 border-slate-200 p-6 rounded-2xl shadow-sm group hover:border-slate-300 transition-all">
-                                                            <p className={studioClass("text-xl font-black mb-4 leading-tight", STUDIO_THEME.text.primary)}>{step.title}</p>
-                                                            <button onClick={() => handleMoveStep(step.id, 'doing')} className={`w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black rounded-xl border-2 border-indigo-600 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-900/10 uppercase tracking-wide`}>
-                                                                START <ArrowRight size={18} strokeWidth={3} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                    {projectForm.steps?.filter(s => s.status === 'todo').length === 0 && (
-                                                        <div className="text-center text-slate-400 italic py-8 font-medium">No tasks left! 🎉</div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* In Progress Column */}
-                                            <div className={`flex-1 flex flex-col bg-gradient-to-br ${currentTheme.gradient} border-4 ${currentTheme.border} rounded-[2rem] min-h-[200px] shadow-2xl transform scale-[1.02] z-10`}>
-                                                <div className={`p-4 border-b-2 ${currentTheme.border} bg-white/20 font-black text-sm uppercase ${currentTheme.text} tracking-wider text-center flex items-center justify-center gap-2`}>
-                                                    <Zap size={16} className="fill-current" /> IN PROGRESS
-                                                </div>
-                                                <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
-                                                    {projectForm.steps?.filter(s => s.status === 'doing').map(step => (
-                                                        <div key={step.id} className={`bg-white border-2 ${currentTheme.border} p-5 rounded-2xl shadow-xl relative overflow-hidden group`}>
-                                                            <div className={`absolute top-0 left-0 w-2 h-full bg-current ${currentTheme.text}`}></div>
-                                                            <p className={studioClass("text-xl font-black mb-4 pl-3 leading-tight", STUDIO_THEME.text.primary)}>{step.title}</p>
-                                                            <div className="flex gap-3">
-                                                                <button onClick={() => handleMoveStep(step.id, 'todo')} className="p-3 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl transition-colors" title="Move back"><ArrowLeft size={20} strokeWidth={3} /></button>
-                                                                <button onClick={() => handleMoveStep(step.id, 'done')} className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white text-sm font-black rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 hover:scale-[1.02] active:scale-95">
-                                                                    DONE! <CheckSquare size={20} strokeWidth={3} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {projectForm.steps?.filter(s => s.status === 'doing').length === 0 && (
-                                                        <div className="text-center text-white/50 italic py-12 font-bold text-lg">
-                                                            Pick a task to start! 👆
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Done Column */}
-                                            <div className="flex-1 flex flex-col bg-white border-2 border-slate-100 rounded-[2rem] min-h-[200px] shadow-sm">
-                                                <div className="p-4 border-b-2 border-slate-100 bg-slate-50 font-black text-sm uppercase text-emerald-600 tracking-wider text-center flex items-center justify-center gap-2">
-                                                    <CheckSquare size={16} /> DONE
-                                                </div>
-                                                <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
-                                                    {projectForm.steps?.filter(s => s.status === 'done').map(step => (
-                                                        <div key={step.id} className="bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl opacity-60 hover:opacity-100 transition-all group">
-                                                            <div className="flex items-start gap-3 mb-3">
-                                                                <div className="bg-emerald-100 text-emerald-600 p-1 rounded-full mt-0.5"><CheckSquare size={16} /></div>
-                                                                <p className="text-base text-slate-400 line-through decoration-2 decoration-slate-300 font-medium">{step.title}</p>
-                                                            </div>
-                                                            <button onClick={() => handleMoveStep(step.id, 'doing')} className={studioClass("text-xs font-bold ml-9 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity", STUDIO_THEME.text.primary)}>
-                                                                <ArrowLeft size={12} /> Not done yet?
-                                                            </button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
+                                        )}
                                     </div>
                                 )}
                             </>
@@ -453,6 +638,8 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                                 <p className="text-slate-500 max-w-md mx-auto">Helpful videos, links, and files for your mission will appear here.</p>
                             </div>
                         )}
+
+
                     </div>
                 </div >
             </Modal >

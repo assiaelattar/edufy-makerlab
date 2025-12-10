@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy } from 'lucide-react';
+import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles } from 'lucide-react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
@@ -28,6 +28,7 @@ import { PortfolioView } from './views/PortfolioView';
 import { ReviewView } from './views/ReviewView';
 import { ParentDashboardView } from './views/ParentDashboardView';
 import { TestDesignView } from './views/TestDesignView';
+import { TestWizardView } from './views/TestWizardView';
 import { LoginView } from './views/LoginView';
 import { Modal } from './components/Modal';
 import { Logo } from './components/Logo';
@@ -48,6 +49,7 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut }: { curren
         { id: 'portfolio', icon: Trophy, label: 'Portfolio' },
         { id: 'toolkit', icon: Box, label: 'Toolbox' },
         { id: 'media', icon: Camera, label: 'Gallery' },
+        { id: 'test-wizard', icon: Sparkles, label: 'New Project (Test)' },
     ];
 
     return (
@@ -460,6 +462,7 @@ const AppContent = () => {
             case 'pickup': return <PickupView />;
             case 'parent-dashboard': return <ParentDashboardView />;
             case 'test-design': return <TestDesignView />;
+            case 'test-wizard': return <TestWizardView />;
             default: return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
         }
     };
@@ -497,6 +500,7 @@ const AppContent = () => {
                             { id: 'portfolio', icon: Trophy, label: 'Portfolio' },
                             { id: 'toolkit', icon: Box, label: 'Toolbox' },
                             { id: 'media', icon: Camera, label: 'Gallery' },
+                            { id: 'test-wizard', icon: Sparkles, label: 'New Project (Test)' },
                         ].map(item => (
                             <button
                                 key={item.id}

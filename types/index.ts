@@ -42,6 +42,7 @@ export interface Student {
   school?: string;
   birthDate?: string;
   medicalInfo?: string;
+  authorizedPickups?: string[]; // Array of names allowed to pick up
   status: 'active' | 'inactive';
   createdAt: Timestamp;
   loginInfo?: {
@@ -332,6 +333,8 @@ export interface StudentProject {
     stepId?: string;
     evidenceLink?: string;
   }[];
+  presentationUrl?: string; // Link to video presentation (YouTube, etc.)
+  isPresentationCompleted?: boolean;
 }
 
 export interface Notification {
@@ -431,8 +434,14 @@ export interface PickupEntry {
   id: string;
   studentId: string;
   studentName: string;
-  parentName: string;
-  status: 'waiting' | 'arrived' | 'dismissed';
+  parentName: string; // The primary parent
+  pickerName?: string; // Who is actually coming (e.g. "Mom", "Uncle John")
+  pickerRelation?: string;
+  status: 'waiting' | 'on_the_way' | 'arrived' | 'released' | 'confirmed' | 'dismissed';
+  notifiedAt?: Timestamp; // When "On my way" was clicked
+  arrivedAt?: Timestamp; // When "I'm Here" was clicked
+  releasedAt?: Timestamp; // When instructor released
+  confirmedAt?: Timestamp; // When parent confirmed receipt
   createdAt: Timestamp;
 }
 

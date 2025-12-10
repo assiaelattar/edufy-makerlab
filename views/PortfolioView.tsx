@@ -6,14 +6,21 @@ import { STUDIO_THEME } from '../utils/studioTheme';
 import { formatDate } from '../utils/helpers';
 
 export const PortfolioView = () => {
-    const { studentProjects, badges, t } = useAppContext();
+    const { studentProjects, badges, students, t } = useAppContext();
     const { userProfile } = useAuth();
 
     // 1. Get My Projects
     const myProjects = useMemo(() => {
         if (!userProfile) return [];
-        return studentProjects.filter(p => p.studentId === userProfile.uid); // or link by email if needed
-    }, [studentProjects, userProfile]);
+        // Match student by email to get their Firestore ID
+        const matchedStudent = students.find(s => s.email === userProfile.email || s.loginInfo?.email === userProfile.email);
+
+        // Filter projects matching either the Auth UID or the Firestore ID
+        return studentProjects.filter(p =>
+            p.studentId === userProfile.uid ||
+            (matchedStudent && p.studentId === matchedStudent.id)
+        );
+    }, [studentProjects, userProfile, students]);
 
     const publishedProjects = myProjects.filter(p => p.status === 'published');
 
@@ -24,12 +31,11 @@ export const PortfolioView = () => {
 
     // 3. Get Earned Badges (Unique)
     const myBadges = useMemo(() => {
-        const badgeIds = new Set<string>();
-        myProjects.forEach(p => {
-            p.earnedBadgeIds?.forEach(bid => badgeIds.add(bid));
-        });
-        return badges.filter(b => badgeIds.has(b.id));
-    }, [myProjects, badges]);
+        if (!userProfile) return [];
+        const student = students.find(s => s.id === userProfile.uid || s.email === userProfile.email);
+        const badgeIds = student?.badges || [];
+        return badges.filter(b => badgeIds.includes(b.id));
+    }, [students, userProfile, badges]);
 
     const studioClass = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' ');
 

@@ -16,7 +16,7 @@ import { generateProjectThumbnail } from '../utils/thumbnailGenerator';
 import { MOCK_PROJECT_TEMPLATES } from '../utils/mockData';
 import { NotificationBell } from '../components/NotificationBell';
 import { ProjectFactoryModal } from './learning/ProjectFactoryModal';
-import { StudentProjectModal } from './learning/StudentProjectModal';
+import { StudentProjectWizardView } from './learning/StudentProjectWizardView';
 import { InstructorStudioDashboard } from './learning/InstructorStudioDashboard';
 import { CommitFeedView } from './learning/CommitFeedView';
 import { StepReviewModal } from './learning/StepReviewModal';
@@ -558,91 +558,105 @@ export const LearningView = () => {
 
     const handleReviewAction = async (status: 'published' | 'changes_requested') => {
         if (!db || !selectedSubmission) return;
-        await updateDoc(doc(db, 'student_projects', selectedSubmission.id), {
-            status: status === 'changes_requested' ? 'changes_requested' : 'published',
-            instructorFeedback: feedback,
-            updatedAt: serverTimestamp()
-        });
+        try {
+            await updateDoc(doc(db, 'student_projects', selectedSubmission.id), {
+                status: status === 'changes_requested' ? 'changes_requested' : 'published',
+                instructorFeedback: feedback,
+                updatedAt: serverTimestamp()
+            });
 
-        if (selectedSubmission.studentId) {
-            await sendNotification(
-                selectedSubmission.studentId,
-                status === 'published' ? 'Mission Accomplished! 🚀' : 'Mission Update 📝',
-                status === 'published'
-                    ? `Your project "${selectedSubmission.title}" has been approved and published!`
-                    : `Your project "${selectedSubmission.title}" needs some changes. Check the feedback!`,
-                status === 'published' ? 'success' : 'warning'
-            );
+            if (selectedSubmission.studentId) {
+                await sendNotification(
+                    selectedSubmission.studentId,
+                    status === 'published' ? 'Mission Accomplished! 🚀' : 'Mission Update 📝',
+                    status === 'published'
+                        ? `Your project "${selectedSubmission.title}" has been approved and published!`
+                        : `Your project "${selectedSubmission.title}" needs some changes. Check the feedback!`,
+                    status === 'published' ? 'success' : 'warning'
+                );
 
-            // --- BADGE AWARDING LOGIC ---
-            if (status === 'published') {
-                const studentId = selectedSubmission.studentId;
-                const student = students.find(s => s.id === studentId);
+                // --- BADGE AWARDING LOGIC ---
+                if (status === 'published') {
+                    const studentId = selectedSubmission.studentId;
+                    const student = students.find(s => s.id === studentId);
 
-                if (student) {
-                    const currentBadges = student.badges || [];
-                    const newBadges: string[] = [];
+                    if (student) {
+                        const currentBadges = student.badges || [];
+                        const newBadges: string[] = [];
 
-                    // Get all published projects for this student (including this one)
-                    const studentPublishedProjects = studentProjects.filter(p => p.studentId === studentId && p.status === 'published');
-                    // Add current one if not already in list (it might not be updated in context yet)
-                    const allProjects = studentPublishedProjects.find(p => p.id === selectedSubmission.id)
-                        ? studentPublishedProjects
-                        : [...studentPublishedProjects, { ...selectedSubmission, status: 'published' } as StudentProject];
+                        // Get all published projects for this student (including this one)
+                        const studentPublishedProjects = studentProjects.filter(p => p.studentId === studentId && p.status === 'published');
+                        // Add current one if not already in list (it might not be updated in context yet)
+                        const allProjects = studentPublishedProjects.find(p => p.id === selectedSubmission.id)
+                            ? studentPublishedProjects
+                            : [...studentPublishedProjects, { ...selectedSubmission, status: 'published' } as StudentProject];
 
-                    // Check each badge
-                    for (const badge of badges) {
-                        if (currentBadges.includes(badge.id)) continue; // Already has it
+                        // Check each badge
+                        for (const badge of badges) {
+                            if (currentBadges.includes(badge.id)) continue; // Already has it
 
-                        let earned = false;
+                            let earned = false;
 
-                        if (badge.criteria.type === 'project_count') {
-                            const targetStation = badge.criteria.target;
-                            let count = 0;
+                            if (badge.criteria.type === 'project_count') {
+                                const targetStation = badge.criteria.target;
+                                let count = 0;
 
-                            if (targetStation === 'all') {
-                                count = allProjects.length;
-                            } else {
-                                count = allProjects.filter(p => p.station === targetStation).length;
+                                if (targetStation === 'all') {
+                                    count = allProjects.length;
+                                } else {
+                                    count = allProjects.filter(p => p.station === targetStation).length;
+                                }
+
+                                if (count >= badge.criteria.count) {
+                                    earned = true;
+                                }
+                            } else if (badge.criteria.type === 'skill') {
+                                const allSkills = new Set<string>();
+                                allProjects.forEach(p => p.skillsAcquired?.forEach(s => allSkills.add(s)));
+
+                                if (allSkills.has(badge.criteria.target)) {
+                                    earned = true;
+                                }
                             }
 
-                            if (count >= badge.criteria.count) {
-                                earned = true;
-                            }
-                        } else if (badge.criteria.type === 'skill') {
-                            const allSkills = new Set<string>();
-                            allProjects.forEach(p => p.skillsAcquired?.forEach(s => allSkills.add(s)));
-
-                            if (allSkills.has(badge.criteria.target)) {
-                                earned = true;
+                            if (earned) {
+                                newBadges.push(badge.id);
                             }
                         }
 
-                        if (earned) {
-                            newBadges.push(badge.id);
-                        }
-                    }
+                        if (newBadges.length > 0) {
+                            await updateDoc(doc(db, 'students', studentId), {
+                                badges: [...currentBadges, ...newBadges]
+                            });
 
-                    if (newBadges.length > 0) {
-                        await updateDoc(doc(db, 'students', studentId), {
-                            badges: [...currentBadges, ...newBadges]
-                        });
+                            // 2. Update Project with Earned Badges
+                            await updateDoc(doc(db, 'student_projects', selectedSubmission.id), {
+                                earnedBadgeIds: newBadges
+                            });
 
-                        // Notify for each badge
-                        for (const badgeId of newBadges) {
-                            const badge = badges.find(b => b.id === badgeId);
-                            if (badge) {
-                                await sendNotification(
-                                    studentId,
-                                    'New Badge Earned! 🏆',
-                                    `You earned the "${badge.name}" badge!`,
-                                    'success'
-                                );
+                            // Notify for each badge
+                            for (const badgeId of newBadges) {
+                                const badge = badges.find(b => b.id === badgeId);
+                                if (badge) {
+                                    await sendNotification(
+                                        studentId,
+                                        'New Badge Earned! 🏆',
+                                        `You earned the "${badge.name}" badge!`,
+                                        'success'
+                                    );
+                                }
                             }
                         }
                     }
                 }
             }
+        } catch (error) {
+            console.error("Error processing review:", error);
+            alert("There was an error updating the project status. Please try again.");
+        } finally {
+            setReviewModalOpen(false);
+            setFeedback('');
+            setSelectedSubmission(null);
         }
 
         setReviewModalOpen(false);
@@ -800,7 +814,9 @@ export const LearningView = () => {
     };
 
     const handleMoveStep = (stepId: string, newStatus: 'todo' | 'doing' | 'done') => {
-        if (newStatus === 'done') {
+        // If the new Wizard is open, don't trigger the legacy proof modal here.
+        // The Wizard handles its own proof of work flow internally.
+        if (newStatus === 'done' && !isProjectModalOpen) {
             setActiveStepForProof(stepId);
             setProofFile(null);
             setIsProofModalOpen(true);
@@ -989,58 +1005,99 @@ export const LearningView = () => {
                                 }}
                             />
                         ) : (
-                            <div className="space-y-6">
+                            <div className="space-y-8 animate-in fade-in slide-in-from-right-8">
                                 {/* Header with Back Button */}
-                                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between border-b border-white/10 pb-6">
                                     <div className="flex items-center gap-4">
                                         <button
                                             onClick={() => {
                                                 setShowStationProjects(false);
                                                 setSelectedStation(null);
                                             }}
-                                            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                                            className="p-3 hover:bg-white/10 rounded-xl transition-colors group"
                                         >
-                                            <ArrowLeft size={20} className="text-slate-600" />
+                                            <ArrowLeft size={24} className="text-slate-400 group-hover:text-white" />
                                         </button>
                                         <div>
-                                            <h2 className="text-2xl font-bold text-slate-900">
+                                            <h2 className="text-3xl font-black text-white flex items-center gap-3">
+                                                {selectedStation && (
+                                                    <span className={`w-3 h-8 rounded-full bg-${getTheme(selectedStation).color}-500 block`}></span>
+                                                )}
                                                 {selectedStation && getTheme(selectedStation).label} Projects
                                             </h2>
-                                            <p className="text-slate-600">All templates and student projects for this station</p>
+                                            <p className="text-slate-400 text-lg mt-1">Manage templates and view student progress</p>
                                         </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {/* Actions could go here */}
                                     </div>
                                 </div>
 
                                 {/* Project Templates Section */}
                                 <div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                        <FileText size={20} className="text-indigo-600" />
+                                    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400">
+                                            <FileText size={20} />
+                                        </div>
                                         Project Templates
                                     </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+                                        {/* Add New Template Card */}
+                                        <button
+                                            onClick={() => {
+                                                setTemplateForm({
+                                                    title: '',
+                                                    description: '',
+                                                    difficulty: 'beginner',
+                                                    skills: [],
+                                                    defaultSteps: [],
+                                                    station: selectedStation || 'general',
+                                                    resources: [],
+                                                    status: 'draft',
+                                                    targetAudience: { grades: [], groups: [] }
+                                                });
+                                                setEditingTemplateId(null);
+                                                setIsTemplateModalOpen(true);
+                                            }}
+                                            className="group relative h-full min-h-[280px] bg-indigo-900/10 border-2 border-dashed border-indigo-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 hover:bg-indigo-900/20 hover:border-indigo-500/50 transition-all"
+                                        >
+                                            <div className="w-16 h-16 rounded-full bg-indigo-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <Plus size={32} className="text-indigo-400" />
+                                            </div>
+                                            <span className="font-bold text-indigo-300">New Template</span>
+                                        </button>
+
                                         {projectTemplates
                                             .filter(t => t.station === selectedStation)
                                             .map(template => {
                                                 const theme = getTheme(template.station);
                                                 return (
-                                                    <div key={template.id} className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden hover:border-indigo-400 transition-all shadow-sm hover:shadow-lg">
-                                                        <div className="h-32 bg-slate-800 relative overflow-hidden">
-                                                            <img src={template.thumbnailUrl || 'https://placehold.co/600x400/f1f5f9/cbd5e1?text=Template'} className="w-full h-full object-cover" alt={template.title} />
-                                                            <div className="absolute top-2 right-2">
-                                                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-indigo-600 text-white">
+                                                    <div key={template.id} className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500/50 transition-all hover:shadow-2xl hover:shadow-indigo-900/20 flex flex-col">
+                                                        <div className="aspect-video bg-slate-800 relative overflow-hidden">
+                                                            {template.thumbnailUrl ? (
+                                                                <img src={template.thumbnailUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={template.title} />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                                                                    <FileText size={48} className="text-slate-700" />
+                                                                </div>
+                                                            )}
+                                                            <div className="absolute top-3 right-3 flex gap-2">
+                                                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-950/80 text-white backdrop-blur-sm border border-white/10">
                                                                     Template
                                                                 </span>
                                                             </div>
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60"></div>
                                                         </div>
-                                                        <div className="p-4">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <theme.icon size={12} style={{ color: theme.colorHex }} />
-                                                                <span className={`text-[9px] font-bold uppercase ${theme.text}`}>{theme.label}</span>
+                                                        <div className="p-5 flex flex-col flex-1">
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${theme.badge} bg-opacity-10`}>{theme.label}</span>
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-slate-700 text-slate-400`}>{template.difficulty}</span>
                                                             </div>
-                                                            <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{template.title}</h3>
-                                                            <p className="text-xs text-slate-600 mb-3 line-clamp-2">{template.description}</p>
+                                                            <h3 className="font-bold text-white text-lg mb-2 leading-tight group-hover:text-indigo-400 transition-colors">{template.title}</h3>
+                                                            <p className="text-sm text-slate-400 mb-6 line-clamp-2">{template.description}</p>
 
-                                                            <div className="flex gap-2">
+                                                            <div className="mt-auto pt-4 border-t border-slate-800 flex gap-2">
                                                                 <button
                                                                     onClick={() => {
                                                                         setEditingTemplateId(template.id);
@@ -1049,9 +1106,9 @@ export const LearningView = () => {
                                                                         setActiveModalTab('details');
                                                                         setIsTemplateModalOpen(true);
                                                                     }}
-                                                                    className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                                                                    className="flex-1 py-2.5 bg-slate-800 hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2"
                                                                 >
-                                                                    <Edit3 size={12} />
+                                                                    <Edit3 size={14} />
                                                                     Edit
                                                                 </button>
                                                             </div>
@@ -1059,87 +1116,114 @@ export const LearningView = () => {
                                                     </div>
                                                 );
                                             })}
-                                        {projectTemplates.filter(t => t.station === selectedStation).length === 0 && (
-                                            <div className="col-span-full text-center py-8 text-slate-500">
-                                                No templates for this station yet.
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
                                 {/* Student Projects Section */}
-                                <div>
-                                    <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-                                        <Rocket size={20} className="text-emerald-600" />
+                                <div className="pt-8 border-t border-slate-800">
+                                    <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                                        <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
+                                            <Rocket size={20} />
+                                        </div>
                                         Student Projects
                                     </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {studentProjects
-                                            .filter(p => p.station === selectedStation)
-                                            .map(project => {
-                                                const theme = getTheme(project.station);
-                                                const student = students.find(s => s.id === project.studentId);
-                                                const progress = project.steps && project.steps.length > 0
-                                                    ? Math.round((project.steps.filter(s => s.status === 'done').length / project.steps.length) * 100)
-                                                    : 0;
-                                                return (
-                                                    <div key={project.id} className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden hover:border-emerald-400 transition-all shadow-sm hover:shadow-lg">
-                                                        <div className="h-32 bg-slate-800 relative overflow-hidden">
-                                                            {project.mediaUrls?.[0] ? (
-                                                                <img src={project.mediaUrls[0]} className="w-full h-full object-cover" alt={project.title} />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                                                                    <ImageIcon size={32} className="text-slate-700" />
-                                                                </div>
-                                                            )}
-                                                            <div className="absolute top-2 right-2">
-                                                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase bg-slate-950/80 text-white border border-slate-800`}>
-                                                                    {project.status.replace('_', ' ')}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="p-4">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <theme.icon size={12} style={{ color: theme.colorHex }} />
-                                                                <span className={`text-[9px] font-bold uppercase ${theme.text}`}>{theme.label}</span>
-                                                            </div>
-                                                            <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{project.title}</h3>
-                                                            <p className="text-xs text-slate-600 mb-3">by {student?.name || project.studentName}</p>
 
-                                                            {/* Progress Bar */}
-                                                            <div className="mb-3">
-                                                                <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                                                                    <span>Progress</span>
-                                                                    <span className={progress === 100 ? 'text-emerald-400' : ''}>{progress}%</span>
-                                                                </div>
-                                                                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                                                    <div className={`h-full bg-gradient-to-r ${theme.gradient} transition-all`} style={{ width: `${progress}%` }} />
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex gap-2">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setActiveProject(project);
-                                                                        setProjectForm(project);
-                                                                        setIsProjectModalOpen(true);
-                                                                    }}
-                                                                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
-                                                                >
-                                                                    <Edit3 size={12} />
-                                                                    Edit
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        {studentProjects.filter(p => p.station === selectedStation).length === 0 && (
-                                            <div className="col-span-full text-center py-8 text-slate-500">
-                                                No student projects for this station yet.
+                                    {studentProjects.filter(p => p.station === selectedStation).length === 0 ? (
+                                        <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-2xl p-12 text-center">
+                                            <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Rocket size={32} className="text-slate-600" />
                                             </div>
-                                        )}
-                                    </div>
+                                            <h4 className="font-bold text-white mb-2">No Projects Yet</h4>
+                                            <p className="text-slate-500">Students haven't started any projects in this station yet.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                            {studentProjects
+                                                .filter(p => p.station === selectedStation)
+                                                .map(project => {
+                                                    const theme = getTheme(project.station);
+                                                    const student = students.find(s => s.id === project.studentId);
+                                                    const progress = project.steps && project.steps.length > 0
+                                                        ? Math.round((project.steps.filter(s => s.status === 'done').length / project.steps.length) * 100)
+                                                        : 0;
+
+                                                    const statusColors = {
+                                                        planning: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
+                                                        building: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+                                                        submitted: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
+                                                        published: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
+                                                        changes_requested: 'text-orange-400 bg-orange-400/10 border-orange-400/20'
+                                                    } as any;
+
+                                                    return (
+                                                        <div key={project.id} className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-emerald-500/50 transition-all hover:shadow-2xl hover:shadow-emerald-900/20 flex flex-col">
+                                                            <div className="aspect-video bg-slate-800 relative overflow-hidden">
+                                                                {project.mediaUrls?.[0] ? (
+                                                                    <img src={project.mediaUrls[0]} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={project.title} />
+                                                                ) : (
+                                                                    <div className="w-full h-full bg-slate-800 flex items-center justify-center">
+                                                                        <ImageIcon size={32} className="text-slate-700" />
+                                                                    </div>
+                                                                )}
+                                                                <div className="absolute top-3 right-3">
+                                                                    <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider backdrop-blur-sm border ${statusColors[project.status] || 'text-slate-400 bg-slate-800 border-slate-700'}`}>
+                                                                        {project.status.replace('_', ' ')}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="p-5 flex flex-col flex-1">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-700">
+                                                                        {student?.name?.charAt(0) || '?'}
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-slate-400">{student?.name || project.studentName}</span>
+                                                                </div>
+
+                                                                <h3 className="font-bold text-white text-lg mb-4 leading-tight line-clamp-1 group-hover:text-emerald-400 transition-colors">{project.title}</h3>
+
+                                                                {/* Progress Bar */}
+                                                                <div className="mb-6">
+                                                                    <div className="flex justify-between text-[10px] font-bold text-slate-500 mb-1.5">
+                                                                        <span>COMPLETION</span>
+                                                                        <span className={progress === 100 ? 'text-emerald-400' : 'text-slate-400'}>{progress}%</span>
+                                                                    </div>
+                                                                    <div className="h-2 bg-slate-800 rounded-full overflow-hidden border border-slate-800">
+                                                                        <div className={`h-full bg-gradient-to-r ${theme.gradient} transition-all duration-500`} style={{ width: `${progress}%` }} />
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="mt-auto flex gap-2">
+                                                                    {project.presentationUrl && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                window.open(project.presentationUrl, '_blank');
+                                                                            }}
+                                                                            className="px-3 py-2 bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-600/30 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1"
+                                                                            title="Watch Presentation"
+                                                                        >
+                                                                            <Play size={14} fill="currentColor" />
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setActiveProject(project);
+                                                                            setProjectForm(project);
+                                                                            setIsProjectModalOpen(true);
+                                                                        }}
+                                                                        className="flex-1 py-2 bg-slate-800 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 border border-slate-700 hover:border-emerald-500"
+                                                                    >
+                                                                        <Edit3 size={14} />
+                                                                        Manage
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -1241,6 +1325,18 @@ export const LearningView = () => {
 
                                                     {/* Action Buttons */}
                                                     <div className="flex gap-2">
+                                                        {/* Watch Presentation Button */}
+                                                        {project.presentationUrl && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    window.open(project.presentationUrl, '_blank');
+                                                                }}
+                                                                className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                                                            >
+                                                                <Play size={12} fill="currentColor" />
+                                                            </button>
+                                                        )}
                                                         {/* Review Button (for submitted projects) */}
                                                         {project.status === 'submitted' && (
                                                             <button
@@ -2398,7 +2494,8 @@ export const LearningView = () => {
                                                             <div className="absolute inset-0 bg-gradient-to-t from-[#2D2B6B]/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                                                             {/* Status Badge */}
-                                                            <div className="absolute top-4 right-4">
+                                                            {/* Status Badge */}
+                                                            <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
                                                                 <span className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase shadow-lg backdrop-blur-md border flex items-center gap-1.5 transition-all ${project.status === 'published' ? 'bg-emerald-500 text-white border-emerald-400' :
                                                                     project.status === 'submitted' ? 'bg-indigo-600 text-white border-indigo-400 animate-pulse' :
                                                                         'bg-white/90 text-slate-700 border-white/50'
@@ -2406,6 +2503,12 @@ export const LearningView = () => {
                                                                     {project.status === 'submitted' && <Clock size={10} />}
                                                                     {project.status.replace('_', ' ')}
                                                                 </span>
+                                                                {project.status === 'published' && !project.isPresentationCompleted && (
+                                                                    <span className="px-3 py-1.5 rounded-full text-[10px] font-bold uppercase shadow-lg backdrop-blur-md border bg-indigo-600 text-white border-indigo-400 animate-pulse flex items-center gap-1.5">
+                                                                        <LucideIcons.Video size={10} />
+                                                                        Add Presentation
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
 
@@ -2457,6 +2560,18 @@ export const LearningView = () => {
                                                                 >
                                                                     View Project <ExternalLink size={14} />
                                                                 </button>
+                                                                {project.presentationUrl && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            window.open(project.presentationUrl, '_blank');
+                                                                        }}
+                                                                        className="bg-rose-500 text-white font-bold px-4 py-2 rounded-full hover:bg-rose-600 transition-colors shadow-md shadow-rose-200 text-sm flex items-center gap-2 ml-2"
+                                                                        title="Watch Presentation"
+                                                                    >
+                                                                        <Play size={14} fill="currentColor" />
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -2485,29 +2600,32 @@ export const LearningView = () => {
 
             {/* --- ENGINEERING WORKSPACE MODAL (Gamified) --- */}
             {/* --- ENGINEERING WORKSPACE MODAL (Gamified) --- */}
-            <StudentProjectModal
-                isOpen={isProjectModalOpen}
-                onClose={() => setIsProjectModalOpen(false)}
-                projectForm={projectForm}
-                setProjectForm={setProjectForm}
-                activeProject={activeProject}
-                currentTheme={currentTheme}
-                workspaceTab={workspaceTab}
-                setWorkspaceTab={setWorkspaceTab}
-                selectedWorkflowId={selectedWorkflowId}
-                handleWorkflowChange={handleWorkflowChange}
-                processTemplates={processTemplates}
-                handleSaveProject={handleSaveProject}
-                handleStartBuilding={handleStartBuilding}
-                handleMoveStep={handleMoveStep}
-                handleAddStep={handleAddStep}
-                handleDeleteStep={handleDeleteStep}
-                newStepTitle={newStepTitle}
-                setNewStepTitle={setNewStepTitle}
-                apiConfig={settings.apiConfig}
-                isWorkflowLocked={!!projectTemplates.find(t => t.id === projectForm.templateId)?.defaultWorkflowId}
-                badges={badges}
-            />
+            {/* --- ENGINEERING WORKSPACE WIZARD (Full Page) --- */}
+            {isProjectModalOpen && (
+                <StudentProjectWizardView
+                    onClose={() => setIsProjectModalOpen(false)}
+                    projectForm={projectForm}
+                    setProjectForm={setProjectForm}
+                    activeProject={activeProject}
+                    currentTheme={currentTheme}
+                    workspaceTab={workspaceTab}
+                    setWorkspaceTab={setWorkspaceTab}
+                    selectedWorkflowId={selectedWorkflowId}
+                    handleWorkflowChange={handleWorkflowChange}
+                    processTemplates={processTemplates}
+                    handleSaveProject={handleSaveProject}
+                    handleStartBuilding={handleStartBuilding}
+                    handleMoveStep={handleMoveStep}
+                    handleAddStep={handleAddStep}
+                    handleDeleteStep={handleDeleteStep}
+                    newStepTitle={newStepTitle}
+                    setNewStepTitle={setNewStepTitle}
+                    apiConfig={settings.apiConfig}
+                    isWorkflowLocked={!!projectTemplates.find(t => t.id === projectForm.templateId)?.defaultWorkflowId}
+                    badges={badges}
+                    handleSubmitForReview={handleSubmitForReview}
+                />
+            )}
 
 
             {/* Review Modal */}
