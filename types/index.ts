@@ -81,6 +81,7 @@ export interface Enrollment {
   status: 'active' | 'completed' | 'dropped';
   startDate: string;
   session?: string; // Academic Year (e.g. "2024-2025")
+  defaultWorkflowId?: string;
   createdAt?: Timestamp;
 }
 
@@ -296,6 +297,7 @@ export interface ProjectTemplate {
     grades?: string[];
     groups?: string[];
   };
+  defaultWorkflowId?: string;
   dueDate?: Timestamp;
   createdAt: Timestamp;
 }
@@ -321,6 +323,7 @@ export interface StudentProject {
   dueDate?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  earnedBadgeIds?: string[];
   commits?: {
     id: string;
     message: string;
@@ -500,7 +503,7 @@ export interface AppSettings {
 }
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'portfolio' | 'review';
 
 export interface ViewParams {
   classId?: { pId: string, gId: string, grpId: string };

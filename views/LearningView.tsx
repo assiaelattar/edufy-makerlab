@@ -22,6 +22,7 @@ import { CommitFeedView } from './learning/CommitFeedView';
 import { StepReviewModal } from './learning/StepReviewModal';
 import { FactoryDashboard } from './learning/FactoryDashboard';
 import { ToastContainer, ToastMessage } from '../components/Toast';
+import { Confetti } from '../components/Confetti';
 
 // Helper to recursively remove undefined values for Firestore
 const cleanData = (obj: any): any => {
@@ -52,6 +53,18 @@ export const LearningView = () => {
     });
 
     const isInstructor = can('learning.manage');
+    const isStudioTheme = userProfile?.role === 'instructor';
+
+    // Theme Helpers
+    const theme = {
+        card: isStudioTheme ? "bg-white border border-slate-200 shadow-sm" : "bg-slate-900 border border-slate-800",
+        text: isStudioTheme ? "text-slate-900" : "text-white",
+        textMuted: "text-slate-500",
+        bgMuted: isStudioTheme ? "bg-slate-50 border-slate-100" : "bg-slate-950 border-slate-800",
+        tabContainer: isStudioTheme ? "bg-slate-100 border-slate-200" : "bg-slate-950 border-slate-800",
+        tabActive: isStudioTheme ? "bg-white text-indigo-600 shadow-sm ring-1 ring-black/5" : "bg-slate-800 text-white shadow-sm",
+        tabInactive: isStudioTheme ? "text-slate-500 hover:text-slate-900" : "text-slate-500 hover:text-slate-300"
+    };
 
     // --- SHARED STATE ---
     const [activeTab, setActiveTab] = useState<'curriculum' | 'studio' | 'review' | 'portfolios' | 'track' | 'setup'>('curriculum');
@@ -98,6 +111,7 @@ export const LearningView = () => {
         gradeIds: [],
         gradeNames: []
     });
+    const [showConfetti, setShowConfetti] = useState(false);
 
     // --- BADGE STATE ---
     const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
@@ -637,7 +651,34 @@ export const LearningView = () => {
     };
 
     const startNewProject = (template?: ProjectTemplate) => {
-        setSelectedWorkflowId('');
+        const defaultWorkflowId = template?.defaultWorkflowId || '';
+        let initialSteps: ProjectStep[] = [];
+        let initialWorkflowId = '';
+
+        if (defaultWorkflowId) {
+            const workflow = processTemplates.find(w => w.id === defaultWorkflowId);
+            if (workflow) {
+                initialWorkflowId = defaultWorkflowId;
+                initialSteps = workflow.phases.map(p => ({
+                    id: Date.now().toString() + Math.random(),
+                    title: p.name,
+                    status: 'todo',
+                    isLocked: true
+                }));
+            }
+        }
+
+        // Fallback to template default steps if no workflow steps defined
+        if (initialSteps.length === 0 && template?.defaultSteps) {
+            initialSteps = template.defaultSteps.map(s => ({
+                id: Date.now().toString() + Math.random(),
+                title: s,
+                status: 'todo',
+                isLocked: true
+            }));
+        }
+
+        setSelectedWorkflowId(initialWorkflowId);
         setProjectForm({
             title: template ? template.title : '',
             description: template ? template.description : '',
@@ -646,12 +687,7 @@ export const LearningView = () => {
             mediaUrls: template?.thumbnailUrl ? [template.thumbnailUrl] : [],
             resources: template?.resources || [],
             skillsAcquired: template ? template.skills : [],
-            steps: template?.defaultSteps ? template.defaultSteps.map(s => ({
-                id: Date.now().toString() + Math.random(),
-                title: s,
-                status: 'todo',
-                isLocked: true
-            })) : [],
+            steps: initialSteps,
             templateId: template?.id || null,
             station: template ? template.station : 'general',
             status: 'planning'
@@ -813,6 +849,8 @@ export const LearningView = () => {
         setIsProofModalOpen(false);
         setProofFile(null);
         setActiveStepForProof(null);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
     };
 
     const handleDeleteStep = (stepId: string) => {
@@ -839,6 +877,8 @@ export const LearningView = () => {
                 setActiveProject(prev => prev ? ({ ...prev, id: projectId!, status: 'building' }) : null);
             }
         }
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
     };
 
     const handleSubmitForReview = async () => {
@@ -892,25 +932,26 @@ export const LearningView = () => {
     if (isInstructor) {
         return (
             <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-right-4">
+                {showConfetti && <Confetti duration={4000} />}
                 {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
+                <div className={`flex flex-col md:flex-row justify-between items-start md:items-center p-4 rounded-xl border gap-4 ${theme.card}`}>
                     <div>
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><Brain className="w-6 h-6 text-cyan-500" /> Learning Management</h2>
+                        <h2 className={`text-xl font-bold flex items-center gap-2 ${theme.text}`}><Brain className="w-6 h-6 text-cyan-500" /> Learning Management</h2>
                         <p className="text-slate-500 text-sm">Manage curriculum, review student work, and build portfolios.</p>
                     </div>
-                    <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 overflow-x-auto">
-                        <button onClick={() => setActiveTab('curriculum')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'curriculum' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <div className={`flex p-1 rounded-lg border overflow-x-auto ${theme.tabContainer}`}>
+                        <button onClick={() => setActiveTab('curriculum')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'curriculum' ? theme.tabActive : theme.tabInactive}`}>
                             <Brain size={16} /> Curriculum
                         </button>
-                        <button onClick={() => setActiveTab('studio')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'studio' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <button onClick={() => setActiveTab('studio')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'studio' ? (isStudioTheme ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : theme.tabInactive}`}>
                             <Rocket size={16} /> Studio
                         </button>
-                        <button onClick={() => setActiveTab('review')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'review' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <button onClick={() => setActiveTab('review')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'review' ? theme.tabActive : theme.tabInactive}`}>
                             <CheckCircle2 size={16} /> Review
                             {pendingReviews.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{pendingReviews.length}</span>}
                         </button>
-                        <button onClick={() => setActiveTab('portfolios')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'portfolios' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}><Award size={16} /> Portfolios</button>
-                        <button onClick={() => setActiveTab('setup')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'setup' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}><Beaker size={16} /> Setup</button>
+                        <button onClick={() => setActiveTab('portfolios')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'portfolios' ? theme.tabActive : theme.tabInactive}`}><Award size={16} /> Portfolios</button>
+                        <button onClick={() => setActiveTab('setup')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'setup' ? theme.tabActive : theme.tabInactive}`}><Beaker size={16} /> Setup</button>
                     </div>
                 </div>
 
@@ -2156,6 +2197,7 @@ export const LearningView = () => {
                     availableGroups={availableGroups}
                     wizardStep={wizardStep}
                     WIZARD_STEPS={WIZARD_STEPS}
+                    processTemplates={processTemplates}
                 />
 
                 <Modal isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
@@ -2195,6 +2237,7 @@ export const LearningView = () => {
 
     return (
         <div className="space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4">
+            {showConfetti && <Confetti duration={5000} />}
             {/* Student Header */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 relative overflow-hidden shadow-sm group">
                 <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity"><Target size={180} className="text-[#2D2B6B]" /></div>
@@ -2462,6 +2505,8 @@ export const LearningView = () => {
                 newStepTitle={newStepTitle}
                 setNewStepTitle={setNewStepTitle}
                 apiConfig={settings.apiConfig}
+                isWorkflowLocked={!!projectTemplates.find(t => t.id === projectForm.templateId)?.defaultWorkflowId}
+                badges={badges}
             />
 
 

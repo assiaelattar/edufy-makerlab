@@ -17,13 +17,14 @@ interface ProjectFactoryModalProps {
     setActiveModalTab: (tab: 'details' | 'resources' | 'targeting' | 'publishing') => void;
     availableGrades: Grade[];
     availableGroups: string[];
+    processTemplates: any[]; // ProcessTemplate[]
     wizardStep: number;
     WIZARD_STEPS: any[];
 }
 
 export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     isOpen, onClose, editingTemplateId, templateForm, setTemplateForm, handleSaveTemplate,
-    activeModalTab, setActiveModalTab, availableGrades, availableGroups, wizardStep, WIZARD_STEPS
+    activeModalTab, setActiveModalTab, availableGrades, availableGroups, processTemplates, wizardStep, WIZARD_STEPS
 }) => {
 
     const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
@@ -105,6 +106,20 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                 <div className="md:col-span-12">
                                     <label className={LABEL_CLASS}>Mandatory Steps (comma separated)</label>
                                     <input className={INPUT_CLASS} value={Array.isArray(templateForm.defaultSteps) ? templateForm.defaultSteps.join(', ') : templateForm.defaultSteps} onChange={e => setTemplateForm({ ...templateForm, defaultSteps: e.target.value as any })} placeholder="Research, Design, Prototype, Test..." />
+                                </div>
+                                <div className="md:col-span-12">
+                                    <label className={LABEL_CLASS}>Default Workflow (Optional)</label>
+                                    <select
+                                        className={INPUT_CLASS}
+                                        value={templateForm.defaultWorkflowId || ''}
+                                        onChange={e => setTemplateForm({ ...templateForm, defaultWorkflowId: e.target.value || undefined })}
+                                    >
+                                        <option value="">-- Let Student Choose --</option>
+                                        {processTemplates?.map(wf => (
+                                            <option key={wf.id} value={wf.id}>{wf.name}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-slate-400 mt-1">If selected, students will not see the workflow selection screen.</p>
                                 </div>
                             </div>
 

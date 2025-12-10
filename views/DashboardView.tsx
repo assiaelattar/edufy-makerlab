@@ -19,7 +19,7 @@ const getDate = (date: any): Date => {
 
 // --- STUDENT DASHBOARD COMPONENT ---
 const StudentDashboard = () => {
-    const { students, enrollments, studentProjects, navigateTo, t } = useAppContext();
+    const { students, enrollments, studentProjects, navigateTo, t, badges } = useAppContext();
     const { userProfile } = useAuth();
 
     // Safe name extraction
@@ -183,9 +183,25 @@ const StudentDashboard = () => {
                                 <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
                                     {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={p.title} /> : <BookOpen size={24} className="text-slate-300" />}
                                 </div>
-                                <div className="min-w-0 flex flex-col justify-center">
+                                <div className="min-w-0 flex flex-col justify-center flex-1">
                                     <h4 className="font-bold text-[#2D2B6B] text-sm truncate">{p.title}</h4>
-                                    <p className="text-xs text-slate-500 truncate">{formatDate(p.createdAt)}</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <p className="text-xs text-slate-500 truncate flex-1">{formatDate(p.createdAt)}</p>
+                                        {/* Badges Display */}
+                                        {p.earnedBadgeIds && p.earnedBadgeIds.length > 0 && (
+                                            <div className="flex -space-x-2">
+                                                {p.earnedBadgeIds.map(bid => {
+                                                    const badge = badges.find(b => b.id === bid);
+                                                    if (!badge) return null;
+                                                    return (
+                                                        <div key={bid} className={`w-5 h-5 rounded-full bg-${badge.color}-100 border border-white flex items-center justify-center text-${badge.color}-600 text-[10px]`} title={badge.name}>
+                                                            <Award size={10} />
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -205,6 +221,21 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
     const firstName = userProfile?.name ? userProfile.name.split(' ')[0] : 'User';
     const currentHour = new Date().getHours();
     const greeting = currentHour < 12 ? t('dash.welcome') : currentHour < 18 ? t('dash.welcome.afternoon') : t('dash.welcome.evening');
+
+    // --- THEME LOGIC ---
+    const isInstructor = userProfile?.role === 'instructor';
+
+    // Theme Classes
+    const theme = {
+        card: isInstructor ? "bg-white border border-slate-200 shadow-sm" : "bg-slate-900 border border-slate-800",
+        cardHover: isInstructor ? "hover:shadow-md hover:border-slate-300" : "hover:border-slate-700",
+        text: isInstructor ? "text-slate-800" : "text-white",
+        textMuted: "text-slate-500", // Works for both usually
+        textLabel: "text-slate-500",
+        bgMuted: isInstructor ? "bg-slate-50 border border-slate-100" : "bg-slate-950/30 border-slate-800",
+        divider: isInstructor ? "border-slate-100" : "border-slate-800",
+        iconBg: (color: string) => isInstructor ? `bg-${color}-50 text-${color}-600` : `bg-${color}-500/10 text-${color}-500`
+    };
 
     // Session Management
     const [selectedSession, setSelectedSession] = useState(settings.academicYear || '2024-2025');
@@ -328,8 +359,8 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
             {/* HEADER */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-                        {greeting}, <span className="text-blue-400">{firstName}</span>
+                    <h1 className={`text-2xl md:text-3xl font-bold tracking-tight ${theme.text}`}>
+                        {greeting}, <span className="text-blue-500">{firstName}</span>
                     </h1>
                     <p className="text-slate-400 text-sm mt-1">Here is what's happening at {settings.academyName} today.</p>
                 </div>
@@ -341,7 +372,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                         <select
                             value={selectedSession}
                             onChange={(e) => setSelectedSession(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white focus:border-blue-500 outline-none appearance-none cursor-pointer shadow-sm hover:border-slate-700 transition-all"
+                            className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none appearance-none cursor-pointer shadow-sm transition-all focus:border-blue-500 ${isInstructor ? 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300' : 'bg-slate-900 border border-slate-800 text-white hover:border-slate-700'}`}
                         >
                             {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
@@ -367,57 +398,57 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
             {/* KPI CARDS */}
             <div className="flex overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 snap-x snap-mandatory no-scrollbar">
                 {/* Revenue */}
-                <div className="min-w-[260px] md:min-w-0 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col justify-between snap-center">
+                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center ${theme.card}`}>
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
-                            <h3 className="text-2xl font-bold text-white mt-1">{formatCurrency(financialStats.totalRevenue)}</h3>
+                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{formatCurrency(financialStats.totalRevenue)}</h3>
                         </div>
-                        <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500"><DollarSign size={20} /></div>
+                        <div className={`p-2 rounded-lg ${theme.iconBg('emerald')}`}><DollarSign size={20} /></div>
                     </div>
                     <div className="mt-4 h-10 flex items-end gap-1">
                         {financialStats.chartData.map((d, i) => (
-                            <div key={i} className="flex-1 bg-slate-800 hover:bg-emerald-500/50 rounded-t transition-colors" style={{ height: `${(d.value / financialStats.maxRevenue) * 100}%` }} title={`${d.month}: ${formatCurrency(d.value)}`}></div>
+                            <div key={i} className={`flex-1 rounded-t transition-colors ${isInstructor ? 'bg-emerald-100 hover:bg-emerald-200' : 'bg-slate-800 hover:bg-emerald-500/50'}`} style={{ height: `${(d.value / financialStats.maxRevenue) * 100}%` }} title={`${d.month}: ${formatCurrency(d.value)}`}></div>
                         ))}
                     </div>
                 </div>
 
                 {/* Active Students */}
-                <div className="min-w-[260px] md:min-w-0 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col justify-between snap-center">
+                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center ${theme.card}`}>
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Students</p>
-                            <h3 className="text-2xl font-bold text-white mt-1">{activeStudentsCount}</h3>
+                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{activeStudentsCount}</h3>
                         </div>
-                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500"><Users size={20} /></div>
+                        <div className={`p-2 rounded-lg ${theme.iconBg('blue')}`}><Users size={20} /></div>
                     </div>
-                    <div className="mt-4 flex items-center text-xs text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded-lg w-fit">
+                    <div className={`mt-4 flex items-center text-xs px-2 py-1 rounded-lg w-fit ${isInstructor ? 'bg-emerald-100 text-emerald-700' : 'text-emerald-400 bg-emerald-950/30'}`}>
                         <ArrowUpRight size={12} className="mr-1" /> +{newStudentsThisMonth} this month
                     </div>
                 </div>
 
                 {/* Attendance Rate */}
-                <div className="min-w-[260px] md:min-w-0 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col justify-between snap-center">
+                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center ${theme.card}`}>
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attendance</p>
-                            <h3 className="text-2xl font-bold text-white mt-1">
+                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>
                                 {todaySchedule.length > 0 ? Math.round((attendanceRecords.filter(r => r.date === new Date().toISOString().split('T')[0]).length / (todaySchedule.reduce((a, b) => a + (b.type === 'class' ? 10 : b.count), 0) || 1)) * 100) : 0}%
                             </h3>
                         </div>
-                        <div className="p-2 bg-pink-500/10 rounded-lg text-pink-500"><ClipboardCheck size={20} /></div>
+                        <div className={`p-2 rounded-lg ${theme.iconBg('pink')}`}><ClipboardCheck size={20} /></div>
                     </div>
                     <p className="text-xs text-slate-500 mt-4">{todaySchedule.length} sessions today</p>
                 </div>
 
                 {/* Leads */}
-                <div onClick={() => navigateTo('marketing')} className="min-w-[260px] md:min-w-0 bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow-sm flex flex-col justify-between snap-center cursor-pointer hover:border-purple-500/30 transition-colors group">
+                <div onClick={() => navigateTo('marketing')} className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center cursor-pointer transition-colors group ${theme.card} ${theme.cardHover}`}>
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-purple-400 transition-colors">New Leads</p>
-                            <h3 className="text-2xl font-bold text-white mt-1">{newLeads}</h3>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-purple-500 transition-colors">New Leads</p>
+                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{newLeads}</h3>
                         </div>
-                        <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500"><Megaphone size={20} /></div>
+                        <div className={`p-2 rounded-lg ${theme.iconBg('purple')}`}><Megaphone size={20} /></div>
                     </div>
                     <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
                         <span>Pipeline Active</span>
@@ -433,9 +464,9 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                 <div className="lg:col-span-2 space-y-6">
 
                     {/* Today's Schedule */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                        <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
-                            <h3 className="font-bold text-white flex items-center gap-2"><Clock size={18} className="text-blue-400" /> Today's Schedule</h3>
+                    <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
+                        <div className={`p-5 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
+                            <h3 className={`font-bold flex items-center gap-2 ${theme.text}`}><Clock size={18} className="text-blue-500" /> Today's Schedule</h3>
                             <button onClick={() => navigateTo('attendance')} className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition-colors">Manage Attendance</button>
                         </div>
                         <div className="p-4">
@@ -447,19 +478,19 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                             ) : (
                                 <div className="space-y-3">
                                     {todaySchedule.map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-4 p-3 rounded-xl bg-slate-950/50 border border-slate-800/50 hover:border-slate-700 transition-colors">
+                                        <div key={idx} className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${theme.bgMuted} ${isInstructor ? 'hover:border-slate-300' : 'hover:border-slate-700'}`}>
                                             <div className="w-16 text-center">
-                                                <span className="block text-sm font-bold text-white">{item.time}</span>
+                                                <span className={`block text-sm font-bold ${theme.text}`}>{item.time}</span>
                                             </div>
-                                            <div className="w-1 h-8 bg-slate-800 rounded-full"></div>
+                                            <div className={`w-1 h-8 rounded-full ${isInstructor ? 'bg-slate-200' : 'bg-slate-800'}`}></div>
                                             <div className="flex-1">
-                                                <h4 className="text-sm font-bold text-slate-200">{item.title}</h4>
+                                                <h4 className={`text-sm font-bold ${isInstructor ? 'text-slate-700' : 'text-slate-200'}`}>{item.title}</h4>
                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${item.type === 'class' ? 'bg-blue-900/20 text-blue-400 border-blue-900/30' : 'bg-pink-900/20 text-pink-400 border-pink-900/30'}`}>{item.type}</span>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${item.type === 'class' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-pink-500/10 text-pink-500 border-pink-500/20'}`}>{item.type}</span>
                                                     <span className="text-xs text-slate-500">{item.count} Students</span>
                                                 </div>
                                             </div>
-                                            <button onClick={() => navigateTo('attendance')} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"><ChevronRight size={16} /></button>
+                                            <button onClick={() => navigateTo('attendance')} className={`p-2 rounded-full transition-colors ${isInstructor ? 'text-slate-400 hover:bg-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><ChevronRight size={16} /></button>
                                         </div>
                                     ))}
                                 </div>
@@ -468,19 +499,19 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
 
                     {/* Program Distribution (Mini) */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-                        <h3 className="font-bold text-white mb-4 text-sm">Student Distribution</h3>
+                    <div className={`rounded-2xl p-5 ${theme.card}`}>
+                        <h3 className={`font-bold mb-4 text-sm ${theme.text}`}>Student Distribution</h3>
                         <div className="space-y-3">
                             {programs.slice(0, 4).map(prog => {
                                 const count = students.filter(s => enrollments.some(e => e.studentId === s.id && e.programId === prog.id && e.status === 'active')).length;
                                 const pct = (count / (activeStudentsCount || 1)) * 100;
                                 return (
                                     <div key={prog.id}>
-                                        <div className="flex justify-between text-xs text-slate-400 mb-1">
+                                        <div className="flex justify-between text-xs text-slate-500 mb-1">
                                             <span>{prog.name}</span>
                                             <span>{count}</span>
                                         </div>
-                                        <div className="h-2 bg-slate-950 rounded-full overflow-hidden">
+                                        <div className={`h-2 rounded-full overflow-hidden ${isInstructor ? 'bg-slate-100' : 'bg-slate-950'}`}>
                                             <div className="h-full bg-blue-600 rounded-full" style={{ width: `${pct}%` }}></div>
                                         </div>
                                     </div>
@@ -514,10 +545,10 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
 
                     {/* Action Center (Alerts) */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
-                            <h3 className="font-bold text-white text-sm flex items-center gap-2"><Activity size={16} className="text-orange-400" /> Action Center</h3>
-                            {totalPendingActions > 0 && <span className="bg-red-950 text-red-400 text-[10px] font-bold px-2 py-0.5 rounded border border-red-900">{totalPendingActions} Pending</span>}
+                    <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
+                        <div className={`p-4 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
+                            <h3 className={`font-bold text-sm flex items-center gap-2 ${theme.text}`}><Activity size={16} className="text-orange-500" /> Action Center</h3>
+                            {totalPendingActions > 0 && <span className="bg-red-500/10 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded border border-red-500/20">{totalPendingActions} Pending</span>}
                         </div>
 
                         <div className="p-5">
@@ -525,16 +556,16 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                 {/* Operational Health Donut Chart */}
                                 <div className="relative w-20 h-20 flex items-center justify-center">
                                     <svg className="w-full h-full transform -rotate-90">
-                                        <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-800" />
+                                        <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" className={isInstructor ? "text-slate-100" : "text-slate-800"} />
                                         <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={36 * 2 * Math.PI} strokeDashoffset={36 * 2 * Math.PI - (actionHealth / 100) * (36 * 2 * Math.PI)} className={`${actionHealth > 75 ? 'text-emerald-500' : actionHealth > 40 ? 'text-amber-500' : 'text-red-500'} transition-all duration-1000 ease-out`} strokeLinecap="round" />
                                     </svg>
                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-lg font-bold text-white">{actionHealth}%</span>
+                                        <span className={`text-lg font-bold ${theme.text}`}>{actionHealth}%</span>
                                         <span className="text-[8px] text-slate-500 uppercase font-bold">Health</span>
                                     </div>
                                 </div>
                                 <div className="flex-1">
-                                    <p className="text-sm text-slate-300 mb-1">System Status</p>
+                                    <p className={`text-sm mb-1 ${theme.text}`}>System Status</p>
                                     <p className="text-xs text-slate-500">
                                         {checksToDeposit > 0 || pendingTransfers > 0 ? "Financial actions pending." : "Operations running smoothly."}
                                     </p>
@@ -591,21 +622,21 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
 
                     {/* Lead Trends (Sparkline) */}
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
-                            <h3 className="font-bold text-white text-sm">New Leads</h3>
-                            <button onClick={() => navigateTo('marketing')} className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-700 transition-colors">View Pipeline</button>
+                    <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
+                        <div className={`p-4 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
+                            <h3 className={`font-bold text-sm ${theme.text}`}>New Leads</h3>
+                            <button onClick={() => navigateTo('marketing')} className={`text-[10px] px-2 py-1 rounded border transition-colors ${isInstructor ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'}`}>View Pipeline</button>
                         </div>
 
                         <div className="p-5">
                             <div className="flex items-end justify-between mb-4">
                                 <div>
-                                    <div className="text-3xl font-bold text-white">{newLeads}</div>
+                                    <div className={`text-3xl font-bold ${theme.text}`}>{newLeads}</div>
                                     <div className="text-xs text-slate-500">Last 7 Days</div>
                                 </div>
                                 <div className="text-right">
                                     {/* Calculate simplified conversion rate */}
-                                    <div className="text-sm font-bold text-emerald-400">
+                                    <div className="text-sm font-bold text-emerald-500">
                                         {leads.length > 0 ? Math.round((leads.filter(l => l.status === 'converted' || l.status === 'closed').length / leads.length) * 100) : 0}%
                                     </div>
                                     <div className="text-[10px] text-slate-500 uppercase font-bold">Conv. Rate</div>

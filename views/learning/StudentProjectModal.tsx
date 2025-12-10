@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal } from '../../components/Modal';
-import { StudentProject, StationType, ProcessTemplate } from '../../types';
+import { StudentProject, StationType, ProcessTemplate, Badge } from '../../types';
 import { STATION_THEMES } from '../../utils/theme';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
 import { ClipboardList, Zap, Beaker, Award, ListChecks, Lock, Trash2, Plus, Play, ArrowRight, ArrowLeft, CheckSquare, GitCommit, X, History, RotateCcw, Link as LinkIcon, Sparkles, Loader2, Image as ImageIcon } from 'lucide-react';
@@ -27,13 +27,15 @@ interface StudentProjectModalProps {
     newStepTitle: string;
     setNewStepTitle: (title: string) => void;
     apiConfig?: { googleApiKey?: string };
+    isWorkflowLocked?: boolean;
+    badges: Badge[];
 }
 
 export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     isOpen, onClose, projectForm, setProjectForm, activeProject, currentTheme,
     workspaceTab, setWorkspaceTab, selectedWorkflowId, handleWorkflowChange,
     processTemplates, handleSaveProject, handleStartBuilding, handleMoveStep,
-    handleAddStep, handleDeleteStep, newStepTitle, setNewStepTitle, apiConfig
+    handleAddStep, handleDeleteStep, newStepTitle, setNewStepTitle, apiConfig, isWorkflowLocked, badges
 }) => {
     const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
@@ -186,19 +188,21 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
                                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-6">
                                             <div className="space-y-6">
-                                                <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
-                                                    <label className={LABEL_CLASS}>1. Choose a Strategy</label>
-                                                    <select
-                                                        className={INPUT_CLASS}
-                                                        value={selectedWorkflowId}
-                                                        onChange={e => handleWorkflowChange(e.target.value)}
-                                                    >
-                                                        <option value="">Select a Workflow...</option>
-                                                        {processTemplates.map(w => (
-                                                            <option key={w.id} value={w.id}>{w.name}</option>
-                                                        ))}
-                                                    </select>
-                                                </div>
+                                                {!isWorkflowLocked && (
+                                                    <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
+                                                        <label className={LABEL_CLASS}>1. Choose a Strategy</label>
+                                                        <select
+                                                            className={INPUT_CLASS}
+                                                            value={selectedWorkflowId}
+                                                            onChange={e => handleWorkflowChange(e.target.value)}
+                                                        >
+                                                            <option value="">Select a Workflow...</option>
+                                                            {processTemplates.map(w => (
+                                                                <option key={w.id} value={w.id}>{w.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
 
                                                 <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
                                                     <label className={LABEL_CLASS}>2. Project Details</label>
@@ -282,6 +286,22 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                                                                 </div>
                                                             )}
                                                         </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* POTENTIAL BADGES */}
+                                                <div className={studioClass("p-6 border-2 shadow-sm", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.rounded.lg)}>
+                                                    <label className={LABEL_CLASS}>Potential Rewards 🏆</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {badges.filter(b => b.criteria.target === 'all' || b.criteria.target === projectForm.station).map(badge => (
+                                                            <div key={badge.id} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-xs font-bold" title={badge.description}>
+                                                                <Award size={14} className={`text-${badge.color}-500`} />
+                                                                {badge.name}
+                                                            </div>
+                                                        ))}
+                                                        {badges.filter(b => b.criteria.target === 'all' || b.criteria.target === projectForm.station).length === 0 && (
+                                                            <div className="text-slate-400 text-sm italic">No specific badges for this mission yet.</div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -434,11 +454,11 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                             </div>
                         )}
                     </div>
-                </div>
-            </Modal>
+                </div >
+            </Modal >
 
             {/* Commit Modal */}
-            <Modal isOpen={isCommitModalOpen} onClose={() => setIsCommitModalOpen(false)} title="Commit Your Progress 💾" size="md">
+            < Modal isOpen={isCommitModalOpen} onClose={() => setIsCommitModalOpen(false)} title="Commit Your Progress 💾" size="md" >
                 <div className="p-6">
                     <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
                         <GitCommit size={32} />
@@ -507,10 +527,10 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                         </div>
                     </div>
                 </div>
-            </Modal>
+            </Modal >
 
             {/* History Modal */}
-            <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title="Project History 📜" size="lg">
+            < Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title="Project History 📜" size="lg" >
                 <div className="p-6">
                     <div className="space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
                         {(!projectForm.commits || projectForm.commits.length === 0) && (
@@ -550,7 +570,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                         ))}
                     </div>
                 </div>
-            </Modal>
+            </Modal >
         </>
     );
 };
