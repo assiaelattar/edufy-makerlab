@@ -232,35 +232,47 @@ export const ParentDashboardView = () => {
         <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30">
 
             {/* Hero Header */}
-            <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-900 via-purple-900 to-pink-900 border-b border-slate-800/50 backdrop-blur-md">
-                <div className="max-w-5xl mx-auto p-6">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-4">
-                            {/* Level Badge */}
-                            <div className="relative">
-                                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-2xl font-black shadow-lg shadow-orange-900/50 border-4 border-slate-900">
+            <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-900/95 via-purple-900/95 to-pink-900/95 border-b border-slate-800/50 backdrop-blur-xl transition-all shadow-lg">
+                <div className="max-w-5xl mx-auto p-4 md:p-6">
+                    <div className="flex flex-row items-center justify-between mb-0 md:mb-6 gap-4">
+                        <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
+                            {/* Level Badge - Compact on Mobile */}
+                            <div className="relative shrink-0 transition-transform scale-75 md:scale-100 origin-left">
+                                <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-lg md:text-2xl font-black shadow-lg shadow-orange-900/50 border-2 md:border-4 border-slate-900">
                                     {childData?.level || 1}
                                 </div>
-                                <div className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-1.5 border-2 border-yellow-400">
-                                    <Star size={14} className="text-yellow-400 fill-yellow-400" />
+                                <div className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-1 md:p-1.5 border-2 border-yellow-400">
+                                    <Star size={10} className="md:w-[14px] md:h-[14px] text-yellow-400 fill-yellow-400" />
                                 </div>
                             </div>
-                            <div>
-                                <h1 className="font-black text-2xl text-white drop-shadow-lg">{activeChild.name}</h1>
-                                <div className="flex items-center gap-2 text-sm">
+
+                            <div className="min-w-0">
+                                <h1 className="font-black text-lg md:text-2xl text-white drop-shadow-lg truncate">{activeChild.name}</h1>
+
+                                {/* Mobile XP Bar Inline */}
+                                <div className="md:hidden flex items-center gap-2 mt-1">
+                                    <div className="h-1.5 w-24 bg-slate-900/50 rounded-full overflow-hidden border border-slate-800/50">
+                                        <div className="h-full bg-gradient-to-r from-cyan-400 to-purple-400" style={{ width: `${getProgressWidth()}%` }}></div>
+                                    </div>
+                                    <span className="text-[10px] text-cyan-300 font-bold">{childData?.totalXP} XP</span>
+                                </div>
+
+                                {/* Desktop XP Text */}
+                                <div className="hidden md:flex items-center gap-2 text-sm">
                                     <span className="text-cyan-300 font-mono font-bold">{childData?.totalXP || 0} XP</span>
                                     <span className="text-white/50">/</span>
                                     <span className="text-white/70">{childData?.nextLevelXP || 1000} XP</span>
                                 </div>
                             </div>
                         </div>
-                        <button onClick={signOut} className="bg-slate-900/80 hover:bg-slate-800 p-3 rounded-full text-slate-300 hover:text-white transition-all border border-slate-700">
-                            <LogOut size={20} />
+
+                        <button onClick={signOut} className="bg-slate-900/50 hover:bg-slate-800 p-2 md:p-3 rounded-full text-slate-300 hover:text-white transition-all border border-slate-700/50 shrink-0">
+                            <LogOut size={18} className="md:w-5 md:h-5" />
                         </button>
                     </div>
 
-                    {/* XP Progress Bar */}
-                    <div className="mb-4">
+                    {/* Desktop XP Progress Bar */}
+                    <div className="hidden md:block mb-4">
                         <div className="h-4 w-full bg-slate-900/50 rounded-full overflow-hidden border border-slate-800/50 shadow-inner">
                             <div
                                 className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 transition-all duration-1000 ease-out relative"
@@ -294,8 +306,8 @@ export const ParentDashboardView = () => {
                         </div>
                     )}
 
-                    {/* Navigation Tabs */}
-                    <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    {/* Navigation Tabs (Desktop) */}
+                    <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar">
                         {[
                             { id: 'overview', label: 'Overview', icon: LucideIcons.LayoutDashboard },
                             { id: 'finance', label: 'Billing', icon: LucideIcons.CreditCard },
@@ -318,7 +330,30 @@ export const ParentDashboardView = () => {
                 </div>
             </header>
 
-            <main className="max-w-5xl mx-auto p-6 md:p-8">
+            {/* Bottom Navigation (Mobile) */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl border-t border-slate-800 z-50 flex justify-around items-center px-2 safe-area-pb">
+                {[
+                    { id: 'overview', label: 'Home', icon: LucideIcons.LayoutDashboard },
+                    { id: 'finance', label: 'Billing', icon: LucideIcons.CreditCard },
+                    { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car },
+                    { id: 'profile', label: 'Profile', icon: LucideIcons.User },
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all ${activeTab === tab.id
+                            ? 'text-indigo-400'
+                            : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                    >
+                        <tab.icon size={20} className={activeTab === tab.id ? 'fill-current opacity-20' : ''} />
+                        <span className="text-[10px] font-bold">{tab.label}</span>
+                        {activeTab === tab.id && <div className="absolute top-0 w-8 h-1 bg-indigo-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />}
+                    </button>
+                ))}
+            </div>
+
+            <main className="max-w-5xl mx-auto p-4 pb-24 md:p-8">
                 {activeTab === 'overview' && (
                     <div className="space-y-10">
 
@@ -467,9 +502,9 @@ export const ParentDashboardView = () => {
 
                                         return (
                                             <div key={project.id} className="relative group">
-                                                {/* Node Icon */}
+                                                {/* Node Icon - Desktop Absolute, Mobile Floating/Inline */}
                                                 <div
-                                                    className={`absolute left-0 w-16 h-16 shrink-0 rounded-2xl flex items-center justify-center border-2 z-10 transition-all duration-300 bg-slate-900 ${isActive ? `border-${theme.colorHex} shadow-[0_0_20px_rgba(6,182,212,0.5)]` : ''
+                                                    className={`hidden md:flex absolute left-0 w-16 h-16 shrink-0 rounded-2xl items-center justify-center border-2 z-10 transition-all duration-300 bg-slate-900 ${isActive ? `border-${theme.colorHex} shadow-[0_0_20px_rgba(6,182,212,0.5)]` : ''
                                                         } ${isCompleted ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]' : ''
                                                         } ${isSubmitted ? 'border-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.5)]' : ''
                                                         }`}
@@ -486,7 +521,7 @@ export const ParentDashboardView = () => {
                                                 </div>
 
                                                 {/* Project Card */}
-                                                <div className="ml-24 md:ml-28">
+                                                <div className="ml-0 md:ml-28">
                                                     <button
                                                         onClick={() => setExpandedProject(isExpanded ? null : project.id)}
                                                         className="w-full text-left"
