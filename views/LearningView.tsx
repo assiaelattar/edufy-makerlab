@@ -869,12 +869,14 @@ export const LearningView = () => {
         // Notify Instructors
         const instructors = teamMembers.filter(m => m.role === 'instructor' || m.role === 'admin');
         for (const instructor of instructors) {
-            await sendNotification(
-                instructor.uid,
-                'New Project Submission 📬',
-                `${userProfile?.name || 'Student'} submitted "${projectForm.title}" for review.`,
-                'info'
-            );
+            if (instructor.uid) {
+                await sendNotification(
+                    instructor.uid,
+                    'New Project Submission 📬',
+                    `${userProfile?.name || 'Student'} submitted "${projectForm.title}" for review.`,
+                    'info'
+                );
+            }
         }
     };
 

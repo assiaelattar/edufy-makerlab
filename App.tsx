@@ -35,6 +35,7 @@ import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'fir
 import { db } from './services/firebase';
 import { formatCurrency, compressImage, calculateAge } from './utils/helpers';
 import { getStudentTheme } from './utils/theme';
+import { ViewState } from './types';
 
 const StudentNavigation = ({ currentView, navigateTo, theme, signOut }: { currentView: string, navigateTo: any, theme: any, signOut: any }) => {
     const menuItems = [
