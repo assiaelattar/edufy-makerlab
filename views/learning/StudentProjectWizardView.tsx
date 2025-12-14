@@ -203,7 +203,7 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
     };
 
     const renderKanbanColumn = (status: 'todo' | 'doing' | 'done', title: string, icon: any, colorClass: string, bgClass: string) => {
-        const steps = projectForm.steps?.filter((s) => s.status === status) || [];
+        const steps = projectForm.steps?.filter((s) => s.status?.toLowerCase() === status) || [];
 
         return (
             <div className={`flex-1 flex flex-col ${bgClass} backdrop-blur-md border border-white/40 rounded-[2.5rem] min-h-[500px] transition-all duration-500 shadow-xl overflow-hidden`}>

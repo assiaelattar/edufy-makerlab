@@ -62,6 +62,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                             </div>
                         </div>
                         <button onClick={signOut} className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-red-400 hover:bg-slate-800 text-xs font-medium"><LogOut size={14} /> {t('menu.signout')}</button>
+                        <button onClick={() => window.open("http://localhost:3000/?token=demo-token", "_blank")} className="w-full mt-2 block p-2 rounded-lg bg-purple-900/50 text-purple-400 text-xs font-bold border border-purple-500/30 hover:bg-purple-900 hover:text-white transition-colors text-center">✨ SparkQuest</button>
                         <button onClick={() => navigateTo('test-design')} className="w-full mt-2 p-2 rounded-lg bg-indigo-900/50 text-indigo-400 text-xs font-bold border border-indigo-500/30 hover:bg-indigo-900 hover:text-white transition-colors">🎨 Test Design</button>
                     </div>
                 </div>

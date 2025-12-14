@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { generateBridgeToken } from '../utils/authHelpers';
 import { Brain, Plus, Target, Star, Upload, ExternalLink, CheckCircle2, Clock, AlertCircle, Image as ImageIcon, ChevronRight, Award, BookOpen, LayoutGrid, List, UserCheck, Trash2, ArrowRight, ClipboardList, Play, CheckSquare, ArrowLeft, Lock, Zap, PenTool, Send, Database, MoreHorizontal, Rocket, ListChecks, Beaker, FileText, GitCommit, Edit3 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
@@ -14,6 +15,7 @@ import { getTheme, STATION_THEMES } from '../utils/theme';
 import { STUDIO_THEME, studioClass } from '../utils/studioTheme';
 import { generateProjectThumbnail } from '../utils/thumbnailGenerator';
 import { MOCK_PROJECT_TEMPLATES } from '../utils/mockData';
+
 import { NotificationBell } from '../components/NotificationBell';
 import { ProjectFactoryModal } from './learning/ProjectFactoryModal';
 import { StudentProjectWizardView } from './learning/StudentProjectWizardView';
@@ -67,7 +69,7 @@ export const LearningView = () => {
     };
 
     // --- SHARED STATE ---
-    const [activeTab, setActiveTab] = useState<'curriculum' | 'studio' | 'review' | 'portfolios' | 'track' | 'setup'>('curriculum');
+    const [activeTab, setActiveTab] = useState<'curriculum' | 'studio' | 'review' | 'portfolios' | 'track' | 'setup' | 'trash'>('curriculum');
     const [studentTab, setStudentTab] = useState<'my_studio' | 'explore'>('explore');
     const [studentProjectFilter, setStudentProjectFilter] = useState<'all' | 'in_progress' | 'completed'>('all');
 
@@ -81,6 +83,9 @@ export const LearningView = () => {
         title: '', description: '', difficulty: 'beginner', skills: [], defaultSteps: [], station: 'general',
         resources: [], status: 'draft', targetAudience: { grades: [], groups: [] }
     });
+    const [projectForm, setProjectForm] = useState<Partial<StudentProject>>({
+        title: '', description: '', externalLink: '', embedUrl: '', mediaUrls: [], steps: [], station: 'general'
+    });
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
     const [wizardStep, setWizardStep] = useState(0);
     const [activeModalTab, setActiveModalTab] = useState<'details' | 'resources' | 'targeting' | 'publishing'>('details');
@@ -91,6 +96,38 @@ export const LearningView = () => {
     const [statusFilter, setStatusFilter] = useState<'all' | 'planning' | 'building' | 'testing' | 'delivered' | 'submitted' | 'changes_requested' | 'published'>('all');
     const [selectedStation, setSelectedStation] = useState<StationType | null>(null);
     const [showStationProjects, setShowStationProjects] = useState(false);
+
+    // --- ARCHIVE HANDLERS ---
+    const handleArchiveTemplate = async (id: string, currentStatus: string) => {
+        if (!db) return;
+        if (currentStatus === 'archived') return; // Already archived
+
+        if (!confirm("Move this project to Trash? It will be hidden from students.")) return;
+
+        try {
+            await updateDoc(doc(db, 'project_templates', id), {
+                status: 'archived',
+                updatedAt: serverTimestamp()
+            });
+            addToast("Archived", "Project moved to trash.", "info");
+        } catch (e) {
+            console.error("Error archiving:", e);
+            addToast("Error", "Could not archive project.", "error");
+        }
+    };
+
+    const handleRestoreTemplate = async (id: string) => {
+        if (!db) return;
+        try {
+            await updateDoc(doc(db, 'project_templates', id), {
+                status: 'draft', // Restore as draft for safety
+                updatedAt: serverTimestamp()
+            });
+            addToast("Restored", "Project restored to drafts.", "success");
+        } catch (e) {
+            console.error("Error restoring:", e);
+        }
+    };
 
     // --- SETUP FACTORY STATE ---
     const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
@@ -158,9 +195,7 @@ export const LearningView = () => {
     // --- STUDENT STATE ---
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [activeProject, setActiveProject] = useState<StudentProject | null>(null);
-    const [projectForm, setProjectForm] = useState<Partial<StudentProject>>({
-        title: '', description: '', externalLink: '', embedUrl: '', mediaUrls: [], steps: [], station: 'general'
-    });
+
     const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
     const [workspaceTab, setWorkspaceTab] = useState<'mission' | 'resources'>('mission');
     const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -300,8 +335,29 @@ export const LearningView = () => {
     };
 
     const handleDeleteTemplate = async (id: string) => {
-        if (!db || !confirm("Delete this assignment template?")) return;
-        await deleteDoc(doc(db, 'project_templates', id));
+        if (!db) return;
+        if (!confirm("⚠️ DANGER ZONE ⚠️\n\nDeleting this assignment will PERMANENTLY DELETE ALL student submissions and data associated with it.\n\nAre you sure you want to proceed?")) return;
+
+        try {
+            const batch = writeBatch(db);
+
+            // 1. Delete Template
+            batch.delete(doc(db, 'project_templates', id));
+
+            // 2. Find and Delete ALL Student Submissions for this template
+            const q = query(collection(db, 'student_projects'), where('templateId', '==', id));
+            const snapshot = await (await import('firebase/firestore')).getDocs(q);
+
+            snapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            await batch.commit();
+            addToast("Deleted", "Assignment and all submissions deleted.", "success");
+        } catch (e) {
+            console.error("Error deleting template:", e);
+            addToast("Error", "Failed to delete assignment.", "error");
+        }
     };
 
     const handleSeedCurriculum = async () => {
@@ -664,7 +720,10 @@ export const LearningView = () => {
         setSelectedSubmission(null);
     };
 
-    const startNewProject = (template?: ProjectTemplate) => {
+    const startNewProject = async (template?: ProjectTemplate) => {
+        if (!userProfile || !db) return;
+
+        // 1. Construct Project Data
         const defaultWorkflowId = template?.defaultWorkflowId || '';
         let initialSteps: ProjectStep[] = [];
         let initialWorkflowId = '';
@@ -682,7 +741,7 @@ export const LearningView = () => {
             }
         }
 
-        // Fallback to template default steps if no workflow steps defined
+        // Fallback to template default steps
         if (initialSteps.length === 0 && template?.defaultSteps) {
             initialSteps = template.defaultSteps.map(s => ({
                 id: Date.now().toString() + Math.random(),
@@ -692,10 +751,9 @@ export const LearningView = () => {
             }));
         }
 
-        setSelectedWorkflowId(initialWorkflowId);
-        setProjectForm({
-            title: template ? template.title : '',
-            description: template ? template.description : '',
+        const projectData = {
+            title: template ? template.title : 'My New Project',
+            description: template ? template.description : 'A verified mission started in SparkQuest',
             externalLink: '',
             embedUrl: '',
             mediaUrls: template?.thumbnailUrl ? [template.thumbnailUrl] : [],
@@ -704,10 +762,34 @@ export const LearningView = () => {
             steps: initialSteps,
             templateId: template?.id || null,
             station: template ? template.station : 'general',
-            status: 'planning'
-        });
-        setActiveProject(null);
-        setIsProjectModalOpen(true);
+            status: 'planning', // SparkQuest will update this
+            studentId: userProfile.uid,
+            studentName: userProfile.name,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+            workflowId: initialWorkflowId || null
+        };
+
+        try {
+            addToast("Mission Accepted", "Initializing mission protocols...", "info");
+
+            // 2. Save directly to Firestore
+            const docRef = await addDoc(collection(db, 'student_projects'), projectData);
+            const newProjectId = docRef.id;
+
+            // 3. Launch SparkQuest
+            const token = generateBridgeToken(userProfile);
+            const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}?projectId=${newProjectId}&token=${token}`;
+            window.open(url, '_blank');
+
+            // 4. Update UI State (Legacy compatibility)
+            setActiveProject({ ...projectData, id: newProjectId } as any);
+            // setIsProjectModalOpen(true); // DISABLED: No more local wizard
+
+        } catch (error) {
+            console.error("Failed to start mission:", error);
+            addToast("Error", "Mission initialization failed. Check comms.", "error");
+        }
     };
 
     const handleWorkflowChange = (workflowId: string) => {
@@ -725,9 +807,13 @@ export const LearningView = () => {
     };
 
     const openActiveProject = (project: StudentProject) => {
-        setActiveProject(project);
-        setProjectForm(project);
-        setIsProjectModalOpen(true);
+        // Redirect to new SparkQuest App
+        if (!userProfile) return;
+        const bridgeToken = generateBridgeToken(userProfile);
+        const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}?projectId=${project.id}&token=${bridgeToken}`;
+        window.open(url, '_blank');
+
+        // Legacy: setActiveProject(project); setIsProjectModalOpen(true);
     };
 
     const handleSaveProject = async (silent = false): Promise<string | undefined> => {
@@ -784,11 +870,28 @@ export const LearningView = () => {
                 console.log("📤 Adding document to Firestore...");
                 const ref = await addDoc(collection(db, 'student_projects'), {
                     ...data,
-                    status: 'planning',
+                    status: 'planning', // Force planning on create
                     createdAt: serverTimestamp()
                 });
 
                 console.log("✅ Document added with ID:", ref.id);
+
+                // --- NOTIFY INSTRUCTORS ---
+                try {
+                    await addDoc(collection(db, 'notifications'), {
+                        userId: 'all', // Broadcaster to all instructors
+                        type: 'info',
+                        title: 'New Mission Started',
+                        message: `${userProfile.name} has started building "${data.title}"`,
+                        projectId: ref.id,
+                        projectTitle: data.title,
+                        read: false,
+                        createdAt: serverTimestamp(),
+                        link: `/reviews?projectId=${ref.id}`
+                    });
+                } catch (err) {
+                    console.error("Failed to notify instructors", err);
+                }
 
                 // Update active project so subsequent saves are updates
                 const newProject = { ...data, id: ref.id, status: 'planning' } as StudentProject;
@@ -1374,957 +1477,905 @@ export const LearningView = () => {
                             )}
                         </div>
                     </div>
-                )}
+
+                )
+                }
 
                 {/* STUDIO TAB - Instructor Project Monitoring */}
-                {activeTab === 'studio' && (
-                    <div>
-                        {studioView === 'dashboard' && (
-                            <InstructorStudioDashboard
-                                studentProjects={studentProjects}
-                                students={students}
-                                onViewProject={(project) => {
-                                    setActiveProject(project);
-                                    setProjectForm(project);
-                                    setIsProjectModalOpen(true);
-                                }}
-                                onViewCommits={() => setStudioView('commits')}
-                                onViewReviews={() => setStudioView('reviews')}
-                            />
-                        )}
+                {
+                    activeTab === 'studio' && (
+                        <div>
+                            {studioView === 'dashboard' && (
+                                <InstructorStudioDashboard
+                                    studentProjects={studentProjects}
+                                    students={students}
+                                    onViewProject={(project) => {
+                                        setActiveProject(project);
+                                        setProjectForm(project);
+                                        setIsProjectModalOpen(true);
+                                    }}
+                                    onViewCommits={() => setStudioView('commits')}
+                                    onViewReviews={() => setStudioView('reviews')}
+                                />
+                            )}
 
-                        {studioView === 'commits' && (
-                            <CommitFeedView
-                                studentProjects={studentProjects}
-                                students={students}
-                                onViewProject={(project) => {
-                                    setActiveProject(project);
-                                    setProjectForm(project);
-                                    setIsProjectModalOpen(true);
-                                }}
-                            />
-                        )}
+                            {studioView === 'commits' && (
+                                <CommitFeedView
+                                    studentProjects={studentProjects}
+                                    students={students}
+                                    onViewProject={(project) => {
+                                        setActiveProject(project);
+                                        setProjectForm(project);
+                                        setIsProjectModalOpen(true);
+                                    }}
+                                />
+                            )}
 
-                        {studioView === 'reviews' && (
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between mb-6">
-                                    <div>
-                                        <h3 className="text-2xl font-bold text-slate-900">Review Queue</h3>
-                                        <p className="text-slate-600">Projects submitted for your review</p>
+                            {studioView === 'reviews' && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-slate-900">Review Queue</h3>
+                                            <p className="text-slate-600">Projects submitted for your review</p>
+                                        </div>
+                                        <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg font-bold">
+                                            {pendingReviews.length} Pending
+                                        </div>
                                     </div>
-                                    <div className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg font-bold">
-                                        {pendingReviews.length} Pending
-                                    </div>
-                                </div>
 
-                                {pendingReviews.length === 0 ? (
-                                    <div className="bg-white border-2 border-slate-200 rounded-xl p-12 text-center">
-                                        <CheckCircle2 size={48} className="text-emerald-500 mx-auto mb-4" />
-                                        <h4 className="text-xl font-bold text-slate-900 mb-2">All Caught Up! 🎉</h4>
-                                        <p className="text-slate-600">No projects waiting for review.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {pendingReviews.map(project => {
-                                            const theme = getTheme(project.station);
-                                            const student = students.find(s => s.id === project.studentId);
-                                            return (
-                                                <div key={project.id} className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden hover:border-purple-400 transition-all shadow-sm hover:shadow-lg">
-                                                    {/* Project Header */}
-                                                    <div className="h-32 bg-slate-800 relative overflow-hidden">
-                                                        {project.mediaUrls?.[0] ? (
-                                                            <img src={project.mediaUrls[0]} className="w-full h-full object-cover" alt={project.title} />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                                                                <ImageIcon size={32} className="text-slate-700" />
+                                    {pendingReviews.length === 0 ? (
+                                        <div className="bg-white border-2 border-slate-200 rounded-xl p-12 text-center">
+                                            <CheckCircle2 size={48} className="text-emerald-500 mx-auto mb-4" />
+                                            <h4 className="text-xl font-bold text-slate-900 mb-2">All Caught Up! 🎉</h4>
+                                            <p className="text-slate-600">No projects waiting for review.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {pendingReviews.map(project => {
+                                                const theme = getTheme(project.station);
+                                                const student = students.find(s => s.id === project.studentId);
+                                                return (
+                                                    <div key={project.id} className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden hover:border-purple-400 transition-all shadow-sm hover:shadow-lg">
+                                                        {/* Project Header */}
+                                                        <div className="h-32 bg-slate-800 relative overflow-hidden">
+                                                            {project.mediaUrls?.[0] ? (
+                                                                <img src={project.mediaUrls[0]} className="w-full h-full object-cover" alt={project.title} />
+                                                            ) : (
+                                                                <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                                                                    <ImageIcon size={32} className="text-slate-700" />
+                                                                </div>
+                                                            )}
+                                                            <div className="absolute top-2 right-2">
+                                                                <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-purple-600 text-white">
+                                                                    Needs Review
+                                                                </span>
                                                             </div>
-                                                        )}
-                                                        <div className="absolute top-2 right-2">
-                                                            <span className="px-2 py-1 rounded text-[10px] font-bold uppercase bg-purple-600 text-white">
-                                                                Needs Review
-                                                            </span>
+                                                        </div>
+
+                                                        {/* Project Info */}
+                                                        <div className="p-4">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <theme.icon size={12} style={{ color: theme.colorHex }} />
+                                                                <span className={`text-[9px] font-bold uppercase ${theme.text}`}>{theme.label}</span>
+                                                            </div>
+                                                            <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{project.title}</h3>
+                                                            <p className="text-xs text-slate-600 mb-3">by {student?.name || project.studentName}</p>
+
+                                                            {/* Submitted Date */}
+                                                            <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-3">
+                                                                <Clock size={10} />
+                                                                <span>Submitted {project.updatedAt ? formatDate(project.updatedAt) : 'recently'}</span>
+                                                            </div>
+
+                                                            {/* Review Button */}
+                                                            <button
+                                                                onClick={() => { setSelectedSubmission(project); setReviewModalOpen(true); }}
+                                                                className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-colors"
+                                                            >
+                                                                Review Now
+                                                            </button>
                                                         </div>
                                                     </div>
-
-                                                    {/* Project Info */}
-                                                    <div className="p-4">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <theme.icon size={12} style={{ color: theme.colorHex }} />
-                                                            <span className={`text-[9px] font-bold uppercase ${theme.text}`}>{theme.label}</span>
-                                                        </div>
-                                                        <h3 className="font-bold text-slate-900 text-sm mb-1 line-clamp-1">{project.title}</h3>
-                                                        <p className="text-xs text-slate-600 mb-3">by {student?.name || project.studentName}</p>
-
-                                                        {/* Submitted Date */}
-                                                        <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-3">
-                                                            <Clock size={10} />
-                                                            <span>Submitted {project.updatedAt ? formatDate(project.updatedAt) : 'recently'}</span>
-                                                        </div>
-
-                                                        {/* Review Button */}
-                                                        <button
-                                                            onClick={() => { setSelectedSubmission(project); setReviewModalOpen(true); }}
-                                                            className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-colors"
-                                                        >
-                                                            Review Now
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )
+                }
 
                 {/* REVIEW TAB */}
-                {activeTab === 'review' && (
-                    <div className="flex flex-col">
-                        <div className="space-y-3 pb-4">
-                            {pendingReviews.length === 0 ? <div className="p-8 text-center text-slate-500 italic bg-slate-900/50 rounded-xl border border-slate-800">No projects waiting for review.</div> :
-                                pendingReviews.map(p => {
-                                    const theme = getTheme(p.station);
-                                    return (
-                                        <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-slate-700 transition-colors">
-                                            <div className="flex items-start gap-4">
-                                                {p.mediaUrls?.[0] ? (
-                                                    <img src={p.mediaUrls[0]} alt="Preview" className="w-24 h-16 rounded-lg object-cover border border-slate-800" />
-                                                ) : (
-                                                    <div className="w-24 h-16 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500"><ImageIcon size={20} /></div>
-                                                )}
-                                                <div>
-                                                    <h4 className="font-bold text-white">{p.title}</h4>
-                                                    <p className="text-sm text-slate-400">by <span className="text-cyan-400">{p.studentName}</span></p>
-                                                    <span className={`text-[10px] uppercase font-bold ${theme.text} mt-1 block`}>{theme.label}</span>
+                {
+                    activeTab === 'review' && (
+                        <div className="flex flex-col">
+                            <div className="space-y-3 pb-4">
+                                {pendingReviews.length === 0 ? <div className="p-8 text-center text-slate-500 italic bg-slate-900/50 rounded-xl border border-slate-800">No projects waiting for review.</div> :
+                                    pendingReviews.map(p => {
+                                        const theme = getTheme(p.station);
+                                        return (
+                                            <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-slate-700 transition-colors">
+                                                <div className="flex items-start gap-4">
+                                                    {p.mediaUrls?.[0] ? (
+                                                        <img src={p.mediaUrls[0]} alt="Preview" className="w-24 h-16 rounded-lg object-cover border border-slate-800" />
+                                                    ) : (
+                                                        <div className="w-24 h-16 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500"><ImageIcon size={20} /></div>
+                                                    )}
+                                                    <div>
+                                                        <h4 className="font-bold text-white">{p.title}</h4>
+                                                        <p className="text-sm text-slate-400">by <span className="text-cyan-400">{p.studentName}</span></p>
+                                                        <span className={`text-[10px] uppercase font-bold ${theme.text} mt-1 block`}>{theme.label}</span>
+                                                    </div>
                                                 </div>
+                                                <button onClick={() => { setSelectedSubmission(p); setReviewModalOpen(true); }} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-cyan-900/20">Review</button>
                                             </div>
-                                            <button onClick={() => { setSelectedSubmission(p); setReviewModalOpen(true); }} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-cyan-900/20">Review</button>
-                                        </div>
-                                    );
-                                })}
+                                        );
+                                    })}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* PORTFOLIO TAB */}
-                {activeTab === 'portfolios' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-4">
-                        {students.filter(s => s.status === 'active').map(student => {
-                            const workCount = studentProjects.filter(p => p.studentId === student.id && p.status === 'published').length;
-                            return (
-                                <div key={student.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center text-center hover:border-slate-700 transition-colors group">
-                                    <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-400 mb-3 group-hover:bg-cyan-900/20 group-hover:text-cyan-400 transition-colors">
-                                        {student.name.charAt(0)}
+                {
+                    activeTab === 'portfolios' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-4">
+                            {students.filter(s => s.status === 'active').map(student => {
+                                const workCount = studentProjects.filter(p => p.studentId === student.id && p.status === 'published').length;
+                                return (
+                                    <div key={student.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center text-center hover:border-slate-700 transition-colors group">
+                                        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-400 mb-3 group-hover:bg-cyan-900/20 group-hover:text-cyan-400 transition-colors">
+                                            {student.name.charAt(0)}
+                                        </div>
+                                        <h3 className="font-bold text-white">{student.name}</h3>
+                                        <p className="text-xs text-slate-500 mb-3">{workCount} Published Projects</p>
                                     </div>
-                                    <h3 className="font-bold text-white">{student.name}</h3>
-                                    <p className="text-xs text-slate-500 mb-3">{workCount} Published Projects</p>
-                                </div>
-                            )
-                        })}
-                    </div>
-                )}
+                                )
+                            })}
+                        </div>
+                    )
+                }
 
                 {/* SETUP TAB */}
-                {activeTab === 'setup' && (
-                    <div className="flex flex-col">
-                        <div className="bg-gradient-to-r from-purple-900/20 to-indigo-900/20 border border-purple-800/30 rounded-xl p-6 mb-6">
-                            <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
-                                <Beaker className="text-purple-400" size={28} /> Setup Factory
-                            </h3>
-                            <p className="text-slate-400">Configure workflows, stations, and badges for your learning environment.</p>
-                        </div>
-
-                        {/* Sub-tabs */}
-                        <div className="flex gap-2 mb-6 border-b border-slate-800 pb-2">
-                            <button
-                                onClick={() => setSetupSubTab('workflows')}
-                                className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'workflows' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                🔄 Workflows
-                            </button>
-                            <button
-                                onClick={() => setSetupSubTab('stations')}
-                                className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'stations' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                🎨 Stations
-                            </button>
-                            <button
-                                onClick={() => setSetupSubTab('badges')}
-                                className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'badges' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
-                            >
-                                🏆 Badges
-                            </button>
-                        </div>
-
-                        {/* Workflows Section */}
-                        {setupSubTab === 'workflows' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-white text-lg">Process Workflows</h4>
-                                    <button
-                                        onClick={() => setIsWorkflowModalOpen(true)}
-                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold flex items-center gap-2"
-                                    >
-                                        <Plus size={18} /> New Workflow
-                                    </button>
-                                </div>
-
-                                {processTemplates.length === 0 ? (
-                                    <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-xl p-12 text-center">
-                                        <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Beaker size={32} className="text-slate-600" />
-                                        </div>
-                                        <h4 className="font-bold text-white mb-2">No Workflows Yet</h4>
-                                        <p className="text-slate-500 mb-4">Create your first process workflow to structure student projects.</p>
-                                        <button
-                                            onClick={handleSeedWorkflows}
-                                            disabled={isSeeding}
-                                            className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {isSeeding ? 'Creating...' : 'Create Default Workflows'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {processTemplates.map(workflow => (
-                                            <div key={workflow.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-purple-500/50 transition-all group">
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <div>
-                                                        <h5 className="font-bold text-white text-lg">{workflow.name}</h5>
-                                                        <p className="text-sm text-slate-400">{workflow.description}</p>
-                                                    </div>
-                                                    {workflow.isDefault && (
-                                                        <span className="px-2 py-1 bg-purple-900/30 text-purple-400 text-xs font-bold rounded border border-purple-800">
-                                                            DEFAULT
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-wrap gap-2 mb-4">
-                                                    {workflow.phases.sort((a, b) => a.order - b.order).map(phase => (
-                                                        <span
-                                                            key={phase.id}
-                                                            className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700"
-                                                        >
-                                                            {phase.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <button
-                                                        onClick={() => handleEditWorkflow(workflow)}
-                                                        className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    {!workflow.isDefault && (
-                                                        <button
-                                                            onClick={() => handleSetDefaultWorkflow(workflow.id)}
-                                                            className="px-3 py-2 bg-purple-900/20 hover:bg-purple-900/30 text-purple-400 rounded-lg text-sm font-medium"
-                                                            title="Set as default"
-                                                        >
-                                                            <Star size={16} />
-                                                        </button>
-                                                    )}
-                                                    {!workflow.isDefault && (
-                                                        <button
-                                                            onClick={() => handleDeleteWorkflow(workflow.id)}
-                                                            className="px-3 py-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 rounded-lg text-sm font-medium"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                {
+                    activeTab === 'setup' && (
+                        <div className="flex flex-col">
+                            <div className="bg-gradient-to-r from-purple-900/20 to-indigo-900/20 border border-purple-800/30 rounded-xl p-6 mb-6">
+                                <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+                                    <Beaker className="text-purple-400" size={28} /> Setup Factory
+                                </h3>
+                                <p className="text-slate-400">Configure workflows, stations, and badges for your learning environment.</p>
                             </div>
-                        )}
 
-                        {/* Stations Section */}
-                        {setupSubTab === 'stations' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-white text-lg">Project Stations</h4>
-                                    <button
-                                        onClick={() => setIsStationModalOpen(true)}
-                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold flex items-center gap-2"
-                                    >
-                                        <Plus size={18} /> New Station
-                                    </button>
-                                </div>
-
-                                {stations.length === 0 ? (
-                                    <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-xl p-12 text-center">
-                                        <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Zap size={32} className="text-slate-600" />
-                                        </div>
-                                        <h4 className="font-bold text-white mb-2">No Stations Yet</h4>
-                                        <p className="text-slate-500 mb-4">Create project stations to categorize and theme your learning activities.</p>
-                                        <button
-                                            onClick={handleSeedStations}
-                                            disabled={isSeeding}
-                                            className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {isSeeding ? 'Creating...' : 'Create Default Stations'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {stations.sort((a, b) => (a.order || 0) - (b.order || 0)).map(station => {
-                                            const colorMap: Record<string, { border: string, bg: string, text: string, badge: string, activeBtn: string }> = {
-                                                blue: { border: 'border-blue-500/30', bg: 'bg-blue-900/10', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', activeBtn: 'bg-blue-500 text-white border-blue-400' },
-                                                purple: { border: 'border-purple-500/30', bg: 'bg-purple-900/10', text: 'text-purple-400', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', activeBtn: 'bg-purple-500 text-white border-purple-400' },
-                                                cyan: { border: 'border-cyan-500/30', bg: 'bg-cyan-900/10', text: 'text-cyan-400', badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', activeBtn: 'bg-cyan-500 text-white border-cyan-400' },
-                                                amber: { border: 'border-amber-500/30', bg: 'bg-amber-900/10', text: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', activeBtn: 'bg-amber-500 text-white border-amber-400' },
-                                                green: { border: 'border-green-500/30', bg: 'bg-green-900/10', text: 'text-green-400', badge: 'bg-green-500/20 text-green-300 border-green-500/30', activeBtn: 'bg-green-500 text-white border-green-400' },
-                                                orange: { border: 'border-orange-500/30', bg: 'bg-orange-900/10', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/30', activeBtn: 'bg-orange-500 text-white border-orange-400' },
-                                                pink: { border: 'border-pink-500/30', bg: 'bg-pink-900/10', text: 'text-pink-400', badge: 'bg-pink-500/20 text-pink-300 border-pink-500/30', activeBtn: 'bg-pink-500 text-white border-pink-400' },
-                                                indigo: { border: 'border-indigo-500/30', bg: 'bg-indigo-900/10', text: 'text-indigo-400', badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', activeBtn: 'bg-indigo-500 text-white border-indigo-400' },
-                                                sky: { border: 'border-sky-500/30', bg: 'bg-sky-900/10', text: 'text-sky-400', badge: 'bg-sky-500/20 text-sky-300 border-sky-500/30', activeBtn: 'bg-sky-500 text-white border-sky-400' },
-                                                violet: { border: 'border-violet-500/30', bg: 'bg-violet-900/10', text: 'text-violet-400', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/30', activeBtn: 'bg-violet-500 text-white border-violet-400' },
-                                                rose: { border: 'border-rose-500/30', bg: 'bg-rose-900/10', text: 'text-rose-400', badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30', activeBtn: 'bg-rose-500 text-white border-rose-400' },
-                                                emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-900/10', text: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', activeBtn: 'bg-emerald-500 text-white border-emerald-400' },
-                                            };
-                                            const theme = colorMap[station.color] || colorMap.blue;
-                                            const Icon = (LucideIcons[station.icon as keyof typeof LucideIcons] || LucideIcons.Circle) as React.ElementType;
-
-                                            return (
-                                                <div key={station.id} className={`relative overflow-hidden rounded-xl border ${theme.border} ${theme.bg} p-5 transition-all hover:shadow-lg hover:shadow-${station.color}-500/10 group`}>
-                                                    {/* Header */}
-                                                    <div className="flex items-start justify-between mb-4">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${theme.badge}`}>
-                                                                <Icon size={20} />
-                                                            </div>
-                                                            <div>
-                                                                <h5 className="font-bold text-white text-lg leading-tight">{station.label}</h5>
-                                                                <div className="flex flex-wrap gap-1 mt-1">
-                                                                    {(station.gradeNames?.length ? station.gradeNames : ['All Grades']).map((gn, i) => (
-                                                                        <span key={i} className="text-[10px] uppercase tracking-wider font-bold opacity-60">
-                                                                            {gn}
-                                                                        </span>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <p className="text-sm text-slate-300 mb-6 line-clamp-2 min-h-[2.5rem]">{station.description}</p>
-
-                                                    {/* Activation Section */}
-                                                    <div className="space-y-2 mb-4">
-                                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active For:</label>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {(station.gradeIds && station.gradeIds.length > 0 ? station.gradeIds : availableGrades.map(g => g.id)).map(gid => {
-                                                                const gName = availableGrades.find(g => g.id === gid)?.name || station.gradeNames?.[station.gradeIds?.indexOf(gid) || -1] || 'Unknown';
-                                                                const isActive = station.activeForGradeIds?.includes(gid);
-
-                                                                return (
-                                                                    <button
-                                                                        key={gid}
-                                                                        onClick={() => handleToggleStationActivation(station.id, gid)}
-                                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${isActive
-                                                                            ? theme.activeBtn
-                                                                            : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-slate-500 hover:bg-slate-800'
-                                                                            }`}
-                                                                    >
-                                                                        {isActive ? <Zap size={12} fill="currentColor" /> : <div className="w-3 h-3 rounded-full border-2 border-slate-600" />}
-                                                                        {gName}
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Actions */}
-                                                    <div className="flex gap-2 pt-4 border-t border-slate-700/50">
-                                                        <button
-                                                            onClick={() => handleEditStation(station)}
-                                                            className="flex-1 px-3 py-2 bg-slate-800/80 hover:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteStation(station.id)}
-                                                            className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-medium transition-colors"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Badges Section */}
-                        {setupSubTab === 'badges' && (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="font-bold text-white text-lg">Achievement Badges</h4>
-                                    <button
-                                        onClick={() => setIsBadgeModalOpen(true)}
-                                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold flex items-center gap-2"
-                                    >
-                                        <Plus size={18} /> New Badge
-                                    </button>
-                                </div>
-
-                                {badges.length === 0 ? (
-                                    <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-xl p-12 text-center">
-                                        <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Award size={32} className="text-slate-600" />
-                                        </div>
-                                        <h4 className="font-bold text-white mb-2">No Badges Yet</h4>
-                                        <p className="text-slate-500 mb-4">Create badges to reward student achievements.</p>
-                                        <button
-                                            onClick={handleSeedBadges}
-                                            disabled={isSeeding}
-                                            className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            {isSeeding ? 'Creating...' : 'Create Default Badges'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {badges.map(badge => {
-                                            const Icon = (LucideIcons[badge.icon as keyof typeof LucideIcons] || LucideIcons.Award) as React.ElementType;
-                                            return (
-                                                <div key={badge.id} className={`bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-${badge.color}-500/50 transition-all group`}>
-                                                    <div className="flex items-start justify-between mb-4">
-                                                        <div className={`w-12 h-12 rounded-xl bg-${badge.color}-900/20 text-${badge.color}-400 flex items-center justify-center border border-${badge.color}-500/30`}>
-                                                            <Icon size={24} />
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <button onClick={() => { setEditingBadgeId(badge.id); setBadgeForm(badge); setIsBadgeModalOpen(true); }} className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg transition-colors"><MoreHorizontal size={16} /></button>
-                                                            <button onClick={() => handleDeleteBadge(badge.id)} className="p-2 hover:bg-red-900/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"><Trash2 size={16} /></button>
-                                                        </div>
-                                                    </div>
-                                                    <h5 className="font-bold text-white text-lg mb-1">{badge.name}</h5>
-                                                    <p className="text-sm text-slate-400 mb-4 line-clamp-2">{badge.description}</p>
-                                                    <div className="text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-950 py-2 px-3 rounded-lg border border-slate-800">
-                                                        Criteria: {badge.criteria.type === 'project_count' ? `${badge.criteria.count} Projects (${badge.criteria.target})` : `Skill: ${badge.criteria.target}`}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* WORKFLOW EDITOR MODAL */}
-                <Modal
-                    isOpen={isWorkflowModalOpen}
-                    onClose={() => {
-                        setIsWorkflowModalOpen(false);
-                        setEditingWorkflowId(null);
-                        setWorkflowForm({ name: '', description: '', phases: [] });
-                    }}
-                    title={editingWorkflowId ? "✏️ Edit Workflow" : "✨ Create New Workflow"}
-                >
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Workflow Name</label>
-                            <input
-                                type="text"
-                                value={workflowForm.name || ''}
-                                onChange={e => setWorkflowForm(prev => ({ ...prev, name: e.target.value }))}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                placeholder="e.g., Engineering Design Process"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
-                            <textarea
-                                value={workflowForm.description || ''}
-                                onChange={e => setWorkflowForm(prev => ({ ...prev, description: e.target.value }))}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
-                                placeholder="Describe this workflow..."
-                            />
-                        </div>
-
-                        <div>
-                            <div className="flex justify-between items-center mb-3">
-                                <label className="block text-sm font-bold text-slate-400">Phases</label>
+                            {/* Sub-tabs */}
+                            <div className="flex gap-2 mb-6 border-b border-slate-800 pb-2">
                                 <button
-                                    type="button"
-                                    onClick={() => {
-                                        const newPhase: ProcessPhase = {
-                                            id: `phase_${Date.now()}`,
-                                            name: '',
-                                            color: 'blue',
-                                            icon: 'Circle',
-                                            order: (workflowForm.phases?.length || 0) + 1
-                                        };
-                                        setWorkflowForm(prev => ({
-                                            ...prev,
-                                            phases: [...(prev.phases || []), newPhase]
-                                        }));
-                                    }}
-                                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-bold flex items-center gap-1"
+                                    onClick={() => setSetupSubTab('workflows')}
+                                    className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'workflows' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    <Plus size={14} /> Add Phase
+                                    🔄 Workflows
+                                </button>
+                                <button
+                                    onClick={() => setSetupSubTab('stations')}
+                                    className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'stations' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    🎨 Stations
+                                </button>
+                                <button
+                                    onClick={() => setSetupSubTab('badges')}
+                                    className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'badges' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    🏆 Badges
                                 </button>
                             </div>
 
-                            <div className="space-y-2 max-h-64 overflow-y-auto">
-                                {workflowForm.phases?.map((phase, index) => (
-                                    <div key={phase.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex items-center gap-3">
-                                        <span className="text-slate-500 font-bold text-sm">{index + 1}</span>
-                                        <input
-                                            type="text"
-                                            value={phase.name}
-                                            onChange={e => {
-                                                const updated = [...(workflowForm.phases || [])];
-                                                updated[index] = { ...phase, name: e.target.value };
-                                                setWorkflowForm(prev => ({ ...prev, phases: updated }));
-                                            }}
-                                            className="flex-1 p-2 bg-slate-950 border border-slate-700 rounded text-white text-sm outline-none focus:border-purple-500"
-                                            placeholder="Phase name"
-                                        />
-                                        <select
-                                            value={phase.color}
-                                            onChange={e => {
-                                                const updated = [...(workflowForm.phases || [])];
-                                                updated[index] = { ...phase, color: e.target.value };
-                                                setWorkflowForm(prev => ({ ...prev, phases: updated }));
-                                            }}
-                                            className="p-2 bg-slate-950 border border-slate-700 rounded text-white text-sm outline-none"
-                                        >
-                                            <option value="blue">Blue</option>
-                                            <option value="purple">Purple</option>
-                                            <option value="cyan">Cyan</option>
-                                            <option value="amber">Amber</option>
-                                            <option value="green">Green</option>
-                                            <option value="orange">Orange</option>
-                                            <option value="pink">Pink</option>
-                                            <option value="indigo">Indigo</option>
-                                        </select>
+                            {/* Workflows Section */}
+                            {setupSubTab === 'workflows' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="font-bold text-white text-lg">Process Workflows</h4>
                                         <button
-                                            type="button"
-                                            onClick={() => {
-                                                const updated = workflowForm.phases?.filter((_, i) => i !== index);
-                                                setWorkflowForm(prev => ({ ...prev, phases: updated }));
-                                            }}
-                                            className="p-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 rounded"
+                                            onClick={() => setIsWorkflowModalOpen(true)}
+                                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold flex items-center gap-2"
                                         >
-                                            <Trash2 size={14} />
+                                            <Plus size={18} /> New Workflow
                                         </button>
                                     </div>
-                                ))}
-                                {(!workflowForm.phases || workflowForm.phases.length === 0) && (
-                                    <div className="text-center py-8 text-slate-500 text-sm italic">
-                                        No phases yet. Click "Add Phase" to get started.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
 
-                        <div className="flex gap-3 pt-4 border-t border-slate-800">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsWorkflowModalOpen(false);
-                                    setEditingWorkflowId(null);
-                                    setWorkflowForm({ name: '', description: '', phases: [] });
-                                }}
-                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    if (!db || !workflowForm.name || !workflowForm.phases?.length) return;
-                                    try {
-                                        if (editingWorkflowId) {
-                                            // Update existing workflow
-                                            await updateDoc(doc(db, 'process_templates', editingWorkflowId), {
-                                                name: workflowForm.name,
-                                                description: workflowForm.description,
-                                                phases: workflowForm.phases
-                                            });
-                                        } else {
-                                            // Create new workflow
-                                            await addDoc(collection(db, 'process_templates'), {
-                                                ...workflowForm,
-                                                createdAt: serverTimestamp()
-                                            });
-                                        }
-                                        setIsWorkflowModalOpen(false);
-                                        setEditingWorkflowId(null);
-                                        setWorkflowForm({ name: '', description: '', phases: [] });
-                                    } catch (e) {
-                                        console.error('Error saving workflow:', e);
-                                    }
-                                }}
-                                disabled={!workflowForm.name || !workflowForm.phases?.length}
-                                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {editingWorkflowId ? 'Update' : 'Create'} Workflow
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
-
-                {/* STATION EDITOR MODAL */}
-                <Modal
-                    isOpen={isStationModalOpen}
-                    onClose={() => {
-                        setIsStationModalOpen(false);
-                        setEditingStationId(null);
-                        setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
-                    }}
-                    title={editingStationId ? "✏️ Edit Station" : "✨ Create New Station"}
-                >
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Station Name</label>
-                            <input
-                                type="text"
-                                value={stationForm.label || ''}
-                                onChange={e => setStationForm(prev => ({ ...prev, label: e.target.value }))}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                placeholder="e.g., Robotics & Engineering"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
-                            <textarea
-                                value={stationForm.description || ''}
-                                onChange={e => setStationForm(prev => ({ ...prev, description: e.target.value }))}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
-                                placeholder="Describe this station..."
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Assign to Grades</label>
-                            <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-slate-950 border border-slate-800 rounded-xl">
-                                <label className="flex items-center gap-2 cursor-pointer hover:text-purple-400 transition-colors">
-                                    <input
-                                        type="checkbox"
-                                        checked={!stationForm.gradeIds || stationForm.gradeIds.length === 0}
-                                        onChange={() => setStationForm(prev => ({ ...prev, gradeIds: [], gradeNames: [] }))}
-                                        className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
-                                    />
-                                    <span className="text-white">All Grades</span>
-                                </label>
-                                {availableGrades.map(grade => (
-                                    <label key={grade.id} className="flex items-center gap-2 cursor-pointer hover:text-purple-400 transition-colors">
-                                        <input
-                                            type="checkbox"
-                                            checked={stationForm.gradeIds?.includes(grade.id) || false}
-                                            onChange={e => {
-                                                const currentIds = stationForm.gradeIds || [];
-                                                const currentNames = stationForm.gradeNames || [];
-                                                if (e.target.checked) {
-                                                    setStationForm(prev => ({
-                                                        ...prev,
-                                                        gradeIds: [...currentIds, grade.id],
-                                                        gradeNames: [...currentNames, grade.name]
-                                                    }));
-                                                } else {
-                                                    const newIds = currentIds.filter(id => id !== grade.id);
-                                                    const newNames = currentNames.filter(name => name !== grade.name);
-                                                    setStationForm(prev => ({
-                                                        ...prev,
-                                                        gradeIds: newIds,
-                                                        gradeNames: newNames
-                                                    }));
-                                                }
-                                            }}
-                                            className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
-                                        />
-                                        <span className="text-white">{grade.name}</span>
-                                    </label>
-                                ))}
-                            </div>
-                            <p className="text-xs text-slate-500 mt-1">Select specific grades or "All Grades" for universal access</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-400 mb-2">Color</label>
-                                <select
-                                    value={stationForm.color || 'blue'}
-                                    onChange={e => setStationForm(prev => ({ ...prev, color: e.target.value }))}
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                >
-                                    <option value="blue">Blue</option>
-                                    <option value="purple">Purple</option>
-                                    <option value="cyan">Cyan</option>
-                                    <option value="amber">Amber</option>
-                                    <option value="green">Green</option>
-                                    <option value="orange">Orange</option>
-                                    <option value="pink">Pink</option>
-                                    <option value="indigo">Indigo</option>
-                                    <option value="sky">Sky</option>
-                                    <option value="violet">Violet</option>
-                                    <option value="rose">Rose</option>
-                                    <option value="emerald">Emerald</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-slate-400 mb-2">Icon</label>
-                                <input
-                                    type="text"
-                                    value={stationForm.icon || ''}
-                                    onChange={e => setStationForm(prev => ({ ...prev, icon: e.target.value }))}
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                    placeholder="e.g., Bot"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-4 border-t border-slate-800">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsStationModalOpen(false);
-                                    setEditingStationId(null);
-                                    setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
-                                }}
-                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    if (!db || !stationForm.label) return;
-                                    try {
-                                        if (editingStationId) {
-                                            // Update existing station
-                                            await updateDoc(doc(db, 'stations', editingStationId), {
-                                                label: stationForm.label,
-                                                description: stationForm.description,
-                                                color: stationForm.color,
-                                                icon: stationForm.icon,
-                                                gradeId: null, // Legacy
-                                                gradeName: null, // Legacy
-                                                gradeIds: stationForm.gradeIds || [],
-                                                gradeNames: stationForm.gradeNames || []
-                                            });
-                                        } else {
-                                            // Create new station
-                                            await addDoc(collection(db, 'stations'), {
-                                                ...stationForm,
-                                                order: stations.length + 1,
-                                                createdAt: serverTimestamp()
-                                            });
-                                        }
-                                        setIsStationModalOpen(false);
-                                        setEditingStationId(null);
-                                        setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
-                                    } catch (e) {
-                                        console.error('Error saving station:', e);
-                                    }
-                                }}
-                                disabled={!stationForm.label}
-                                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {editingStationId ? 'Update' : 'Create'} Station
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
-
-                {/* BADGE EDITOR MODAL */}
-                <Modal
-                    isOpen={isBadgeModalOpen}
-                    onClose={() => {
-                        setIsBadgeModalOpen(false);
-                        setEditingBadgeId(null);
-                        setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } });
-                    }}
-                    title={editingBadgeId ? "✏️ Edit Badge" : "✨ Create New Badge"}
-                >
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Badge Name</label>
-                            <input
-                                type="text"
-                                value={badgeForm.name || ''}
-                                onChange={e => setBadgeForm(prev => ({ ...prev, name: e.target.value }))}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                placeholder="e.g., Robotics Master"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
-                            <textarea
-                                value={badgeForm.description || ''}
-                                onChange={e => setBadgeForm(prev => ({ ...prev, description: e.target.value }))}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
-                                placeholder="Describe this badge..."
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-400 mb-2">Color</label>
-                                <select
-                                    value={badgeForm.color || 'blue'}
-                                    onChange={e => setBadgeForm(prev => ({ ...prev, color: e.target.value }))}
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                >
-                                    {Object.keys(STATION_THEMES).map(color => (
-                                        <option key={color} value={color}>{color.charAt(0).toUpperCase() + color.slice(1)}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-slate-400 mb-2">Icon (Lucide)</label>
-                                <input
-                                    type="text"
-                                    value={badgeForm.icon || ''}
-                                    onChange={e => setBadgeForm(prev => ({ ...prev, icon: e.target.value }))}
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
-                                    placeholder="e.g., Award"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
-                            <h4 className="font-bold text-white mb-4 flex items-center gap-2"><Target size={16} className="text-cyan-400" /> Awarding Criteria</h4>
-
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
-                                    <select
-                                        value={badgeForm.criteria?.type || 'project_count'}
-                                        onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, type: e.target.value as any } }))}
-                                        className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
-                                    >
-                                        <option value="project_count">Project Count</option>
-                                        <option value="skill">Skill Acquisition</option>
-                                    </select>
-                                </div>
-
-                                {badgeForm.criteria?.type === 'project_count' && (
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Station</label>
-                                            <select
-                                                value={badgeForm.criteria?.target || 'all'}
-                                                onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, target: e.target.value } }))}
-                                                className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
+                                    {processTemplates.length === 0 ? (
+                                        <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-xl p-12 text-center">
+                                            <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Beaker size={32} className="text-slate-600" />
+                                            </div>
+                                            <h4 className="font-bold text-white mb-2">No Workflows Yet</h4>
+                                            <p className="text-slate-500 mb-4">Create your first process workflow to structure student projects.</p>
+                                            <button
+                                                onClick={handleSeedWorkflows}
+                                                disabled={isSeeding}
+                                                className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                <option value="all">All Stations</option>
-                                                {Object.keys(STATION_THEMES).map(k => <option key={k} value={k}>{STATION_THEMES[k as StationType].label}</option>)}
-                                            </select>
+                                                {isSeeding ? 'Creating...' : 'Create Default Workflows'}
+                                            </button>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Count Required</label>
-                                            <input
-                                                type="number"
-                                                min="1"
-                                                value={badgeForm.criteria?.count || 1}
-                                                onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, count: parseInt(e.target.value) } }))}
-                                                className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
-                                            />
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {processTemplates.map(workflow => (
+                                                <div key={workflow.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-purple-500/50 transition-all group">
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <div>
+                                                            <h5 className="font-bold text-white text-lg">{workflow.name}</h5>
+                                                            <p className="text-sm text-slate-400">{workflow.description}</p>
+                                                        </div>
+                                                        {workflow.isDefault && (
+                                                            <span className="px-2 py-1 bg-purple-900/30 text-purple-400 text-xs font-bold rounded border border-purple-800">
+                                                                DEFAULT
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2 mb-4">
+                                                        {workflow.phases.sort((a, b) => a.order - b.order).map(phase => (
+                                                            <span
+                                                                key={phase.id}
+                                                                className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700"
+                                                            >
+                                                                {phase.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleEditWorkflow(workflow)}
+                                                            className="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm font-medium"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        {!workflow.isDefault && (
+                                                            <button
+                                                                onClick={() => handleSetDefaultWorkflow(workflow.id)}
+                                                                className="px-3 py-2 bg-purple-900/20 hover:bg-purple-900/30 text-purple-400 rounded-lg text-sm font-medium"
+                                                                title="Set as default"
+                                                            >
+                                                                <Star size={16} />
+                                                            </button>
+                                                        )}
+                                                        {!workflow.isDefault && (
+                                                            <button
+                                                                onClick={() => handleDeleteWorkflow(workflow.id)}
+                                                                className="px-3 py-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 rounded-lg text-sm font-medium"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
-                                    </div>
-                                )}
-
-                                {badgeForm.criteria?.type === 'skill' && (
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Skill Name</label>
-                                        <input
-                                            type="text"
-                                            value={badgeForm.criteria?.target || ''}
-                                            onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, target: e.target.value } }))}
-                                            className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
-                                            placeholder="e.g., Python, 3D Design"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 pt-4 border-t border-slate-800">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsBadgeModalOpen(false);
-                                    setEditingBadgeId(null);
-                                    setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } });
-                                }}
-                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleSaveBadge}
-                                disabled={!badgeForm.name}
-                                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {editingBadgeId ? 'Update' : 'Create'} Badge
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
-
-                {/* FACTORY MODAL (Create Assignment) */}
-                <ProjectFactoryModal
-                    isOpen={isTemplateModalOpen}
-                    onClose={() => setIsTemplateModalOpen(false)}
-                    editingTemplateId={editingTemplateId}
-                    templateForm={templateForm}
-                    setTemplateForm={setTemplateForm}
-                    handleSaveTemplate={handleSaveTemplate}
-                    activeModalTab={activeModalTab}
-                    setActiveModalTab={setActiveModalTab}
-                    availableGrades={availableGrades.map(g => ({ ...g, groups: [] }))}
-                    availableGroups={availableGroups}
-                    wizardStep={wizardStep}
-                    WIZARD_STEPS={WIZARD_STEPS}
-                    processTemplates={processTemplates}
-                />
-
-                <Modal isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
-                    <div className="space-y-4">
-                        <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                            <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-500 uppercase">Student</span><span className="text-white font-medium">{selectedSubmission?.studentName}</span></div>
-                            <h4 className="text-lg font-bold text-white mb-2">{selectedSubmission?.title}</h4>
-                            <div className="mb-4">
-                                <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Engineering Process</h5>
-                                <div className="space-y-1">
-                                    {selectedSubmission?.steps?.map((step, i) => (
-                                        <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
-                                            {step.status === 'done' ? <CheckSquare size={14} className="text-emerald-500" /> : <Clock size={14} className="text-amber-500" />}
-                                            {step.title}
-                                        </div>
-                                    ))}
+                                    )}
                                 </div>
-                            </div>
-                            {selectedSubmission?.mediaUrls?.[0] && <img src={selectedSubmission.mediaUrls[0]} alt="Work" className="w-full rounded-lg border border-slate-800" />}
+                            )}
+
+                            {/* Stations Section */}
+                            {setupSubTab === 'stations' && (
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="font-bold text-white text-lg">Project Stations</h4>
+                                        <button
+                                            onClick={() => setIsStationModalOpen(true)}
+                                            className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold flex items-center gap-2"
+                                        >
+                                            <Plus size={18} /> New Station
+                                        </button>
+                                    </div>
+
+                                    {stations.length === 0 ? (
+                                        <div className="bg-slate-900/50 border border-slate-800 border-dashed rounded-xl p-12 text-center">
+                                            <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <Zap size={32} className="text-slate-600" />
+                                            </div>
+                                            <h4 className="font-bold text-white mb-2">No Stations Yet</h4>
+                                            <p className="text-slate-500 mb-4">Create project stations to categorize and theme your learning activities.</p>
+                                            <button
+                                                onClick={handleSeedStations}
+                                                disabled={isSeeding}
+                                                className="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                {isSeeding ? 'Creating...' : 'Create Default Stations'}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {stations.sort((a, b) => (a.order || 0) - (b.order || 0)).map(station => {
+                                                const colorMap: Record<string, { border: string, bg: string, text: string, badge: string, activeBtn: string }> = {
+                                                    blue: { border: 'border-blue-500/30', bg: 'bg-blue-900/10', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', activeBtn: 'bg-blue-500 text-white border-blue-400' },
+                                                    purple: { border: 'border-purple-500/30', bg: 'bg-purple-900/10', text: 'text-purple-400', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', activeBtn: 'bg-purple-500 text-white border-purple-400' },
+                                                    cyan: { border: 'border-cyan-500/30', bg: 'bg-cyan-900/10', text: 'text-cyan-400', badge: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30', activeBtn: 'bg-cyan-500 text-white border-cyan-400' },
+                                                    amber: { border: 'border-amber-500/30', bg: 'bg-amber-900/10', text: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30', activeBtn: 'bg-amber-500 text-white border-amber-400' },
+                                                    green: { border: 'border-green-500/30', bg: 'bg-green-900/10', text: 'text-green-400', badge: 'bg-green-500/20 text-green-300 border-green-500/30', activeBtn: 'bg-green-500 text-white border-green-400' },
+                                                    orange: { border: 'border-orange-500/30', bg: 'bg-orange-900/10', text: 'text-orange-400', badge: 'bg-orange-500/20 text-orange-300 border-orange-500/30', activeBtn: 'bg-orange-500 text-white border-orange-400' },
+                                                    pink: { border: 'border-pink-500/30', bg: 'bg-pink-900/10', text: 'text-pink-400', badge: 'bg-pink-500/20 text-pink-300 border-pink-500/30', activeBtn: 'bg-pink-500 text-white border-pink-400' },
+                                                    indigo: { border: 'border-indigo-500/30', bg: 'bg-indigo-900/10', text: 'text-indigo-400', badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30', activeBtn: 'bg-indigo-500 text-white border-indigo-400' },
+                                                    sky: { border: 'border-sky-500/30', bg: 'bg-sky-900/10', text: 'text-sky-400', badge: 'bg-sky-500/20 text-sky-300 border-sky-500/30', activeBtn: 'bg-sky-500 text-white border-sky-400' },
+                                                    violet: { border: 'border-violet-500/30', bg: 'bg-violet-900/10', text: 'text-violet-400', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/30', activeBtn: 'bg-violet-500 text-white border-violet-400' },
+                                                    rose: { border: 'border-rose-500/30', bg: 'bg-rose-900/10', text: 'text-rose-400', badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30', activeBtn: 'bg-rose-500 text-white border-rose-400' },
+                                                    emerald: { border: 'border-emerald-500/30', bg: 'bg-emerald-900/10', text: 'text-emerald-400', badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30', activeBtn: 'bg-emerald-500 text-white border-emerald-400' },
+                                                };
+                                                const theme = colorMap[station.color] || colorMap.blue;
+                                                const Icon = (LucideIcons[station.icon as keyof typeof LucideIcons] || LucideIcons.Circle) as React.ElementType;
+
+                                                return (
+                                                    <div key={station.id} className={`relative overflow-hidden rounded-xl border ${theme.border} ${theme.bg} p-5 transition-all hover:shadow-lg hover:shadow-${station.color}-500/10 group`}>
+                                                        {/* Header */}
+                                                        <div className="flex items-start justify-between mb-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${theme.badge}`}>
+                                                                    <Icon size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <h5 className="font-bold text-white text-lg leading-tight">{station.label}</h5>
+                                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                                        {(station.gradeNames?.length ? station.gradeNames : ['All Grades']).map((gn, i) => (
+                                                                            <span key={i} className="text-[10px] uppercase tracking-wider font-bold opacity-60">
+                                                                                {gn}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <p className="text-sm text-slate-300 mb-6 line-clamp-2 min-h-[2.5rem]">{station.description}</p>
+
+                                                        {/* Activation Section */}
+                                                        <div className="space-y-2 mb-4">
+                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active For:</label>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {(station.gradeIds && station.gradeIds.length > 0 ? station.gradeIds : availableGrades.map(g => g.id)).map(gid => {
+                                                                    const gName = availableGrades.find(g => g.id === gid)?.name || station.gradeNames?.[station.gradeIds?.indexOf(gid) || -1] || 'Unknown';
+                                                                    const isActive = station.activeForGradeIds?.includes(gid);
+
+                                                                    return (
+                                                                        <button
+                                                                            key={gid}
+                                                                            onClick={() => handleToggleStationActivation(station.id, gid)}
+                                                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${isActive
+                                                                                ? theme.activeBtn
+                                                                                : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-slate-500 hover:bg-slate-800'
+                                                                                }`}
+                                                                        >
+                                                                            {isActive ? <Zap size={12} fill="currentColor" /> : <div className="w-3 h-3 rounded-full border-2 border-slate-600" />}
+                                                                            {gName}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingStationId(station.id);
+                                                                setStationForm(station);
+                                                                setIsStationModalOpen(true);
+                                                            }}
+                                                            className="absolute top-4 right-4 p-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                                                        >
+                                                            <Edit3 size={16} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* WORKFLOW MODAL */}
+                                    {isWorkflowModalOpen && (
+                                        <Modal
+                                            isOpen={isWorkflowModalOpen}
+                                            onClose={() => {
+                                                setIsWorkflowModalOpen(false);
+                                                setEditingWorkflowId(null);
+                                                setWorkflowForm({ name: '', description: '', phases: [] });
+                                            }}
+                                            title={editingWorkflowId ? "✏️ Edit Workflow" : "✨ Create New Workflow"}
+                                        >
+                                            <div className="space-y-6">
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Workflow Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={workflowForm.name || ''}
+                                                        onChange={e => setWorkflowForm(prev => ({ ...prev, name: e.target.value }))}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                        placeholder="e.g., Engineering Design Process"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
+                                                    <textarea
+                                                        value={workflowForm.description || ''}
+                                                        onChange={e => setWorkflowForm(prev => ({ ...prev, description: e.target.value }))}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
+                                                        placeholder="Describe this workflow..."
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <div className="flex justify-between items-center mb-3">
+                                                        <label className="block text-sm font-bold text-slate-400">Phases</label>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const newPhase: ProcessPhase = {
+                                                                    id: `phase_${Date.now()}`,
+                                                                    name: '',
+                                                                    color: 'blue',
+                                                                    icon: 'Circle',
+                                                                    order: (workflowForm.phases?.length || 0) + 1
+                                                                };
+                                                                setWorkflowForm(prev => ({
+                                                                    ...prev,
+                                                                    phases: [...(prev.phases || []), newPhase]
+                                                                }));
+                                                            }}
+                                                            className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-bold flex items-center gap-1"
+                                                        >
+                                                            <Plus size={14} /> Add Phase
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                                                        {workflowForm.phases?.map((phase, index) => (
+                                                            <div key={phase.id} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex items-center gap-3">
+                                                                <span className="text-slate-500 font-bold text-sm">{index + 1}</span>
+                                                                <input
+                                                                    type="text"
+                                                                    value={phase.name}
+                                                                    onChange={e => {
+                                                                        const updated = [...(workflowForm.phases || [])];
+                                                                        updated[index] = { ...phase, name: e.target.value };
+                                                                        setWorkflowForm(prev => ({ ...prev, phases: updated }));
+                                                                    }}
+                                                                    className="flex-1 p-2 bg-slate-950 border border-slate-700 rounded text-white text-sm outline-none focus:border-purple-500"
+                                                                    placeholder="Phase name"
+                                                                />
+                                                                <select
+                                                                    value={phase.color}
+                                                                    onChange={e => {
+                                                                        const updated = [...(workflowForm.phases || [])];
+                                                                        updated[index] = { ...phase, color: e.target.value };
+                                                                        setWorkflowForm(prev => ({ ...prev, phases: updated }));
+                                                                    }}
+                                                                    className="p-2 bg-slate-950 border border-slate-700 rounded text-white text-sm outline-none"
+                                                                >
+                                                                    <option value="blue">Blue</option>
+                                                                    <option value="purple">Purple</option>
+                                                                    <option value="cyan">Cyan</option>
+                                                                    <option value="amber">Amber</option>
+                                                                    <option value="green">Green</option>
+                                                                    <option value="orange">Orange</option>
+                                                                    <option value="pink">Pink</option>
+                                                                    <option value="indigo">Indigo</option>
+                                                                </select>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const updated = workflowForm.phases?.filter((_, i) => i !== index);
+                                                                        setWorkflowForm(prev => ({ ...prev, phases: updated }));
+                                                                    }}
+                                                                    className="p-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 rounded"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                        {(!workflowForm.phases || workflowForm.phases.length === 0) && (
+                                                            <div className="text-center py-8 text-slate-500 text-sm italic">
+                                                                No phases yet. Click "Add Phase" to get started.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex gap-3 pt-4 border-t border-slate-800">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setIsWorkflowModalOpen(false);
+                                                            setEditingWorkflowId(null);
+                                                            setWorkflowForm({ name: '', description: '', phases: [] });
+                                                        }}
+                                                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => {
+                                                            if (!db || !workflowForm.name || !workflowForm.phases?.length) return;
+                                                            try {
+                                                                if (editingWorkflowId) {
+                                                                    // Update existing workflow
+                                                                    await updateDoc(doc(db, 'process_templates', editingWorkflowId), {
+                                                                        name: workflowForm.name,
+                                                                        description: workflowForm.description,
+                                                                        phases: workflowForm.phases
+                                                                    });
+                                                                } else {
+                                                                    // Create new workflow
+                                                                    await addDoc(collection(db, 'process_templates'), {
+                                                                        ...workflowForm,
+                                                                        createdAt: serverTimestamp()
+                                                                    });
+                                                                }
+                                                                setIsWorkflowModalOpen(false);
+                                                                setEditingWorkflowId(null);
+                                                                setWorkflowForm({ name: '', description: '', phases: [] });
+                                                            } catch (e) {
+                                                                console.error('Error saving workflow:', e);
+                                                            }
+                                                        }}
+                                                        disabled={!workflowForm.name || !workflowForm.phases?.length}
+                                                        className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {editingWorkflowId ? 'Update' : 'Create'} Workflow
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </Modal>
+                                    )}
+
+                                    {/* STATION EDITOR MODAL */}
+                                    <Modal
+                                        isOpen={isStationModalOpen}
+                                        onClose={() => {
+                                            setIsStationModalOpen(false);
+                                            setEditingStationId(null);
+                                            setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
+                                        }}
+                                        title={editingStationId ? "✏️ Edit Station" : "✨ Create New Station"}
+                                    >
+                                        <div className="space-y-6">
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-400 mb-2">Station Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={stationForm.label || ''}
+                                                    onChange={e => setStationForm(prev => ({ ...prev, label: e.target.value }))}
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                    placeholder="e.g., Robotics & Engineering"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
+                                                <textarea
+                                                    value={stationForm.description || ''}
+                                                    onChange={e => setStationForm(prev => ({ ...prev, description: e.target.value }))}
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
+                                                    placeholder="Describe this station..."
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-400 mb-2">Assign to Grades</label>
+                                                <div className="space-y-2 max-h-40 overflow-y-auto p-3 bg-slate-950 border border-slate-800 rounded-xl">
+                                                    <label className="flex items-center gap-2 cursor-pointer hover:text-purple-400 transition-colors">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={!stationForm.gradeIds || stationForm.gradeIds.length === 0}
+                                                            onChange={() => setStationForm(prev => ({ ...prev, gradeIds: [], gradeNames: [] }))}
+                                                            className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
+                                                        />
+                                                        <span className="text-white">All Grades</span>
+                                                    </label>
+                                                    {availableGrades.map(grade => (
+                                                        <label key={grade.id} className="flex items-center gap-2 cursor-pointer hover:text-purple-400 transition-colors">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={stationForm.gradeIds?.includes(grade.id) || false}
+                                                                onChange={e => {
+                                                                    const currentIds = stationForm.gradeIds || [];
+                                                                    const currentNames = stationForm.gradeNames || [];
+                                                                    if (e.target.checked) {
+                                                                        setStationForm(prev => ({
+                                                                            ...prev,
+                                                                            gradeIds: [...currentIds, grade.id],
+                                                                            gradeNames: [...currentNames, grade.name]
+                                                                        }));
+                                                                    } else {
+                                                                        const newIds = currentIds.filter(id => id !== grade.id);
+                                                                        const newNames = currentNames.filter(name => name !== grade.name);
+                                                                        setStationForm(prev => ({
+                                                                            ...prev,
+                                                                            gradeIds: newIds,
+                                                                            gradeNames: newNames
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                                className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-purple-500"
+                                                            />
+                                                            <span className="text-white">{grade.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">Select specific grades or "All Grades" for universal access</p>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Color</label>
+                                                    <select
+                                                        value={stationForm.color || 'blue'}
+                                                        onChange={e => setStationForm(prev => ({ ...prev, color: e.target.value }))}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                    >
+                                                        <option value="blue">Blue</option>
+                                                        <option value="purple">Purple</option>
+                                                        <option value="cyan">Cyan</option>
+                                                        <option value="amber">Amber</option>
+                                                        <option value="green">Green</option>
+                                                        <option value="orange">Orange</option>
+                                                        <option value="pink">Pink</option>
+                                                        <option value="indigo">Indigo</option>
+                                                        <option value="sky">Sky</option>
+                                                        <option value="violet">Violet</option>
+                                                        <option value="rose">Rose</option>
+                                                        <option value="emerald">Emerald</option>
+                                                    </select>
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Icon</label>
+                                                    <input
+                                                        type="text"
+                                                        value={stationForm.icon || ''}
+                                                        onChange={e => setStationForm(prev => ({ ...prev, icon: e.target.value }))}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                        placeholder="e.g., Bot"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-3 pt-4 border-t border-slate-800">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsStationModalOpen(false);
+                                                        setEditingStationId(null);
+                                                        setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
+                                                    }}
+                                                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        if (!db || !stationForm.label) return;
+                                                        try {
+                                                            if (editingStationId) {
+                                                                // Update existing station
+                                                                await updateDoc(doc(db, 'stations', editingStationId), {
+                                                                    label: stationForm.label,
+                                                                    description: stationForm.description,
+                                                                    color: stationForm.color,
+                                                                    icon: stationForm.icon,
+                                                                    gradeId: null, // Legacy
+                                                                    gradeName: null, // Legacy
+                                                                    gradeIds: stationForm.gradeIds || [],
+                                                                    gradeNames: stationForm.gradeNames || []
+                                                                });
+                                                            } else {
+                                                                // Create new station
+                                                                await addDoc(collection(db, 'stations'), {
+                                                                    ...stationForm,
+                                                                    order: stations.length + 1,
+                                                                    createdAt: serverTimestamp()
+                                                                });
+                                                            }
+                                                            setIsStationModalOpen(false);
+                                                            setEditingStationId(null);
+                                                            setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
+                                                        } catch (e) {
+                                                            console.error('Error saving station:', e);
+                                                        }
+                                                    }}
+                                                    disabled={!stationForm.label}
+                                                    className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {editingStationId ? 'Update' : 'Create'} Station
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </Modal>
+
+                                    {/* BADGE EDITOR MODAL */}
+                                    <Modal
+                                        isOpen={isBadgeModalOpen}
+                                        onClose={() => {
+                                            setIsBadgeModalOpen(false);
+                                            setEditingBadgeId(null);
+                                            setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } });
+                                        }}
+                                        title={editingBadgeId ? "✏️ Edit Badge" : "✨ Create New Badge"}
+                                    >
+                                        <div className="space-y-6">
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-400 mb-2">Badge Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={badgeForm.name || ''}
+                                                    onChange={e => setBadgeForm(prev => ({ ...prev, name: e.target.value }))}
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                    placeholder="e.g., Robotics Master"
+                                                />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
+                                                <textarea
+                                                    value={badgeForm.description || ''}
+                                                    onChange={e => setBadgeForm(prev => ({ ...prev, description: e.target.value }))}
+                                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
+                                                    placeholder="Describe this badge..."
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Color</label>
+                                                    <select
+                                                        value={badgeForm.color || 'blue'}
+                                                        onChange={e => setBadgeForm(prev => ({ ...prev, color: e.target.value }))}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                    >
+                                                        {Object.keys(STATION_THEMES).map(color => (
+                                                            <option key={color} value={color}>{color.charAt(0).toUpperCase() + color.slice(1)}</option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Icon (Lucide)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={badgeForm.icon || ''}
+                                                        onChange={e => setBadgeForm(prev => ({ ...prev, icon: e.target.value }))}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                        placeholder="e.g., Award"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                                <h4 className="font-bold text-white mb-4 flex items-center gap-2"><Target size={16} className="text-cyan-400" /> Awarding Criteria</h4>
+
+                                                <div className="space-y-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
+                                                        <select
+                                                            value={badgeForm.criteria?.type || 'project_count'}
+                                                            onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, type: e.target.value as any } }))}
+                                                            className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
+                                                        >
+                                                            <option value="project_count">Project Count</option>
+                                                            <option value="skill">Skill Acquisition</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {badgeForm.criteria?.type === 'project_count' && (
+                                                        <div className="grid grid-cols-2 gap-4">
+                                                            <div>
+                                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Station</label>
+                                                                <select
+                                                                    value={badgeForm.criteria?.target || 'all'}
+                                                                    onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, target: e.target.value } }))}
+                                                                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
+                                                                >
+                                                                    <option value="all">All Stations</option>
+                                                                    {Object.keys(STATION_THEMES).map(k => <option key={k} value={k}>{STATION_THEMES[k as StationType].label}</option>)}
+                                                                </select>
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Count Required</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min="1"
+                                                                    value={badgeForm.criteria?.count || 1}
+                                                                    onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, count: parseInt(e.target.value) } }))}
+                                                                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {badgeForm.criteria?.type === 'skill' && (
+                                                        <div>
+                                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Skill Name</label>
+                                                            <input
+                                                                type="text"
+                                                                value={badgeForm.criteria?.target || ''}
+                                                                onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, target: e.target.value } }))}
+                                                                className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
+                                                                placeholder="e.g., Python, 3D Design"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-3 pt-4 border-t border-slate-800">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsBadgeModalOpen(false);
+                                                        setEditingBadgeId(null);
+                                                        setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } });
+                                                    }}
+                                                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleSaveBadge}
+                                                    disabled={!badgeForm.name}
+                                                    className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {editingBadgeId ? 'Update' : 'Create'} Badge
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </Modal>
+                                </div>
+                            )}
+                            <ProjectFactoryModal
+                                isOpen={isTemplateModalOpen}
+                                onClose={() => setIsTemplateModalOpen(false)}
+                                editingTemplateId={editingTemplateId}
+                                templateForm={templateForm}
+                                setTemplateForm={setTemplateForm}
+                                handleSaveTemplate={handleSaveTemplate}
+                                activeModalTab={activeModalTab}
+                                setActiveModalTab={setActiveModalTab}
+                                availableGrades={grades}
+                                availableGroups={groups}
+                                processTemplates={processTemplates}
+                                wizardStep={wizardStep}
+                                WIZARD_STEPS={WIZARD_STEPS}
+                                onArchive={() => handleArchiveTemplate(templateForm.id!, templateForm.status || 'draft')}
+                            />
+
+                            <Modal isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
+                                <div className="space-y-4">
+                                    <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                                        <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-500 uppercase">Student</span><span className="text-white font-medium">{selectedSubmission?.studentName}</span></div>
+                                        <h4 className="text-lg font-bold text-white mb-2">{selectedSubmission?.title}</h4>
+                                        <div className="mb-4">
+                                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Engineering Process</h5>
+                                            <div className="space-y-1">
+                                                {selectedSubmission?.steps?.map((step, i) => (
+                                                    <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
+                                                        {step.status === 'done' ? <CheckSquare size={14} className="text-emerald-500" /> : <Clock size={14} className="text-amber-500" />}
+                                                        {step.title}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {selectedSubmission?.mediaUrls?.[0] && <img src={selectedSubmission.mediaUrls[0]} alt="Work" className="w-full rounded-lg border border-slate-800" />}
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1">Feedback</label>
+                                        <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Great job!..." />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button onClick={() => handleReviewAction('changes_requested')} className="py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-bold border border-slate-700">Request Changes</button>
+                                        <button onClick={() => handleReviewAction('published')} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Approve & Publish</button>
+                                    </div>
+                                </div>
+                            </Modal>
                         </div>
-                        <div>
-                            <label className="block text-xs text-slate-400 mb-1">Feedback</label>
-                            <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Great job!..." />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => handleReviewAction('changes_requested')} className="py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-bold border border-slate-700">Request Changes</button>
-                            <button onClick={() => handleReviewAction('published')} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Approve & Publish</button>
-                        </div>
-                    </div>
-                </Modal>
-            </div >
+                    )}
+            </div>
         );
     }
 
@@ -2346,9 +2397,7 @@ export const LearningView = () => {
                         if (projectId) {
                             const project = studentProjects.find(p => p.id === projectId);
                             if (project) {
-                                setActiveProject(project);
-                                setProjectForm(project);
-                                setIsProjectModalOpen(true);
+                                openActiveProject(project);
                             }
                         }
                     }} />
@@ -2406,7 +2455,51 @@ export const LearningView = () => {
                                             ))}
                                         </div>
 
-                                        <button disabled={isLocked} onClick={() => startNewProject(t)} className={`w-full py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 border ${isLocked ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-[#2D2B6B] hover:bg-indigo-800 text-white border-transparent shadow-lg shadow-indigo-900/10'} `}>
+                                        <button disabled={isLocked} onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Ensure we have a profile to generate token from
+                                            if (!userProfile) return;
+
+                                            // Generate bridge token
+                                            const token = generateBridgeToken(userProfile);
+
+                                            // Construct SparkQuest URL with token and templateId
+                                            // This assumes SparkQuest can handle ?templateId=... to auto-start
+                                            // Or we just go to root and let them pick, but better to deeplink.
+                                            // Based on previous code, we might need to create the project first?
+                                            // Wait, "Accept Mission" usually creates a project instance.
+                                            // If we want SparkQuest to handle it, we might need to send them there.
+                                            // BUT, the current startNewProject function creates the generic "projectForm" state 
+                                            // and opens the modal. 
+                                            // The user says "when he click to start lission its opned with the old kanban form".
+                                            // So we need to CREATE the project here, then redirect.
+
+                                            startNewProject(t); // Keep this for now if startNewProject handles creation? 
+                                            // No, startNewProject just sets state and opens modal.
+                                            // We need a way to "Quick Start" into SparkQuest.
+
+                                            // Let's look at startNewProject implementation again.
+                                            // It just sets state.
+
+                                            // REVISED PLAN: Check if we can redirect to SparkQuest with templateId
+                                            // and let SparkQuest create it? Or create it here then redirect?
+                                            // Creating here is safer for data consistency.
+
+                                            // Actually, the user says "assigned it as instructor -> student sees new mission -> clicks start -> opens old kanban".
+                                            // This refers to the "My Studio" tab list, not this "Explore" list.
+                                            // The "Explore" list is templates. The "My Studio" list is assigned projects.
+                                            // The user said "create a project and assign it... the student can see the new mission".
+                                            // So I should look at the "My Studio" tab code I read previously (lines 2550+).
+
+                                            // Let's modify THIS button too for consistency, but the priority is the "My Studio" one.
+                                            // Since I'm editing this file, I'll update the 'My Studio' logic which is further down around line 2570.
+                                            // I will leave this one as is for now to avoid breaking template preview, 
+                                            // or I can startNewProject() then immediately redirect? 
+                                            // Let's stick to fixing the REPORTED flow first: "assigned project".
+
+                                            // Returning original code for this block to focus on the fix:
+                                            startNewProject(t);
+                                        }} className={`w-full py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 border ${isLocked ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-[#2D2B6B] hover:bg-indigo-800 text-white border-transparent shadow-lg shadow-indigo-900/10'} `}>
                                             {isLocked ? <><Lock size={16} /> Locked</> : <>Accept Mission <ArrowRight size={16} /></>}
                                         </button>
                                     </div>
@@ -2548,17 +2641,21 @@ export const LearningView = () => {
                                                                 <button
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        if (project.externalLink) {
-                                                                            window.open(project.externalLink, '_blank');
-                                                                        } else if (project.embedUrl) {
-                                                                            window.open(project.embedUrl, '_blank');
-                                                                        } else {
-                                                                            openActiveProject(project);
+                                                                        // SparkQuest Launch Logic
+                                                                        if (true) {
+                                                                            // ALWAYS open in SparkQuest as requested
+                                                                            const token = generateBridgeToken(userProfile);
+                                                                            const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}/?token=${token}&projectId=${project.id}`;
+                                                                            window.open(url, '_blank');
                                                                         }
                                                                     }}
-                                                                    className="bg-[#FFC107] text-[#2D2B6B] font-bold px-6 py-2 rounded-full hover:bg-amber-400 transition-colors shadow-md shadow-amber-200 text-sm flex items-center gap-2"
+                                                                    className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold px-6 py-2 rounded-full hover:shadow-lg hover:scale-105 transition-all shadow-blue-500/30 text-sm flex items-center gap-2"
                                                                 >
-                                                                    View Project <ExternalLink size={14} />
+                                                                    {project.status === 'published' ? (
+                                                                        <>View Details <ExternalLink size={14} /></>
+                                                                    ) : (
+                                                                        <>Enter Mission <Rocket size={14} /></>
+                                                                    )}
                                                                 </button>
                                                                 {project.presentationUrl && (
                                                                     <button

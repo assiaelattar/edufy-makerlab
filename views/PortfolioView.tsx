@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { STUDIO_THEME } from '../utils/studioTheme';
 import { formatDate } from '../utils/helpers';
+import { generateBridgeToken } from '../utils/authHelpers';
 
 export const PortfolioView = () => {
     const { studentProjects, badges, students, t } = useAppContext();
@@ -128,9 +129,22 @@ export const PortfolioView = () => {
                                             </div>
                                         )}
 
-                                        <button className="w-full py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 font-bold text-sm transition-colors flex items-center justify-center gap-2">
-                                            <Share2 size={16} /> Share Project
-                                        </button>
+
+                                        <div className="flex gap-2">
+                                            <button className="flex-1 py-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-500 font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                                                <Share2 size={16} /> Share
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (!userProfile) return;
+                                                    const token = generateBridgeToken(userProfile);
+                                                    window.open(`http://localhost:3000/?token=${token}&projectId=${p.id}`, '_blank');
+                                                }}
+                                                className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm transition-transform hover:scale-105 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                                            >
+                                                <Rocket size={16} strokeWidth={2.5} /> Open
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}

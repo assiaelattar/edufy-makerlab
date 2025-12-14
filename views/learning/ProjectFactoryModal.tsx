@@ -20,11 +20,12 @@ interface ProjectFactoryModalProps {
     processTemplates: any[]; // ProcessTemplate[]
     wizardStep: number;
     WIZARD_STEPS: any[];
+    onArchive?: () => void;
 }
 
 export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     isOpen, onClose, editingTemplateId, templateForm, setTemplateForm, handleSaveTemplate,
-    activeModalTab, setActiveModalTab, availableGrades, availableGroups, processTemplates, wizardStep, WIZARD_STEPS
+    activeModalTab, setActiveModalTab, availableGrades, availableGroups, processTemplates, wizardStep, WIZARD_STEPS, onArchive
 }) => {
 
     const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
@@ -340,7 +341,18 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                 </div>
 
                 <div className="p-6 border-t border-slate-200 flex justify-between gap-4 shrink-0 bg-white/80 backdrop-blur-sm rounded-b-2xl">
-                    <button type="button" onClick={onClose} className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold transition-colors">Cancel</button>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={onClose} className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold transition-colors">Cancel</button>
+                        {editingTemplateId && onArchive && (
+                            <button
+                                type="button"
+                                onClick={onArchive}
+                                className="px-4 py-3 text-red-400 hover:text-red-600 font-bold transition-colors flex items-center gap-2"
+                            >
+                                <Trash2 size={18} /> <span className="hidden md:inline">Archive</span>
+                            </button>
+                        )}
+                    </div>
                     <button type="submit" className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 hover:shadow-emerald-900/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2">
                         {templateForm.status === 'assigned' ? '🚀 Assign Project' : templateForm.status === 'featured' ? '🌟 Publish as Featured' : '✅ Finish & Save'}
                     </button>

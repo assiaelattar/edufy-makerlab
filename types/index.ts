@@ -57,6 +57,7 @@ export interface Student {
     uid: string;
   };
   badges?: string[]; // Array of Badge IDs
+  avatarUrl?: string; // Creative Avatar URL
 }
 
 export interface Enrollment {
@@ -271,14 +272,20 @@ export interface ProjectResource {
 export interface ProjectStep {
   id: string;
   title: string;
-  status: 'todo' | 'doing' | 'done';
+  status: 'todo' | 'doing' | 'done' | 'PENDING_REVIEW' | 'REJECTED';
   isLocked?: boolean;
   proofUrl?: string; // Proof of work (image/link)
   proofStatus?: 'pending' | 'approved' | 'rejected';
+
+  // SparkQuest Sync Fields
+  evidence?: string; // URL or Base64
+  note?: string; // Student reflection
+  resources?: ProjectResource[]; // Tool links
+
   // Approval workflow fields
   approvalStatus?: 'pending' | 'approved' | 'rejected';
   reviewedBy?: string; // Instructor UID
-  reviewedAt?: Timestamp;
+  reviewedAt?: Timestamp | string; // Allow string for compatibility
   reviewNotes?: string; // Instructor feedback
 }
 
@@ -425,6 +432,8 @@ export interface GalleryItem {
   url: string; // Image URL
   caption?: string;
   type: 'image' | 'video';
+  studentId?: string; // Optional tagging
+  studentName?: string;
   createdAt: Timestamp;
 }
 
@@ -470,6 +479,7 @@ export interface UserProfile {
   status: 'active' | 'disabled';
   createdAt: Timestamp;
   lastLogin?: Timestamp;
+  avatarUrl?: string;
 }
 
 export interface RoleDefinition {
@@ -517,6 +527,7 @@ export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'fin
 export interface ViewParams {
   classId?: { pId: string, gId: string, grpId: string };
   studentId?: string;
+  projectId?: string; // Add projectId here
   activityId?: { type: 'payment' | 'enrollment' | 'booking', id: string };
   filter?: string;
 }

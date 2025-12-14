@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles, Rocket } from 'lucide-react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
@@ -42,22 +42,29 @@ import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
 import { InstructorLayout } from './components/layouts/InstructorLayout';
 
-const StudentNavigation = ({ currentView, navigateTo, theme, signOut }: { currentView: string, navigateTo: any, theme: any, signOut: any }) => {
+import { generateBridgeToken } from './utils/authHelpers';
+
+const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfile }: { currentView: string, navigateTo: any, theme: any, signOut: any, userProfile: any }) => {
     const menuItems = [
         { id: 'dashboard', icon: Home, label: 'Lobby' },
         { id: 'learning', icon: BookOpen, label: 'Studio' },
         { id: 'portfolio', icon: Trophy, label: 'Portfolio' },
-        { id: 'toolkit', icon: Box, label: 'Toolbox' },
         { id: 'media', icon: Camera, label: 'Gallery' },
-        { id: 'test-wizard', icon: Sparkles, label: 'New Project (Test)' },
+        { id: 'test-wizard', icon: Sparkles, label: 'New Project' },
+        // SparkQuest is now accessed via 'Enter Mission' in Studio, but keeping it here as a shortcut
+        { id: 'sparkquest', icon: Rocket, label: 'Quest' },
     ];
 
+    const handleSparkQuestLaunch = () => {
+        const token = generateBridgeToken(userProfile);
+        const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}/?token=${token}`;
+        window.open(url, "_blank");
+    };
+
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4">
-            <div className={`
-                ${theme.bgCard} ${theme.rounded} p-2 shadow-2xl flex justify-between items-center border border-white/10 backdrop-blur-xl
-            `}>
-                {menuItems.map(item => {
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-md">
+            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-2 shadow-2xl flex justify-between items-center border border-white/20 ring-1 ring-black/5">
+                {menuItems.slice(0, 5).map(item => { // Show first 5 + Quest logic
                     const isActive = currentView === item.id;
                     const Icon = item.icon;
                     return (
@@ -65,18 +72,29 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut }: { curren
                             key={item.id}
                             onClick={() => navigateTo(item.id)}
                             className={`
-                                flex flex-col items-center justify-center p-3 rounded-xl transition-all duration-300 w-16
-                                ${isActive ? theme.primaryColor + ' bg-white/10 scale-110' : 'text-slate-500 hover:text-slate-300'}
+                                flex flex-col items-center justify-center py-2 rounded-2xl transition-all duration-300 w-full
+                                ${isActive
+                                    ? 'text-blue-600 bg-blue-50 scale-105 shadow-sm'
+                                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                }
                             `}
                         >
-                            <Icon size={isActive ? 28 : 24} strokeWidth={isActive ? 2.5 : 2} />
-                            {isActive && <span className="text-[9px] font-bold mt-1 uppercase tracking-wide">{item.label}</span>}
+                            <Icon size={isActive ? 24 : 22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "animate-pulse" : ""} />
+                            {isActive && <span className="text-[9px] font-black mt-1 uppercase tracking-wider">{item.label}</span>}
                         </button>
                     )
                 })}
 
-                {/* Settings / Logout Mini Menu */}
-                <button onClick={() => navigateTo('settings')} className="flex flex-col items-center justify-center p-3 rounded-xl text-slate-600 hover:text-slate-400 w-16">
+                {/* SparkQuest Button */}
+                <button
+                    onClick={handleSparkQuestLaunch}
+                    className="flex flex-col items-center justify-center py-2 rounded-2xl w-full text-white bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/30 scale-105 mx-1"
+                >
+                    <Rocket size={22} fill="white" />
+                </button>
+
+                {/* Settings */}
+                <button onClick={() => navigateTo('settings')} className="flex flex-col items-center justify-center py-2 rounded-2xl text-slate-400 hover:text-slate-600 w-full">
                     <Settings size={22} />
                 </button>
             </div>
@@ -90,6 +108,34 @@ const AppContent = () => {
     const { requestPermission } = useNotifications();
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // --- UNIFIED LOGIN REDIRECT (For Authenticated Users) ---
+    useEffect(() => {
+        if (!user || !userProfile) return;
+
+        const params = new URLSearchParams(window.location.search);
+        const service = params.get('service');
+        const redirectUrl = params.get('redirect');
+
+        if (service === 'sparkquest' && redirectUrl) {
+            const token = generateBridgeToken(userProfile);
+
+            console.log("🚀 [ERP] Processing Unified Login Redirect");
+            console.log("Target:", redirectUrl);
+
+            if (!token || token.length < 10) {
+                console.error("❌ [ERP] Bridge Token Generation Failed (Empty Token)");
+                alert("Auth Error: Failed to generate bridge token. Please contact support.");
+                return;
+            }
+
+            console.log("✅ [ERP] Token Generated. Redirecting in 1s...");
+            // Artificial delay to ensure logs are visible or state is settled
+            setTimeout(() => {
+                window.location.replace(`${redirectUrl}?token=${token}`);
+            }, 1000);
+        }
+    }, [user, userProfile]);
 
     // --- STUDENT THEME LOGIC ---
     const isStudent = userProfile?.role === 'student';
@@ -479,87 +525,105 @@ const AppContent = () => {
     // --- STUDENT LAYOUT ---
     if (isStudent) {
         return (
-            <div className="flex h-[100dvh] bg-slate-50 font-sans overflow-hidden selection:bg-[#FFC107]/30">
-                {/* Desktop Sidebar */}
-                <aside className="hidden md:flex w-64 bg-[#2D2B6B] flex-col text-white shrink-0 rounded-r-[3rem] relative z-20 shadow-2xl">
-                    {/* User Profile */}
-                    <div className="p-8 pb-4">
-                        <div className="flex items-center gap-3 bg-[#3D3B7B] p-2 rounded-full pr-6 w-max border border-white/10">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FFC107] to-amber-600 flex items-center justify-center text-[#2D2B6B] font-black border-2 border-white">
+            <div className="flex h-[100dvh] bg-slate-100 font-spark overflow-hidden selection:bg-blue-200 selection:text-blue-900">
+                {/* Desktop Sidebar (SparkQuest Themed) */}
+                <aside className="hidden md:flex w-72 bg-white flex-col text-slate-600 shrink-0 m-4 rounded-[2.5rem] relative z-20 shadow-xl border-b-[8px] border-slate-200 overflow-hidden">
+                    {/* Brand / Profile */}
+                    <div className="p-8 pb-4 flex flex-col items-center">
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 p-1 mb-4 shadow-lg animate-float">
+                            <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-3xl font-black text-indigo-600 border-4 border-white/50">
                                 {userProfile?.name?.charAt(0) || 'S'}
                             </div>
-                            <span className="font-medium text-sm truncate max-w-[100px]">{userProfile?.name?.split(' ')[0]}</span>
                         </div>
+                        <h2 className="text-xl font-black text-slate-800 text-center">{userProfile?.name}</h2>
+                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Student Explorer</span>
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto custom-scrollbar">
+                    <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto no-scrollbar">
                         {[
                             { id: 'dashboard', icon: Home, label: 'Lobby' },
                             { id: 'learning', icon: BookOpen, label: 'Studio' },
                             { id: 'portfolio', icon: Trophy, label: 'Portfolio' },
-                            { id: 'toolkit', icon: Box, label: 'Toolbox' },
                             { id: 'media', icon: Camera, label: 'Gallery' },
                             { id: 'test-wizard', icon: Sparkles, label: 'New Project (Test)' },
-                        ].map(item => (
+                        ].map(item => {
+                            const isActive = currentView === item.id;
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => navigateTo(item.id as ViewState)}
+                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-xl transition-all relative group font-bold ${isActive
+                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105 btn-3d'
+                                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    <item.icon size={24} strokeWidth={isActive ? 3 : 2.5} className="shrink-0" />
+                                    <span className="truncate text-lg">{item.label}</span>
+                                </button>
+                            );
+                        })}
+                        {/* SparkQuest Launch Button (Desktop) */}
+                        <div className="pt-4 mt-2 border-t-2 border-slate-100">
                             <button
-                                key={item.id}
-                                onClick={() => navigateTo(item.id as ViewState)}
-                                className={`w-full flex items-center gap-4 px-6 py-4 rounded-l-full transition-all relative group ${currentView === item.id
-                                    ? 'bg-[#FFC107] text-[#2D2B6B] font-bold translate-x-4 shadow-lg'
-                                    : 'text-slate-300 hover:text-white hover:bg-white/5'
-                                    }`}
+                                onClick={() => {
+                                    const token = generateBridgeToken(userProfile);
+                                    const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}/?token=${token}`;
+                                    window.open(url, "_blank");
+                                }}
+                                className="w-full flex items-center gap-4 px-6 py-4 rounded-xl transition-all relative group font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/20 hover:scale-105 hover:shadow-blue-500/40 btn-3d"
                             >
-                                <item.icon size={20} strokeWidth={currentView === item.id ? 2.5 : 2} className="shrink-0" />
-                                <span className="truncate">{item.label}</span>
-                                {currentView === item.id && (
-                                    <div className="absolute right-4 w-2 h-2 rounded-full bg-[#2D2B6B] animate-pulse" />
-                                )}
+                                <Rocket size={24} strokeWidth={3} className="shrink-0 animate-pulse" />
+                                <span className="truncate text-lg">Mission Control</span>
                             </button>
-                        ))}
+                        </div>
                     </nav>
 
                     {/* Bottom Actions */}
                     <div className="p-6 mt-auto space-y-2">
-                        <button onClick={() => navigateTo('settings')} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors text-sm font-medium">
-                            <Settings size={18} /> Settings
+                        <button onClick={() => navigateTo('settings')} className="w-full flex items-center gap-3 px-6 py-3 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors text-sm font-bold">
+                            <Settings size={20} /> Settings
                         </button>
-                        <button onClick={signOut} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-slate-400 hover:text-red-300 hover:bg-red-500/10 transition-colors text-sm font-medium">
-                            <LogOut size={18} /> Sign Out
+                        <button onClick={signOut} className="w-full flex items-center gap-3 px-6 py-3 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm font-bold">
+                            <LogOut size={20} /> Sign Out
                         </button>
                     </div>
                 </aside>
 
                 {/* Main Content Area */}
                 <main className="flex-1 flex flex-col h-full overflow-hidden relative">
-                    {/* Mobile Header */}
-                    <header className="md:hidden p-4 flex justify-between items-center bg-[#2D2B6B] text-white shrink-0 z-30 shadow-lg rounded-b-3xl mx-2 mt-2">
+                    {/* Mobile Header (SparkQuest Themed) */}
+                    <header className="md:hidden p-4 flex justify-between items-center bg-white text-slate-800 shrink-0 z-30 shadow-sm mx-4 mt-4 rounded-2xl border-b-4 border-slate-100">
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-[#FFC107] flex items-center justify-center text-[#2D2B6B] font-bold">
+                            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-black shadow-md">
                                 {settings.academyName.charAt(0)}
                             </div>
-                            <span className="font-bold">{settings.academyName}</span>
+                            <span className="font-black text-lg tracking-tight">{settings.academyName}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <NotificationDropdown />
-                            <button onClick={signOut} className="p-2 text-slate-300 hover:text-white"><LogOut size={20} /></button>
+                            <button onClick={signOut} className="p-2 text-slate-400 hover:text-red-500"><LogOut size={24} /></button>
                         </div>
                     </header>
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 pb-32 md:pb-8">
-                        <div className="max-w-6xl mx-auto">
-                            {renderView()}
+                        <div className="max-w-7xl mx-auto h-full flex flex-col">
+                            {/* View Container with SparkQuest Style */}
+                            <div className="bg-white/50 backdrop-blur-xl rounded-[2.5rem] p-6 md:p-8 flex-1 border-white border shadow-sm">
+                                {renderView()}
+                            </div>
                         </div>
                     </div>
 
                     {/* Mobile Bottom Dock (Hidden on Desktop) */}
                     <div className="md:hidden">
-                        <StudentNavigation currentView={currentView} navigateTo={navigateTo} theme={studentTheme} signOut={signOut} />
+                        <StudentNavigation currentView={currentView} navigateTo={navigateTo} theme={studentTheme} signOut={signOut} userProfile={userProfile} />
                     </div>
                 </main>
             </div>
         );
     }
+
 
     // --- LAYOUT SELECTION ---
     const Layout = isInstructor ? InstructorLayout : AdminLayout;

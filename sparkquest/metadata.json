@@ -1,0 +1,7 @@
+{
+  "name": "SparkQuest",
+  "description": "An interactive, gamified roadmap for kids to track their STEM project progress, submit proof of work, and see peers on the map.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

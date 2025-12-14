@@ -17,8 +17,8 @@ export interface ModuleConfig {
 // You can disable modules here to "turn them off".
 export const MODULES: ModuleConfig[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, enabled: true, color: 'blue', requiredPermission: 'dashboard.view' },
-    { id: 'learning', label: 'Learning & Portfolio', icon: Brain, enabled: true, description: 'LMS, Projects & Student Portfolios', color: 'cyan', requiredPermission: 'learning.view' },
-    { id: 'toolkit', label: 'Toolkit', icon: Hammer, enabled: true, description: 'Software, Resources & Tools', color: 'amber', requiredPermission: 'toolkit.view' },
+    { id: 'learning', label: 'Learning & Portfolio', icon: Brain, enabled: false, description: 'LMS, Projects & Student Portfolios', color: 'cyan', requiredPermission: 'learning.view' },
+    { id: 'toolkit', label: 'Toolkit', icon: Hammer, enabled: false, description: 'Software, Resources & Tools', color: 'amber', requiredPermission: 'toolkit.view' },
     { id: 'media', label: 'Gallery', icon: Camera, enabled: true, description: 'Photos & Media Gallery', color: 'pink', requiredPermission: 'media.view' },
     { id: 'pickup', label: 'Pickup Status', icon: Car, enabled: true, description: 'Real-time Parent Arrival', color: 'emerald', requiredPermission: 'pickup.view' },
     { id: 'classes', label: 'Classes', icon: School, enabled: true, color: 'indigo', requiredPermission: 'classes.view' },

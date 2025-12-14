@@ -60,6 +60,26 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     const [wizardStep, setWizardStep] = React.useState(1);
     const [scrolled, setScrolled] = React.useState(false);
 
+    // Edit Step State
+    const [editingStepId, setEditingStepId] = React.useState<string | null>(null);
+    const [editEvidence, setEditEvidence] = React.useState('');
+    const [editNote, setEditNote] = React.useState('');
+
+    const handleEditStep = (step: any) => {
+        setEditingStepId(step.id);
+        setEditEvidence(step.evidence || '');
+        setEditNote(step.note || '');
+    };
+
+    const saveStepEdit = async () => {
+        const updatedSteps = projectForm.steps?.map(step =>
+            step.id === editingStepId ? { ...step, evidence: editEvidence, note: editNote } : step
+        );
+        setProjectForm({ ...projectForm, steps: updatedSteps });
+        setEditingStepId(null);
+        await handleSaveProject(false);
+    };
+
     // Scroll Effect
     React.useEffect(() => {
         const handleScroll = () => {
@@ -91,11 +111,11 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
         const updatedCommits = [...(projectForm.commits || []), newCommit];
 
-        // Optionally update the step's proofUrl if provided
+        // Optionally update the step's evidence if provided
         let updatedSteps = projectForm.steps;
         if (selectedStepId && evidenceLink) {
             updatedSteps = projectForm.steps?.map(step =>
-                step.id === selectedStepId ? { ...step, proofUrl: evidenceLink } : step
+                step.id === selectedStepId ? { ...step, evidence: evidenceLink } : step
             );
         }
 
@@ -159,8 +179,41 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                                     </button>
                                 )}
                                 {status === 'done' && (
-                                    <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full">
-                                        <CheckCircle2 size={14} /> Completed
+                                    <div className="flex flex-col gap-2 items-end w-full">
+                                        <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs bg-emerald-50 px-3 py-1 rounded-full mb-2">
+                                            <CheckCircle2 size={14} /> Completed
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleMoveStep(step.id, 'doing')}
+                                                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                                title="Undo / Move to Doing"
+                                            >
+                                                <RotateCcw size={14} /> Undo
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedStepId(step.id);
+                                                    setEvidenceLink(step.evidence || '');
+                                                    // We might need a separate 'Edit' mode or reused modal. 
+                                                    // For now, let's open the Commit Modal but pre-filled? 
+                                                    // Actually, committing is for history. Editing current state is different.
+                                                    // Let's create a quick inline edit or open a dedicated 'EditStep' modal.
+                                                    // Since we don't have a separate modal ready, let's reuse Commit Modal but as 'Update Step'
+                                                    // Or better, just setIsCommitModalOpen(true) and handle context?
+                                                    // No, let's prompt or set a 'isEditingStep' state.
+                                                    // I'll assume we add a new 'isStepEditModalOpen' state in the next step.
+                                                    // For now, let's just trigger the state I will add.
+                                                    // Let's assume I add `setIsStepEditModalOpen(true)`
+                                                    // I will stick to adding the buttons first.
+                                                    // I'll call a hypothetical function handleEditStep(step)
+                                                    handleEditStep(step);
+                                                }}
+                                                className="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-colors flex items-center gap-1"
+                                            >
+                                                Edit
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -758,6 +811,50 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                     </div>
                 </div>
             </Modal >
+            {/* Step Edit Modal */}
+            <Modal isOpen={!!editingStepId} onClose={() => setEditingStepId(null)} title="Edit Mission Step ✏️" size="md">
+                <div className="p-6">
+                    <div className="space-y-4">
+                        <div>
+                            <label className={LABEL_CLASS}>Evidence / Proof Link</label>
+                            <div className="relative">
+                                <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    className={`${INPUT_CLASS} pl-10`}
+                                    placeholder="https://..."
+                                    value={editEvidence}
+                                    onChange={e => setEditEvidence(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className={LABEL_CLASS}>Reflection / Notes</label>
+                            <textarea
+                                className={INPUT_CLASS}
+                                rows={4}
+                                placeholder="What did you learn? Any challenges?"
+                                value={editNote}
+                                onChange={e => setEditNote(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex gap-3 pt-4">
+                            <button
+                                onClick={() => setEditingStepId(null)}
+                                className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold rounded-xl transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={saveStepEdit}
+                                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/20 transition-all"
+                            >
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
         </>
     );
 };

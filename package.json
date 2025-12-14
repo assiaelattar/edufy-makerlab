@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:sparkquest": "cd sparkquest && npm run dev",
     "build": "tsc && vite build && node -e \"require('fs').copyFileSync('manifest.json', 'dist/manifest.json')\"",
     "preview": "vite preview"
   },
@@ -22,6 +23,7 @@
     "@types/react": "^18.2.56",
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
+    "react-router-dom": "^7.10.1",
     "typescript": "^5.2.2",
     "vite": "^7.2.4"
   }

@@ -2,9 +2,9 @@ import { Bot, Code, Gamepad2, Video, PenTool, Hammer, Zap } from 'lucide-react';
 import { StationType } from '../types';
 
 // Configuration for each station's visual identity
-export const STATION_THEMES: Record<StationType, { 
-    label: string; 
-    colorHex: string; 
+export const STATION_THEMES: Record<StationType, {
+    label: string;
+    colorHex: string;
     icon: any;
     // Tailwind Classes
     bgSoft: string;
@@ -85,8 +85,9 @@ export const STATION_THEMES: Record<StationType, {
     }
 };
 
-export const getTheme = (station?: StationType) => {
-    return STATION_THEMES[station || 'general'];
+export const getTheme = (station?: string) => {
+    const key = (station && STATION_THEMES[station as StationType]) ? station as StationType : 'general';
+    return STATION_THEMES[key];
 };
 
 export const getStudentTheme = (age: number | null) => {

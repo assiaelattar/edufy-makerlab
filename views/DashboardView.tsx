@@ -214,13 +214,35 @@ const StudentDashboard = () => {
 
 // --- ADMIN DASHBOARD COMPONENT ---
 const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
-    const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t } = useAppContext();
+    const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t, studentProjects } = useAppContext();
     const { userProfile } = useAuth();
 
     // Safe name extraction
     const firstName = userProfile?.name ? userProfile.name.split(' ')[0] : 'User';
     const currentHour = new Date().getHours();
     const greeting = currentHour < 12 ? t('dash.welcome') : currentHour < 18 ? t('dash.welcome.afternoon') : t('dash.welcome.evening');
+
+    // --- PENDING REVIEWS CALCULATION ---
+    const pendingReviews = useMemo(() => {
+        const queue: any[] = [];
+        const projects = studentProjects || []; // Safety Array
+        projects.forEach(proj => {
+            if (!proj.steps) return; // Safety Check
+            proj.steps.forEach(step => {
+                if (step.status === 'PENDING_REVIEW') {
+                    const student = students?.find(s => s.id === proj.studentId);
+                    queue.push({
+                        projectId: proj.id,
+                        projectTitle: proj.title,
+                        studentName: student ? `${student.firstName} ${student.lastName}` : 'Unknown Student',
+                        step: step,
+                        submittedAt: step.reviewedAt // Using this as proxy or add submittedAt if available
+                    });
+                }
+            });
+        });
+        return queue;
+    }, [studentProjects, students]);
 
     // --- THEME LOGIC ---
     const isInstructor = userProfile?.role === 'instructor';
@@ -524,6 +546,56 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                 {/* RIGHT COLUMN: ACTIONS & ALERTS */}
                 <div className="space-y-6">
 
+                    {/* Review Queue (Instructor Only) */}
+                    {isInstructor && (
+                        <div className={`rounded-2xl overflow-hidden ${theme.card} border-2 border-indigo-500/20`}>
+                            <div className={`p-4 border-b flex justify-between items-center ${theme.divider} bg-indigo-500/5`}>
+                                <h3 className={`font-bold text-sm flex items-center gap-2 ${theme.text}`}><Rocket size={16} className="text-indigo-500" /> Mission Control</h3>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] uppercase font-bold text-indigo-400 animate-pulse">Live</span>
+                                    <button onClick={() => navigateTo('reviews')} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">Open Queue</button>
+                                </div>
+                            </div>
+                            <div className="p-4">
+                                {pendingReviews.length === 0 ? (
+                                    <div className="text-center py-6 text-slate-400">
+                                        <CheckCircle2 size={32} className="mx-auto mb-2 opacity-50 text-indigo-300" />
+                                        <p className="text-xs">No pending submissions.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {pendingReviews.slice(0, 3).map((item, i) => (
+                                            <div key={i} className="flex gap-3 items-start p-3 bg-slate-50 border border-slate-100 rounded-xl hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigateTo('reviews', { projectId: item.projectId })}>
+                                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0 text-xs">
+                                                    {item.studentName.charAt(0)}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex justify-between items-start">
+                                                        <p className="text-sm font-bold text-slate-700 truncate">{item.step.title}</p>
+                                                        <span className="text-[10px] text-slate-400 whitespace-nowrap">Now</span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-500 truncate">{item.studentName} • {item.projectTitle}</p>
+
+                                                    {isInstructor && (
+                                                        <div className="mt-2 flex gap-2">
+                                                            <button className="flex-1 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded hover:bg-green-200">Approve</button>
+                                                            <button className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded hover:bg-slate-200">View</button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {pendingReviews.length > 3 && (
+                                            <button onClick={() => navigateTo('reviews')} className="w-full py-2 text-xs text-indigo-500 font-bold hover:bg-indigo-50 rounded-lg transition-colors">
+                                                View {pendingReviews.length - 3} more
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Quick Actions Grid (Desktop) */}
                     <div className="hidden md:grid grid-cols-2 gap-3">
                         <button onClick={() => onRecordPayment()} className="p-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white text-center transition-all shadow-lg shadow-emerald-900/20 active:scale-[0.98]">
@@ -678,13 +750,20 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
     );
 };
 
+import { InstructorDashboardView } from './InstructorDashboardView';
+
 // --- MAIN VIEW ---
 export const DashboardView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const { userProfile } = useAuth();
     const isStudent = userProfile?.role === 'student';
+    const isInstructor = userProfile?.role === 'instructor';
 
     if (isStudent) {
         return <StudentDashboard />;
+    }
+
+    if (isInstructor) {
+        return <InstructorDashboardView />;
     }
 
     return <AdminDashboard onRecordPayment={onRecordPayment} />;

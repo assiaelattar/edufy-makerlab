@@ -104,16 +104,36 @@ export const StudentDetailsView = ({
                     <div className="border-t border-slate-800 pt-6">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Engineering Journey</h4>
                         <div className="space-y-3 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
-                            {selectedProject.steps?.map((step, idx) => (
-                                <div key={step.id} className="relative flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-full border-4 border-slate-900 flex items-center justify-center shrink-0 z-10 ${step.status === 'done' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-500'}`}>
-                                        {step.status === 'done' ? <CheckCircle2 size={16} /> : <span className="text-xs font-bold">{idx + 1}</span>}
+                            {selectedProject.steps?.map((step, idx) => {
+                                let statusColor = 'bg-slate-800 text-slate-500';
+                                let icon = <span className="text-xs font-bold">{idx + 1}</span>;
+
+                                if (step.status === 'done') {
+                                    statusColor = 'bg-emerald-600 text-white';
+                                    icon = <CheckCircle2 size={16} />;
+                                } else if (step.status === 'PENDING_REVIEW') {
+                                    statusColor = 'bg-amber-500 text-white animate-pulse';
+                                    icon = <Clock size={16} />;
+                                } else if (step.status === 'REJECTED') {
+                                    statusColor = 'bg-red-500 text-white';
+                                    icon = <XCircle size={16} />;
+                                }
+
+                                return (
+                                    <div key={step.id} className="relative flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-full border-4 border-slate-900 flex items-center justify-center shrink-0 z-10 ${statusColor}`}>
+                                            {icon}
+                                        </div>
+                                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex-1">
+                                            <div className="flex justify-between items-start">
+                                                <div className="text-sm font-medium text-slate-200">{step.title}</div>
+                                                {step.status === 'PENDING_REVIEW' && <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">In Review</span>}
+                                                {step.status === 'REJECTED' && <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">Action Required</span>}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex-1">
-                                        <div className="text-sm font-medium text-slate-200">{step.title}</div>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
 
@@ -296,11 +316,9 @@ export const StudentDetailsView = ({
     const handleCreateParentAccess = async () => {
         if (!db || !student) return;
 
-        const { teamMembers } = useAppContext();
-
-        const isRegenerating = !!student.parentLoginInfo;
-        if (isRegenerating) {
-            if (!confirm("Are you sure you want to regenerate access for the parent? This will generate a new password for display, but their actual login password will NOT change. A full password reset requires backend support.")) return;
+        // Check if regenerating
+        if (student.parentLoginInfo) {
+            if (!confirm("Are you sure you want to regenerate access? This will create a NEW password for the parent account if we cannot recover the old one. If the parent knows their password, you don't need to do this.")) return;
         }
 
         setIsGeneratingAccess(true);
@@ -312,48 +330,67 @@ export const StudentDetailsView = ({
             const password = Math.random().toString(36).slice(-8);
 
             let uid = student.parentLoginInfo?.uid;
-            let existingUser = false;
+            let isExistingUser = false;
 
-            if (!uid) {
-                try {
-                    const newUid = await createSecondaryUser(parentEmail, password);
-                    uid = newUid;
-                } catch (e: any) {
-                    if (e.code === 'auth/email-already-in-use') {
-                        const existingParent = teamMembers.find(member => member.email === parentEmail);
-                        if (existingParent && existingParent.uid) {
-                            uid = existingParent.uid;
-                            existingUser = true;
-                        } else {
-                            alert(`A parent account with email ${parentEmail} exists, but we could not find their profile to link automatically. Please try again or contact support.`);
-                            setIsGeneratingAccess(false);
-                            return;
-                        }
+            // 1. Try to create the user
+            try {
+                uid = await createSecondaryUser(parentEmail, password);
+                // If successful, it's a new user
+            } catch (e: any) {
+                if (e.message?.includes('already exists') || e.code === 'auth/email-already-in-use') {
+                    // User exists. Find their UID from Firestore 'users' collection
+                    const q = (await import('firebase/firestore')).query(
+                        (await import('firebase/firestore')).collection(db, 'users'),
+                        (await import('firebase/firestore')).where('email', '==', parentEmail)
+                    );
+                    const querySnap = await (await import('firebase/firestore')).getDocs(q);
+
+                    if (!querySnap.empty) {
+                        uid = querySnap.docs[0].id;
+                        isExistingUser = true;
                     } else {
-                        throw e; // Rethrow other errors
+                        alert(`Account ${parentEmail} exists in Auth but not in Users database. Please contact support to fix this inconsistency.`);
+                        setIsGeneratingAccess(false);
+                        return;
                     }
+                } else {
+                    throw e; // Rethrow other errors
                 }
             }
 
             if (!uid) {
-                alert(`Could not create or link a parent account because a user ID could not be obtained.`);
+                alert("Could not obtain User ID.");
                 setIsGeneratingAccess(false);
                 return;
             }
 
+            // 2. Update Student Record
             const newParentLoginInfo = {
                 email: parentEmail,
-                initialPassword: existingUser ? '********' : password,
+                initialPassword: isExistingUser ? '********' : password,
                 uid
             };
 
             await updateDoc(doc(db, 'students', student.id), { parentLoginInfo: newParentLoginInfo });
 
-            if (existingUser) {
-                alert(`Successfully linked the existing parent account for ${parentEmail}. The parent can log in with their original password.`);
+            // 3. Ensure User Profile Exists/Is Updated
+            await setDoc(doc(db, 'users', uid), {
+                uid,
+                email: parentEmail,
+                name: parentName,
+                role: 'parent',
+                status: 'active',
+                // Don't overwrite createdAt if existing
+                ...(isExistingUser ? {} : { createdAt: serverTimestamp() })
+            }, { merge: true });
+
+            if (isExistingUser) {
+                alert(`Successfully linked existing parent account (${parentEmail}).\nThe parent can log in with their existing password.`);
             } else {
-                await setDoc(doc(db, 'users', uid), { uid, email: parentEmail, name: parentName, role: 'parent', status: 'active', createdAt: serverTimestamp() }, { merge: true });
-                setCredentialsModal({ isOpen: true, data: { name: parentName, email: parentEmail, pass: password, role: 'Parent' } });
+                setCredentialsModal({
+                    isOpen: true,
+                    data: { name: parentName, email: parentEmail, pass: password, role: 'Parent' }
+                });
             }
 
         } catch (err: any) {

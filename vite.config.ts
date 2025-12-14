@@ -5,6 +5,10 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    host: true, // Expose to all IPs (0.0.0.0) to fix localhost/IPv6 issues
+    port: 5173
+  },
   build: {
     outDir: 'dist',
     chunkSizeWarningLimit: 1000,

@@ -354,6 +354,40 @@ export const ParentDashboardView = () => {
             </div>
 
             <main className="max-w-5xl mx-auto p-4 pb-24 md:p-8">
+                {/* Global Pickup Status Banner (if not on pickup tab) */}
+                {activeTab !== 'pickup' && activePickupEntry && (
+                    <button
+                        onClick={() => setActiveTab('pickup')}
+                        className="w-full mb-6 relative overflow-hidden group"
+                    >
+                        <div className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all shadow-lg text-left ${activePickupEntry.status === 'released'
+                                ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-900/50 animate-pulse'
+                                : activePickupEntry.status === 'arrived'
+                                    ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-900/50'
+                                    : 'bg-slate-900 border-slate-700 text-slate-300'
+                            }`}>
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${activePickupEntry.status === 'released' ? 'bg-white text-indigo-600' :
+                                    activePickupEntry.status === 'arrived' ? 'bg-white text-emerald-600' : 'bg-slate-800'
+                                }`}>
+                                {activePickupEntry.status === 'url' ? <Star size={24} fill="currentColor" /> : <Car size={24} />}
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-lg leading-tight">
+                                    {activePickupEntry.status === 'released' ? `${activeChild.name.split(' ')[0]} is Released! 🎉` :
+                                        activePickupEntry.status === 'arrived' ? "Check-in Confirmed ✅" :
+                                            "Pickup in Progress 🚗"}
+                                </h4>
+                                <p className="text-xs opacity-80">
+                                    {activePickupEntry.status === 'released' ? "Go to Pickup tab to confirm receipt" :
+                                        activePickupEntry.status === 'arrived' ? "Waiting for student release..." :
+                                            `Driver: ${activePickupEntry.pickerName}`}
+                                </p>
+                            </div>
+                            <ChevronRight className="ml-auto opacity-50 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                    </button>
+                )}
+
                 {activeTab === 'overview' && (
                     <div className="space-y-10">
 
