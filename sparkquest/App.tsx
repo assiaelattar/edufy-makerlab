@@ -162,98 +162,115 @@ const SparkQuestApp: React.FC = () => {
       );
     }
 
-        </p >
+    // Otherwise, show Manual Login Screen
+    const currentUrl = window.location.href;
 
-  {/* Configuration Toggle */ }
-  < button
-onClick = {() => setShowConfig(!showConfig)}
-className = "text-xs text-slate-500 hover:text-blue-400 underline mt-2"
-  >
-  { showConfig? 'Hide Settings': 'Wrong Server? Configure URL' }
-        </button >
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white p-8 text-center space-y-8 animate-in fade-in duration-500 relative">
+        <div className="w-24 h-24 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/20 mb-4 animate-pulse">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" x2="3" y1="12" y2="12" /></svg>
+        </div>
+        <div>
+          <h1 className="text-3xl font-black mb-2">Welcome to SparkQuest</h1>
+          <p className="text-slate-400">Connect to your Makerlab account to access missions.</p>
+        </div>
 
-  { showConfig && (
-    <div className="mt-4 p-4 bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm animate-in slide-in-from-bottom-2">
-      <label className="text-xs text-slate-400 block mb-1">ERP Server URL</label>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm text-white"
-          value={erpUrl}
-          onChange={(e) => {
-            setErpUrl(e.target.value);
-            localStorage.setItem('erp_url', e.target.value);
-          }}
-        />
-        <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-3 py-1 rounded text-xs font-bold">Save & Retry</button>
+        <button
+          onClick={handleLogin}
+          className="px-8 py-4 bg-white text-slate-950 hover:bg-slate-200 rounded-2xl font-black shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)] hover:scale-105 transition-all text-lg flex items-center gap-3"
+        >
+          <span>Log In with School Account</span>
+        </button>
+
+        {/* Configuration Toggle */}
+        <div className="pt-8">
+          <button
+            onClick={() => setShowConfig(!showConfig)}
+            className="text-xs text-slate-600 hover:text-slate-400 underline"
+          >
+            {showConfig ? 'Hide Settings' : 'Connection Settings'}
+          </button>
+
+          {showConfig && (
+            <div className="mt-4 p-4 bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm mx-auto animate-in slide-in-from-bottom-2">
+              <label className="text-xs text-slate-400 block mb-1 text-left">ERP Server URL</label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:border-blue-500 outline-none"
+                  value={erpUrl}
+                  onChange={(e) => {
+                    setErpUrl(e.target.value);
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    localStorage.setItem('erp_url', erpUrl);
+                    alert("URL Saved");
+                  }}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  )}
-
-{/* DEBUG INFO */ }
-<div className="mt-8 p-4 bg-slate-900 rounded text-left font-mono text-xs text-slate-500 w-full max-w-lg overflow-hidden break-all opacity-50 hover:opacity-100 transition-opacity">
-  <p className="font-bold text-slate-400 mb-2">DEBUG DIAGNOSTICS:</p>
-  <p>Target ERP: {erpUrl}</p>
-  <p>Current URL: {currentUrl}</p>
-  <p>Params: {window.location.search}</p>
-  <p>Has Token Check: {hasToken ? "YES" : "NO"}</p>
-  <p>User State: {user ? "Logged In" : "Null"}</p>
-</div>
-      </div >
     );
   }
 
-// --- INSTRUCTOR VIEW: THE FACTORY ---
-if (view === 'FACTORY') {
-  return <InstructorFactory />;
-}
+  // --- INSTRUCTOR VIEW: THE FACTORY ---
+  if (view === 'FACTORY') {
+    return <InstructorFactory />;
+  }
 
-// --- STUDENT VIEW: STUDIO / HOME ---
-if (view === 'HOME' && !project) {
-  return (
-    <ProjectSelector
-      studentId={user.uid}
-      studentName={userProfile?.name || user.displayName || 'Explorer'}
-      onSelectProject={(projectId) => {
-        setSelectedProjectId(projectId);
-      }}
-      onLogout={handleLogout}
-    />
-  );
-}
+  // --- STUDENT VIEW: STUDIO / HOME ---
+  if (view === 'HOME' && !project) {
+    return (
+      <ProjectSelector
+        studentId={user.uid}
+        studentName={userProfile?.name || user.displayName || 'Explorer'}
+        onSelectProject={(projectId) => {
+          setSelectedProjectId(projectId);
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
 
-// --- ERROR STATE ---
-if (error) {
+  // --- ERROR STATE ---
+  if (error) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white p-8 text-center space-y-6">
+        <h1 className="text-4xl font-black text-red-500">Mission Error</h1>
+        <p className="text-lg text-slate-300">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors"
+        >
+          Reboot System
+        </button>
+      </div>
+    );
+  }
+
+  // --- ACTIVE MISSION: WIZARD ---
   return (
-    <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white p-8 text-center space-y-6">
-      <h1 className="text-4xl font-black text-red-500">Mission Error</h1>
-      <p className="text-lg text-slate-300">{error}</p>
-      <button
-        onClick={() => window.location.reload()}
-        className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors"
-      >
-        Reboot System
-      </button>
+    <div className="h-screen w-full flex flex-col bg-slate-900 overflow-hidden relative">
+      <StudentWizard
+        assignment={assignment!}
+        initialProject={project!}
+        isConnected={isConnected}
+        onExit={() => {
+          // Clear selection to go back to Home
+          setSelectedProjectId(null);
+          setView('HOME');
+          // Force reload to clear hooks is safer for now
+          window.location.href = window.location.pathname;
+        }}
+      />
     </div>
   );
-}
-
-// --- ACTIVE MISSION: WIZARD ---
-return (
-  <div className="h-screen w-full flex flex-col bg-slate-900 overflow-hidden relative">
-    <StudentWizard
-      assignment={assignment!}
-      initialProject={project!}
-      isConnected={isConnected}
-      onExit={() => {
-        // Clear selection to go back to Home
-        setSelectedProjectId(null);
-        setView('HOME');
-        // Force reload to clear hooks is safer for now
-        window.location.href = window.location.pathname;
-      }}
-    />
-  </div>
-);
 };
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: Error | null }> {
