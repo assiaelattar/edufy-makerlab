@@ -6,6 +6,8 @@ import {
     ArrowUpRight, Microscope, Zap
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { Logo } from '../components/Logo';
+import { config } from '../utils/config';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -132,7 +134,7 @@ export const InstructorDashboardView = () => {
                 </div>
                 <div className="flex gap-3">
                     <button
-                        onClick={() => window.open('http://localhost:3000', '_blank')}
+                        onClick={() => window.open(config.sparkQuestUrl, '_blank')}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-bold shadow-lg shadow-slate-900/20 hover:bg-slate-800 transition-all border border-slate-800"
                     >
                         <Rocket size={18} />

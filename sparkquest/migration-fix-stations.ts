@@ -1,7 +1,7 @@
 // TEMPORARY MIGRATION UTILITY - Run once to fix existing projects
 // Add this button somewhere visible in SparkQuest (or run in console)
 
-import { collection, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, doc, Firestore } from 'firebase/firestore';
 import { db } from './services/firebase';
 
 const normalizeStation = (stationText: string): string => {
@@ -19,7 +19,12 @@ export const migrateProjectStations = async () => {
     console.log('🔧 Starting station migration...');
 
     try {
-        const projectsRef = collection(db, 'student_projects');
+        if (!db) {
+            console.error('❌ Database not initialized');
+            return;
+        }
+        const firestore = db as Firestore;
+        const projectsRef = collection(firestore, 'student_projects');
         const snapshot = await getDocs(projectsRef);
 
         let updated = 0;
@@ -31,7 +36,7 @@ export const migrateProjectStations = async () => {
             const newStation = normalizeStation(oldStation);
 
             if (oldStation !== newStation) {
-                await updateDoc(doc(db, 'student_projects', docSnap.id), {
+                await updateDoc(doc(firestore, 'student_projects', docSnap.id), {
                     station: newStation
                 });
                 console.log(`✅ Updated ${docSnap.id}: "${oldStation}" → "${newStation}"`);

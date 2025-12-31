@@ -15,6 +15,8 @@ export const PickupView = () => {
     const isGatekeeper = can('attendance.manage');
 
     const [isDisplayMode, setIsDisplayMode] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
 
     // Filter Students for Search
     const searchResults = useMemo(() => {

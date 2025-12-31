@@ -9,8 +9,17 @@ import { SubmissionModal } from './components/SubmissionModal';
 import { StyleGuide } from './components/StyleGuide';
 import { api } from './services/api';
 import { LoginPage } from './components/LoginPage';
+import { LoginView } from './components/LoginView';
 import { ProjectSelector } from './components/ProjectSelector';
+import { SessionProvider } from './context/SessionContext';
+import { ThemeProvider } from './context/ThemeContext';
 import './cleanup-projects'; // Import cleanup script for console access
+import { config } from './utils/config';
+import { SessionOverlay } from './components/SessionOverlay';
+import { InactivityMonitor } from './components/InactivityMonitor';
+import { PickupNotification } from './components/PickupNotification';
+import { FocusSessionProvider } from './context/FocusSessionContext';
+import { SessionControls } from './components/SessionControls';
 
 // Mock Data for Old Roadmap (Legacy View)
 const INITIAL_STEPS: RoadmapStep[] = [
@@ -37,13 +46,21 @@ const INITIAL_USER: User = {
 };
 
 
+import { BootSequence } from './components/BootSequence';
+
 // Wrapper component to use Auth Context
 const SparkQuestApp: React.FC = () => {
   const { user, userProfile, signInWithToken, signOut, loading: authLoading } = useAuth();
   const { fetchMission, assignment, project, loading: missionLoading, error, isConnected } = useMissionData();
 
+  useEffect(() => { console.log("App Version: Fixed hooks"); }, []);
+
   const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  const [bootComplete, setBootComplete] = useState(() => {
+    return localStorage.getItem('sparkquest_boot_complete') === 'true'; // Changed to localStorage for persistence across reloads/sessions
+  });
 
   // Parse projectId from URL on mount (ONCE, before auth redirect clears params)
   const [initialProjectId] = useState(() => {
@@ -51,6 +68,8 @@ const SparkQuestApp: React.FC = () => {
     const pId = params.get('projectId');
     return pId;
   });
+
+
 
   useEffect(() => {
     // Check for token in URL on load (Bridge from ERP Legacy)
@@ -87,6 +106,8 @@ const SparkQuestApp: React.FC = () => {
   useEffect(() => {
     if (!user || authLoading) return;
 
+    console.log("🚦 Routing Check. User:", user.email, "Role:", userProfile?.role, "Current View:", view);
+
     // 1. If actively working on a mission (WIZARD mode), stay there
     if (assignment && project) {
       setView('WIZARD');
@@ -94,12 +115,15 @@ const SparkQuestApp: React.FC = () => {
     }
 
     // 2. Role Based Routing
+    // FIXED: Route Instructors/Admins to FACTORY
     if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
+      console.log("👉 Routing to FACTORY (Instructor/Admin)");
       setView('FACTORY');
-    } else {
-      // Students go to Home/Studio
-      setView('HOME');
+      return;
     }
+
+    console.log("👉 Routing to HOME (Unified View)");
+    setView('HOME');
   }, [user, userProfile, assignment, project, authLoading]);
 
 
@@ -116,7 +140,7 @@ const SparkQuestApp: React.FC = () => {
       console.log("🚀 [SparkQuest] Loading Mission:", pId);
       // Logic: If user selects a project, we fetch it. 
       // This hook will eventually set 'project' and 'assignment', causing view -> WIZARD
-      fetchMission(user.uid, pId);
+      fetchMission(user.uid, pId || undefined);
     }
   }, [selectedProjectId, initialProjectId, user, userProfile]);
 
@@ -135,6 +159,14 @@ const SparkQuestApp: React.FC = () => {
     const currentUrl = window.location.href;
     window.location.href = `${erpUrl}?service=sparkquest&redirect=${encodeURIComponent(currentUrl)}`;
   };
+
+  // --- ONBOARDING: BOOT SEQUENCE ---
+  if (!bootComplete) {
+    return <BootSequence onComplete={() => {
+      localStorage.setItem('sparkquest_boot_complete', 'true'); // Persist to localStorage
+      setBootComplete(true);
+    }} />;
+  }
 
   // --- LOADING STATE ---
   if (authLoading || (missionLoading && view === 'WIZARD')) {
@@ -163,60 +195,7 @@ const SparkQuestApp: React.FC = () => {
     }
 
     // Otherwise, show Manual Login Screen
-    const currentUrl = window.location.href;
-
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white p-8 text-center space-y-8 animate-in fade-in duration-500 relative">
-        <div className="w-24 h-24 bg-blue-600 rounded-3xl flex items-center justify-center shadow-2xl shadow-blue-500/20 mb-4 animate-pulse">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" x2="3" y1="12" y2="12" /></svg>
-        </div>
-        <div>
-          <h1 className="text-3xl font-black mb-2">Welcome to SparkQuest</h1>
-          <p className="text-slate-400">Connect to your Makerlab account to access missions.</p>
-        </div>
-
-        <button
-          onClick={handleLogin}
-          className="px-8 py-4 bg-white text-slate-950 hover:bg-slate-200 rounded-2xl font-black shadow-[0_0_40px_-10px_rgba(255,255,255,0.3)] hover:scale-105 transition-all text-lg flex items-center gap-3"
-        >
-          <span>Log In with School Account</span>
-        </button>
-
-        {/* Configuration Toggle */}
-        <div className="pt-8">
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="text-xs text-slate-600 hover:text-slate-400 underline"
-          >
-            {showConfig ? 'Hide Settings' : 'Connection Settings'}
-          </button>
-
-          {showConfig && (
-            <div className="mt-4 p-4 bg-slate-900 border border-slate-700 rounded-xl w-full max-w-sm mx-auto animate-in slide-in-from-bottom-2">
-              <label className="text-xs text-slate-400 block mb-1 text-left">ERP Server URL</label>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 bg-slate-950 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:border-blue-500 outline-none"
-                  value={erpUrl}
-                  onChange={(e) => {
-                    setErpUrl(e.target.value);
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    localStorage.setItem('erp_url', erpUrl);
-                    alert("URL Saved");
-                  }}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-xs font-bold"
-                >
-                  Save
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    return <LoginView />;
   }
 
   // --- INSTRUCTOR VIEW: THE FACTORY ---
@@ -229,7 +208,6 @@ const SparkQuestApp: React.FC = () => {
     return (
       <ProjectSelector
         studentId={user.uid}
-        studentName={userProfile?.name || user.displayName || 'Explorer'}
         onSelectProject={(projectId) => {
           setSelectedProjectId(projectId);
         }}
@@ -323,7 +301,17 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <SparkQuestApp />
+        <ThemeProvider>
+          <FocusSessionProvider>
+            <SessionProvider>
+              <SessionOverlay />
+              <InactivityMonitor />
+              <PickupNotification />
+              <SessionControls />
+              <SparkQuestApp />
+            </SessionProvider>
+          </FocusSessionProvider>
+        </ThemeProvider>
       </AuthProvider>
     </ErrorBoundary>
   )

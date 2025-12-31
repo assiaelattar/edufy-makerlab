@@ -1,0 +1,32 @@
+{
+    "appId": "com.makerlab.sparkquest",
+    "productName": "SparkQuest Studio",
+    "directories": {
+        "output": "dist-electron",
+        "icon": "public/icon.png"
+    },
+    "files": [
+        "dist/**/*",
+        "electron/**/*"
+    ],
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "shortcutName": "SparkQuest"
+    },
+    "win": {
+        "target": [
+            "nsis",
+            "zip"
+        ]
+    },
+    "publish": [
+        {
+            "provider": "github",
+            "owner": "assiaelattar",
+            "repo": "edufy-makerlab"
+        }
+    ]
+}

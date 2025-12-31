@@ -1,10 +1,29 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
-import { StudentProject, ProjectTemplate } from '../../types';
-import { X, Check, AlertCircle, MessageSquare, ExternalLink, Award, Sparkles, Clock } from 'lucide-react';
+import { StudentProject } from '../../types';
+import { X, ExternalLink, CheckCircle, XCircle, Clock, MessageSquare, Award, GitCommit, Check, AlertCircle, Sparkles } from 'lucide-react';
 import { db } from '../../services/firebase';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, Firestore } from 'firebase/firestore';
+
+// Helper to convert base64 to Blob URL for secure rendering
+const base64ToBlob = (base64: string): string => {
+    if (!base64 || !base64.startsWith('data:')) return base64; // Already a URL
+    try {
+        const [header, data] = base64.split(',');
+        const mime = header.match(/:(.*?);/)?.[1] || 'image/png';
+        const binary = atob(data);
+        const array = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            array[i] = binary.charCodeAt(i);
+        }
+        const blob = new Blob([array], { type: mime });
+        return URL.createObjectURL(blob);
+    } catch (err) {
+        console.error('Failed to convert base64 to blob:', err);
+        return base64;
+    }
+};
 
 interface ReviewModalProps {
     projectId: string;
@@ -18,40 +37,31 @@ const ensureProtocol = (url: string) => {
 };
 
 export const ReviewModal: React.FC<ReviewModalProps> = ({ projectId, onClose }) => {
-    const { studentProjects, actions } = useFactoryData();
+    const { studentProjects, students, actions } = useFactoryData();
     const project = studentProjects.find(p => p.id === projectId);
+    const student = students.find(s => s.id === project?.studentId);
 
     const [activeTab, setActiveTab] = useState<'overview' | 'history'>('overview');
     const [feedback, setFeedback] = useState('');
-    const [fetchedName, setFetchedName] = useState<string>('');
     const [awardXp, setAwardXp] = useState(50); // Default completion XP
+    const [blobUrls, setBlobUrls] = useState<string[]>([]);
 
-    // Fetch student name if missing - MOVED UP TO FIX HOOK ERROR
-    React.useEffect(() => {
-        const fetchStudentName = async () => {
-            if (project && (!project.studentName || project.studentName === 'Student' || project.studentName === 'Unknown Explorer')) {
-                try {
-                    const { doc, getDoc } = await import('firebase/firestore');
-                    const userSnap = await getDoc(doc(db, 'users', project.studentId));
-                    if (userSnap.exists()) {
-                        setFetchedName(userSnap.data().name || 'Unknown Maker');
-                    }
-                } catch (e) {
-                    console.error("Error fetching student name:", e);
-                }
-            }
+    // Cleanup Blob URLs on unmount
+    useEffect(() => {
+        return () => {
+            blobUrls.forEach(url => URL.revokeObjectURL(url));
         };
-        fetchStudentName();
-    }, [project]);
+    }, [blobUrls]);
 
     // GUARD: If no project found (yet), return null
     if (!project) return null;
 
     const handleAction = async (status: 'published' | 'changes_requested') => {
         if (!db) return;
+        const firestore = db as Firestore;
 
         try {
-            await updateDoc(doc(db, 'student_projects', projectId), {
+            await updateDoc(doc(firestore, 'student_projects', projectId), {
                 status,
                 feedback: feedback || null,
                 updatedAt: serverTimestamp(),
@@ -78,7 +88,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ projectId, onClose }) 
                         </div>
                         <h2 className="text-3xl font-black text-slate-800 tracking-tight">{project.title}</h2>
                         <p className="text-slate-500 font-medium flex items-center gap-2">
-                            Maker: <span className="text-indigo-600 font-bold bg-indigo-50 px-2 rounded-md">{fetchedName || project.studentName || 'Student'}</span>
+                            Maker: <span className="text-indigo-600 font-bold bg-indigo-50 px-2 rounded-md">{student?.name || project.studentName || 'Student'}</span>
                         </p>
                     </div>
                     <div className="flex items-center gap-4">
@@ -153,11 +163,11 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ projectId, onClose }) 
                                                                     onClick={async () => {
                                                                         if (!db) return;
                                                                         const updatedSteps = project.steps.map(s => s.id === step.id ? { ...s, status: 'done' } : s);
-                                                                        await updateDoc(doc(db, 'student_projects', projectId), { steps: updatedSteps });
+                                                                        await updateDoc(doc(db as Firestore, 'student_projects', projectId), { steps: updatedSteps });
                                                                     }}
                                                                     className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded-lg hover:bg-emerald-600 transition-colors shadow-sm flex items-center gap-1"
                                                                 >
-                                                                    <Check size={12} /> Approve
+                                                                    <CheckCircle size={12} /> Approve
                                                                 </button>
                                                                 <button
                                                                     onClick={async () => {
@@ -165,26 +175,37 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ projectId, onClose }) 
                                                                         const prompt = window.prompt("Reason for rejection:");
                                                                         if (prompt === null) return;
                                                                         const updatedSteps = project.steps.map(s => s.id === step.id ? { ...s, status: 'REJECTED', reviewNotes: prompt } : s);
-                                                                        await updateDoc(doc(db, 'student_projects', projectId), { steps: updatedSteps });
+                                                                        await updateDoc(doc(db as Firestore, 'student_projects', projectId), { steps: updatedSteps });
                                                                     }}
                                                                     className="px-3 py-1 bg-rose-100 text-rose-600 text-xs font-bold rounded-lg hover:bg-rose-200 transition-colors flex items-center gap-1"
                                                                 >
-                                                                    <X size={12} /> Reject
+                                                                    <XCircle size={12} /> Reject
                                                                 </button>
                                                             </div>
                                                         )}
                                                     </div>
                                                     {step.evidence ? (
-                                                        step.evidence.match(/\.(jpeg|jpg|gif|png)$/i) ? (
-                                                            <a href={step.evidence} target="_blank" rel="noreferrer" className="block mt-2 rounded-lg overflow-hidden border border-slate-200 group relative">
-                                                                <img src={step.evidence} alt={`Evidence for ${step.title}`} className="w-full h-32 object-cover" />
-                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                    <span className="text-white font-bold text-xs flex items-center gap-1"><ExternalLink size={14} /> View Full Image</span>
+                                                        step.evidence.match(/\.(jpeg|jpg|gif|png)$/i) || step.evidence.startsWith('data:image/') ? (
+                                                            <a href={base64ToBlob(step.evidence)} target="_blank" rel="noreferrer" className="block mt-2 rounded-lg overflow-hidden border border-slate-200 group relative">
+                                                                <img
+                                                                    src={base64ToBlob(step.evidence)}
+                                                                    alt={`Evidence for ${step.title}`}
+                                                                    className="w-full h-32 object-cover"
+                                                                    onLoad={(e) => {
+                                                                        const url = (e.target as HTMLImageElement).src;
+                                                                        if (url.startsWith('blob:')) {
+                                                                            setBlobUrls(prev => [...prev, url]);
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                                                    <ExternalLink className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                                                                 </div>
                                                             </a>
                                                         ) : (
                                                             <a href={ensureProtocol(step.evidence)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm font-bold text-indigo-600 hover:underline mt-2">
-                                                                <ExternalLink size={14} /> View Evidence Link
+                                                                <ExternalLink size={14} />
+                                                                View Evidence Link
                                                             </a>
                                                         )
                                                     ) : null}

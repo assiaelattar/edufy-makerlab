@@ -1,12 +1,13 @@
 
 import React, { useState } from 'react';
-import { Menu, LogOut, X, Home, BookOpen, Box, Camera, Settings, Users, CalendarCheck, FileText, LayoutGrid } from 'lucide-react';
+import { Menu, LogOut, X, Home, BookOpen, Box, Camera, Settings, Users, CalendarCheck, FileText, LayoutGrid, Gamepad2 } from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationDropdown } from '../NotificationDropdown';
 import { Logo } from '../Logo';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
 import { ViewState } from '../../types';
+import { config } from '../../utils/config';
 
 interface InstructorLayoutProps {
     children: React.ReactNode;
@@ -24,6 +25,7 @@ export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) 
         { id: 'attendance', icon: CalendarCheck, label: 'Attendance' },
         { id: 'tools', icon: Box, label: 'Inventory' },
         { id: 'media', icon: Camera, label: 'Gallery' },
+        { id: 'arcade-mgr', icon: Gamepad2, label: 'Arcade Manager' },
         { id: 'sparkquest', icon: Home, label: 'SparkQuest' },
     ];
 
@@ -69,7 +71,7 @@ export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) 
                                 return (
                                     <button
                                         key={item.id}
-                                        onClick={() => window.open("http://localhost:3000/?token=demo-token", "_blank")}
+                                        onClick={() => window.open(`${config.sparkQuestUrl}/?token=demo-token`, "_blank")}
                                         className={`
                                             w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group
                                             text-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:pl-5

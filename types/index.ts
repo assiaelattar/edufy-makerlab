@@ -28,8 +28,21 @@ export interface Program {
   type: 'Regular Program' | 'Holiday Camp' | 'Workshop';
   description: string;
   status: 'active' | 'archived';
+  targetAudience?: 'kids' | 'adults';
   packs: ProgramPack[];
   grades: Grade[];
+  dashboardConfig?: ProgramDashboardConfig;
+  resources?: ToolLink[];
+}
+
+export interface ProgramDashboardConfig {
+  welcomeMessage?: string;
+  themeColor?: 'brand' | 'blue' | 'purple' | 'green' | 'orange';
+  showStats?: boolean;
+  showSchedule?: boolean;
+  meetingUrl?: string; // ZOOM/MEET Link
+  enableAttendanceTracking?: boolean;
+  customLinks?: { label: string; url: string }[];
 }
 
 export interface Student {
@@ -58,7 +71,9 @@ export interface Student {
   };
   badges?: string[]; // Array of Badge IDs
   avatarUrl?: string; // Creative Avatar URL
+  lastScheduleSharedAt?: Timestamp; // Track when schedule was shared
 }
+
 
 export interface Enrollment {
   id: string;
@@ -87,6 +102,29 @@ export interface Enrollment {
   createdAt?: Timestamp;
 }
 
+export interface CommunicationTemplate {
+  id: string;
+  title: string;
+  content: string; // Supports placeholders like {{student_name}}
+  category: 'news' | 'holiday' | 'urgent' | 'reminder' | 'event';
+  tags?: string[];
+  createdAt?: Timestamp;
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  targetAudience: {
+    type: 'all' | 'program' | 'grade' | 'specific';
+    ids?: string[]; // IDs of programs, grades, or students depending on type
+  };
+  status: 'draft' | 'sent';
+  sentCount: number;
+  sentAt?: Timestamp;
+  createdAt: Timestamp;
+}
+
 export interface Payment {
   id: string;
   enrollmentId: string;
@@ -101,6 +139,7 @@ export interface Payment {
   issueDate?: string;
   proofUrl?: string;
   session?: string; // Academic Year (e.g. "2024-2025")
+  receiptSharedAt?: Timestamp;
   createdAt: Timestamp;
 }
 
@@ -158,6 +197,8 @@ export interface WorkshopTemplate {
   capacityPerSlot: number;
   isActive: boolean;
   shareableSlug: string;
+  targetAudience?: 'Child' | 'School' | 'Teacher' | 'Professional';
+  imageUrl?: string;
   createdAt: Timestamp;
 }
 
@@ -387,6 +428,8 @@ export interface Station {
   gradeIds?: string[]; // Array of grade IDs this station belongs to
   gradeNames?: string[]; // Array of grade names for display
   activeForGradeIds?: string[]; // IDs of grades where this station is currently active
+  startDate?: Timestamp;
+  endDate?: Timestamp;
 }
 
 export interface Badge {
@@ -522,7 +565,7 @@ export interface AppSettings {
 }
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'portfolio' | 'review';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications';
 
 export interface ViewParams {
   classId?: { pId: string, gId: string, grpId: string };

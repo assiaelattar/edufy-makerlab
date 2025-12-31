@@ -167,6 +167,20 @@ export const FactoryToolbox = () => {
                 <button onClick={() => activeTab === 'digital' ? setIsToolModalOpen(true) : setIsAssetModalOpen(true)} className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-400 hover:to-pink-500 text-white px-6 py-3 rounded-xl transition-colors shadow-lg shadow-pink-500/30 text-sm font-bold w-full sm:w-auto justify-center">
                     <Plus size={18} /> Add {activeTab === 'digital' ? 'Link' : 'Item'}
                 </button>
+
+                <button
+                    onClick={() => {
+                        if (!confirm("SECURE DEVICE?\n\nThis will wipe all saved emails ('Remember Me') and sign you out.\nUse this when leaving a public device.")) return;
+                        localStorage.removeItem('sparkquest_remember_email');
+                        localStorage.removeItem('sparkquest_session_start');
+                        // Reload to clear auth state via firebase
+                        window.location.reload();
+                    }}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-colors border border-slate-700 text-sm font-bold w-full sm:w-auto justify-center"
+                    title="Clear saved data & Logout"
+                >
+                    <Database size={18} /> <span className="hidden sm:inline">Secure</span>
+                </button>
             </div>
 
             {/* --- VIEW: DIGITAL RESOURCES --- */}

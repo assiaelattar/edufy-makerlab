@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { Trophy, Star, Rocket, Award, Grid, Calendar, Share2, BookOpen } from 'lucide-react';
+import { ChevronRight, ExternalLink, Calendar, Award, BookOpen, Clock, AlertCircle, Trophy, Rocket, Grid, Share2, Star } from 'lucide-react';
+import { config } from '../utils/config';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { STUDIO_THEME } from '../utils/studioTheme';
@@ -138,7 +139,7 @@ export const PortfolioView = () => {
                                                 onClick={() => {
                                                     if (!userProfile) return;
                                                     const token = generateBridgeToken(userProfile);
-                                                    window.open(`http://localhost:3000/?token=${token}&projectId=${p.id}`, '_blank');
+                                                    window.open(`${config.sparkQuestUrl}/?token=${token}&projectId=${p.id}`, '_blank');
                                                 }}
                                                 className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm transition-transform hover:scale-105 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
                                             >

@@ -1,16 +1,9 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 
-interface UserProfile {
-    uid: string;
-    name: string;
-    email: string;
-    role: string;
-    schoolId?: string;
-    photoURL?: string;
-}
+import { UserProfile } from '../types';
 
 interface AuthContextType {
     user: User | null;
@@ -18,6 +11,7 @@ interface AuthContextType {
     loading: boolean;
     signInWithToken: (token: string) => Promise<void>;
     signOut: () => Promise<void>;
+    updateCredits: (amount: number) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -26,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     signInWithToken: async () => { },
     signOut: async () => { },
+    updateCredits: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -222,8 +217,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await firebaseSignOut(auth);
     };
 
+    const updateCredits = async (amount: number) => {
+        if (!user || isDemoMode.current) {
+            // In demo/bridge mode, just update local state
+            if (userProfile) {
+                setUserProfile({
+                    ...userProfile,
+                    arcadeCredits: (userProfile.arcadeCredits || 0) + amount
+                });
+            }
+            return;
+        }
+
+        try {
+            if (db) {
+                const userRef = doc(db, 'users', user.uid);
+                await updateDoc(userRef, {
+                    arcadeCredits: increment(amount)
+                });
+
+                // Optimistic update
+                setUserProfile(prev => prev ? {
+                    ...prev,
+                    arcadeCredits: (prev.arcadeCredits || 0) + amount
+                } : null);
+            }
+        } catch (e) {
+            console.error("Failed to update credits:", e);
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, signInWithToken, signOut }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, signInWithToken, signOut, updateCredits }}>
             {children}
         </AuthContext.Provider>
     );

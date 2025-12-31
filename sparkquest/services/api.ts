@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, setDoc, updateDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, collection, addDoc, Firestore } from 'firebase/firestore';
 import { StudentProject, User, Assignment } from '../types';
 
 // Helper to simulate network latency (optional, reduced)
@@ -45,8 +45,10 @@ export const api = {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
+        if (!db) throw new Error("Database not initialized");
+        const firestore = db as Firestore;
         console.log(`[ERP] Syncing project state... (attempt ${attempt}/${MAX_RETRIES})`, project.id);
-        const ref = doc(db, 'student_projects', project.id);
+        const ref = doc(firestore, 'student_projects', project.id);
 
         // CRITICAL: Normalize station before saving to match ERP expectations
         const normalizedProject = {
@@ -82,7 +84,8 @@ export const api = {
 
     // Create Notification for Instructor
     try {
-      await setDoc(doc(collection(db, 'notifications')), {
+      if (!db) return false;
+      await setDoc(doc(collection(db as Firestore, 'notifications')), {
         type: 'submission',
         title: 'Mission Step Submitted',
         message: `A student submitted evidence for step: ${stepId}`,

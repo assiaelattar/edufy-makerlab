@@ -9,34 +9,34 @@ export const formatCurrency = (amount: number) => {
 
 export const formatDate = (dateInput: any) => {
   if (!dateInput) return '-';
-  
+
   let date: Date;
   // Handle Firestore Timestamp via Duck Typing (checking for .toDate() method)
   if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput.toDate === 'function') {
-      date = dateInput.toDate();
+    date = dateInput.toDate();
   } else {
-      // Handle String, Number, or Date object
-      date = new Date(dateInput);
+    // Handle String, Number, or Date object
+    date = new Date(dateInput);
   }
 
   if (isNaN(date.getTime())) return '-';
-  
+
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 export const getDaysDifference = (dateInput: any) => {
   if (!dateInput) return 0;
   let target: Date;
-  
+
   if (typeof dateInput === 'object' && dateInput !== null && typeof dateInput.toDate === 'function') {
-      target = dateInput.toDate();
+    target = dateInput.toDate();
   } else {
-      target = new Date(dateInput);
+    target = new Date(dateInput);
   }
 
   const today = new Date();
   const diffTime = target.getTime() - today.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
 export const calculateAge = (birthDate?: string) => {
@@ -73,8 +73,8 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promis
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-            reject(new Error("Canvas context not found"));
-            return;
+          reject(new Error("Canvas context not found"));
+          return;
         }
         ctx.drawImage(img, 0, 0, width, height);
         // Compress to JPEG
@@ -88,61 +88,61 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promis
 
 // --- HELPER: Convert standard URLs to Embeddable versions ---
 export const getEmbedSrc = (url: string): string | null => {
-    if (!url) return null;
-    
-    // Scratch
-    if (url.includes('scratch.mit.edu/projects/')) {
-        const id = url.split('projects/')[1].split('/')[0];
-        return `https://scratch.mit.edu/projects/${id}/embed`;
-    }
-    // YouTube
-    if (url.includes('youtube.com/watch')) {
-        const id = new URL(url).searchParams.get('v');
-        return `https://www.youtube.com/embed/${id}`;
-    }
-    if (url.includes('youtu.be/')) {
-        const id = url.split('youtu.be/')[1];
-        return `https://www.youtube.com/embed/${id}`;
-    }
-    // Tinkercad (Public links only)
-    if (url.includes('tinkercad.com/things/')) {
-        return url; // Tinkercad links often need specific embed params, but raw link usually works in iframe if public
-    }
-    // Replit
-    if (url.includes('replit.com/@')) {
-        return `${url}?embed=true`;
-    }
+  if (!url) return null;
 
-    return null; // Not a recognized embed pattern
+  // Scratch
+  if (url.includes('scratch.mit.edu/projects/')) {
+    const id = url.split('projects/')[1].split('/')[0];
+    return `https://scratch.mit.edu/projects/${id}/embed`;
+  }
+  // YouTube
+  if (url.includes('youtube.com/watch')) {
+    const id = new URL(url).searchParams.get('v');
+    return `https://www.youtube.com/embed/${id}`;
+  }
+  if (url.includes('youtu.be/')) {
+    const id = url.split('youtu.be/')[1];
+    return `https://www.youtube.com/embed/${id}`;
+  }
+  // Tinkercad (Public links only)
+  if (url.includes('tinkercad.com/things/')) {
+    return url; // Tinkercad links often need specific embed params, but raw link usually works in iframe if public
+  }
+  // Replit
+  if (url.includes('replit.com/@')) {
+    return `${url}?embed=true`;
+  }
+
+  return null; // Not a recognized embed pattern
 };
 
 // --- RESUME GENERATOR ---
 export const generateMakerResume = (student: Student, projects: StudentProject[], settings: AppSettings) => {
-    const win = window.open('', '_blank');
-    if (!win) return;
+  const win = window.open('', '_blank');
+  if (!win) return;
 
-    // Filter only published/approved projects
-    const portfolio = projects
-        .filter(p => p.status === 'published')
-        .sort((a, b) => {
-            const da = (a.createdAt as any).seconds || 0;
-            const db = (b.createdAt as any).seconds || 0;
-            return db - da;
-        });
+  // Filter only published/approved projects
+  const portfolio = projects
+    .filter(p => p.status === 'published')
+    .sort((a, b) => {
+      const da = (a.createdAt as any).seconds || 0;
+      const db = (b.createdAt as any).seconds || 0;
+      return db - da;
+    });
 
-    // Aggregate Skills
-    const allSkills = portfolio.flatMap(p => p.skillsAcquired);
-    const skillCounts: Record<string, number> = {};
-    allSkills.forEach(s => skillCounts[s] = (skillCounts[s] || 0) + 1);
-    const topSkills = Object.entries(skillCounts)
-        .sort(([,a], [,b]) => b - a)
-        .map(([skill]) => skill);
+  // Aggregate Skills
+  const allSkills = portfolio.flatMap(p => p.skillsAcquired);
+  const skillCounts: Record<string, number> = {};
+  allSkills.forEach(s => skillCounts[s] = (skillCounts[s] || 0) + 1);
+  const topSkills = Object.entries(skillCounts)
+    .sort(([, a], [, b]) => b - a)
+    .map(([skill]) => skill);
 
-    const logoHtml = settings.logoUrl 
-        ? `<img src="${settings.logoUrl}" alt="Logo" class="logo" />` 
-        : `<div class="logo-placeholder">${settings.academyName.charAt(0)}</div>`;
+  const logoHtml = settings.logoUrl
+    ? `<img src="${settings.logoUrl}" alt="Logo" class="logo" />`
+    : `<div class="logo-placeholder">${settings.academyName.charAt(0)}</div>`;
 
-    const html = `
+  const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -276,8 +276,8 @@ export const generateMakerResume = (student: Student, projects: StudentProject[]
               <h2 class="section-title">Engineering Portfolio</h2>
               
               ${portfolio.length === 0 ? '<p>No published projects yet.</p>' : portfolio.map(p => {
-                  const theme = STATION_THEMES[p.station] || STATION_THEMES.general;
-                  return `
+    const theme = STATION_THEMES[p.station] || STATION_THEMES.general;
+    return `
                     <div class="project-item">
                       <img src="${p.mediaUrls?.[0] || 'https://placehold.co/120x80/f1f5f9/94a3b8?text=Project'}" class="project-thumb" />
                       <div class="project-details">
@@ -293,7 +293,7 @@ export const generateMakerResume = (student: Student, projects: StudentProject[]
                       </div>
                     </div>
                   `;
-              }).join('')}
+  }).join('')}
             </section>
 
             <div class="footer">
@@ -309,8 +309,8 @@ export const generateMakerResume = (student: Student, projects: StudentProject[]
       </body>
       </html>
     `;
-    win.document.write(html);
-    win.document.close();
+  win.document.write(html);
+  win.document.close();
 };
 
 // Recurrence Engine
@@ -327,71 +327,71 @@ export interface VirtualSlot {
 }
 
 export const getGeneratedSlots = (
-  templates: WorkshopTemplate[], 
-  existingSlots: WorkshopSlot[], 
-  startDate: Date, 
+  templates: WorkshopTemplate[],
+  existingSlots: WorkshopSlot[],
+  startDate: Date,
   daysAhead: number = 30
 ): VirtualSlot[] => {
   const slots: VirtualSlot[] = [];
   const start = new Date(startDate);
-  start.setHours(0,0,0,0);
+  start.setHours(0, 0, 0, 0);
 
   templates.filter(t => t.isActive).forEach(template => {
     if (!template.recurrencePattern) return;
 
     if (template.recurrenceType === 'one-time' && template.recurrencePattern.date) {
-        const slotDate = new Date(template.recurrencePattern.date);
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        
-        if (slotDate >= today) {
-            const existing = existingSlots.find(s => s.workshopTemplateId === template.id && s.date === template.recurrencePattern.date);
-            const [h, m] = (template.recurrencePattern.time || "00:00").split(':').map(Number);
-            const endTimeDate = new Date();
-            endTimeDate.setHours(h, m + template.duration);
-            const endTimeStr = `${String(endTimeDate.getHours()).padStart(2, '0')}:${String(endTimeDate.getMinutes()).padStart(2, '0')}`;
+      const slotDate = new Date(template.recurrencePattern.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-            slots.push({
-                workshopTemplateId: template.id,
-                templateTitle: template.title,
-                dateStr: template.recurrencePattern.date,
-                startTime: template.recurrencePattern.time || "00:00",
-                endTime: endTimeStr,
-                capacity: existing ? existing.capacity : template.capacityPerSlot,
-                bookedCount: existing ? existing.bookedCount : 0,
-                status: existing ? existing.status : 'available',
-                slotId: existing?.id
-            });
-        }
+      if (slotDate >= today) {
+        const existing = existingSlots.find(s => s.workshopTemplateId === template.id && s.date === template.recurrencePattern.date);
+        const [h, m] = (template.recurrencePattern.time || "00:00").split(':').map(Number);
+        const endTimeDate = new Date();
+        endTimeDate.setHours(h, m + template.duration);
+        const endTimeStr = `${String(endTimeDate.getHours()).padStart(2, '0')}:${String(endTimeDate.getMinutes()).padStart(2, '0')}`;
+
+        slots.push({
+          workshopTemplateId: template.id,
+          templateTitle: template.title,
+          dateStr: template.recurrencePattern.date,
+          startTime: template.recurrencePattern.time || "00:00",
+          endTime: endTimeStr,
+          capacity: existing ? existing.capacity : template.capacityPerSlot,
+          bookedCount: existing ? existing.bookedCount : 0,
+          status: existing ? existing.status : 'available',
+          slotId: existing?.id
+        });
+      }
     }
 
     if (template.recurrenceType === 'weekly' && template.recurrencePattern.days && template.recurrencePattern.time) {
-        for (let i = 0; i < daysAhead; i++) {
-            const d = new Date(start);
-            d.setDate(start.getDate() + i);
-            const dayOfWeek = d.getDay();
+      for (let i = 0; i < daysAhead; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const dayOfWeek = d.getDay();
 
-            if (template.recurrencePattern.days.includes(dayOfWeek)) {
-                const dateStr = d.toISOString().split('T')[0];
-                const existing = existingSlots.find(s => s.workshopTemplateId === template.id && s.date === dateStr);
-                const [h, m] = template.recurrencePattern.time.split(':').map(Number);
-                const endTimeDate = new Date();
-                endTimeDate.setHours(h, m + template.duration);
-                const endTimeStr = `${String(endTimeDate.getHours()).padStart(2, '0')}:${String(endTimeDate.getMinutes()).padStart(2, '0')}`;
+        if (template.recurrencePattern.days.includes(dayOfWeek)) {
+          const dateStr = d.toISOString().split('T')[0];
+          const existing = existingSlots.find(s => s.workshopTemplateId === template.id && s.date === dateStr);
+          const [h, m] = template.recurrencePattern.time.split(':').map(Number);
+          const endTimeDate = new Date();
+          endTimeDate.setHours(h, m + template.duration);
+          const endTimeStr = `${String(endTimeDate.getHours()).padStart(2, '0')}:${String(endTimeDate.getMinutes()).padStart(2, '0')}`;
 
-                slots.push({
-                    workshopTemplateId: template.id,
-                    templateTitle: template.title,
-                    dateStr: dateStr,
-                    startTime: template.recurrencePattern.time,
-                    endTime: endTimeStr,
-                    capacity: existing ? existing.capacity : template.capacityPerSlot,
-                    bookedCount: existing ? existing.bookedCount : 0,
-                    status: existing ? existing.status : 'available',
-                    slotId: existing?.id
-                });
-            }
+          slots.push({
+            workshopTemplateId: template.id,
+            templateTitle: template.title,
+            dateStr: dateStr,
+            startTime: template.recurrencePattern.time,
+            endTime: endTimeStr,
+            capacity: existing ? existing.capacity : template.capacityPerSlot,
+            bookedCount: existing ? existing.bookedCount : 0,
+            status: existing ? existing.status : 'available',
+            slotId: existing?.id
+          });
         }
+      }
     }
   });
 
@@ -414,8 +414,8 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
   const t = (key: string) => (translations[lang] as any)[key] || key;
 
   const isRejected = payment.status === 'check_bounced';
-  const logoHtml = settings.logoUrl 
-    ? `<div class="logo-container"><img src="${settings.logoUrl}" alt="Logo" /></div>` 
+  const logoHtml = settings.logoUrl
+    ? `<div class="logo-container"><img src="${settings.logoUrl}" alt="Logo" /></div>`
     : `<div class="logo-placeholder">${settings.academyName.charAt(0)}</div>`;
 
   const htmlContent = `
@@ -539,21 +539,20 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
 export const generateStudentSchedulePrint = (student: Student, enrollments: Enrollment[], settings: AppSettings) => {
   const win = window.open('', '_blank');
   if (!win) return;
-  
-  const logoHtml = settings.logoUrl 
-  ? `<img src="${settings.logoUrl}" alt="Logo" style="height: 50px; object-fit: contain;" />` 
-  : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${settings.academyName}</div>`;
+
+  // Use the local logo image
+  const logoHtml = `<img src="${window.location.origin}/images/logo.png" alt="MakerLab Academy" style="height: 60px; object-fit: contain;" />`;
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  
+
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Schedule - ${student.name}</title>
+      <title>MakerLab Academy</title>
       <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
       <style>
-        body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; }
+        body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; max-width: 1000px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
         .student-info h1 { font-size: 24px; margin: 0 0 5px 0; color: #0f172a; }
         .student-info p { color: #64748b; margin: 0; }
@@ -566,35 +565,75 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
         .diy .class-title { color: #5b21b6; }
         .class-meta { color: #60a5fa; font-size: 11px; }
         .diy .class-meta { color: #a78bfa; }
+
+        /* Credentials Section */
+        .credentials-section { margin-top: 40px; border-top: 2px dashed #cbd5e1; padding-top: 30px; page-break-inside: avoid; }
+        .credentials-header { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .credential-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
+        .cred-title { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; text-transform: uppercase; }
+        .cred-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+        .cred-row .label { color: #64748b; font-size: 12px; }
+        .cred-row .value { font-family: monospace; font-weight: 600; color: #0f172a; }
+        .login-url { margin-top: 20px; font-size: 12px; color: #64748b; text-align: center; }
+
+        /* Flyer Section */
+        .flyer-section { 
+            text-align: center; 
+            page-break-after: always; 
+            margin-bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 90vh;
+        }
+        .flyer-img { 
+            max-width: 95%; 
+            max-height: 90vh;
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
+            border: 1px solid #e2e8f0; 
+            object-fit: contain;
+        }
+
         @media print {
+          body { padding: 0; }
           .grid { gap: 5px; }
           .day-col { border: 1px solid #e2e8f0; }
           .class-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .credential-box { border: 1px solid #cbd5e1; }
+          .flyer-section { min-height: 100vh; margin: 0; }
         }
       </style>
     </head>
     <body>
+      <!-- Flyer Section (Page 1) -->
+      <div class="flyer-section">
+         <img src="${window.location.origin}/images/flyer.png" class="flyer-img" alt="Information Flyer" />
+      </div>
+
+      <!-- Schedule Section (Page 2) -->
       <div class="header">
         <div class="student-info">
           <h1>${student.name}</h1>
-          <p>Weekly Class Schedule • ${settings.academicYear}</p>
+          <p>Weekly Class Schedule • MakerLab Academy</p>
         </div>
         <div>${logoHtml}</div>
       </div>
       <div class="grid">
         ${days.map(day => `<div class="day-header">${day}</div>`).join('')}
         ${days.map(day => {
-           const slots: {title: string, time: string, sub: string, type: 'main'|'diy'}[] = [];
-           enrollments.filter(e => e.status === 'active').forEach(e => {
-              if (e.groupTime && e.groupTime.includes(day)) {
-                  slots.push({ title: e.programName, time: e.groupTime.split(' ').slice(1).join(' '), sub: `${e.gradeName} • ${e.groupName}`, type: 'main' });
-              }
-              if (e.secondGroupTime && e.secondGroupTime.includes(day)) {
-                  slots.push({ title: `${e.programName} (DIY)`, time: e.secondGroupTime.split(' ').slice(1).join(' '), sub: e.secondGroupName || 'DIY Workshop', type: 'diy' });
-              }
-           });
+    const slots: { title: string, time: string, sub: string, type: 'main' | 'diy' }[] = [];
+    enrollments.filter(e => e.status === 'active').forEach(e => {
+      if (e.groupTime && e.groupTime.includes(day)) {
+        slots.push({ title: e.programName, time: e.groupTime.split(' ').slice(1).join(' '), sub: `${e.gradeName} • ${e.groupName}`, type: 'main' });
+      }
+      if (e.secondGroupTime && e.secondGroupTime.includes(day)) {
+        slots.push({ title: `${e.programName} (DIY)`, time: e.secondGroupTime.split(' ').slice(1).join(' '), sub: e.secondGroupName || 'DIY Workshop', type: 'diy' });
+      }
+    });
 
-           return `
+    return `
              <div class="day-col">
                ${slots.map(c => `
                  <div class="class-card ${c.type}">
@@ -605,9 +644,38 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
                `).join('')}
              </div>
            `;
-        }).join('')}
+  }).join('')}
       </div>
-      <script>window.onload = function() { window.print(); }</script>
+
+      <!-- Credentials Section -->
+      <div class="credentials-section">
+        <div class="credentials-header">Access Credentials</div>
+        <div class="credential-grid">
+            <div class="credential-box">
+                <div class="cred-title">Student Portal</div>
+                <div class="cred-row"><span class="label">Email</span> <span class="value">${student.loginInfo?.email || 'Not generated'}</span></div>
+                <div class="cred-row"><span class="label">Password</span> <span class="value">${student.loginInfo?.initialPassword || '********'}</span></div>
+            </div>
+            ${student.parentLoginInfo ? `
+            <div class="credential-box">
+                <div class="cred-title">Parent Portal</div>
+                <div class="cred-row"><span class="label">Email</span> <span class="value">${student.parentLoginInfo.email}</span></div>
+                <div class="cred-row"><span class="label">Password</span> <span class="value">${student.parentLoginInfo.initialPassword || '********'}</span></div>
+            </div>
+            ` : `
+             <div class="credential-box" style="opacity: 0.5; border-style: dashed;">
+                <div class="cred-title">Parent Portal</div>
+                <div class="cred-row" style="justify-content: center;"><span class="label">No Account</span></div>
+            </div>
+            `}
+        </div>
+        <p class="login-url">Login at: <strong>${window.location.host}</strong></p>
+      </div>
+
+      <!-- Flyer Section -->
+
+
+      <script>window.onload = function() { setTimeout(function() { window.print(); }, 800); }</script>
     </body>
     </html>
   `;
@@ -637,10 +705,10 @@ export const generateRosterPrint = (programName: string, gradeName: string, grou
 export const generateAccessCardPrint = (student: Student, settings: AppSettings) => {
   const win = window.open('', '_blank');
   if (!win || !student.loginInfo) return;
-  
-  const logoHtml = settings.logoUrl 
-  ? `<img src="${settings.logoUrl}" alt="Logo" style="height: 60px; object-fit: contain;" />` 
-  : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${settings.academyName}</div>`;
+
+  const logoHtml = settings.logoUrl
+    ? `<img src="${settings.logoUrl}" alt="Logo" style="height: 60px; object-fit: contain;" />`
+    : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${settings.academyName}</div>`;
 
   const html = `
     <!DOCTYPE html>
@@ -711,14 +779,14 @@ export const generateAccessCardPrint = (student: Student, settings: AppSettings)
 
 
 export const generateCredentialsPrint = (name: string, email: string, pass: string, role: string, settings: AppSettings) => {
-    const win = window.open('', '_blank');
-    if (!win) return;
+  const win = window.open('', '_blank');
+  if (!win) return;
 
-    const logoHtml = settings.logoUrl
-        ? `<img src="${settings.logoUrl}" alt="Logo" style="height: 60px; object-fit: contain;" />`
-        : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${settings.academyName}</div>`;
+  const logoHtml = settings.logoUrl
+    ? `<img src="${settings.logoUrl}" alt="Logo" style="height: 60px; object-fit: contain;" />`
+    : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${settings.academyName}</div>`;
 
-    const html = `
+  const html = `
         <!DOCTYPE html>
         <html>
         <head>
@@ -782,6 +850,6 @@ export const generateCredentialsPrint = (name: string, email: string, pass: stri
         </body>
         </html>
     `;
-    win.document.write(html);
-    win.document.close();
+  win.document.write(html);
+  win.document.close();
 };

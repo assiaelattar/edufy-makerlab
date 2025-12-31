@@ -8,9 +8,10 @@ interface StudentManagerProps {
 }
 
 export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject }) => {
-    const { studentProjects, students } = useFactoryData();
+    const { studentProjects, students, availableGrades, enrollments } = useFactoryData();
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
 
     // Helper for safe date parsing
     const safeDate = (val: any): Date => {
@@ -28,6 +29,7 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
             projectCount: number;
             completedCount: number;
             lastActive: Date;
+            gradeId?: string; // Track grade
         }>();
 
         studentProjects.forEach(p => {
@@ -36,16 +38,22 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
             const existing = map.get(p.studentId);
             const pDate = safeDate(p.updatedAt);
 
-            // Resolve Name: try project name, then lookup student list, then fallback
-            let makerName = p.studentName;
-            if (!makerName || makerName === 'Student' || makerName === 'Unknown Maker') {
-                const foundStudent = students.find(s => s.id === p.studentId);
-                if (foundStudent?.name) {
-                    makerName = foundStudent.name;
-                } else {
-                    makerName = 'Unknown Maker';
-                }
+            // Resolve Name & Grade: try project name, then lookup student list, then fallback
+            let makerName: string = p.studentName || '';
+            let makerGrade: string | undefined = undefined;
+
+            const foundStudent = students.find(s => s.id === p.studentId);
+            if (foundStudent) {
+                if (!makerName || makerName === 'Student') makerName = foundStudent.name;
             }
+
+            // Resolve Grade from Enrollments (Source of Truth)
+            const enrollment = enrollments.find(e => e.studentId === p.studentId && e.status === 'active');
+            if (enrollment) {
+                makerGrade = enrollment.gradeId;
+            }
+
+            if (!makerName || makerName === 'Student') makerName = 'Unknown Maker';
 
             if (!existing) {
                 map.set(p.studentId, {
@@ -53,19 +61,42 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
                     name: makerName,
                     projectCount: 1,
                     completedCount: p.status === 'published' ? 1 : 0,
-                    lastActive: pDate
+                    lastActive: pDate,
+                    gradeId: makerGrade
                 });
             } else {
                 existing.projectCount++;
                 if (p.status === 'published') existing.completedCount++;
                 if (pDate > existing.lastActive) existing.lastActive = pDate;
+                // Update grade if missing
+                if (!existing.gradeId && makerGrade) existing.gradeId = makerGrade;
+            }
+        });
+
+        // Also add students who have NO projects yet if they exist in valid students list
+        // This ensures the portfolio view shows all registered students even if inactive
+        students.forEach(s => {
+            if (s.role === 'student' && !map.has(s.id)) {
+                const enrollment = enrollments.find(e => e.studentId === s.id && e.status === 'active');
+                map.set(s.id, {
+                    id: s.id,
+                    name: s.name,
+                    projectCount: 0,
+                    completedCount: 0,
+                    lastActive: safeDate(s.createdAt || new Date()),
+                    gradeId: enrollment?.gradeId || s.grade || s.gradeId
+                });
             }
         });
 
         return Array.from(map.values()).sort((a, b) => b.lastActive.getTime() - a.lastActive.getTime());
-    }, [studentProjects]);
+    }, [studentProjects, students, enrollments]);
 
-    const filteredMakers = makers.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const filteredMakers = makers.filter(m => {
+        const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesGrade = selectedGrade ? m.gradeId === selectedGrade : true;
+        return matchesSearch && matchesGrade;
+    });
 
     const selectedMaker = useMemo(() => {
         if (!selectedStudentId) return null;
@@ -184,16 +215,35 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
                     </p>
                 </div>
 
-                {/* Search */}
-                <div className="relative w-full md:w-96 group">
-                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-200 to-purple-200 rounded-2xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
-                    <input
-                        className="relative w-full pl-12 pr-4 py-4 bg-white/80 backdrop-blur-sm border-2 border-slate-100 rounded-2xl font-bold text-slate-600 outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-sm"
-                        placeholder="Find a maker..."
-                        value={searchTerm}
-                        onChange={e => setSearchTerm(e.target.value)}
-                    />
+                {/* Search & Filter */}
+                <div className="flex gap-4 w-full md:w-auto">
+                    {/* Grade Filter */}
+                    <div className="relative">
+                        <select
+                            className="appearance-none pl-4 pr-10 py-4 bg-white/80 backdrop-blur-sm border-2 border-slate-100 rounded-2xl font-bold text-slate-600 outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-sm cursor-pointer"
+                            value={selectedGrade || ''}
+                            onChange={(e) => setSelectedGrade(e.target.value || null)}
+                        >
+                            <option value="">All Grades</option>
+                            {availableGrades.map(g => (
+                                <option key={g.id} value={g.id}>{g.name}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <Grid size={16} />
+                        </div>
+                    </div>
+
+                    <div className="relative w-full md:w-80 group">
+                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-200 to-purple-200 rounded-2xl blur opacity-20 group-hover:opacity-40 transition-opacity" />
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
+                        <input
+                            className="relative w-full pl-12 pr-4 py-4 bg-white/80 backdrop-blur-sm border-2 border-slate-100 rounded-2xl font-bold text-slate-600 outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-sm"
+                            placeholder="Find a maker..."
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                        />
+                    </div>
                 </div>
             </div>
 

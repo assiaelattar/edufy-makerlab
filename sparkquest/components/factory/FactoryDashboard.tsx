@@ -31,6 +31,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
                 const getDate = (d: any) => {
                     if (!d) return 0;
                     if (d.seconds) return d.seconds * 1000; // Timestamp
+                    if (d.toDate) return d.toDate().getTime(); // Firestore Timestamp method
                     const date = new Date(d);
                     return !isNaN(date.getTime()) ? date.getTime() : 0;
                 };
@@ -237,9 +238,9 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
                                                 {(() => {
                                                     if (!p.updatedAt) return 'Just now';
                                                     // Handle Firestore Timestamp
-                                                    if (p.updatedAt.seconds) return new Date(p.updatedAt.seconds * 1000).toLocaleTimeString();
+                                                    if ((p.updatedAt as any).seconds) return new Date((p.updatedAt as any).seconds * 1000).toLocaleTimeString();
                                                     // Handle JS Date or String
-                                                    const d = new Date(p.updatedAt);
+                                                    const d = new Date(p.updatedAt as any);
                                                     return !isNaN(d.getTime()) ? d.toLocaleTimeString() : 'Just now';
                                                 })()}
                                             </p>
@@ -276,8 +277,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
                                 <div className="flex items-center justify-between text-xs font-bold text-slate-400 border-t border-slate-100 pt-4 mt-auto">
                                     <span>Updated {(() => {
                                         if (!p.updatedAt) return 'N/A';
-                                        if (p.updatedAt.seconds) return new Date(p.updatedAt.seconds * 1000).toLocaleDateString();
-                                        const d = new Date(p.updatedAt);
+                                        if ((p.updatedAt as any).seconds) return new Date((p.updatedAt as any).seconds * 1000).toLocaleDateString();
+                                        const d = new Date(p.updatedAt as any);
                                         return !isNaN(d.getTime()) ? d.toLocaleDateString() : 'N/A';
                                     })()}</span>
                                     <span className="group-hover:text-indigo-600 flex items-center gap-1 transition-colors">

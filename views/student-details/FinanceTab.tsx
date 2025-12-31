@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Wallet, CreditCard, Eye, Pencil, Trash2, Printer } from 'lucide-react';
+import { Wallet, CreditCard, Eye, Pencil, Trash2, Printer, Share2, CheckCircle2 } from 'lucide-react';
 import { Payment, Enrollment, Student } from '../../types';
 import { formatCurrency, formatDate, generateReceipt } from '../../utils/helpers';
 
@@ -13,6 +13,7 @@ interface FinanceTabProps {
   setEditPayment: (payment: Payment) => void;
   initiateDeletePayment: (payment: Payment) => void;
   settings: any;
+  onShareReceipt: (paymentId: string) => void;
 }
 
 export const FinanceTab: React.FC<FinanceTabProps> = ({
@@ -24,6 +25,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
   setEditPayment,
   initiateDeletePayment,
   settings,
+  onShareReceipt
 }) => {
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -46,7 +48,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
               <th className="p-4">Method</th>
               <th className="p-4">Amount</th>
               <th className="p-4">Status</th>
-              <th className="p-4">Ref</th>
+              <th className="p-4">Shared</th>
               <th className="p-4 text-right rounded-tr-xl">Actions</th>
             </tr>
           </thead>
@@ -59,18 +61,42 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
                 <td className="p-4">
                   <span
                     className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase border tracking-wide ${['paid', 'verified'].includes(p.status)
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                        : p.status === 'check_bounced'
-                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      : p.status === 'check_bounced'
+                        ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                       }`}
                   >
                     {p.status === 'check_bounced' ? 'Rejected' : p.status.replace('_', ' ')}
                   </span>
                 </td>
-                <td className="p-4 text-slate-500 text-xs font-mono">#{p.id.slice(0, 6)}</td>
+                <td className="p-4">
+                  {p.receiptSharedAt ? (
+                    <div className="flex items-center gap-1 text-emerald-400 text-xs font-medium" title={`Shared on ${formatDate(((p.receiptSharedAt as any).toDate ? (p.receiptSharedAt as any).toDate() : p.receiptSharedAt) as any)}`}>
+                      <CheckCircle2 size={14} /> Shared
+                    </div>
+                  ) : (
+                    <span className="text-slate-600 text-xs">-</span>
+                  )}
+                </td>
                 <td className="p-4 text-right">
                   <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                    <button
+                      onClick={() => {
+                        if (!student.parentPhone) return alert("Parent phone number missing");
+                        let phone = student.parentPhone.replace(/[^0-9]/g, '');
+                        if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+                        const enrollment = studentEnrollments.find((e) => e.id === p.enrollmentId);
+                        const msg = `🧾 Payment Receipt - MakerLab Academy\n\nDate: ${formatDate(p.date)}\nAmount: ${formatCurrency(p.amount)}\nMethod: ${p.method}\nProgram: ${enrollment?.programName || 'Unknown Program'}\n\nThank you for your payment!`;
+
+                        onShareReceipt(p.id);
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                      }}
+                      className="p-2 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-green-400 transition-colors"
+                      title="Share Receipt (WhatsApp)"
+                    >
+                      <Share2 size={16} />
+                    </button>
                     <button
                       onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: p.id } })}
                       className="p-2 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-blue-400 transition-colors"
@@ -137,19 +163,42 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
                   <span className="capitalize text-slate-400">{p.method}</span>
                 </div>
               </div>
-              <span
-                className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase border tracking-wide ${['paid', 'verified'].includes(p.status)
+              <div className="flex flex-col items-end gap-2">
+                <span
+                  className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase border tracking-wide ${['paid', 'verified'].includes(p.status)
                     ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
                     : p.status === 'check_bounced'
                       ? 'bg-red-500/10 text-red-400 border-red-500/20'
                       : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  }`}
-              >
-                {p.status === 'check_bounced' ? 'Rejected' : p.status.replace('_', ' ')}
-              </span>
+                    }`}
+                >
+                  {p.status === 'check_bounced' ? 'Rejected' : p.status.replace('_', ' ')}
+                </span>
+                {p.receiptSharedAt && (
+                  <div className="flex items-center gap-1 text-emerald-400 text-[10px] font-medium">
+                    <CheckCircle2 size={12} /> Shared
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-800/50">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!student.parentPhone) return alert("Parent phone number missing");
+                  let phone = student.parentPhone.replace(/[^0-9]/g, '');
+                  if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+                  const enrollment = studentEnrollments.find((e) => e.id === p.enrollmentId);
+                  const msg = `Receipt for payment of ${formatCurrency(p.amount)} received on ${formatDate(p.date)}. Thank you!`;
+
+                  onShareReceipt(p.id);
+                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                }}
+                className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-green-400 rounded-lg border border-slate-800 transition-colors"
+              >
+                <Share2 size={16} />
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();

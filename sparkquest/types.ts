@@ -4,6 +4,14 @@ import { Timestamp } from 'firebase/firestore';
 export type ProjectStatus = 'planning' | 'building' | 'submitted' | 'published';
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'PENDING_REVIEW' | 'REJECTED';
 
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+}
+
 // Stations
 export type StationType = 'Robotics' | 'Coding' | 'Design' | 'Circuits' | 'Engineering' | 'Game Design' | 'Multimedia' | 'Branding';
 
@@ -16,6 +24,8 @@ export interface Station {
   order?: number;
   gradeIds?: string[];
   activeForGradeIds?: string[];
+  startDate?: Timestamp;
+  endDate?: Timestamp;
 }
 
 // Badges
@@ -41,6 +51,7 @@ export interface ProcessPhase {
   icon: string; // Lucide icon name
   order: number;
   description?: string;
+  resources?: Resource[]; // Default resources for this phase
 }
 
 export interface ProcessTemplate {
@@ -173,3 +184,65 @@ export interface ProjectTemplate {
   dueDate?: Timestamp;
   createdAt?: Timestamp;
 }
+
+// Toolkit & Assets
+export interface ToolLink {
+  id: string;
+  title: string;
+  url: string;
+  category: 'robotics' | 'coding' | 'design' | 'engineering' | 'multimedia' | 'other';
+  description: string;
+  createdAt?: Timestamp;
+}
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: 'robotics' | 'computer' | 'tools' | 'other';
+  status: 'available' | 'in_use' | 'maintenance' | 'lost';
+  serialNumber?: string;
+  notes?: string;
+  assignedTo?: string; // Student ID
+  assignedToName?: string;
+  createdAt?: Timestamp;
+}
+
+// Global Electron API
+export interface ElectronAPI {
+  onFocusChange: (callback: (focused: boolean) => void) => void;
+  startSession: (url: string) => void;
+  endSession: () => void;
+  sessionControl: (action: string) => void;
+  captureSession: () => Promise<string | null>;
+  getConfig: () => Promise<any>;
+  updateConfig: (config: any) => Promise<{ success: boolean; requiresRestart?: boolean }>;
+}
+
+
+export interface Credential {
+  id: string;
+  service: string; // 'Tinkercad', 'Canva', 'Google', 'Scratch', etc.
+  label: string;
+  username: string;
+  password?: string;
+  url?: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  name: string;
+  email: string;
+  role: string;
+  schoolId?: string;
+  photoURL?: string;
+  credentials?: Credential[];
+  arcadeCredits?: number;
+}
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+    sparkquest: ElectronAPI;
+  }
+}
+

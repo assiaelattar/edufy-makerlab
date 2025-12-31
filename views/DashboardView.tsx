@@ -1,9 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { LayoutDashboard, Calendar, DollarSign, Briefcase, Users, UserPlus, Zap, BookOpen, CreditCard, Activity, CheckCircle2, ChevronRight, Hourglass, Building, ClipboardCheck, CalendarCheck, BarChart3, Filter, Phone, MessageCircle, ArrowUpRight, CheckSquare, PieChart, Megaphone, Clock, AlertTriangle, TrendingUp, ArrowRight, Trophy, Rocket, Star, Target } from 'lucide-react';
+import { LayoutDashboard, Calendar, DollarSign, Briefcase, Users, UserPlus, Zap, BookOpen, CreditCard, Activity, CheckCircle2, ChevronRight, Hourglass, Building, ClipboardCheck, CalendarCheck, BarChart3, Filter, Phone, MessageCircle, ArrowUpRight, CheckSquare, PieChart, Megaphone, Clock, AlertTriangle, TrendingUp, ArrowRight, Trophy, Rocket, Star, Target, Award } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, getDaysDifference, formatDate } from '../utils/helpers';
+import { db } from '../services/firebase';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
 // --- HELPER: Safe Date Conversion ---
 const getDate = (date: any): Date => {
@@ -58,8 +60,39 @@ const StudentDashboard = () => {
         return myEnrollments.find(e => e.groupTime?.includes(dayName) || e.secondGroupTime?.includes(dayName));
     }, [myEnrollments]);
 
+    // --- ANNOUNCEMENTS LOGIC ---
+    const [recentAnnouncements, setRecentAnnouncements] = React.useState<any[]>([]);
+    React.useEffect(() => {
+        if (!db) return;
+        const fetchNews = async () => {
+            try {
+                const q = query(collection(db as any, 'announcements'), orderBy('createdAt', 'desc'), limit(3));
+                const snap = await getDocs(q);
+                // TODO: filtering logic based on targetAudience could optionally go here or be processed
+                setRecentAnnouncements(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+            } catch (e) { console.error(e); }
+        };
+        fetchNews();
+    }, []);
+
     return (
         <div className="space-y-8 pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
+
+            {/* Announcements Ticker/Banner if any */}
+            {recentAnnouncements.length > 0 && (
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                    <div className="flex items-center gap-3 relative z-10">
+                        <div className="p-2 bg-white/20 rounded-full animate-pulse">
+                            <Megaphone size={20} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className="font-bold text-sm">Latest News: {recentAnnouncements[0].title}</h3>
+                            <p className="text-xs text-indigo-100 line-clamp-1">{recentAnnouncements[0].content}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Student Hero */}
             <div className="relative rounded-[2.5rem] overflow-hidden shadow-xl bg-white group">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-[#FFC107]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
@@ -234,7 +267,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     queue.push({
                         projectId: proj.id,
                         projectTitle: proj.title,
-                        studentName: student ? `${student.firstName} ${student.lastName}` : 'Unknown Student',
+                        studentName: student ? `${student.name}` : 'Unknown Student',
                         step: step,
                         submittedAt: step.reviewedAt // Using this as proxy or add submittedAt if available
                     });
@@ -553,7 +586,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                 <h3 className={`font-bold text-sm flex items-center gap-2 ${theme.text}`}><Rocket size={16} className="text-indigo-500" /> Mission Control</h3>
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] uppercase font-bold text-indigo-400 animate-pulse">Live</span>
-                                    <button onClick={() => navigateTo('reviews')} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">Open Queue</button>
+                                    <button onClick={() => navigateTo('review')} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">Open Queue</button>
                                 </div>
                             </div>
                             <div className="p-4">
@@ -565,7 +598,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                 ) : (
                                     <div className="space-y-3">
                                         {pendingReviews.slice(0, 3).map((item, i) => (
-                                            <div key={i} className="flex gap-3 items-start p-3 bg-slate-50 border border-slate-100 rounded-xl hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigateTo('reviews', { projectId: item.projectId })}>
+                                            <div key={i} className="flex gap-3 items-start p-3 bg-slate-50 border border-slate-100 rounded-xl hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigateTo('review', { projectId: item.projectId })}>
                                                 <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0 text-xs">
                                                     {item.studentName.charAt(0)}
                                                 </div>
@@ -586,7 +619,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                             </div>
                                         ))}
                                         {pendingReviews.length > 3 && (
-                                            <button onClick={() => navigateTo('reviews')} className="w-full py-2 text-xs text-indigo-500 font-bold hover:bg-indigo-50 rounded-lg transition-colors">
+                                            <button onClick={() => navigateTo('review')} className="w-full py-2 text-xs text-indigo-500 font-bold hover:bg-indigo-50 rounded-lg transition-colors">
                                                 View {pendingReviews.length - 3} more
                                             </button>
                                         )}
@@ -613,6 +646,10 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                         <button onClick={() => navigateTo('team')} className="p-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 hover:text-white text-center transition-all border border-slate-700">
                             <CheckSquare size={24} className="mx-auto mb-2" />
                             <span className="text-xs font-bold">New Task</span>
+                        </button>
+                        <button onClick={() => navigateTo('communications')} className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-white text-center transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] col-span-2 md:col-span-1">
+                            <MessageCircle size={24} className="mx-auto mb-2" />
+                            <span className="text-xs font-bold">Send Message</span>
                         </button>
                     </div>
 

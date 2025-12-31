@@ -25,7 +25,7 @@ export const StudentDetailsView = ({
     onQuickEnroll: (id: string) => void;
     onRecordPayment: (id: string) => void;
 }) => {
-    const { students, enrollments, payments, attendanceRecords, studentProjects, navigateTo, settings, viewParams, sendNotification, badges } = useAppContext();
+    const { students, enrollments, programs, payments, attendanceRecords, studentProjects, navigateTo, settings, viewParams, sendNotification, badges } = useAppContext();
     const { createSecondaryUser, userProfile } = useAuth();
 
     const { studentId } = viewParams;
@@ -62,6 +62,11 @@ export const StudentDetailsView = ({
     const studentAttendance = attendanceRecords.filter(r => r.studentId === student.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const absenceCount = studentAttendance.filter(r => r.status === 'absent').length;
     const lateCount = studentAttendance.filter(r => r.status === 'late').length;
+
+    const isAdult = studentEnrollments.some(e => {
+        const prog = programs.find(p => p.id === e.programId);
+        return prog?.targetAudience === 'adults';
+    });
 
     // ... [renderProjectModal same as before] ...
     const renderProjectModal = () => (
@@ -284,31 +289,57 @@ export const StudentDetailsView = ({
         if (isRegenerating) { if (!confirm("Are you sure you want to regenerate access? This will create a NEW account and password. The previous login will stop working.")) return; }
         setIsGeneratingAccess(true);
         try {
-            const names = student.name.trim().split(' ');
-            const firstNameChar = names[0].charAt(0).toLowerCase();
-            const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
+            const names = student.name.trim().split(' ').map((n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, ''));
+            const firstName = names[0];
+            const lastName = names.length > 1 ? names[names.length - 1] : names[0];
 
-            // Format: w.fakir@makerlab.academy
-            const username = `${firstNameChar}.${lastName}`;
-            const email = `${username}@makerlab.academy`;
+            // Format: firstname.lastname@makerlab.academy (e.g. walid.fakir@makerlab.academy)
+            const baseUsername = `${firstName}.${lastName}`;
+            const domain = 'makerlab.academy';
 
             const password = Math.random().toString(36).slice(-8);
-            const uid = await createSecondaryUser(email, password);
-            await setDoc(doc(db, 'users', uid), { uid, email, name: student.name, role: 'student', status: 'active', createdAt: serverTimestamp() });
-            await updateDoc(doc(db, 'students', student.id), { loginInfo: { username, email, initialPassword: password, uid } });
+            let uid = '';
+            let finalEmail = '';
+
+            // Recursive function to find available email
+            const createUniqueUser = async (attempt: number): Promise<{ uid: string, email: string }> => {
+                const currentEmail = attempt === 0
+                    ? `${baseUsername}@${domain}`
+                    : `${baseUsername}${attempt}@${domain}`;
+
+                try {
+                    const newUid = await createSecondaryUser(currentEmail, password);
+                    return { uid: newUid, email: currentEmail };
+                } catch (err: any) {
+                    if (err.message?.includes('email-already-in-use') || err.code === 'auth/email-already-in-use') {
+                        // Retry with next number
+                        return createUniqueUser(attempt + 1);
+                    }
+                    throw err;
+                }
+            };
+
+            const result = await createUniqueUser(0);
+            uid = result.uid;
+            finalEmail = result.email;
+
+            const username = finalEmail.split('@')[0];
+
+            await setDoc(doc(db, 'users', uid), { uid, email: finalEmail, name: student.name, role: 'student', status: 'active', createdAt: serverTimestamp() });
+            await updateDoc(doc(db, 'students', student.id), { loginInfo: { username, email: finalEmail, initialPassword: password, uid } });
 
             // Send Notification
             const { sendNotification } = useAppContext();
-            await sendNotification(uid, 'Welcome to Edufy!', 'Your student portal account has been created.', 'success');
+            try {
+                await sendNotification(uid, 'Welcome to Edufy!', 'Your student portal account has been created.', 'success');
+            } catch (e) {
+                console.error("Failed to send notification", e);
+            }
 
-            alert(`Access ${isRegenerating ? 'Regenerated' : 'Generated'} Successfully!\nEmail: ${email}\nPassword: ${password}`);
+            alert(`Access ${isRegenerating ? 'Regenerated' : 'Generated'} Successfully!\nEmail: ${finalEmail}\nPassword: ${password}`);
         } catch (err: any) {
             console.error(err);
-            if (err.message.includes('email-already-in-use')) {
-                alert(`Error: The email for this user already exists. Try editing the student name to be unique or contact support.`);
-            } else {
-                alert(`Error: ${err.message}`);
-            }
+            alert(`Error: ${err.message}`);
         } finally { setIsGeneratingAccess(false); }
     };
 
@@ -430,6 +461,38 @@ export const StudentDetailsView = ({
         try { await updateDoc(doc(db, 'payments', editPayment.id), editPayment); if (editPayment.amount && editPayment.amount !== originalPayment.amount && ['paid', 'verified'].includes(originalPayment.status)) { const diff = Number(editPayment.amount) - originalPayment.amount; const enrollment = enrollments.find(e => e.id === originalPayment.enrollmentId); if (enrollment) { await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: increment(diff), balance: increment(-diff) }); } } setEditPayment(null); alert("Payment updated."); } catch (err) { console.error(err); }
     };
 
+    const handleShareReceipt = async (paymentId: string) => {
+        if (!db) return;
+        try {
+            await updateDoc(doc(db, 'payments', paymentId) as any, {
+                receiptSharedAt: serverTimestamp() as any
+            });
+        } catch (error) {
+            console.error("Error sharing receipt:", error);
+        }
+    };
+
+    const handleShareSchedule = async () => {
+        if (!db) return;
+        if (!student.parentPhone) return alert("Parent phone number is missing.");
+
+        // Track sharing
+        try {
+            await updateDoc(doc(db, 'students', student.id) as any, {
+                lastScheduleSharedAt: serverTimestamp() as any
+            });
+        } catch (error) {
+            console.error("Error tracking schedule share:", error);
+        }
+
+        let phone = student.parentPhone.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+
+        const msg = `Hello! Here is the weekly schedule for ${student.name} at MakerLab Academy.\n\nYou can access the student portal here:\n${window.location.origin}\n\nLogin Email: ${student.loginInfo?.email || 'N/A'}\nPassword: ${student.loginInfo?.initialPassword || '********'}\n\nSee you in class! 🚀`;
+
+        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+    };
+
     const shareCredentialsWhatsApp = () => {
         if (!student.loginInfo || !student.parentPhone) return alert("Missing login info or parent phone.");
         const msg = `Hello! Here are the login credentials for ${student.name}'s student portal:\n\nLink: ${window.location.origin}\nEmail: ${student.loginInfo.email}\nPassword: ${student.loginInfo.initialPassword || '********'}`;
@@ -479,6 +542,14 @@ export const StudentDetailsView = ({
                         <button onClick={() => generateStudentSchedulePrint(student, studentEnrollments, settings)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-all hover:border-slate-600 text-sm font-medium">
                             <Printer size={18} /> <span className="hidden sm:inline">Schedule</span>
                         </button>
+                        <button
+                            onClick={handleShareSchedule}
+                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-lg transition-all hover:scale-105 active:scale-95 text-sm font-bold ${student.lastScheduleSharedAt ? 'bg-emerald-700 text-emerald-100 shadow-emerald-900/10' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}
+                            title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : "Share via WhatsApp"}
+                        >
+                            {student.lastScheduleSharedAt ? <CheckCircle2 size={18} /> : <Share2 size={18} />}
+                            <span className="hidden sm:inline">{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</span>
+                        </button>
                         <button onClick={() => onEditStudent(student)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-all hover:border-slate-600 text-sm font-medium">
                             <Pencil size={18} /> <span className="hidden sm:inline">Edit</span>
                         </button>
@@ -508,57 +579,32 @@ export const StudentDetailsView = ({
                     ]}>
 
                         <AcademicsTab
-
                             studentEnrollments={studentEnrollments}
-
                             onQuickEnroll={onQuickEnroll}
-
                             navigateTo={navigateTo as any}
-
                             setEditEnrollment={setEditEnrollment}
-
                             initiateDeleteEnrollment={initiateDeleteEnrollment}
-
                             studentId={student.id}
-
                         />
-
                         <FinanceTab
-
                             studentPayments={studentPayments}
-
                             studentEnrollments={studentEnrollments}
-
                             student={student}
-
                             onRecordPayment={onRecordPayment}
-
                             navigateTo={navigateTo as any}
-
                             setEditPayment={setEditPayment}
-
                             initiateDeletePayment={initiateDeletePayment}
-
                             settings={settings}
-
+                            onShareReceipt={handleShareReceipt}
                         />
-
                         <PortfolioTab
-
                             publishedProjects={publishedProjects}
-
                             setSelectedProject={setSelectedProject}
-
                         />
-
                         <AttendanceTab
-
                             studentAttendance={studentAttendance}
-
                             absenceCount={absenceCount}
-
                             lateCount={lateCount}
-
                         />
 
                     </Tabs>
@@ -576,15 +622,156 @@ export const StudentDetailsView = ({
                         shareCredentialsWhatsApp={shareCredentialsWhatsApp}
                         setCredentialsModal={setCredentialsModal}
                         settings={settings}
+                        isAdult={isAdult}
                     />
                 </div>
             </div>
             {renderProjectModal()}
             <Modal isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
                 <form onSubmit={handleSaveEnrollment} className="space-y-4">
-                    <div className="bg-slate-950 p-3 rounded border border-slate-800 mb-4"><div className="text-xs text-slate-500 uppercase font-bold mb-1">Program</div><div className="text-white font-medium">{editEnrollment?.programName}</div><div className="text-sm text-slate-400">{editEnrollment?.gradeName} • {editEnrollment?.groupName}</div></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg" value={editEnrollment?.totalAmount || 0} onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, totalAmount: Number(e.target.value) }) : null)} /><p className="text-xs text-slate-500 mt-1">Changing this will automatically recalculate the remaining balance.</p></div>
-                    <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2"><Save size={16} /> Save Changes</button>
+                    <div className="bg-slate-950 p-3 rounded border border-slate-800 mb-4">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Program</div>
+                        <div className="text-white font-medium">{editEnrollment?.programName}</div>
+                        <div className="text-sm text-slate-400">{editEnrollment?.gradeName}</div>
+                    </div>
+
+                    {/* Group Selection */}
+                    {editEnrollment && programs.find(p => p.id === editEnrollment.programId) && (
+                        <div className="space-y-4">
+                            {/* Grade/Level Selection */}
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Level / Grade</label>
+                                <select
+                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                    value={editEnrollment.gradeId || ''}
+                                    onChange={(e) => {
+                                        const program = programs.find(p => p.id === editEnrollment.programId);
+                                        if (!program) return;
+                                        const selectedGrade = program.grades.find(g => g.id === e.target.value);
+
+                                        if (selectedGrade) {
+                                            setEditEnrollment(prev => prev ? ({
+                                                ...prev,
+                                                gradeId: selectedGrade.id,
+                                                gradeName: selectedGrade.name,
+                                                groupId: '', // Reset group when level changes
+                                                groupName: '',
+                                                groupTime: ''
+                                            }) : null);
+                                        }
+                                    }}
+                                >
+                                    <option value="">Select Level</option>
+                                    {programs
+                                        .find(p => p.id === editEnrollment.programId)
+                                        ?.grades.map(g => (
+                                            <option key={g.id} value={g.id}>
+                                                {g.name}
+                                            </option>
+                                        ))
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Group / Schedule</label>
+                                <select
+                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                    value={editEnrollment.groupId || ''}
+                                    onChange={(e) => {
+                                        const program = programs.find(p => p.id === editEnrollment.programId);
+                                        if (!program) return;
+                                        const grade = program.grades.find(g => g.id === editEnrollment.gradeId);
+                                        if (!grade) return;
+
+                                        const selectedGroup = grade.groups.find(g => g.id === e.target.value);
+                                        if (selectedGroup) {
+                                            setEditEnrollment(prev => prev ? ({
+                                                ...prev,
+                                                groupId: selectedGroup.id,
+                                                groupName: selectedGroup.name,
+                                                groupTime: `${selectedGroup.day} ${selectedGroup.time}`
+                                            }) : null);
+                                        }
+                                    }}
+                                >
+                                    <option value="">Select Group</option>
+                                    {programs
+                                        .find(p => p.id === editEnrollment.programId)
+                                        ?.grades.find(g => g.id === editEnrollment.gradeId)
+                                        ?.groups.map(g => (
+                                            <option key={g.id} value={g.id}>
+                                                {g.name} — {g.day} {g.time}
+                                            </option>
+                                        ))
+                                    }
+                                </select>
+                            </div>
+
+                            {/* Second Group (DIY/Extra) */}
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Extra Workshop / DIY (Optional)</label>
+                                <select
+                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                    value={editEnrollment.secondGroupId || ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (!val) {
+                                            setEditEnrollment(prev => prev ? ({
+                                                ...prev,
+                                                secondGroupId: undefined,
+                                                secondGroupName: undefined,
+                                                secondGroupTime: undefined
+                                            }) : null);
+                                            return;
+                                        }
+
+                                        const program = programs.find(p => p.id === editEnrollment.programId);
+                                        if (!program) return;
+                                        const grade = program.grades.find(g => g.id === editEnrollment.gradeId);
+                                        if (!grade) return;
+
+                                        const selectedGroup = grade.groups.find(g => g.id === val);
+                                        if (selectedGroup) {
+                                            setEditEnrollment(prev => prev ? ({
+                                                ...prev,
+                                                secondGroupId: selectedGroup.id,
+                                                secondGroupName: selectedGroup.name,
+                                                secondGroupTime: `${selectedGroup.day} ${selectedGroup.time}`
+                                            }) : null);
+                                        }
+                                    }}
+                                >
+                                    <option value="">-- No Extra Workshop --</option>
+                                    {programs
+                                        .find(p => p.id === editEnrollment.programId)
+                                        ?.grades.find(g => g.id === editEnrollment.gradeId)
+                                        ?.groups.map(g => (
+                                            <option key={g.id} value={g.id}>
+                                                {g.name} — {g.day} {g.time}
+                                            </option>
+                                        ))
+                                    }
+                                </select>
+                                <p className="text-[10px] text-slate-500 mt-1">For 'Innovator' plans with 2 sessions per week.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label>
+                        <input
+                            type="number"
+                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg"
+                            value={editEnrollment?.totalAmount || 0}
+                            onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, totalAmount: Number(e.target.value) }) : null)}
+                        />
+                        <p className="text-xs text-slate-500 mt-1">Changing this will automatically recalculate the remaining balance.</p>
+                    </div>
+
+                    <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+                        <Save size={16} /> Save Changes
+                    </button>
                 </form>
             </Modal>
             <Modal isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Edit Payment Record">

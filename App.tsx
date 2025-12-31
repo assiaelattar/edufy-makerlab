@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles, Rocket } from 'lucide-react';
 import { AppProvider, useAppContext } from './context/AppContext';
+import { ThemeProvider } from './sparkquest/context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { getEnabledModules } from './services/moduleRegistry';
@@ -29,6 +30,8 @@ import { ReviewView } from './views/ReviewView';
 import { ParentDashboardView } from './views/ParentDashboardView';
 import { TestDesignView } from './views/TestDesignView';
 import { TestWizardView } from './views/TestWizardView';
+import { ArcadeManagerView } from './views/learning/ArcadeManagerView';
+import { CommunicationsView } from './views/CommunicationsView';
 import { LoginView } from './views/LoginView';
 import { Modal } from './components/Modal';
 import { Logo } from './components/Logo';
@@ -509,6 +512,8 @@ const AppContent = () => {
             case 'parent-dashboard': return <ParentDashboardView />;
             case 'test-design': return <TestDesignView />;
             case 'test-wizard': return <TestWizardView />;
+            case 'arcade-mgr': return <ArcadeManagerView />;
+            case 'communications': return <CommunicationsView />;
             default: return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
         }
     };
@@ -975,7 +980,9 @@ const App = () => {
         <AuthProvider>
             <NotificationProvider>
                 <AppProvider>
-                    <AppContent />
+                    <ThemeProvider>
+                        <AppContent />
+                    </ThemeProvider>
                 </AppProvider>
             </NotificationProvider>
         </AuthProvider>

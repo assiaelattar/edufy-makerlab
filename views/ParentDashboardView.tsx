@@ -3,7 +3,7 @@ import { User, Calendar, CreditCard, Car, Bell, Phone, Clock, MapPin, CheckCircl
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { addDoc, collection, serverTimestamp, Timestamp, updateDoc, doc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, Timestamp, updateDoc, doc, Firestore } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { formatCurrency, formatDate } from '../utils/helpers';
 import { StudentProject, Payment, Enrollment } from '../types';
@@ -361,15 +361,15 @@ export const ParentDashboardView = () => {
                         className="w-full mb-6 relative overflow-hidden group"
                     >
                         <div className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all shadow-lg text-left ${activePickupEntry.status === 'released'
-                                ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-900/50 animate-pulse'
-                                : activePickupEntry.status === 'arrived'
-                                    ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-900/50'
-                                    : 'bg-slate-900 border-slate-700 text-slate-300'
+                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-900/50 animate-pulse'
+                            : activePickupEntry.status === 'arrived'
+                                ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-900/50'
+                                : 'bg-slate-900 border-slate-700 text-slate-300'
                             }`}>
                             <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${activePickupEntry.status === 'released' ? 'bg-white text-indigo-600' :
-                                    activePickupEntry.status === 'arrived' ? 'bg-white text-emerald-600' : 'bg-slate-800'
+                                activePickupEntry.status === 'arrived' ? 'bg-white text-emerald-600' : 'bg-slate-800'
                                 }`}>
-                                {activePickupEntry.status === 'url' ? <Star size={24} fill="currentColor" /> : <Car size={24} />}
+                                {activePickupEntry.status === 'released' ? <Star size={24} fill="currentColor" /> : <Car size={24} />}
                             </div>
                             <div>
                                 <h4 className="font-bold text-lg leading-tight">
@@ -853,7 +853,10 @@ export const ParentDashboardView = () => {
                                                 type="text"
                                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
                                                 defaultValue={activeChild.parentName}
-                                                onBlur={(e) => updateDoc(doc(db, 'students', activeChild.id), { parentName: e.target.value })}
+                                                onBlur={async (e) => {
+                                                    if (!db) return;
+                                                    await updateDoc(doc(db as Firestore, 'students', activeChild.id), { parentName: e.target.value });
+                                                }}
                                             />
                                         </div>
                                         <div>
@@ -862,7 +865,10 @@ export const ParentDashboardView = () => {
                                                 type="text"
                                                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
                                                 defaultValue={activeChild.parentPhone}
-                                                onBlur={(e) => updateDoc(doc(db, 'students', activeChild.id), { parentPhone: e.target.value })}
+                                                onBlur={async (e) => {
+                                                    if (!db) return;
+                                                    await updateDoc(doc(db as Firestore, 'students', activeChild.id), { parentPhone: e.target.value });
+                                                }}
                                             />
                                         </div>
                                     </div>
@@ -875,7 +881,10 @@ export const ParentDashboardView = () => {
                                         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none min-h-[100px]"
                                         placeholder="Allergies, medical conditions, or other important notes..."
                                         defaultValue={activeChild.medicalInfo}
-                                        onBlur={(e) => updateDoc(doc(db, 'students', activeChild.id), { medicalInfo: e.target.value })}
+                                        onBlur={async (e) => {
+                                            if (!db) return;
+                                            await updateDoc(doc(db as Firestore, 'students', activeChild.id), { medicalInfo: e.target.value });
+                                        }}
                                     />
                                 </div>
 
@@ -889,9 +898,10 @@ export const ParentDashboardView = () => {
                                             <div key={idx} className="flex justify-between items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-700">
                                                 <span className="text-sm text-slate-300">{name}</span>
                                                 <button
-                                                    onClick={() => {
+                                                    onClick={async () => {
                                                         const newPickups = activeChild.authorizedPickups?.filter((_, i) => i !== idx) || [];
-                                                        updateDoc(doc(db, 'students', activeChild.id), { authorizedPickups: newPickups });
+                                                        if (!db) return;
+                                                        await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
                                                     }}
                                                     className="text-red-400 hover:text-red-300"
                                                 >
@@ -910,22 +920,24 @@ export const ParentDashboardView = () => {
                                             type="text"
                                             placeholder="Add Name (e.g. Uncle John)"
                                             className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
-                                            onKeyDown={(e) => {
+                                            onKeyDown={async (e) => {
                                                 if (e.key === 'Enter') {
                                                     const input = e.currentTarget;
                                                     if (!input.value.trim()) return;
                                                     const newPickups = [...(activeChild.authorizedPickups || []), input.value.trim()];
-                                                    updateDoc(doc(db, 'students', activeChild.id), { authorizedPickups: newPickups });
+                                                    if (!db) return;
+                                                    await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
                                                     input.value = '';
                                                 }
                                             }}
                                         />
                                         <button
-                                            onClick={() => {
+                                            onClick={async () => {
                                                 const input = document.getElementById('newPickupParams') as HTMLInputElement;
                                                 if (!input?.value.trim()) return;
                                                 const newPickups = [...(activeChild.authorizedPickups || []), input.value.trim()];
-                                                updateDoc(doc(db, 'students', activeChild.id), { authorizedPickups: newPickups });
+                                                if (!db) return;
+                                                await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
                                                 input.value = '';
                                             }}
                                             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold"

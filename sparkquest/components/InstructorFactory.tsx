@@ -7,7 +7,9 @@ import { StationManager } from './factory/StationManager';
 import { ProjectManager } from './factory/ProjectManager';
 import { FactoryDashboard } from './factory/FactoryDashboard';
 import { FactoryToolbox } from './factory/FactoryToolbox';
-import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, User, Bell, Trash2, Users, Hammer } from 'lucide-react';
+import { GradeProjectFilter } from './factory/GradeProjectFilter';
+import { ProjectSelector } from './ProjectSelector';
+import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, User, Bell, Trash2, Users, Hammer, Filter, Eye, Settings } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext'; // Import useAuth for user profile
 
@@ -34,22 +36,48 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, on
 import { ReviewModal } from './factory/ReviewModal';
 
 import { StudentManager } from './factory/StudentManager';
+import { ProjectEditor } from './factory/ProjectEditor';
 
 export const InstructorFactory: React.FC = () => {
   const { userProfile, signOut } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'projects' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'projects' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview'>('dashboard');
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
   const [filterTemplateId, setFilterTemplateId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Project Editor State
+  const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<any | null>(null);
 
   // If Review Modal is open
   if (reviewingProjectId) {
     return <ReviewModal projectId={reviewingProjectId} onClose={() => setReviewingProjectId(null)} />;
   }
 
+  // If Project Editor is open
+  if (isProjectEditorOpen) {
+    return <ProjectEditor
+      templateId={editingProject?.id}
+      initialViewProject={editingProject}
+      onClose={() => setIsProjectEditorOpen(false)}
+    />;
+  }
+
   const handleViewSubmissions = (templateId: string) => {
     setFilterTemplateId(templateId);
     setView('dashboard');
+  };
+
+  const handleCreateMission = (gradeId?: string, programId?: string) => {
+    if (gradeId) {
+      setEditingProject({
+        targetAudience: { grades: [gradeId], groups: [] },
+        programId: programId // Store programId for context
+      });
+    } else {
+      setEditingProject(null);
+    }
+    setIsProjectEditorOpen(true);
   };
 
   return (
@@ -87,6 +115,7 @@ export const InstructorFactory: React.FC = () => {
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Missions</p>
           </div>
           <SidebarItem icon={Briefcase} label="All Missions" active={view === 'projects'} onClick={() => { setView('projects'); setIsMobileOpen(false); }} />
+          <SidebarItem icon={Filter} label="By Grade" active={view === 'grades'} onClick={() => { setView('grades'); setIsMobileOpen(false); }} />
           <SidebarItem icon={GitMerge} label="Workflows" active={view === 'workflows'} onClick={() => { setView('workflows'); setIsMobileOpen(false); }} />
 
           <div className="pt-4 pb-1">
@@ -102,8 +131,20 @@ export const InstructorFactory: React.FC = () => {
           <SidebarItem icon={Users} label="Students" active={view === 'makers'} onClick={() => { setView('makers'); setIsMobileOpen(false); }} />
 
           <div className="pt-4 pb-1">
+            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Preview</p>
+          </div>
+          <SidebarItem icon={Eye} label="Student View" active={view === 'preview'} onClick={() => { setView('preview'); setIsMobileOpen(false); }} />
+
+          <div className="pt-4 pb-1">
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">System</p>
           </div>
+          <button
+            onClick={() => (window as any).openAdminSettings?.() || alert("Settings panel implementation pending or accessible from Student Preview.")}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800"
+          >
+            <Settings size={18} />
+            Settings
+          </button>
           <button
             onClick={() => {
               if ((window as any).wipeAllData) {
@@ -182,11 +223,21 @@ export const InstructorFactory: React.FC = () => {
             />
           )}
           {view === 'projects' && <ProjectManager onViewSubmissions={handleViewSubmissions} />}
+          {view === 'grades' && <GradeProjectFilter onCreateMission={handleCreateMission} />}
           {view === 'workflows' && <WorkflowManager />}
           {view === 'stations' && <StationManager />}
           {view === 'badges' && <BadgeManager />}
           {view === 'toolbox' && <FactoryToolbox />}
           {view === 'makers' && <StudentManager onReviewProject={(id) => setReviewingProjectId(id)} />}
+          {view === 'preview' && (
+            <div className="h-full">
+              <ProjectSelector
+                studentId={userProfile?.uid || ''}
+                userRole="instructor"
+                onSelectProject={(id) => console.log("Preview select:", id)}
+              />
+            </div>
+          )}
         </main>
       </div>
     </div>

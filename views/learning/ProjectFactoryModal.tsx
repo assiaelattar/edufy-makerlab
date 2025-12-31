@@ -31,6 +31,14 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
 
+    // Debug logging
+    React.useEffect(() => {
+        if (isOpen) {
+            console.log('[ProjectFactoryModal] Available Grades:', availableGrades);
+            console.log('[ProjectFactoryModal] Available Groups:', availableGroups);
+        }
+    }, [isOpen, availableGrades, availableGroups]);
+
     const tabs = ['details', 'resources', 'targeting', 'publishing'];
     const currentTabIndex = tabs.indexOf(activeModalTab);
     const isFirstTab = currentTabIndex === 0;
@@ -250,24 +258,46 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                 </div>
                             </div>
                             <div>
-                                <label className={LABEL_CLASS}>Target Groups</label>
+                                <label className={LABEL_CLASS}>Target Groups (Optional)</label>
+                                <p className="text-xs text-slate-500 mb-3 italic">Leave empty to target all groups in selected grades</p>
                                 <div className="flex flex-wrap gap-3">
-                                    {availableGroups.length > 0 ? availableGroups.map(g => (
-                                        <button
-                                            key={g}
-                                            type="button"
-                                            onClick={() => {
-                                                const current = templateForm.targetAudience?.groups || [];
-                                                const newGroups = current.includes(g) ? current.filter(x => x !== g) : [...current, g];
-                                                setTemplateForm({ ...templateForm, targetAudience: { ...templateForm.targetAudience, groups: newGroups } });
-                                            }}
-                                            className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all flex items-center gap-2 ${templateForm.targetAudience?.groups?.includes(g) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-slate-200 text-slate-500 hover:border-purple-300 hover:text-purple-500'}`}
-                                        >
-                                            {templateForm.targetAudience?.groups?.includes(g) && <Check size={14} />}
-                                            {g}
-                                        </button>
-                                    )) : (
-                                        <p className="text-sm text-slate-500 italic">No groups found.</p>
+                                    {availableGroups.length > 0 ? (
+                                        <>
+                                            {/* All Groups Option */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setTemplateForm({ ...templateForm, targetAudience: { ...templateForm.targetAudience, groups: [] } });
+                                                }}
+                                                className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all flex items-center gap-2 ${(!templateForm.targetAudience?.groups || templateForm.targetAudience.groups.length === 0) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-slate-200 text-slate-500 hover:border-purple-300 hover:text-purple-500'}`}
+                                            >
+                                                {(!templateForm.targetAudience?.groups || templateForm.targetAudience.groups.length === 0) && <Check size={14} />}
+                                                All Groups
+                                            </button>
+
+                                            {/* Individual Groups */}
+                                            {availableGroups.map(g => (
+                                                <button
+                                                    key={g}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const current = templateForm.targetAudience?.groups || [];
+                                                        const newGroups = current.includes(g) ? current.filter(x => x !== g) : [...current, g];
+                                                        setTemplateForm({ ...templateForm, targetAudience: { ...templateForm.targetAudience, groups: newGroups } });
+                                                    }}
+                                                    className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all flex items-center gap-2 ${templateForm.targetAudience?.groups?.includes(g) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-slate-200 text-slate-500 hover:border-purple-300 hover:text-purple-500'}`}
+                                                >
+                                                    {templateForm.targetAudience?.groups?.includes(g) && <Check size={14} />}
+                                                    {g}
+                                                </button>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        <div className="w-full p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                            <p className="text-sm text-amber-700 font-medium">
+                                                ℹ️ No groups found. This mission will be available to all students in the selected grades.
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>

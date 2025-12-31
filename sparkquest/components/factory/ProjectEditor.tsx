@@ -13,7 +13,7 @@ interface ProjectEditorProps {
 const TABS = ['details', 'resources', 'targeting', 'publishing'];
 
 export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initialViewProject, onClose }) => {
-    const { projectTemplates, stations, processTemplates, availableGrades, actions } = useFactoryData();
+    const { projectTemplates, stations, processTemplates, availableGrades, availableGroups, programs, actions } = useFactoryData();
 
     // Initialize Form
     const defaults = {
@@ -40,11 +40,56 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         targetAudience: { ...defaults.targetAudience, ...(initialData?.targetAudience || {}) }
     };
 
+    // Smart grade matching: If grade IDs don't match availableGrades, use first available grade
+    if (mergedData.targetAudience?.grades?.length > 0 && availableGrades.length > 0) {
+        const matchedGrades: string[] = [];
+        mergedData.targetAudience.grades.forEach(gradeId => {
+            // Try exact ID match first
+            const exactMatch = availableGrades.find(g => g.id === gradeId);
+            if (exactMatch) {
+                matchedGrades.push(gradeId);
+                console.log(`[ProjectEditor] ✓ Exact match for grade ID: ${gradeId}`);
+            } else {
+                // Fallback: Use the first available grade ID
+                // This happens when creating from a different program's grade
+                if (availableGrades.length > 0) {
+                    const fallbackGrade = availableGrades[0];
+                    matchedGrades.push(fallbackGrade.id);
+                    console.warn(`[ProjectEditor] Grade ID ${gradeId} not found, using fallback: ${fallbackGrade.name} (${fallbackGrade.id})`);
+                } else {
+                    // Keep original ID if no grades available
+                    matchedGrades.push(gradeId);
+                }
+            }
+        });
+        mergedData.targetAudience.grades = matchedGrades;
+    }
+
     const [form, setForm] = useState<Partial<ProjectTemplate>>(mergedData);
     const [activeTab, setActiveTab] = useState('details');
 
+    // Debug: Log initial data
+    console.log('[ProjectEditor] Initialized with:', {
+        templateId,
+        initialViewProject,
+        mergedData: mergedData.targetAudience,
+        availableGrades: availableGrades.map(g => ({ id: g.id, name: g.name })),
+        preSelectedGrades: mergedData.targetAudience?.grades,
+        matchFound: mergedData.targetAudience?.grades?.map(gradeId =>
+            availableGrades.find(g => g.id === gradeId) ? 'MATCH' : 'NO MATCH for ' + gradeId
+        )
+    });
+
     const handleSave = async () => {
         try {
+            console.log('💾 [ProjectEditor] Saving mission with targetAudience:', {
+                grades: form.targetAudience?.grades,
+                gradeNames: form.targetAudience?.grades?.map(gradeId =>
+                    availableGrades.find(g => g.id === gradeId)?.name || `Unknown (${gradeId})`
+                ),
+                groups: form.targetAudience?.groups
+            });
+
             if (templateId) {
                 await actions.updateProjectTemplate(templateId, form);
             } else {
@@ -54,6 +99,19 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         } catch (e) {
             console.error(e);
             alert("Error saving project template");
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!templateId) return;
+        if (confirm("Are you sure you want to PERMANENTLY delete this mission?\n\nWARNING: This will also delete ALL student submissions associated with this mission. This action cannot be undone.")) {
+            try {
+                await actions.deleteProjectTemplate(templateId);
+                onClose();
+            } catch (e) {
+                console.error("Error deleting project:", e);
+                alert("Failed to delete project");
+            }
         }
     };
 
@@ -85,6 +143,14 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                     </div>
                 </div>
                 <div className="flex gap-3">
+                    {templateId && (
+                        <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold transition-all"
+                        >
+                            <Trash2 size={18} /> <span className="hidden md:inline">Delete</span>
+                        </button>
+                    )}
                     <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all">
                         <Save size={18} /> Save & Close
                     </button>
@@ -306,6 +372,85 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                 )}
                             </div>
                         </div>
+
+                        {/* Target Groups */}
+                        <div>
+                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Target Groups (Optional)</label>
+                            <p className="text-xs text-slate-500 mb-3 italic">Leave empty to target all groups in selected grades</p>
+                            <div className="flex flex-wrap gap-3">
+                                {(() => {
+                                    // Get groups only from selected grades
+                                    const selectedGradeIds = form.targetAudience?.grades || [];
+                                    const gradeSpecificGroups: string[] = [];
+
+                                    if (selectedGradeIds.length > 0 && programs.length > 0) {
+                                        // Find the grades in programs and extract their groups
+                                        programs.forEach(program => {
+                                            if (program.grades) {
+                                                program.grades.forEach((grade: any) => {
+                                                    if (selectedGradeIds.includes(grade.id)) {
+                                                        // This grade is selected, add its groups
+                                                        if (grade.groups && Array.isArray(grade.groups)) {
+                                                            grade.groups.forEach((group: any) => {
+                                                                if (group.name && !gradeSpecificGroups.includes(group.name)) {
+                                                                    gradeSpecificGroups.push(group.name);
+                                                                }
+                                                            });
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        });
+                                    }
+
+                                    return gradeSpecificGroups.length > 0 ? (
+                                        <>
+                                            {/* All Groups Option */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setForm({ ...form, targetAudience: { ...form.targetAudience, groups: [] } });
+                                                }}
+                                                className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 transition-all ${(!form.targetAudience?.groups || form.targetAudience.groups.length === 0)
+                                                    ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-105'
+                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'
+                                                    }`}
+                                            >
+                                                {(!form.targetAudience?.groups || form.targetAudience.groups.length === 0) && <Check size={16} />}
+                                                All Groups
+                                            </button>
+
+                                            {/* Individual Groups */}
+                                            {gradeSpecificGroups.map(groupName => {
+                                                const isSelected = form.targetAudience?.groups?.includes(groupName);
+                                                return (
+                                                    <button
+                                                        key={groupName}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const current = form.targetAudience?.groups || [];
+                                                            const newGroups = isSelected ? current.filter(g => g !== groupName) : [...current, groupName];
+                                                            setForm({ ...form, targetAudience: { ...form.targetAudience, groups: newGroups } });
+                                                        }}
+                                                        className={`px-5 py-3 rounded-xl font-bold flex items-center gap-2 border-2 transition-all ${isSelected
+                                                            ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-105'
+                                                            : 'bg-white text-slate-500 border-slate-200 hover:border-purple-300'
+                                                            }`}
+                                                    >
+                                                        {isSelected && <Check size={16} />}
+                                                        {groupName}
+                                                    </button>
+                                                );
+                                            })}
+                                        </>
+                                    ) : selectedGradeIds.length > 0 ? (
+                                        <p className="text-slate-400 italic">No groups found for selected grades.</p>
+                                    ) : (
+                                        <p className="text-slate-400 italic">Please select a grade first to see available groups.</p>
+                                    );
+                                })()}
+                            </div>
+                        </div>
                     </div>
                 )}
 
@@ -365,6 +510,6 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                     Next <ArrowRight size={20} />
                 </button>
             </div>
-        </div>
+        </div >
     );
 };

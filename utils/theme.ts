@@ -12,6 +12,7 @@ export const STATION_THEMES: Record<StationType, {
     text: string;
     gradient: string;
     kanbanHeader: string;
+    color: string;
 }> = {
     robotics: {
         label: 'Robotics & Electronics',
@@ -21,7 +22,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-sky-500/30',
         text: 'text-sky-400',
         gradient: 'from-sky-600 to-blue-700',
-        kanbanHeader: 'border-sky-500'
+        kanbanHeader: 'border-sky-500',
+        color: 'sky'
     },
     coding: {
         label: 'Coding & SaaS',
@@ -31,7 +33,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-violet-500/30',
         text: 'text-violet-400',
         gradient: 'from-violet-600 to-indigo-700',
-        kanbanHeader: 'border-violet-500'
+        kanbanHeader: 'border-violet-500',
+        color: 'violet'
     },
     game_design: {
         label: 'Game Development',
@@ -41,7 +44,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-amber-500/30',
         text: 'text-amber-400',
         gradient: 'from-amber-600 to-orange-700',
-        kanbanHeader: 'border-amber-500'
+        kanbanHeader: 'border-amber-500',
+        color: 'amber'
     },
     multimedia: {
         label: 'Video & Multimedia',
@@ -51,7 +55,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-pink-500/30',
         text: 'text-pink-400',
         gradient: 'from-pink-600 to-rose-700',
-        kanbanHeader: 'border-pink-500'
+        kanbanHeader: 'border-pink-500',
+        color: 'pink'
     },
     branding: {
         label: 'Design & Branding',
@@ -61,7 +66,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-emerald-500/30',
         text: 'text-emerald-400',
         gradient: 'from-emerald-600 to-teal-700',
-        kanbanHeader: 'border-emerald-500'
+        kanbanHeader: 'border-emerald-500',
+        color: 'emerald'
     },
     engineering: {
         label: 'Engineering & DIY',
@@ -71,7 +77,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-slate-600/30',
         text: 'text-slate-300',
         gradient: 'from-slate-600 to-gray-700',
-        kanbanHeader: 'border-slate-500'
+        kanbanHeader: 'border-slate-500',
+        color: 'slate'
     },
     general: {
         label: 'General Project',
@@ -81,7 +88,8 @@ export const STATION_THEMES: Record<StationType, {
         border: 'border-indigo-500/30',
         text: 'text-indigo-400',
         gradient: 'from-indigo-600 to-blue-700',
-        kanbanHeader: 'border-indigo-500'
+        kanbanHeader: 'border-indigo-500',
+        color: 'indigo'
     }
 };
 

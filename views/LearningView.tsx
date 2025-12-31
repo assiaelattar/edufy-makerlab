@@ -15,6 +15,7 @@ import { getTheme, STATION_THEMES } from '../utils/theme';
 import { STUDIO_THEME, studioClass } from '../utils/studioTheme';
 import { generateProjectThumbnail } from '../utils/thumbnailGenerator';
 import { MOCK_PROJECT_TEMPLATES } from '../utils/mockData';
+import { config } from '../utils/config';
 
 import { NotificationBell } from '../components/NotificationBell';
 import { ProjectFactoryModal } from './learning/ProjectFactoryModal';
@@ -25,6 +26,7 @@ import { StepReviewModal } from './learning/StepReviewModal';
 import { FactoryDashboard } from './learning/FactoryDashboard';
 import { ToastContainer, ToastMessage } from '../components/Toast';
 import { Confetti } from '../components/Confetti';
+import { ProjectSelector } from '../sparkquest/components/ProjectSelector';
 
 // Helper to recursively remove undefined values for Firestore
 const cleanData = (obj: any): any => {
@@ -45,6 +47,8 @@ const cleanData = (obj: any): any => {
 export const LearningView = () => {
     const { projectTemplates, studentProjects, students, settings, programs, sendNotification, teamMembers, processTemplates, stations, badges } = useAppContext();
     const { userProfile, can } = useAuth();
+
+    if (!userProfile) return null;
 
     // Debug logging
     console.log('🔍 LearningView Debug:', {
@@ -87,6 +91,50 @@ export const LearningView = () => {
         title: '', description: '', externalLink: '', embedUrl: '', mediaUrls: [], steps: [], station: 'general'
     });
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+
+    // Extract all grades and groups from active programs
+    const grades = useMemo(() => {
+        const gradesList: any[] = [];
+        console.log('[LearningView] Full programs data:', JSON.stringify(programs, null, 2));
+        programs.filter(p => p.status === 'active').forEach(program => {
+            if (program.grades) {
+                program.grades.forEach(grade => {
+                    // Avoid duplicates by checking if grade with same ID already exists
+                    if (!gradesList.some(g => g.id === grade.id)) {
+                        gradesList.push(grade);
+                    }
+                });
+            }
+        });
+        return gradesList;
+    }, [programs]);
+
+    const groups = useMemo(() => {
+        const groupsSet = new Set<string>();
+        console.log('[LearningView] Extracting groups from programs:', programs.length);
+
+        // Extract groups from programs.grades
+        programs.filter(p => p.status === 'active').forEach(program => {
+            console.log('[LearningView] Program:', program.name, 'has grades:', program.grades?.length);
+            if (program.grades) {
+                program.grades.forEach(grade => {
+                    console.log('[LearningView] Grade:', grade.name, 'has groups:', grade.groups?.length, grade.groups);
+                    if (grade.groups && Array.isArray(grade.groups)) {
+                        grade.groups.forEach(group => {
+                            if (group.name) {
+                                groupsSet.add(group.name);
+                                console.log('[LearningView] Added group:', group.name);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        const groupsList = Array.from(groupsSet);
+        console.log('[LearningView] Final groups list:', groupsList);
+        return groupsList;
+    }, [programs]);
     const [wizardStep, setWizardStep] = useState(0);
     const [activeModalTab, setActiveModalTab] = useState<'details' | 'resources' | 'targeting' | 'publishing'>('details');
     const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -779,7 +827,7 @@ export const LearningView = () => {
 
             // 3. Launch SparkQuest
             const token = generateBridgeToken(userProfile);
-            const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}?projectId=${newProjectId}&token=${token}`;
+            const url = `${config.sparkQuestUrl}?projectId=${newProjectId}&token=${token}`;
             window.open(url, '_blank');
 
             // 4. Update UI State (Legacy compatibility)
@@ -810,7 +858,7 @@ export const LearningView = () => {
         // Redirect to new SparkQuest App
         if (!userProfile) return;
         const bridgeToken = generateBridgeToken(userProfile);
-        const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}?projectId=${project.id}&token=${bridgeToken}`;
+        const url = `${config.sparkQuestUrl}?projectId=${project.id}&token=${bridgeToken}`;
         window.open(url, '_blank');
 
         // Legacy: setActiveProject(project); setIsProjectModalOpen(true);
@@ -1194,7 +1242,7 @@ export const LearningView = () => {
                                                         </div>
                                                         <div className="p-5 flex flex-col flex-1">
                                                             <div className="flex items-center gap-2 mb-3">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${theme.badge} bg-opacity-10`}>{theme.label}</span>
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${theme.border} ${theme.text} bg-opacity-10`}>{theme.label}</span>
                                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border border-slate-700 text-slate-400`}>{template.difficulty}</span>
                                                             </div>
                                                             <h3 className="font-bold text-white text-lg mb-2 leading-tight group-hover:text-indigo-400 transition-colors">{template.title}</h3>
@@ -2030,7 +2078,7 @@ export const LearningView = () => {
                                         onClose={() => {
                                             setIsStationModalOpen(false);
                                             setEditingStationId(null);
-                                            setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
+                                            setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '', startDate: undefined, endDate: undefined });
                                         }}
                                         title={editingStationId ? "✏️ Edit Station" : "✨ Create New Station"}
                                     >
@@ -2054,6 +2102,33 @@ export const LearningView = () => {
                                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
                                                     placeholder="Describe this station..."
                                                 />
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Start Date (Optional)</label>
+                                                    <input
+                                                        type="date"
+                                                        value={stationForm.startDate ? stationForm.startDate.toDate().toISOString().split('T')[0] : ''}
+                                                        onChange={e => {
+                                                            const date = e.target.value ? Timestamp.fromDate(new Date(e.target.value)) : undefined;
+                                                            setStationForm(prev => ({ ...prev, startDate: date }));
+                                                        }}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-bold text-slate-400 mb-2">End Date (Optional)</label>
+                                                    <input
+                                                        type="date"
+                                                        value={stationForm.endDate ? stationForm.endDate.toDate().toISOString().split('T')[0] : ''}
+                                                        onChange={e => {
+                                                            const date = e.target.value ? Timestamp.fromDate(new Date(e.target.value)) : undefined;
+                                                            setStationForm(prev => ({ ...prev, endDate: date }));
+                                                        }}
+                                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
+                                                    />
+                                                </div>
                                             </div>
 
                                             <div>
@@ -2160,6 +2235,8 @@ export const LearningView = () => {
                                                                     description: stationForm.description,
                                                                     color: stationForm.color,
                                                                     icon: stationForm.icon,
+                                                                    startDate: stationForm.startDate || null,
+                                                                    endDate: stationForm.endDate || null,
                                                                     gradeId: null, // Legacy
                                                                     gradeName: null, // Legacy
                                                                     gradeIds: stationForm.gradeIds || [],
@@ -2175,7 +2252,7 @@ export const LearningView = () => {
                                                             }
                                                             setIsStationModalOpen(false);
                                                             setEditingStationId(null);
-                                                            setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '' });
+                                                            setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '', startDate: undefined, endDate: undefined });
                                                         } catch (e) {
                                                             console.error('Error saving station:', e);
                                                         }
@@ -2337,8 +2414,8 @@ export const LearningView = () => {
                                 handleSaveTemplate={handleSaveTemplate}
                                 activeModalTab={activeModalTab}
                                 setActiveModalTab={setActiveModalTab}
-                                availableGrades={grades}
-                                availableGroups={groups}
+                                availableGrades={grades as any}
+                                availableGroups={groups as any}
                                 processTemplates={processTemplates}
                                 wizardStep={wizardStep}
                                 WIZARD_STEPS={WIZARD_STEPS}
@@ -2382,6 +2459,33 @@ export const LearningView = () => {
     const progress = projectForm.steps ? Math.round((projectForm.steps.filter(s => s.status === 'done').length / (projectForm.steps.length || 1)) * 100) : 0;
     const phase = projectForm.status === 'planning' ? 1 : projectForm.status === 'submitted' ? 3 : 2;
 
+    // --- STUDENT VIEW (GAMIFIED) ---
+    if (!isInstructor) {
+        return (
+            <div className="absolute inset-0 z-10 w-full h-full bg-slate-900 overflow-hidden">
+                <ProjectSelector
+                    studentId={userProfile.uid || ''}
+                    userRole={userProfile.role}
+                    onSelectProject={(projectId) => {
+                        const project = studentProjects.find(p => p.id === projectId);
+                        if (project) {
+                            openActiveProject(project);
+                        } else {
+                            // If not found in context yet, try to open anyway (params might work if SparkQuest fetches its own data)
+                            // But openActiveProject relies on generating a token.
+                            if (userProfile) {
+                                const bridgeToken = generateBridgeToken(userProfile);
+                                const url = `${config.sparkQuestUrl}?projectId=${projectId}&token=${bridgeToken}`;
+                                window.open(url, '_blank');
+                            }
+                        }
+                    }}
+                />
+            </div>
+        );
+    }
+
+    // --- LEGACY / INSTRUCTOR VIEW FALLBACK ---
     return (
         <div className="space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4">
             {showConfetti && <Confetti duration={5000} />}
@@ -2645,7 +2749,7 @@ export const LearningView = () => {
                                                                         if (true) {
                                                                             // ALWAYS open in SparkQuest as requested
                                                                             const token = generateBridgeToken(userProfile);
-                                                                            const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}/?token=${token}&projectId=${project.id}`;
+                                                                            const url = `${config.sparkQuestUrl}/?token=${token}&projectId=${project.id}`;
                                                                             window.open(url, '_blank');
                                                                         }
                                                                     }}

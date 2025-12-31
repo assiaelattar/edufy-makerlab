@@ -6,6 +6,12 @@ import { api } from '../services/api';
 import { WizardNode, WizardNodeProps } from './WizardNode';
 import { WizardModal } from './WizardModal';
 import { ConnectionStatus } from './ConnectionStatus';
+import { useSession } from '../context/SessionContext';
+import { useFactoryData } from '../hooks/useFactoryData';
+import { getRandomMindset, getProjectIcon, MINDSET_LIBRARY } from '../utils/MindsetLibrary';
+import { TypingChallenge } from './TypingChallenge';
+import { useTheme, THEMES } from '../context/ThemeContext';
+import { useFocusSession } from '../context/FocusSessionContext';
 
 // --- Sound Utility (Synthesizer) ---
 const playSound = (type: 'hover' | 'click' | 'success' | 'open') => {
@@ -70,11 +76,8 @@ const playSound = (type: 'hover' | 'click' | 'success' | 'open') => {
 };
 
 // --- Static Data ---
-const WORKFLOWS: Workflow[] = [
-  { id: 'design-thinking', name: 'Design Thinking', description: 'Empathize, Define, Ideate, Prototype, Test', color: 'bg-pink-500', icon: '🎨' },
-  { id: 'engineering', name: 'Engineering', description: 'Ask, Imagine, Plan, Create, Improve', color: 'bg-blue-500', icon: '⚙️' },
-  { id: 'scientific', name: 'Scientific Method', description: 'Hypothesis, Experiment, Analysis, Conclusion', color: 'bg-teal-500', icon: '🧪' },
-];
+// --- Static Data ---
+// Removed MOCK WORKFLOWS as per request to rely on DB data only.
 
 // --- Sub-Components ---
 
@@ -222,33 +225,81 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 };
 
 const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, updateProject, closeModal }) => {
+  const { processTemplates } = useFactoryData();
+
+  // Map ProcessTemplate -> Workflow UI format
+  const displayWorkflows = processTemplates.map(pt => ({
+    id: pt.id,
+    name: pt.name,
+    description: pt.description || 'Custom Workflow',
+    color: 'bg-indigo-500',
+    icon: '🚀'
+  }));
+
+  // Auto-select recommended workflow
   // Auto-select recommended workflow
   useEffect(() => {
-    if (assignment.recommendedWorkflow && !project.workflowId) {
-      updateProject({ workflowId: assignment.recommendedWorkflow });
+    // If mission has a recommended workflow
+    if (assignment.recommendedWorkflow) {
+      // Find it in our available list
+      const recommended = displayWorkflows.find(w => w.id === assignment.recommendedWorkflow);
+
+      // If found, and not already set (or set to something else), force it
+      if (recommended && project.workflowId !== recommended.id) {
+        console.log("Auto-selecting assigned workflow:", recommended.name);
+        updateProject({ workflowId: recommended.id });
+      }
     }
-  }, [assignment.recommendedWorkflow, project.workflowId, updateProject]);
+  }, [assignment.recommendedWorkflow, project.workflowId, updateProject, displayWorkflows]);
 
   const handleLockIn = async () => {
     playSound('success');
 
-    // Auto-generate steps if missing
-    if (project.workflowId && (!project.steps || project.steps.length === 0)) {
+    // Auto-generate steps if missing OR FIX existing steps
+    if (project.workflowId) {
       try {
-        const { getFirestore, doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('../services/firebase'); // Dynamic import to avoid collision or if not modifying top
+        const { getFirestore, doc, getDoc, Firestore } = await import('firebase/firestore');
+        const { db } = await import('../services/firebase');
+        if (!db) throw new Error("Firestore not initialized");
 
-        const workflowSnap = await getDoc(doc(db, 'process_templates', project.workflowId));
+        const workflowSnap = await getDoc(doc(db as any, 'process_templates', project.workflowId));
         if (workflowSnap.exists()) {
           const data = workflowSnap.data();
+          console.log("🔥 [DEBUG] Raw Workflow Template Data:", data);
+
           if (data?.phases) {
-            const newSteps = data.phases.map((p: any) => ({
-              id: p.id || Date.now().toString() + Math.random(),
-              title: p.name,
-              status: 'todo'
-            }));
-            console.log('✨ Auto-generating steps from workflow:', newSteps);
-            updateProject({ steps: newSteps });
+            let updatedSteps = [...(project.steps || [])];
+            let hasChanges = false;
+
+            // SCENARIO 1: No steps yet -> Generate all
+            if (updatedSteps.length === 0) {
+              updatedSteps = data.phases.map((p: any) => ({
+                id: p.id || Date.now().toString() + Math.random(),
+                title: p.name,
+                status: 'todo',
+                resources: p.resources || []
+              }));
+              hasChanges = true;
+              console.log('✨ Generated new steps from workflow');
+            }
+            // SCENARIO 2: Steps exist -> MERGE Resources (Fix for existing missions)
+            else {
+              updatedSteps = updatedSteps.map((step, idx) => {
+                const phase = data.phases[idx];
+                // If titles match (or index alignment assumed), update resources
+                if (phase && (phase.name === step.title || idx < data.phases.length)) {
+                  // Force update resources
+                  return { ...step, resources: phase.resources || [] };
+                }
+                return step;
+              });
+              hasChanges = true;
+              console.log('🔧 Merged resources into existing steps');
+            }
+
+            if (hasChanges) {
+              updateProject({ steps: updatedSteps });
+            }
           }
         }
       } catch (e) {
@@ -265,7 +316,7 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         <p className="text-indigo-600 font-bold">Recommended for this mission: <span className="uppercase font-black">{assignment.recommendedWorkflow}</span></p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {WORKFLOWS.map(wf => (
+        {displayWorkflows.map(wf => (
           <div
             key={wf.id}
             onClick={() => { playSound('click'); updateProject({ workflowId: wf.id }); }}
@@ -362,6 +413,7 @@ const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProje
 };
 
 const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ project, updateProject, closeModal, taskId }) => {
+  const { startSession } = useSession();
   const realId = taskId.replace('step-', '');
   const step = project.steps.find(s => s.id === realId);
 
@@ -369,8 +421,30 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [isEditing, setIsEditing] = useState(false); // ← MISSING! Causes crash after submission
+  const [isEditing, setIsEditing] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [showCommitInput, setShowCommitInput] = useState(false);
+  const [isProMode, setIsProMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Theme Hook
+  const { activeTheme } = useTheme();
+  const theme = THEMES.find(t => t.id === activeTheme) || THEMES[0];
+
+  const EMAIL_TEMPLATE = `Subject: Mission Report - ${step?.title || 'Unknown Step'}
+
+Dear Commander,
+
+I have successfully completed the tasks for this mission step.
+Attached is the evidence of my work.
+
+Key Learnings:
+- [Enter 1 key learning here]
+
+Ready for inspection.
+
+Signed,
+${project.studentId || 'Cadet'}`;
 
   if (!step) return <div>Error: Step not found</div>;
 
@@ -417,6 +491,34 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
     setSubmitting(false);
   };
 
+  const handleSaveProgress = async () => {
+    if (!commitMessage.trim()) {
+      alert('Please enter a commit message');
+      return;
+    }
+
+    playSound('click');
+    const newCommit = {
+      id: `commit-${Date.now()}`,
+      timestamp: new Date(),
+      message: commitMessage,
+      stepId: realId
+    };
+
+    const updatedProject = {
+      ...project,
+      commits: [...(project.commits || []), newCommit]
+    };
+
+    updateProject(updatedProject);
+    await api.syncProject(updatedProject);
+
+    setCommitMessage('');
+    setShowCommitInput(false);
+    playSound('success');
+    alert('✅ Progress saved!');
+  };
+
   if (step.status === 'done') {
     return (
       <div className="text-center py-8">
@@ -456,6 +558,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
     );
   }
 
+  console.log('TaskStepContent step:', step);
+
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 p-6 rounded-3xl border-4 border-blue-100 text-blue-900 font-bold text-center text-lg relative overflow-hidden">
@@ -480,26 +584,34 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         </div>
       )}
 
-      {/* Resources / Tool Links - ALWAYS VISIBLE */}
-      {step.resources && step.resources.length > 0 && (
-        <div>
-          <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Mission Tools</label>
-          <div className="flex flex-wrap gap-3">
-            {step.resources.map((res, idx) => (
-              <a
-                key={idx}
-                href={res.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:scale-105 transition-all shadow-sm"
-              >
-                <span>{res.title}</span>
-                <span className="text-xs opacity-50">↗</span>
-              </a>
-            ))}
-          </div>
+      {/* Resources / Tool Links - ALWAYS VISIBLE FOR DEBUGGING */}
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div className="flex justify-between">
+          <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Project Tools (Debug v3)</label>
+          <span className="text-xs text-slate-300 font-mono">Res: {step.resources?.length || 0}</span>
         </div>
-      )}
+
+        {(!step.resources || step.resources.length === 0) && (
+          <div className="text-sm text-slate-400 italic">No tools attached to this step. (Check Factory)</div>
+        )}
+
+        <div className="flex flex-wrap gap-3">
+          {step.resources && step.resources.map((res, idx) => (
+            <button
+              key={idx}
+              onClick={() => {
+                console.log("Launching session for:", res.url);
+                // Pass default duration (30) and the tool title for credential matching
+                startSession(res.url, 30, res.title);
+              }}
+              className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:scale-105 transition-all shadow-sm"
+            >
+              <span>{res.title}</span>
+              <span className="text-xs opacity-50">↗</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* SUBMISSION FORM (Only if NOT pending OR isEditing) */}
       {step.status !== 'PENDING_REVIEW' || isEditing ? (
@@ -520,14 +632,103 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
               )}
               <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
             </div>
+
+            {/* SCREENSHOT IMPORT BUTTON */}
+            <div className="mt-2 flex justify-center">
+              <button
+                onClick={() => setShowCommitInput(!showCommitInput)}
+                className="w-full py-4 bg-cyan-600/10 border-2 border-cyan-500/30 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all mb-4"
+              >
+                💾 Save Progress
+              </button>
+
+              {showCommitInput && (
+                <div className="mb-4 p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100">
+                  <label className="block text-xs font-black text-cyan-600 uppercase tracking-wider mb-2">Commit Message</label>
+                  <input
+                    type="text"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    placeholder="e.g., Finished motor assembly"
+                    className="w-full p-3 bg-white border-2 border-cyan-200 rounded-xl font-medium text-slate-600 outline-none focus:border-cyan-500 mb-2"
+                  />
+                  <button
+                    onClick={handleSaveProgress}
+                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold transition-colors"
+                  >
+                    Save Commit
+                  </button>
+                </div>
+              )}
+
+              {/* Show previous commits for this step */}
+              {project.commits?.filter(c => c.stepId === realId).length > 0 && (
+                <div className="mb-4 p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Previous Saves</h4>
+                  <div className="space-y-2">
+                    {project.commits.filter(c => c.stepId === realId).slice(-3).reverse().map(commit => (
+                      <div key={commit.id} className="p-2 bg-white rounded-lg border border-slate-200">
+                        <p className="text-sm font-bold text-slate-700">{commit.message}</p>
+                        <p className="text-xs text-slate-400">{new Date(commit.timestamp).toLocaleString()}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  const stored = sessionStorage.getItem('temp_evidence');
+                  if (stored) {
+                    setPreview(stored);
+                    // Convert Base64 to File for upload
+                    fetch(stored)
+                      .then(res => res.blob())
+                      .then(blob => {
+                        const file = new File([blob], "evidence_screenshot.png", { type: "image/png" });
+                        setFile(file);
+                        playSound('click');
+                      });
+                  } else {
+                    alert("No screenshot found! Take a photo in the Mission Tool/Session first.");
+                  }
+                }}
+                className="text-xs font-bold text-indigo-500 hover:text-indigo-700 underline flex items-center gap-1"
+              >
+                📸 Use Last Session Screenshot
+              </button>
+            </div>
           </div>
 
-          <textarea
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
-            placeholder="How did it go? Notes for Commander..."
-          />
+          {/* Pro Mode Toggle */}
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={() => setIsProMode(!isProMode)}
+              className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-300'}`}
+            >
+              {isProMode ? '⚡ Pro Mode Active' : 'Enable Pro Mode'}
+            </button>
+          </div>
+
+          {isProMode ? (
+            <TypingChallenge
+              template={EMAIL_TEMPLATE}
+              onComplete={(text) => {
+                setNote(text);
+                // Optional: auto-submit or just fill the note
+                setIsProMode(false);
+                playSound('success');
+              }}
+              onCancel={() => setIsProMode(false)}
+            />
+          ) : (
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
+              placeholder="How did it go? Notes for Commander..."
+            />
+          )}
 
           <button
             onClick={handleSubmit}
@@ -571,12 +772,53 @@ interface StudentWizardProps {
 }
 
 export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initialProject, isConnected = true, onExit }) => {
+  // Theme
+  const { activeTheme } = useTheme();
+  const activeThemeDef = THEMES.find(t => t.id === activeTheme) || THEMES[0];
+
   // State
   const [project, setProject] = useState<StudentProject>(initialProject);
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [mindset] = useState(getRandomMindset()); // Random quote for this session
+  const [projectIcon, setProjectIcon] = useState('⚡');
+
+  // Peer Mock Data (Simulating other students working)
+  const [peers] = useState([
+    { id: 'p1', name: 'Alex', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex', stepId: 'strategy', color: 'bg-pink-500' },
+    { id: 'p2', name: 'Sam', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sam', stepId: 'step-1700000000000', color: 'bg-blue-500' }, // ID match logic needed if real
+    { id: 'p3', name: 'Jordan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jordan', stepId: 'publish', color: 'bg-emerald-500' }
+  ]);
+
+  // Update icon when title changes
+  useEffect(() => {
+    if (project.title) {
+      setProjectIcon(getProjectIcon(project.title));
+    }
+  }, [project.title]);
+
+  // Focus Session: Auto-start when working on project
+  const { startSession, endSession, activeSession, incrementMissions } = useFocusSession();
+
+  useEffect(() => {
+    // Auto-start session when student opens wizard to work
+    if (!activeSession) {
+      startSession();
+      console.log('🎯 Auto-started focus session for project work');
+    }
+    // Increment mission counter when entering
+    if (activeSession) {
+      incrementMissions();
+    }
+
+    // End session when leaving the wizard
+    return () => {
+      endSession();
+      console.log('🛑 Auto-ending focus session on exit');
+    };
+  }, []); // Only on mount
 
   // Sync state if prop changes (e.g. from real-time listener)
   useEffect(() => {
@@ -663,7 +905,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           status = 'ACTIVE';
         } else {
           const prevStep = project.steps[index - 1];
-          if (!prevStep || prevStep.status === 'DONE' || prevStep.status === 'done') {
+          if (!prevStep || prevStep.status === 'done') {
             status = 'ACTIVE';
           }
         }
@@ -778,10 +1020,10 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const { basePath, progressPath } = generatePaths();
 
   return (
-    <div className="h-full flex flex-col bg-slate-900 w-full overflow-hidden relative selection:bg-blue-500 selection:text-white">
+    <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
 
-      {/* Connection Status Indicator */}
-      <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} />
+      {/* Connection Status Indicator - HIDDEN as per user request */}
+      {/* <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} /> */}
 
       {/* --- COSMIC BACKGROUND --- */}
       {/* Grid */}
@@ -800,20 +1042,53 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
 
       {/* Header */}
       <div className="relative z-20 px-8 py-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-700 flex justify-between items-center shadow-lg">
-        <div>
-          <h1 className="text-3xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-            <span className="text-4xl">🪐</span> SparkQuest
-          </h1>
-          <p className="text-slate-400 font-bold text-sm uppercase tracking-wider pl-12">{assignment.station} | {assignment.title}</p>
+        <div className="flex items-center gap-6">
+          {/* Student Avatar & XP (Mock for now, replacing previous simple header) */}
+          <div className="flex items-center gap-3 pr-6 border-r border-slate-700">
+            <div className="relative">
+              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${project.studentId || 'You'}`} className="w-12 h-12 rounded-full border-2 border-slate-500 bg-slate-800" />
+              <div className="absolute -bottom-1 -right-1 bg-amber-500 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-amber-400">
+                LVL 3
+              </div>
+            </div>
+            <div>
+              <h4 className="text-white font-bold text-sm leading-tight">Cadet Builder</h4>
+              <div className="w-20 h-1.5 bg-slate-700 rounded-full mt-1 overflow-hidden">
+                <div className="h-full bg-blue-500 w-[60%] animate-pulse"></div>
+              </div>
+              <p className="text-[10px] text-blue-400 font-bold mt-0.5">850 / 1000 XP</p>
+            </div>
+          </div>
+
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight flex items-center gap-4 filter drop-shadow-lg">
+              <span className="text-5xl animate-bounce">{projectIcon}</span> {project.title || assignment.title}
+            </h1>
+            <p className="text-slate-400 font-bold text-sm uppercase tracking-wider pl-16 flex items-center gap-2">
+              <span className="text-blue-400">{assignment.station}</span>
+              <span className="text-slate-600">•</span>
+              <span>SparkQuest Mission</span>
+            </p>
+          </div>
         </div>
         <div className="flex gap-4 items-center">
-          <div className="px-4 py-2 bg-slate-800 text-blue-400 rounded-xl font-black border border-slate-700 shadow-inner">
+          {/* Mindset Widget */}
+          <div className="hidden lg:flex flex-col items-end mr-4 max-w-[200px]">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Creator's Mindset</p>
+            <div className="bg-slate-800/50 border border-slate-700 p-2 rounded-xl text-right">
+              <p className="text-xs text-slate-300 italic">"{mindset.text}"</p>
+              {mindset.author && <p className="text-[10px] text-slate-500 font-bold mt-1">- {mindset.author}</p>}
+            </div>
+          </div>
+
+          {/* Step Counter - Enlarged */}
+          <div className="px-6 py-3 bg-slate-800 text-blue-400 rounded-2xl font-black border-2 border-slate-700 shadow-inner text-lg">
             Step {activeNodeIndex !== -1 ? activeNodeIndex + 1 : nodes.length} <span className="text-slate-600">/</span> {nodes.length}
           </div>
           {onExit && (
             <button
               onClick={onExit}
-              className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-xl font-bold transition-colors text-sm"
+              className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-white border-b-4 border-emerald-700 active:border-b-0 active:translate-y-1 rounded-2xl font-black transition-all text-lg flex items-center gap-2 shadow-lg shadow-emerald-500/20"
             >
               Exit Mission 🚪
             </button>
@@ -847,7 +1122,27 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           {/* Nodes */}
           <div className="flex gap-[108px] z-10 pl-[50px]">
             {nodes.map((node, i) => (
-              <div key={node.id} className={`transform transition-all duration-500 ${i % 2 === 0 ? '-translate-y-0' : 'translate-y-10'}`}>
+              <div key={node.id} className={`transform transition-all duration-500 ${i % 2 === 0 ? '-translate-y-0' : 'translate-y-10'} relative group`}>
+                {/* Peer Avatars on Node - ALWAYS VISIBLE & LARGER */}
+                {/* Peer Avatars on Node - ALWAYS VISIBLE & LARGER */}
+                <div className="absolute -top-20 left-1/2 -translate-x-1/2 flex -space-x-4 z-50 pointer-events-auto">
+                  {/* Logic: Show peers based on stepId match OR fallback distribution for liveness */}
+                  {peers.filter(p => p.stepId === node.id || (
+                    // Fallback: Distribute peers to generic nodes based on index to ensure they appear
+                    !nodes.some(n => n.id === p.stepId) && ((i + 1) % 2 === parseInt(p.id.replace(/\D/g, '')) % 2)
+                  )).map(peer => (
+                    <div
+                      key={peer.id}
+                      className="w-14 h-14 rounded-full border-4 border-slate-900 bg-slate-700 overflow-hidden relative shadow-xl transform hover:scale-125 hover:z-50 transition-all cursor-pointer"
+                      title={`${peer.name} is working on ${node.title}`}
+                    >
+                      <img src={peer.avatar} className="w-full h-full object-cover" alt={peer.name} />
+                      {/* Status Indicator */}
+                      <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-900 ${peer.color || 'bg-green-500'}`}></div>
+                    </div>
+                  ))}
+                </div>
+
                 <WizardNode
                   {...node}
                   isFirst={i === activeNodeIndex}

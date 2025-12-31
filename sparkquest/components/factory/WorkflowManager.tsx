@@ -1,8 +1,15 @@
 
 import React, { useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
-import { ProcessTemplate, ProcessPhase } from '../../types';
+import { ProcessTemplate, ProcessPhase, Resource } from '../../types';
 import { Plus, Trash2, Edit2, GripVertical, Check, X, ArrowRight, LayoutList } from 'lucide-react';
+
+// Default tools available in every workflow step
+const DEFAULT_TOOLS: Resource[] = [
+    { id: 'gemini', title: 'Gemini AI Assistant', type: 'link', url: 'https://gemini.google.com' },
+    { id: 'chatgpt', title: 'ChatGPT', type: 'link', url: 'https://chat.openai.com' },
+    { id: 'tldraw', title: 'TLDraw Whiteboard', type: 'link', url: 'https://tldraw.com' }
+];
 
 export const WorkflowManager: React.FC = () => {
     const { processTemplates, actions } = useFactoryData();
@@ -13,6 +20,10 @@ export const WorkflowManager: React.FC = () => {
     const [form, setForm] = useState<Partial<ProcessTemplate>>({
         name: '', description: '', phases: []
     });
+
+    // Resource Input State (to avoid prompt)
+    const [activeResourcePhase, setActiveResourcePhase] = useState<number | null>(null);
+    const [resourceForm, setResourceForm] = useState({ title: '', url: '' });
 
     const handleEdit = (wf: ProcessTemplate) => {
         setEditingId(wf.id);
@@ -56,7 +67,8 @@ export const WorkflowManager: React.FC = () => {
             color: 'blue',
             icon: 'Circle',
             order: (form.phases?.length || 0) + 1,
-            description: ''
+            description: '',
+            resources: DEFAULT_TOOLS  // 🎯 Auto-add default tools to every phase
         };
         setForm({ ...form, phases: [...(form.phases || []), newPhase] });
     };
@@ -177,33 +189,110 @@ export const WorkflowManager: React.FC = () => {
 
                                 <div className="space-y-3">
                                     {form.phases?.map((phase, idx) => (
-                                        <div key={idx} className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200 group hover:border-indigo-300 transition-colors">
-                                            <div className="cursor-move text-slate-400 hover:text-slate-600"><GripVertical size={20} /></div>
-                                            <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-white rounded-lg border border-slate-200 font-black text-slate-400">
-                                                {idx + 1}
+                                        <div key={idx} className="flex flex-col gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200 group hover:border-indigo-300 transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className="cursor-move text-slate-400 hover:text-slate-600"><GripVertical size={20} /></div>
+                                                <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-white rounded-lg border border-slate-200 font-black text-slate-400">
+                                                    {idx + 1}
+                                                </div>
+                                                <input
+                                                    className="flex-1 bg-transparent font-bold text-slate-700 outline-none border-b border-transparent focus:border-indigo-500 px-1"
+                                                    placeholder="Phase Name"
+                                                    value={phase.name}
+                                                    onChange={e => updatePhase(idx, 'name', e.target.value)}
+                                                />
+                                                <select
+                                                    className="bg-white border border-slate-200 text-xs font-medium rounded-lg px-2 py-2 outline-none"
+                                                    value={phase.color}
+                                                    onChange={e => updatePhase(idx, 'color', e.target.value)}
+                                                >
+                                                    <option value="slate">Slate</option>
+                                                    <option value="blue">Blue</option>
+                                                    <option value="indigo">Indigo</option>
+                                                    <option value="purple">Purple</option>
+                                                    <option value="amber">Amber</option>
+                                                    <option value="emerald">Green</option>
+                                                    <option value="rose">Red</option>
+                                                </select>
+                                                <button onClick={() => removePhase(idx)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                    <Trash2 size={16} />
+                                                </button>
                                             </div>
-                                            <input
-                                                className="flex-1 bg-transparent font-bold text-slate-700 outline-none border-b border-transparent focus:border-indigo-500 px-1"
-                                                placeholder="Phase Name"
-                                                value={phase.name}
-                                                onChange={e => updatePhase(idx, 'name', e.target.value)}
-                                            />
-                                            <select
-                                                className="bg-white border border-slate-200 text-xs font-medium rounded-lg px-2 py-2 outline-none"
-                                                value={phase.color}
-                                                onChange={e => updatePhase(idx, 'color', e.target.value)}
-                                            >
-                                                <option value="slate">Slate</option>
-                                                <option value="blue">Blue</option>
-                                                <option value="indigo">Indigo</option>
-                                                <option value="purple">Purple</option>
-                                                <option value="amber">Amber</option>
-                                                <option value="emerald">Green</option>
-                                                <option value="rose">Red</option>
-                                            </select>
-                                            <button onClick={() => removePhase(idx)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                                                <Trash2 size={16} />
-                                            </button>
+
+                                            {/* Resources Section */}
+                                            <div className="pl-12">
+                                                <div className="flex flex-wrap gap-2 mb-2">
+                                                    {phase.resources?.map((res, rIdx) => (
+                                                        <div key={rIdx} className="flex items-center gap-2 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
+                                                            <span>🔗 {res.title}</span>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const newRes = [...(phase.resources || [])];
+                                                                    newRes.splice(rIdx, 1);
+                                                                    updatePhase(idx, 'resources', newRes);
+                                                                }}
+                                                                className="text-red-400 hover:text-red-600"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setActiveResourcePhase(idx);
+                                                        setResourceForm({ title: '', url: '' });
+                                                    }}
+                                                    className="text-xs font-bold text-slate-400 hover:text-indigo-500 flex items-center gap-1 mt-2"
+                                                >
+                                                    <Plus size={12} /> Add Tool/Resource
+                                                </button>
+
+                                                {/* Inline Resource Form */}
+                                                {activeResourcePhase === idx && (
+                                                    <div className="mt-2 p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg animate-in slide-in-from-top-2">
+                                                        <div className="flex flex-col gap-2">
+                                                            <input
+                                                                placeholder="Resource Name (e.g. Tldraw)"
+                                                                className="text-xs p-2 border border-slate-200 rounded-md outline-none focus:border-indigo-400"
+                                                                value={resourceForm.title}
+                                                                onChange={e => setResourceForm({ ...resourceForm, title: e.target.value })}
+                                                                autoFocus
+                                                            />
+                                                            <input
+                                                                placeholder="URL (https://...)"
+                                                                className="text-xs p-2 border border-slate-200 rounded-md outline-none focus:border-indigo-400"
+                                                                value={resourceForm.url}
+                                                                onChange={e => setResourceForm({ ...resourceForm, url: e.target.value })}
+                                                            />
+                                                            <div className="flex gap-2 justify-end">
+                                                                <button
+                                                                    onClick={() => setActiveResourcePhase(null)}
+                                                                    className="px-2 py-1 text-xs text-slate-500 hover:text-slate-700"
+                                                                >
+                                                                    Cancel
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (!resourceForm.title || !resourceForm.url) return;
+                                                                        const newRes = [...(phase.resources || []), {
+                                                                            id: Date.now().toString(),
+                                                                            title: resourceForm.title,
+                                                                            url: resourceForm.url,
+                                                                            type: 'link' as const
+                                                                        }];
+                                                                        updatePhase(idx, 'resources', newRes);
+                                                                        setActiveResourcePhase(null);
+                                                                    }}
+                                                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md"
+                                                                >
+                                                                    Add
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                     {(!form.phases || form.phases.length === 0) && (

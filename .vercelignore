@@ -1,0 +1,18 @@
+i think you need to work here instead of thinking about teh erp , 
+
+our work is herev# Global
+node_modules
+dist
+.git
+.vercel
+
+# SparkQuest Desktop Artifacts (Not needed for Web)
+sparkquest/node_modules
+sparkquest/dist
+sparkquest/dist-electron
+sparkquest/temp_build
+sparkquest/release
+sparkquest/*.zip
+sparkquest/*.exe
+sparkquest/*.dmg
+sparkquest/build_log.txt

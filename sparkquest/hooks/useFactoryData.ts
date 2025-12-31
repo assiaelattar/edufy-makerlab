@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, Firestore } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { ProjectTemplate, ProcessTemplate, Station, Badge, StudentProject } from '../types'; // Ensure types are imported
 
@@ -15,32 +15,33 @@ export const useFactoryData = () => {
 
     useEffect(() => {
         if (!db) return;
+        const firestore = db as Firestore;
 
-        const unsubProjectTemplates = onSnapshot(collection(db, 'project_templates'), (snapshot) => {
+        const unsubProjectTemplates = onSnapshot(collection(firestore, 'project_templates'), (snapshot) => {
             setProjectTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProjectTemplate)));
         });
 
-        const unsubProcessTemplates = onSnapshot(collection(db, 'process_templates'), (snapshot) => {
+        const unsubProcessTemplates = onSnapshot(collection(firestore, 'process_templates'), (snapshot) => {
             setProcessTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProcessTemplate)));
         });
 
         const unsubStations = onSnapshot(
-            query(collection(db, 'stations'), orderBy('order', 'asc')),
+            query(collection(firestore, 'stations'), orderBy('order', 'asc')),
             (snapshot) => {
                 setStations(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Station)));
             }
         );
 
-        const unsubBadges = onSnapshot(collection(db, 'badges'), (snapshot) => {
+        const unsubBadges = onSnapshot(collection(firestore, 'badges'), (snapshot) => {
             setBadges(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Badge)));
         });
 
-        const unsubPrograms = onSnapshot(collection(db, 'programs'), (snapshot) => {
+        const unsubPrograms = onSnapshot(collection(firestore, 'programs'), (snapshot) => {
             setPrograms(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
         // Fetch all student projects for Dashboard/Review
-        const unsubStudentProjects = onSnapshot(collection(db, 'student_projects'), (snapshot) => {
+        const unsubStudentProjects = onSnapshot(collection(firestore, 'student_projects'), (snapshot) => {
             setStudentProjects(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StudentProject)));
         });
 
@@ -70,52 +71,86 @@ export const useFactoryData = () => {
         return acc;
     }, []);
 
+    // Helper to get available groups from programs
+    const availableGroups = programs.reduce((acc: string[], prog) => {
+        if (prog.grades) {
+            prog.grades.forEach((grade: any) => {
+                if (grade.groups && Array.isArray(grade.groups)) {
+                    grade.groups.forEach((group: any) => {
+                        if (group.name && !acc.includes(group.name)) {
+                            acc.push(group.name);
+                        }
+                    });
+                }
+            });
+        }
+        return acc;
+    }, []);
+
     // --- ACTIONS ---
 
     // Badges
     const addBadge = async (badge: Omit<Badge, 'id'>) => {
-        await addDoc(collection(db, 'badges'), { ...badge, createdAt: serverTimestamp() });
+        if (!db) return;
+        await addDoc(collection(db as Firestore, 'badges'), { ...badge, createdAt: serverTimestamp() });
     };
     const updateBadge = async (id: string, data: Partial<Badge>) => {
-        await updateDoc(doc(db, 'badges', id), data);
+        if (!db) return;
+        await updateDoc(doc(db as Firestore, 'badges', id), data);
     };
     const deleteBadge = async (id: string) => {
-        await deleteDoc(doc(db, 'badges', id));
+        if (!db) return;
+        await deleteDoc(doc(db as Firestore, 'badges', id));
     };
 
     // Workflows (Process Templates)
     const addWorkflow = async (workflow: Omit<ProcessTemplate, 'id'>) => {
-        await addDoc(collection(db, 'process_templates'), { ...workflow, createdAt: serverTimestamp() });
+        if (!db) return;
+        await addDoc(collection(db as Firestore, 'process_templates'), { ...workflow, createdAt: serverTimestamp() });
     };
     const updateWorkflow = async (id: string, data: Partial<ProcessTemplate>) => {
-        await updateDoc(doc(db, 'process_templates', id), data);
+        if (!db) return;
+        await updateDoc(doc(db as Firestore, 'process_templates', id), data);
     };
     const deleteWorkflow = async (id: string) => {
-        await deleteDoc(doc(db, 'process_templates', id));
+        if (!db) return;
+        await deleteDoc(doc(db as Firestore, 'process_templates', id));
     };
 
     // Stations
+    const addStation = async (station: Omit<Station, 'id'>) => {
+        if (!db) return;
+        await addDoc(collection(db as Firestore, 'stations'), { ...station, order: stations.length });
+    };
     const updateStation = async (id: string, data: Partial<Station>) => {
-        await updateDoc(doc(db, 'stations', id), data);
+        if (!db) return;
+        await updateDoc(doc(db as Firestore, 'stations', id), data);
+    };
+    const deleteStation = async (id: string) => {
+        if (!db) return;
+        await deleteDoc(doc(db as Firestore, 'stations', id));
     };
 
     // Project Templates
     const addProjectTemplate = async (template: Omit<ProjectTemplate, 'id'>) => {
-        await addDoc(collection(db, 'project_templates'), { ...template, createdAt: serverTimestamp() });
+        if (!db) return;
+        await addDoc(collection(db as Firestore, 'project_templates'), { ...template, createdAt: serverTimestamp() });
     };
     const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>) => {
-        await updateDoc(doc(db, 'project_templates', id), { ...data, updatedAt: serverTimestamp() });
+        if (!db) return;
+        await updateDoc(doc(db as Firestore, 'project_templates', id), { ...data, updatedAt: serverTimestamp() });
     };
     const deleteProjectTemplate = async (id: string) => {
         if (!db) return;
-        const batch = (await import('firebase/firestore')).writeBatch(db);
+        const firestore = db as Firestore;
+        const batch = (await import('firebase/firestore')).writeBatch(firestore);
 
         // 1. Delete the Template
-        batch.delete(doc(db, 'project_templates', id));
+        batch.delete(doc(firestore, 'project_templates', id));
 
         // 2. Find and Delete ALL Student Submissions for this template
         // We query directly to ensure we catch everything on the server
-        const submissionsQuery = query(collection(db, 'student_projects'), (await import('firebase/firestore')).where('templateId', '==', id));
+        const submissionsQuery = query(collection(firestore, 'student_projects'), (await import('firebase/firestore')).where('templateId', '==', id));
         const submissionsSnapshot = await (await import('firebase/firestore')).getDocs(submissionsQuery);
 
         submissionsSnapshot.forEach(subDoc => {
@@ -128,7 +163,8 @@ export const useFactoryData = () => {
     // Complex Actions
     const toggleStationActivation = async (stationId: string, gradeId: string, currentStations: Station[]) => {
         if (!db) return;
-        const batch = (await import('firebase/firestore')).writeBatch(db);
+        const firestore = db as Firestore;
+        const batch = (await import('firebase/firestore')).writeBatch(firestore);
         const targetStation = currentStations.find(s => s.id === stationId);
 
         if (!targetStation) return;
@@ -138,17 +174,17 @@ export const useFactoryData = () => {
         if (isCurrentlyActive) {
             // Deactivate
             const newActiveIds = (targetStation.activeForGradeIds || []).filter(id => id !== gradeId);
-            batch.update(doc(db, 'stations', stationId), { activeForGradeIds: newActiveIds });
+            batch.update(doc(firestore, 'stations', stationId), { activeForGradeIds: newActiveIds });
         } else {
             // Activate for this station
             const newActiveIds = [...(targetStation.activeForGradeIds || []), gradeId];
-            batch.update(doc(db, 'stations', stationId), { activeForGradeIds: newActiveIds });
+            batch.update(doc(firestore, 'stations', stationId), { activeForGradeIds: newActiveIds });
 
             // Deactivate for ALL other stations for this grade (Mutual Exclusivity)
             currentStations.forEach(st => {
                 if (st.id !== stationId && st.activeForGradeIds?.includes(gradeId)) {
                     const filteredIds = (st.activeForGradeIds || []).filter(id => id !== gradeId);
-                    batch.update(doc(db!, 'stations', st.id), { activeForGradeIds: filteredIds });
+                    batch.update(doc(firestore, 'stations', st.id), { activeForGradeIds: filteredIds });
                 }
             });
         }
@@ -160,10 +196,11 @@ export const useFactoryData = () => {
 
     useEffect(() => {
         if (!db) return;
+        const firestore = db as Firestore;
 
         // Fetch students (users with role 'student' or just all users for mapping)
         // Optimization: In a real app we might only fetch needed users, but for now we fetch all to ensure we have names.
-        const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+        const unsubUsers = onSnapshot(collection(firestore, 'users'), (snapshot) => {
             const allUsers = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             // Filter client-side if needed, or just keep all for mapping instructor names too
             setStudents(allUsers);
@@ -174,20 +211,33 @@ export const useFactoryData = () => {
         };
     }, []);
 
+    // Enrollments (for Grade Resolution)
+    const [enrollments, setEnrollments] = useState<any[]>([]);
+    useEffect(() => {
+        if (!db) return;
+        const firestore = db as Firestore;
+        const unsubEnrollments = onSnapshot(collection(firestore, 'enrollments'), (snapshot) => {
+            setEnrollments(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubEnrollments();
+    }, []);
+
     return {
         projectTemplates,
         processTemplates,
         stations,
         badges,
-        programs,
+        programs, // Export programs for grade-specific data
         studentProjects,
         students, // Export students
+        enrollments, // Export enrollments
         availableGrades,
+        availableGroups, // Export groups
         loading,
         actions: {
             addBadge, updateBadge, deleteBadge,
             addWorkflow, updateWorkflow, deleteWorkflow,
-            updateStation, toggleStationActivation,
+            addStation, updateStation, deleteStation, toggleStationActivation,
             addProjectTemplate, updateProjectTemplate, deleteProjectTemplate
         }
     };
