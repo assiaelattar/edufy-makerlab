@@ -37,17 +37,41 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden ml-auto text-slate-400"><X size={24} /></button>
                     </div>
 
-                    <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
-                        {modules.map(module => (
-                            <button
-                                key={module.id}
-                                onClick={() => { navigateTo(module.id); setIsMobileMenuOpen(false); }}
-                                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${currentView === module.id ? `bg-${module.color}-950/30 text-${module.color}-400 border border-${module.color}-900/50 shadow-lg` : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
-                            >
-                                <module.icon className={`w-5 h-5 transition-colors ${currentView === module.id ? `text-${module.color}-400` : 'text-slate-500 group-hover:text-slate-300'}`} />
-                                {t(`menu.${module.id}`) || module.label}
-                            </button>
-                        ))}
+                    <nav className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                        {['dashboard', 'academic', 'business', 'organization', 'system'].map((category) => {
+                            const categoryModules = modules.filter(m => m.category === category);
+                            if (categoryModules.length === 0) return null;
+
+                            const categoryLabels: Record<string, string> = {
+                                'dashboard': '',
+                                'academic': 'Academic',
+                                'business': 'Business & Operations',
+                                'organization': 'Organization',
+                                'system': 'System'
+                            };
+
+                            return (
+                                <div key={category} className="mb-6 last:mb-0">
+                                    {categoryLabels[category] && (
+                                        <div className="px-3 mb-2 text-xs font-bold text-slate-600 uppercase tracking-wider">
+                                            {categoryLabels[category]}
+                                        </div>
+                                    )}
+                                    <div className="space-y-1">
+                                        {categoryModules.map(module => (
+                                            <button
+                                                key={module.id}
+                                                onClick={() => { navigateTo(module.id); setIsMobileMenuOpen(false); }}
+                                                className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${currentView === module.id ? `bg-${module.color}-950/30 text-${module.color}-400 border border-${module.color}-900/50 shadow-lg` : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                                            >
+                                                <module.icon className={`w-5 h-5 transition-colors ${currentView === module.id ? `text-${module.color}-400` : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                                {t(`menu.${module.id}`) || module.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </nav>
 
                     <div className="p-4 border-t border-slate-800 bg-slate-950/30">
