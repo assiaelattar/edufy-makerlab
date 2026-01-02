@@ -10,8 +10,8 @@ import { authenticateBiometric, isBiometricEnabled } from '../utils/biometrics';
 export const LoginView = () => {
     const { settings } = useAppContext();
     const [isLogin, setIsLogin] = useState(true);
-    const [email, setEmail] = useState('admin@edufy.com');
-    const [password, setPassword] = useState('admin123@');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);

@@ -45,7 +45,7 @@ import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
 import { InstructorLayout } from './components/layouts/InstructorLayout';
 
-import { generateBridgeToken } from './utils/authHelpers';
+
 
 const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfile }: { currentView: string, navigateTo: any, theme: any, signOut: any, userProfile: any }) => {
     const menuItems = [
@@ -54,15 +54,7 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfil
         { id: 'portfolio', icon: Trophy, label: 'Portfolio' },
         { id: 'media', icon: Camera, label: 'Gallery' },
         { id: 'test-wizard', icon: Sparkles, label: 'New Project' },
-        // SparkQuest is now accessed via 'Enter Mission' in Studio, but keeping it here as a shortcut
-        { id: 'sparkquest', icon: Rocket, label: 'Quest' },
     ];
-
-    const handleSparkQuestLaunch = () => {
-        const token = generateBridgeToken(userProfile);
-        const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}/?token=${token}`;
-        window.open(url, "_blank");
-    };
 
     return (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-md">
@@ -88,14 +80,6 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfil
                     )
                 })}
 
-                {/* SparkQuest Button */}
-                <button
-                    onClick={handleSparkQuestLaunch}
-                    className="flex flex-col items-center justify-center py-2 rounded-2xl w-full text-white bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/30 scale-105 mx-1"
-                >
-                    <Rocket size={22} fill="white" />
-                </button>
-
                 {/* Settings */}
                 <button onClick={() => navigateTo('settings')} className="flex flex-col items-center justify-center py-2 rounded-2xl text-slate-400 hover:text-slate-600 w-full">
                     <Settings size={22} />
@@ -111,34 +95,6 @@ const AppContent = () => {
     const { requestPermission } = useNotifications();
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-    // --- UNIFIED LOGIN REDIRECT (For Authenticated Users) ---
-    useEffect(() => {
-        if (!user || !userProfile) return;
-
-        const params = new URLSearchParams(window.location.search);
-        const service = params.get('service');
-        const redirectUrl = params.get('redirect');
-
-        if (service === 'sparkquest' && redirectUrl) {
-            const token = generateBridgeToken(userProfile);
-
-            console.log("🚀 [ERP] Processing Unified Login Redirect");
-            console.log("Target:", redirectUrl);
-
-            if (!token || token.length < 10) {
-                console.error("❌ [ERP] Bridge Token Generation Failed (Empty Token)");
-                alert("Auth Error: Failed to generate bridge token. Please contact support.");
-                return;
-            }
-
-            console.log("✅ [ERP] Token Generated. Redirecting in 1s...");
-            // Artificial delay to ensure logs are visible or state is settled
-            setTimeout(() => {
-                window.location.replace(`${redirectUrl}?token=${token}`);
-            }, 1000);
-        }
-    }, [user, userProfile]);
 
     // --- STUDENT THEME LOGIC ---
     const isStudent = userProfile?.role === 'student';
@@ -582,20 +538,7 @@ const AppContent = () => {
                                 </button>
                             );
                         })}
-                        {/* SparkQuest Launch Button (Desktop) */}
-                        <div className="pt-4 mt-2 border-t-2 border-slate-100">
-                            <button
-                                onClick={() => {
-                                    const token = generateBridgeToken(userProfile);
-                                    const url = `${import.meta.env.VITE_SPARKQUEST_URL || 'http://localhost:3000'}/?token=${token}`;
-                                    window.open(url, "_blank");
-                                }}
-                                className="w-full flex items-center gap-4 px-6 py-4 rounded-xl transition-all relative group font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xl shadow-blue-500/20 hover:scale-105 hover:shadow-blue-500/40 btn-3d"
-                            >
-                                <Rocket size={24} strokeWidth={3} className="shrink-0 animate-pulse" />
-                                <span className="truncate text-lg">Mission Control</span>
-                            </button>
-                        </div>
+
                     </nav>
 
                     {/* Bottom Actions */}

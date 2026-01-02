@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { STUDIO_THEME } from '../utils/studioTheme';
 import { formatDate } from '../utils/helpers';
-import { generateBridgeToken } from '../utils/authHelpers';
+
 
 export const PortfolioView = () => {
     const { studentProjects, badges, students, t } = useAppContext();
@@ -138,8 +138,8 @@ export const PortfolioView = () => {
                                             <button
                                                 onClick={() => {
                                                     if (!userProfile) return;
-                                                    const token = generateBridgeToken(userProfile);
-                                                    window.open(`${config.sparkQuestUrl}/?token=${token}&projectId=${p.id}`, '_blank');
+                                                    if (!userProfile) return;
+                                                    window.open(`${config.sparkQuestUrl}/?projectId=${p.id}`, '_blank');
                                                 }}
                                                 className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-sm transition-transform hover:scale-105 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
                                             >

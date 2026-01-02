@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { generateBridgeToken } from '../utils/authHelpers';
+
 import { Brain, Plus, Target, Star, Upload, ExternalLink, CheckCircle2, Clock, AlertCircle, Image as ImageIcon, ChevronRight, Award, BookOpen, LayoutGrid, List, UserCheck, Trash2, ArrowRight, ClipboardList, Play, CheckSquare, ArrowLeft, Lock, Zap, PenTool, Send, Database, MoreHorizontal, Rocket, ListChecks, Beaker, FileText, GitCommit, Edit3 } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
