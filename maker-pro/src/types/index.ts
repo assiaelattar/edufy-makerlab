@@ -11,6 +11,7 @@ export interface Student {
     };
     photoUrl?: string; // Creative Avatar URL
     badgeId?: string;
+    badges?: string[];
     points?: number;
     level?: number;
     xp?: number;

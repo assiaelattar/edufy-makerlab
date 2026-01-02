@@ -120,7 +120,14 @@ export const SettingsView = () => {
         try {
             const compressed = await compressImage(file, 200, 0.7); // Smaller for logo
             setLogoPreview(compressed);
-            setSettings({ ...settings, logoUrl: compressed });
+
+            const newSettings = { ...settings, logoUrl: compressed };
+            setSettings(newSettings);
+
+            // Auto-save to DB
+            if (db) {
+                await setDoc(doc(db, 'settings', 'global'), newSettings);
+            }
         } catch (err) {
             console.error(err);
             alert("Failed to process logo image.");

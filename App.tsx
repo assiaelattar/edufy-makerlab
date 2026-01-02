@@ -36,7 +36,7 @@ import { LoginView } from './views/LoginView';
 import { Modal } from './components/Modal';
 import { Logo } from './components/Logo';
 import { NotificationDropdown } from './components/NotificationDropdown';
-import { DevRoleSwitcher } from './components/DevRoleSwitcher';
+
 import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from './services/firebase';
 import { formatCurrency, compressImage, calculateAge } from './utils/helpers';
@@ -355,6 +355,20 @@ const AppContent = () => {
 
             // 1. Create Student if New
             if (!finalStudentId) {
+                // DUPLICATE CHECK
+                const isDuplicate = students.some(s =>
+                    s.name.trim().toLowerCase() === studentName.trim().toLowerCase() ||
+                    (s.parentPhone && enrollStudentForm.parentPhone && s.parentPhone.replace(/\D/g, '') === enrollStudentForm.parentPhone.replace(/\D/g, ''))
+                );
+
+                if (isDuplicate) {
+                    const confirmDuplicate = window.confirm("A student with this Name or Phone Number already exists. Are you sure you want to create a duplicate?");
+                    if (!confirmDuplicate) {
+                        setIsSubmittingEnrollment(false);
+                        return;
+                    }
+                }
+
                 const sRef = await addDoc(collection(db, 'students'), {
                     ...enrollStudentForm,
                     status: 'active',
@@ -970,7 +984,7 @@ const AppContent = () => {
                     </div>
                 </div>
             </Modal>
-            <DevRoleSwitcher />
+
         </Layout>
     );
 };

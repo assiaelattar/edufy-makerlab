@@ -26,7 +26,7 @@ export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) 
         { id: 'tools', icon: Box, label: 'Inventory' },
         { id: 'media', icon: Camera, label: 'Gallery' },
         { id: 'arcade-mgr', icon: Gamepad2, label: 'Arcade Manager' },
-        { id: 'sparkquest', icon: Home, label: 'SparkQuest' },
+
     ];
 
     // Import LayoutDashboard icon specifically as it was missing in lucide import above
@@ -67,21 +67,7 @@ export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) 
                     {/* Navigation */}
                     <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                         {menuItems.map(item => {
-                            if (item.id === 'sparkquest') {
-                                return (
-                                    <button
-                                        key={item.id}
-                                        onClick={() => window.open(`${config.sparkQuestUrl}/?token=demo-token`, "_blank")}
-                                        className={`
-                                            w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group
-                                            text-purple-500 hover:bg-purple-50 hover:text-purple-700 hover:pl-5
-                                        `}
-                                    >
-                                        <item.icon size={20} className="text-purple-400 group-hover:text-purple-600" strokeWidth={2} />
-                                        {item.label}
-                                    </button>
-                                )
-                            }
+
                             const isActive = currentView === item.id;
                             const Icon = item.icon;
                             return (

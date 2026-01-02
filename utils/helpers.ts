@@ -51,6 +51,44 @@ export const calculateAge = (birthDate?: string) => {
   return age;
 };
 
+export const getDaysUntilBirthday = (birthDate: string | Date): number | null => {
+  if (!birthDate) return null;
+  const today = new Date();
+  const dob = new Date(birthDate);
+  if (isNaN(dob.getTime())) return null;
+
+  const currentYear = today.getFullYear();
+  const nextBirthday = new Date(dob);
+  nextBirthday.setFullYear(currentYear);
+
+  // If birthday has passed this year (or is today), check if it's strictly in the past
+  // Note: If we want to say "Happy Birthday" today, diff should be 0.
+  // If today is 2023-01-01 and birthday is 2023-01-01, diff is roughly 0.
+
+  // Reset hours to avoid timezone/time diff issues
+  today.setHours(0, 0, 0, 0);
+  nextBirthday.setHours(0, 0, 0, 0);
+
+  if (nextBirthday < today) {
+    nextBirthday.setFullYear(currentYear + 1);
+  }
+
+  // Calculate difference in days
+  const diffTime = nextBirthday.getTime() - today.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+};
+
+export const getUpcomingBirthdays = (students: any[], daysLookahead: number = 21) => {
+  return students
+    .map(s => {
+      const daysCheck = getDaysUntilBirthday(s.birthDate);
+      return { ...s, daysUntilBirthday: daysCheck };
+    })
+    .filter(s => s.daysUntilBirthday !== null && s.daysUntilBirthday >= 0 && s.daysUntilBirthday <= daysLookahead)
+    .sort((a, b) => (a.daysUntilBirthday || 0) - (b.daysUntilBirthday || 0));
+};
+
 // --- IMAGE COMPRESSION UTILITY ---
 export const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promise<string> => {
   return new Promise((resolve, reject) => {

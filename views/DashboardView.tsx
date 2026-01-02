@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { LayoutDashboard, Calendar, DollarSign, Briefcase, Users, UserPlus, Zap, BookOpen, CreditCard, Activity, CheckCircle2, ChevronRight, Hourglass, Building, ClipboardCheck, CalendarCheck, BarChart3, Filter, Phone, MessageCircle, ArrowUpRight, CheckSquare, PieChart, Megaphone, Clock, AlertTriangle, TrendingUp, ArrowRight, Trophy, Rocket, Star, Target, Award } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, getDaysDifference, formatDate } from '../utils/helpers';
+import { formatCurrency, getDaysDifference, formatDate, getUpcomingBirthdays } from '../utils/helpers';
 import { db } from '../services/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 
@@ -248,7 +248,11 @@ const StudentDashboard = () => {
 // --- ADMIN DASHBOARD COMPONENT ---
 const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t, studentProjects } = useAppContext();
+
     const { userProfile } = useAuth();
+
+    // Birthday Logic
+    const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(students, 21).slice(0, 3), [students]);
 
     // Safe name extraction
     const firstName = userProfile?.name ? userProfile.name.split(' ')[0] : 'User';
@@ -574,6 +578,34 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                             })}
                         </div>
                     </div>
+
+
+                    {/* Upcoming Birthdays Widget */}
+                    {upcomingBirthdays.length > 0 && (
+                        <div className={`rounded-2xl p-5 ${theme.card} border-2 border-pink-500/10`}>
+                            <h3 className={`font-bold mb-4 text-sm flex items-center gap-2 ${theme.text}`}>
+                                <Users size={16} className="text-pink-500" /> Upcoming Birthdays
+                            </h3>
+                            <div className="space-y-3">
+                                {upcomingBirthdays.map(s => (
+                                    <div key={s.id} onClick={() => navigateTo('student-details', { studentId: s.id })} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer ${theme.bgMuted} ${theme.cardHover}`}>
+                                        <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500 font-bold text-xs shrink-0">
+                                            {s.name.charAt(0)}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-sm font-bold truncate ${theme.text}`}>{s.name}</p>
+                                            <p className="text-xs text-pink-500 font-medium">
+                                                {s.daysUntilBirthday === 0 ? "🎉 Today!" : `${s.daysUntilBirthday} days left`}
+                                            </p>
+                                        </div>
+                                        <div className="text-xs text-slate-400 font-medium bg-white px-2 py-1 rounded border border-slate-100 dark:bg-slate-800 dark:border-slate-700">
+                                            {new Date(s.birthDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* RIGHT COLUMN: ACTIONS & ALERTS */}
@@ -783,7 +815,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

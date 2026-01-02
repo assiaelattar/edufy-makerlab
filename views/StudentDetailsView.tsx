@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, LayoutDashboard, UserPlus, Copy, Share2, Award } from 'lucide-react';
+import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, LayoutDashboard, UserPlus, Copy, Share2, Award, Shield, Sparkles } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint } from '../utils/helpers';
+import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday } from '../utils/helpers';
 import { updateDoc, doc, deleteDoc, increment, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Modal } from '../components/Modal';
@@ -54,6 +54,37 @@ export const StudentDetailsView = ({
     const [activeTab, setActiveTab] = useState('Academics');
 
     if (!student) return <div className="p-8 text-center text-slate-500">Student profile not found.</div>;
+
+    // --- NEW: Local Edit State ---
+    const [isEditingStudent, setIsEditingStudent] = useState(false);
+    const [editFormData, setEditFormData] = useState<Partial<typeof student>>({});
+
+    const handleEditClick = () => {
+        setEditFormData({
+            name: student.name,
+            birthDate: student.birthDate,
+            parentName: student.parentName,
+            parentPhone: student.parentPhone,
+            email: student.email,
+            address: student.address,
+            school: student.school,
+            medicalInfo: student.medicalInfo,
+        });
+        setIsEditingStudent(true);
+    };
+
+    const handleSaveStudent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!db || !student.id) return;
+        try {
+            await updateDoc(doc(db, 'students', student.id), editFormData);
+            setIsEditingStudent(false);
+            alert("Student details updated successfully!");
+        } catch (err: any) {
+            console.error("Error updating student:", err);
+            alert("Failed to update student details.");
+        }
+    };
 
     // ... [Calculations for enrollments, payments, etc. same as before] ...
     const studentEnrollments = enrollments.filter(e => e.studentId === student.id);
@@ -523,15 +554,55 @@ export const StudentDetailsView = ({
                                     </span>
                                 )}
                             </div>
-                            <div className="flex flex-wrap items-center gap-4 text-slate-400 text-sm">
-                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors">
+                            <div className="flex flex-wrap items-center gap-4 text-slate-400 text-sm mt-2">
+                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors" title="Email">
                                     <Mail size={14} className="text-indigo-500" /> {student.email || 'No email'}
                                 </span>
                                 <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors">
+                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors" title="Parent Phone">
                                     <Phone size={14} className="text-indigo-500" /> {student.parentPhone}
                                 </span>
+                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors" title="Date of Birth">
+                                    <Calendar size={14} className="text-indigo-500" />
+                                    {student.birthDate ? (
+                                        <>
+                                            {student.birthDate} <span className="text-xs bg-slate-800 px-1.5 rounded text-slate-500">({calculateAge(student.birthDate)} yo)</span>
+                                            {(() => {
+                                                const days = getDaysUntilBirthday(student.birthDate);
+                                                if (days !== null && days <= 21) {
+                                                    return (
+                                                        <span className={`ml-2 text-xs font-bold px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1 ${days === 0 ? 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/50' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'}`}>
+                                                            {days === 0 ? <><Sparkles size={12} /> Happy Birthday!</> : <><Clock size={12} /> {days} days left</>}
+                                                        </span>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </>
+                                    ) : (
+                                        <span className="text-slate-600 italic">No DOB Set</span>
+                                    )}
+                                </span>
                             </div>
+                            <div className="flex flex-wrap items-center gap-4 text-slate-400 text-sm mt-1">
+                                <span className="flex items-center gap-1.5">
+                                    <Users size={14} className="text-slate-600" /> <span className="text-slate-500">Parent:</span> <span className={!student.parentName ? "text-slate-600 italic" : "text-slate-300"}>{student.parentName || 'Not Listed'}</span>
+                                </span>
+                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                                <span className="flex items-center gap-1.5">
+                                    <BookOpen size={14} className="text-slate-600" /> <span className={!student.school ? "text-slate-600 italic" : "text-slate-300"}>{student.school || 'No School Listed'}</span>
+                                </span>
+                            </div>
+                            {student.medicalInfo ? (
+                                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-red-950/30 border border-red-900/50 rounded-lg text-red-200 text-xs font-bold animate-pulse">
+                                    <AlertCircle size={14} className="text-red-500" /> Medical Info: {student.medicalInfo}
+                                </div>
+                            ) : (
+                                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-slate-800/30 border border-slate-800 rounded-lg text-slate-500 text-xs">
+                                    <Shield size={14} className="text-emerald-500/50" /> No Medical Alerts
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -550,7 +621,7 @@ export const StudentDetailsView = ({
                             {student.lastScheduleSharedAt ? <CheckCircle2 size={18} /> : <Share2 size={18} />}
                             <span className="hidden sm:inline">{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</span>
                         </button>
-                        <button onClick={() => onEditStudent(student)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-all hover:border-slate-600 text-sm font-medium">
+                        <button onClick={handleEditClick} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-all hover:border-slate-600 text-sm font-medium">
                             <Pencil size={18} /> <span className="hidden sm:inline">Edit</span>
                         </button>
                         <button onClick={() => navigateTo('students')} className="flex-none flex items-center justify-center p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl border border-slate-700 transition-all" title="Back to Directory">
@@ -841,6 +912,109 @@ export const StudentDetailsView = ({
                     </div>
                 )}
             </Modal>
-        </div>
+
+            {/* EDIT STUDENT MODAL */}
+            <Modal isOpen={isEditingStudent} onClose={() => setIsEditingStudent(false)} title="Edit Student Details">
+                <form onSubmit={handleSaveStudent} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Full Name</label>
+                            <input
+                                type="text"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editFormData.name || ''}
+                                onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Date of Birth</label>
+                            <input
+                                type="date"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editFormData.birthDate || ''}
+                                onChange={e => setEditFormData({ ...editFormData, birthDate: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Parent Name</label>
+                            <input
+                                type="text"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editFormData.parentName || ''}
+                                onChange={e => setEditFormData({ ...editFormData, parentName: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Parent Phone</label>
+                            <input
+                                type="text"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editFormData.parentPhone || ''}
+                                onChange={e => setEditFormData({ ...editFormData, parentPhone: e.target.value })}
+                                required
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Email (Optional)</label>
+                        <input
+                            type="email"
+                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                            value={editFormData.email || ''}
+                            onChange={e => setEditFormData({ ...editFormData, email: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">School</label>
+                            <input
+                                type="text"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editFormData.school || ''}
+                                onChange={e => setEditFormData({ ...editFormData, school: e.target.value })}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Address</label>
+                            <input
+                                type="text"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editFormData.address || ''}
+                                onChange={e => setEditFormData({ ...editFormData, address: e.target.value })}
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Medical Info / Allergies</label>
+                        <textarea
+                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24"
+                            value={editFormData.medicalInfo || ''}
+                            onChange={e => setEditFormData({ ...editFormData, medicalInfo: e.target.value })}
+                            placeholder="e.g. Peanut allergy, Asthma..."
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                        <button
+                            type="button"
+                            onClick={() => setIsEditingStudent(false)}
+                            className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg shadow-blue-900/20"
+                        >
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+        </div >
     );
 };
