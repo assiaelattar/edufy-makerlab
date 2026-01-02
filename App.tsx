@@ -374,6 +374,39 @@ const AppContent = () => {
                     }
                 });
 
+                // 1.6 Generate Parent Account
+                if (enrollStudentForm.email) {
+                    try {
+                        const parentEmail = enrollStudentForm.email;
+                        const parentPassword = Math.random().toString(36).slice(-8);
+
+                        // Create Auth User
+                        const parentUid = await createSecondaryUser(parentEmail, parentPassword);
+
+                        // Create User Profile
+                        await setDoc(doc(db, 'users', parentUid), {
+                            uid: parentUid,
+                            email: parentEmail,
+                            name: enrollStudentForm.parentName || 'Parent',
+                            role: 'parent',
+                            status: 'active',
+                            createdAt: serverTimestamp()
+                        });
+
+                        // Link to Student
+                        await updateDoc(doc(db, 'students', finalStudentId), {
+                            parentLoginInfo: {
+                                email: parentEmail,
+                                initialPassword: parentPassword,
+                                uid: parentUid
+                            }
+                        });
+                    } catch (parentErr) {
+                        console.error("Failed to generate parent account:", parentErr);
+                        // If email exists, we effectively skip auto-creation (manual linking required later)
+                    }
+                }
+
             } catch (e) {
                 console.error("Failed to auto-generate student account:", e);
                 // Proceed with enrollment even if account gen fails

@@ -578,8 +578,11 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
   const win = window.open('', '_blank');
   if (!win) return;
 
-  // Use the local logo image
   const logoHtml = `<img src="${window.location.origin}/images/logo.png" alt="MakerLab Academy" style="height: 60px; object-fit: contain;" />`;
+
+  // Construct Parent Portal URL for QR Code
+  const parentPortalUrl = `${window.location.origin}/parent-portal`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(parentPortalUrl)}`;
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -588,32 +591,100 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
     <html>
     <head>
       <title>MakerLab Academy</title>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
       <style>
-        body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; max-width: 1000px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
-        .student-info h1 { font-size: 24px; margin: 0 0 5px 0; color: #0f172a; }
-        .student-info p { color: #64748b; margin: 0; }
-        .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
-        .day-header { text-align: center; background: #f1f5f9; padding: 10px; font-weight: 600; border-radius: 8px; color: #475569; font-size: 14px; }
-        .day-col { min-height: 300px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; }
-        .class-card { background: #eff6ff; border-left: 4px solid #2563eb; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 13px; }
+        body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; max-width: 1000px; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; }
+        .student-info h1 { font-size: 28px; font-weight: 800; margin: 0 0 5px 0; color: #0f172a; letter-spacing: -0.5px; }
+        .student-info p { color: #64748b; margin: 0; font-size: 14px; font-weight: 500; }
+        
+        /* Schedule Grid */
+        .grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 40px; }
+        .day-header { text-align: center; background: #f8fafc; padding: 12px 5px; font-weight: 700; border-radius: 8px; color: #475569; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; border: 1px solid #f1f5f9; }
+        .day-col { min-height: 250px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 8px; background: #fff; }
+        .class-card { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px; border-radius: 6px; margin-bottom: 10px; font-size: 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
         .class-card.diy { background: #f5f3ff; border-left-color: #8b5cf6; }
-        .class-title { font-weight: 700; color: #1e40af; margin-bottom: 2px; }
+        .class-title { font-weight: 700; color: #1e40af; margin-bottom: 4px; font-size: 13px; line-height: 1.3; }
         .diy .class-title { color: #5b21b6; }
-        .class-meta { color: #60a5fa; font-size: 11px; }
+        .class-meta { color: #60a5fa; font-size: 11px; font-weight: 600; text-transform: uppercase; }
         .diy .class-meta { color: #a78bfa; }
 
-        /* Credentials Section */
-        .credentials-section { margin-top: 40px; border-top: 2px dashed #cbd5e1; padding-top: 30px; page-break-inside: avoid; }
-        .credentials-header { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
-        .credential-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .credential-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; }
-        .cred-title { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 5px; text-transform: uppercase; }
-        .cred-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
-        .cred-row .label { color: #64748b; font-size: 12px; }
-        .cred-row .value { font-family: monospace; font-weight: 600; color: #0f172a; }
-        .login-url { margin-top: 20px; font-size: 12px; color: #64748b; text-align: center; }
+        /* Access Pass Section */
+        .credentials-section { 
+            margin-top: 20px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 20px;
+            padding: 30px; 
+            page-break-inside: avoid; 
+            background: linear-gradient(to bottom right, #f8fafc, #fff);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.05);
+        }
+        
+        .credentials-header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 25px;
+            border-bottom: 2px dashed #e2e8f0;
+            padding-bottom: 15px;
+        }
+        
+        .cr-title { font-size: 18px; font-weight: 800; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
+        .cr-badge { background: #0f172a; color: white; padding: 4px 10px; border-radius: 99px; font-size: 10px; letter-spacing: 1px; }
+
+        .pass-layout { display: flex; gap: 40px; }
+        
+        .creds-col { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+
+        .credential-box { 
+            background: white; 
+            border: 1px solid #cbd5e1; 
+            border-radius: 12px; 
+            padding: 20px; 
+            position: relative;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+            transition: all 0.2s;
+        }
+        
+        .box-label { 
+            position: absolute; 
+            top: -10px; 
+            left: 15px; 
+            background: #fff; 
+            padding: 0 8px; 
+            font-size: 11px; 
+            font-weight: 700; 
+            color: #2563eb; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+        }
+        
+        .cred-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .cred-row:last-child { margin-bottom: 0; }
+        .label { color: #64748b; font-size: 12px; font-weight: 600; }
+        .value { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #0f172a; font-size: 14px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+        
+        /* QR Code Side */
+        .qr-col { 
+            width: 180px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center; 
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+        }
+        
+        .qr-img { width: 120px; height: 120px; margin-bottom: 10px; mix-blend-mode: multiply; }
+        .qr-text { font-size: 12px; font-weight: 700; color: #0f172a; line-height: 1.3; margin-bottom: 4px; }
+        .qr-sub { font-size: 10px; color: #64748b; }
+
+        .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; }
 
         /* Flyer Section */
         .flyer-section { 
@@ -637,9 +708,10 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
         @media print {
           body { padding: 0; }
           .grid { gap: 5px; }
-          .day-col { border: 1px solid #e2e8f0; }
-          .class-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .credential-box { border: 1px solid #cbd5e1; }
+          .day-col { border: 1px solid #cbd5e1; }
+          .class-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #bfdbfe; }
+          .credential-box { border: 1px solid #94a3b8; }
+          .credentials-section { border: 1px solid #94a3b8; background: white; }
           .flyer-section { min-height: 100vh; margin: 0; }
         }
       </style>
@@ -654,10 +726,11 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
       <div class="header">
         <div class="student-info">
           <h1>${student.name}</h1>
-          <p>Weekly Class Schedule • MakerLab Academy</p>
+          <p>Weekly Class Schedule • ${settings.academicYear || 'Academic Year'}</p>
         </div>
         <div>${logoHtml}</div>
       </div>
+      
       <div class="grid">
         ${days.map(day => `<div class="day-header">${day}</div>`).join('')}
         ${days.map(day => {
@@ -685,33 +758,49 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
   }).join('')}
       </div>
 
-      <!-- Credentials Section -->
+      <!-- Enhanced Access Pass Section -->
       <div class="credentials-section">
-        <div class="credentials-header">Access Credentials</div>
-        <div class="credential-grid">
-            <div class="credential-box">
-                <div class="cred-title">Student Portal</div>
-                <div class="cred-row"><span class="label">Email</span> <span class="value">${student.loginInfo?.email || 'Not generated'}</span></div>
-                <div class="cred-row"><span class="label">Password</span> <span class="value">${student.loginInfo?.initialPassword || '********'}</span></div>
-            </div>
-            ${student.parentLoginInfo ? `
-            <div class="credential-box">
-                <div class="cred-title">Parent Portal</div>
-                <div class="cred-row"><span class="label">Email</span> <span class="value">${student.parentLoginInfo.email}</span></div>
-                <div class="cred-row"><span class="label">Password</span> <span class="value">${student.parentLoginInfo.initialPassword || '********'}</span></div>
-            </div>
-            ` : `
-             <div class="credential-box" style="opacity: 0.5; border-style: dashed;">
-                <div class="cred-title">Parent Portal</div>
-                <div class="cred-row" style="justify-content: center;"><span class="label">No Account</span></div>
-            </div>
-            `}
+        <div class="credentials-header">
+            <div class="cr-title">Access Credentials <span class="cr-badge">CONFIDENTIAL</span></div>
+            <div style="font-size:12px; color:#64748b; font-weight:600;">MakerLab Student ID</div>
         </div>
-        <p class="login-url">Student Login: <strong>${window.location.host}</strong></p>
-        <p class="login-url">Parent Portal: <strong>${window.location.host}/parent-portal</strong></p>
-      </div>
+        
+        <div class="pass-layout">
+            <div class="creds-col">
+                <!-- Parent Portal Card -->
+                <div class="credential-box" style="border-color: #2563eb;">
+                    <span class="box-label">Parent Portal Access</span>
+                    ${student.parentLoginInfo ? `
+                        <div class="cred-row"><span class="label">Email</span> <span class="value">${student.parentLoginInfo.email}</span></div>
+                        <div class="cred-row"><span class="label">Password</span> <span class="value">${student.parentLoginInfo.initialPassword || '********'}</span></div>
+                        <div style="margin-top:10px; font-size:11px; color:#2563eb; display:flex; align-items:center; gap:5px;">
+                            <strong>URL:</strong> ${window.location.host}/parent-portal
+                        </div>
+                    ` : `
+                        <div style="text-align:center; padding:10px; color:#94a3b8; font-size:12px;">No active parent account</div>
+                    `}
+                </div>
 
-      <!-- Flyer Section -->
+                <!-- Student Portal Card -->
+                <div class="credential-box">
+                    <span class="box-label" style="color: #4f46e5;">Student Portal (SparkQuest)</span>
+                    <div class="cred-row"><span class="label">Username</span> <span class="value">${student.loginInfo?.email || 'Not generated'}</span></div>
+                    <div class="cred-row"><span class="label">Password</span> <span class="value">${student.loginInfo?.initialPassword || '********'}</span></div>
+                </div>
+            </div>
+
+            <!-- QR Code Section -->
+            <div class="qr-col">
+                <img src="${qrCodeUrl}" class="qr-img" alt="Scan QR" />
+                <div class="qr-text">Scan to Access<br/>Parent Portal</div>
+                <div class="qr-sub">Track progress & payments</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            Keep this document safe. Use the credentials above to log in to your respective portals.
+        </div>
+      </div>
 
 
       <script>window.onload = function() { setTimeout(function() { window.print(); }, 800); }</script>
