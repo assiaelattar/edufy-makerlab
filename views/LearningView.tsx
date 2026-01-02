@@ -2474,8 +2474,7 @@ export const LearningView = () => {
                             // If not found in context yet, try to open anyway (params might work if SparkQuest fetches its own data)
                             // But openActiveProject relies on generating a token.
                             if (userProfile) {
-                                const bridgeToken = generateBridgeToken(userProfile);
-                                const url = `${config.sparkQuestUrl}?projectId=${projectId}&token=${bridgeToken}`;
+                                const url = `${config.sparkQuestUrl}?projectId=${projectId}`;
                                 window.open(url, '_blank');
                             }
                         }
@@ -2564,11 +2563,9 @@ export const LearningView = () => {
                                             // Ensure we have a profile to generate token from
                                             if (!userProfile) return;
 
-                                            // Generate bridge token
-                                            const token = generateBridgeToken(userProfile);
-
-                                            // Construct SparkQuest URL with token and templateId
+                                            // Construct SparkQuest URL with templateId
                                             // This assumes SparkQuest can handle ?templateId=... to auto-start
+
                                             // Or we just go to root and let them pick, but better to deeplink.
                                             // Based on previous code, we might need to create the project first?
                                             // Wait, "Accept Mission" usually creates a project instance.
@@ -2748,8 +2745,7 @@ export const LearningView = () => {
                                                                         // SparkQuest Launch Logic
                                                                         if (true) {
                                                                             // ALWAYS open in SparkQuest as requested
-                                                                            const token = generateBridgeToken(userProfile);
-                                                                            const url = `${config.sparkQuestUrl}/?token=${token}&projectId=${project.id}`;
+                                                                            const url = `${config.sparkQuestUrl}/?projectId=${project.id}`;
                                                                             window.open(url, '_blank');
                                                                         }
                                                                     }}
