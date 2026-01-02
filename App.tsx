@@ -32,7 +32,9 @@ import { TestDesignView } from './views/TestDesignView';
 import { TestWizardView } from './views/TestWizardView';
 import { ArcadeManagerView } from './views/learning/ArcadeManagerView';
 import { CommunicationsView } from './views/CommunicationsView';
+// ... imports
 import { LoginView } from './views/LoginView';
+import { ParentLoginView } from './views/ParentLoginView';
 import { Modal } from './components/Modal';
 import { Logo } from './components/Logo';
 import { NotificationDropdown } from './components/NotificationDropdown';
@@ -454,6 +456,7 @@ const AppContent = () => {
 
     // Routing
     if (window.location.search.includes('mode=booking')) return <PublicBookingView />;
+    if (window.location.pathname === '/parent-portal') return <ParentLoginView />;
     if (authLoading || appLoading || (user && !userProfile)) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
     if (!user) return <LoginView />;
 

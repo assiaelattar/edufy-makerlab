@@ -826,8 +826,7 @@ export const LearningView = () => {
             const newProjectId = docRef.id;
 
             // 3. Launch SparkQuest
-            const token = generateBridgeToken(userProfile);
-            const url = `${config.sparkQuestUrl}?projectId=${newProjectId}&token=${token}`;
+            const url = `${config.sparkQuestUrl}?projectId=${newProjectId}`;
             window.open(url, '_blank');
 
             // 4. Update UI State (Legacy compatibility)
@@ -857,8 +856,8 @@ export const LearningView = () => {
     const openActiveProject = (project: StudentProject) => {
         // Redirect to new SparkQuest App
         if (!userProfile) return;
-        const bridgeToken = generateBridgeToken(userProfile);
-        const url = `${config.sparkQuestUrl}?projectId=${project.id}&token=${bridgeToken}`;
+        if (!userProfile) return;
+        const url = `${config.sparkQuestUrl}?projectId=${project.id}`;
         window.open(url, '_blank');
 
         // Legacy: setActiveProject(project); setIsProjectModalOpen(true);

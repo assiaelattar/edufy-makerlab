@@ -707,7 +707,8 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
             </div>
             `}
         </div>
-        <p class="login-url">Login at: <strong>${window.location.host}</strong></p>
+        <p class="login-url">Student Login: <strong>${window.location.host}</strong></p>
+        <p class="login-url">Parent Portal: <strong>${window.location.host}/parent-portal</strong></p>
       </div>
 
       <!-- Flyer Section -->
