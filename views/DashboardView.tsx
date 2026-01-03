@@ -247,7 +247,7 @@ const StudentDashboard = () => {
 
 // --- ADMIN DASHBOARD COMPONENT ---
 const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
-    const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t, studentProjects } = useAppContext();
+    const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t, studentProjects, expenses, expenseTemplates, bookings } = useAppContext();
 
     const { userProfile } = useAuth();
 
@@ -412,6 +412,121 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
             return count;
         });
     }, [leads]);
+
+    // --- ENHANCED ACTION CENTER ALERTS ---
+    const actionAlerts = useMemo(() => {
+        const alerts = [];
+
+        // 1. Finance Alerts (Unpaid Recurring Bills)
+        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+        const unpaidBills = expenseTemplates.filter(t => {
+            if (!t.recurring) return false;
+            const isPaid = expenses.some(e =>
+                e.templateId === t.id &&
+                e.date.startsWith(currentMonth) &&
+                e.session === selectedSession
+            );
+            return !isPaid;
+        });
+        if (unpaidBills.length > 0) {
+            alerts.push({
+                type: 'finance',
+                count: unpaidBills.length,
+                label: 'Unpaid Bills',
+                subLabel: 'Recurring expenses due',
+                route: 'finance', // Redirect to finance
+                color: 'rose',
+                icon: DollarSign
+            });
+        }
+
+        // 2. Lead Alerts
+        const staleLeads = leads.filter(l => {
+            const created = getDate(l.createdAt);
+            const diffDays = getDaysDifference(created, new Date());
+            return l.status === 'new' && diffDays > 2;
+        });
+        if (staleLeads.length > 0) {
+            alerts.push({
+                type: 'leads',
+                count: staleLeads.length,
+                label: 'Stale Leads',
+                subLabel: '> 2 days without contact',
+                route: 'marketing',
+                color: 'purple',
+                icon: Megaphone
+            });
+        }
+
+        // 3. Absence Alerts (Risk)
+        const atRiskStudents = students.filter(s => {
+            if (s.status !== 'active') return false;
+            // Get last 2 records
+            const myRecords = attendanceRecords
+                .filter(r => r.studentId === s.id)
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                .slice(0, 2);
+
+            return myRecords.length >= 2 && myRecords.every(r => r.status === 'absent');
+        });
+        if (atRiskStudents.length > 0) {
+            alerts.push({
+                type: 'absence',
+                count: atRiskStudents.length,
+                label: 'At-Risk Students',
+                subLabel: '2+ consecutive absences',
+                route: 'attendance',
+                color: 'red',
+                icon: AlertTriangle
+            });
+        }
+
+        // 4. Workshop Feedback (Parents with 2+ attended workshops)
+        // Group bookings by parent phone -> count attended
+        const parentAttendance: Record<string, number> = {};
+        bookings.forEach(b => {
+            if (b.status === 'attended') {
+                parentAttendance[b.phoneNumber] = (parentAttendance[b.phoneNumber] || 0) + 1;
+            }
+        });
+        const feedbackPendingCount = Object.values(parentAttendance).filter(count => count >= 2).length;
+        if (feedbackPendingCount > 0) {
+            alerts.push({
+                type: 'workshop',
+                count: feedbackPendingCount,
+                label: 'Feedback Calls',
+                subLabel: 'Parents with 2+ workshops',
+                route: 'workshops',
+                color: 'pink',
+                icon: Phone
+            });
+        }
+
+        // 5. Program Progress
+        const stagnantPrograms = programs.filter(p => {
+            const created = getDate(p.createdAt || new Date());
+            const age = getDaysDifference(created, new Date());
+            const hasStudents = enrollments.some(e => e.programId === p.id);
+            return age > 7 && !hasStudents;
+        });
+        if (stagnantPrograms.length > 0) {
+            alerts.push({
+                type: 'program',
+                count: stagnantPrograms.length,
+                label: 'Stagnant Programs',
+                subLabel: 'No enrollments > 7 days',
+                route: 'classes',
+                color: 'blue',
+                icon: Rocket
+            });
+        }
+
+        return alerts;
+
+    }, [expenses, expenseTemplates, leads, students, attendanceRecords, programs, enrollments, selectedSession, bookings]);
+
+    const totalActiveAlerts = actionAlerts.reduce((sum, a) => sum + a.count, 0) + totalPendingActions;
+    const alertHealth = Math.max(0, 100 - (totalActiveAlerts * 5));
 
     return (
         <div className="space-y-6 pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
@@ -750,6 +865,20 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                         <div className="bg-slate-800 text-slate-400 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight size={12} /></div>
                                     </div>
                                 ))}
+
+                                {/* DYNAMIC ALERTS */}
+                                {actionAlerts.map((alert, idx) => (
+                                    <div key={idx} onClick={() => navigateTo(alert.route as any)} className={`group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors bg-${alert.color}-950/10 border-${alert.color}-900/30 hover:bg-${alert.color}-900/20`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg bg-${alert.color}-500/10 text-${alert.color}-500`}><alert.icon size={16} /></div>
+                                            <div>
+                                                <p className={`text-sm font-bold text-${alert.color}-400`}>{alert.count} {alert.label}</p>
+                                                <p className={`text-[10px] text-${alert.color}-300/70`}>{alert.subLabel}</p>
+                                            </div>
+                                        </div>
+                                        <div className={`bg-${alert.color}-500 text-${alert.color}-950 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity`}><ArrowRight size={12} /></div>
+                                    </div>
+                                ))}
                                 {totalPendingActions === 0 && (
                                     <div className="text-center py-4">
                                         <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-900/20 text-emerald-500 mb-2">
@@ -815,7 +944,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
                 </div>
             </div>
-        </div >
+        </div>
     );
 };
 

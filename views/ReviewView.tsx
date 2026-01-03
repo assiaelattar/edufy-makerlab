@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, Clock, Eye, AlertCircle, MessageSquare, ChevronRight, Filter, Search, Award, Check, ExternalLink, ArrowLeft, Trash2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { STUDIO_THEME, studioClass } from '../utils/studioTheme';
@@ -20,6 +21,7 @@ const QUICK_FEEDBACKS = [
 export const ReviewView = () => {
     const { studentProjects, students, navigateTo, viewParams } = useAppContext();
     const { userProfile } = useAuth();
+    const { confirm, alert } = useConfirm();
     const isInstructor = userProfile?.role === 'instructor' || userProfile?.role === 'admin';
 
     // State
@@ -83,14 +85,14 @@ export const ReviewView = () => {
             setFeedback('');
         } catch (e) {
             console.error(e);
-            alert("Error approving step");
+            alert("Error", "Error approving step", "danger");
         }
     };
 
     const handleRejectStep = async (stepId: string) => {
         if (!db || !activeProject) return;
         if (!feedback) {
-            alert("Please provide feedback for rejection.");
+            alert("Feedback Required", "Please provide feedback for rejection.", "warning");
             return;
         }
 
@@ -105,21 +107,21 @@ export const ReviewView = () => {
             setFeedback('');
         } catch (e) {
             console.error(e);
-            alert("Error rejecting step");
+            alert("Error", "Error rejecting step", "danger");
         }
     };
 
     const handleDeleteProject = async () => {
         if (!db || !activeProject) return;
-        if (!window.confirm("Are you sure you want to DELETE this project? This cannot be undone.")) return;
+        if (!await confirm({ title: "Delete Project?", message: "Are you sure you want to DELETE this project? This cannot be undone.", variant: "danger", confirmText: "Delete Forever" })) return;
 
         try {
             await deleteDoc(doc(db, 'student_projects', activeProject.id));
-            alert("Project deleted.");
+            alert("Success", "Project deleted.", "success");
             setSelectedProjectId(null);
         } catch (e) {
             console.error(e);
-            alert("Error deleting project.");
+            alert("Error", "Error deleting project.", "danger");
         }
     };
 

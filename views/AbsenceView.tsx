@@ -33,11 +33,11 @@ export const AbsenceView = () => {
         return enrollments.filter(e => {
             // Strict check: Enrollment active
             if (e.status !== 'active') return false;
-            
+
             // Strict check: Student Active
             const student = students.find(s => s.id === e.studentId);
             if (!student || student.status === 'inactive') return false;
-            
+
             // Check main group
             const mainHasClass = e.groupTime?.includes(dayString);
             // Check secondary group (DIY)
@@ -45,7 +45,7 @@ export const AbsenceView = () => {
 
             // Filter by search
             if (searchQuery && !e.studentName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-            
+
             // Filter by Group Dropdown (if strict grouping is needed, though we group by time primarily)
             if (selectedGroup !== 'All' && e.groupName !== selectedGroup && e.secondGroupName !== selectedGroup) return false;
 
@@ -55,7 +55,7 @@ export const AbsenceView = () => {
             // If both apply (rare), we might list twice or prefer one. For now, list main if valid, else sec.
             let timeStr = "";
             let groupName = "";
-            
+
             if (e.groupTime?.includes(dayString)) {
                 timeStr = e.groupTime.replace(dayString, '').trim(); // "14:00"
                 groupName = e.groupName || '';
@@ -79,12 +79,12 @@ export const AbsenceView = () => {
             if (!groups[s.displayTime]) groups[s.displayTime] = [];
             groups[s.displayTime].push(s);
         });
-        
+
         // Sort times chronologically
         const sortedTimes = Object.keys(groups).sort((a, b) => {
-             const ta = parseInt(a.replace(':', ''));
-             const tb = parseInt(b.replace(':', ''));
-             return ta - tb;
+            const ta = parseInt(a.replace(':', ''));
+            const tb = parseInt(b.replace(':', ''));
+            return ta - tb;
         });
 
         return sortedTimes.map(time => ({
@@ -96,10 +96,10 @@ export const AbsenceView = () => {
     // 5. Attendance Handler
     const handleMarkAttendance = async (studentId: string, enrollmentId: string, status: AttendanceRecord['status']) => {
         if (!db) return;
-        
+
         // Use a composite ID: DATE_STUDENTID to prevent duplicates easily
         const recordId = `${selectedDate}_${studentId}`;
-        
+
         try {
             await setDoc(doc(db, 'attendance', recordId), {
                 date: selectedDate,
@@ -121,7 +121,7 @@ export const AbsenceView = () => {
 
     // Helper to see if a time block is "Current"
     const isCurrentBlock = (timeStr: string) => {
-        if (!isToday) return false;
+        if (!isToday || !timeStr) return false;
         const [h, m] = timeStr.split(':').map(Number);
         const slotMinutes = h * 60 + m;
         // Assume class is 90 mins. If current time is within slot start and slot start + 90
@@ -167,7 +167,7 @@ export const AbsenceView = () => {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
                 <div>
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><ClipboardCheck className="w-6 h-6 text-red-500"/> Attendance Manager</h2>
+                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><ClipboardCheck className="w-6 h-6 text-red-500" /> Attendance Manager</h2>
                     <p className="text-slate-500 text-sm">Select a date to manage workshop attendance.</p>
                 </div>
                 <div className="flex items-center gap-4 bg-slate-950 p-2 rounded-xl border border-slate-800">
@@ -178,18 +178,18 @@ export const AbsenceView = () => {
                             const d = new Date(selectedDate);
                             d.setDate(d.getDate() - 1);
                             setSelectedDate(d.toISOString().split('T')[0]);
-                        }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} className="rotate-180"/></button>
-                        <input 
-                            type="date" 
-                            value={selectedDate} 
-                            onChange={(e) => setSelectedDate(e.target.value)} 
+                        }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} className="rotate-180" /></button>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
                             className="bg-transparent text-white font-bold text-sm outline-none px-2 cursor-pointer"
                         />
                         <button onClick={() => {
                             const d = new Date(selectedDate);
                             d.setDate(d.getDate() + 1);
                             setSelectedDate(d.toISOString().split('T')[0]);
-                        }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20}/></button>
+                        }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
                     </div>
                 </div>
             </div>
@@ -237,7 +237,7 @@ export const AbsenceView = () => {
             <div className="space-y-6">
                 {studentsByTime.length === 0 ? (
                     <div className="flex flex-col items-center justify-center p-12 bg-slate-900 border border-slate-800 rounded-xl text-center">
-                        <Calendar className="w-12 h-12 text-slate-700 mb-4"/>
+                        <Calendar className="w-12 h-12 text-slate-700 mb-4" />
                         <h3 className="text-slate-400 font-bold mb-1">No Classes Scheduled</h3>
                         <p className="text-slate-500 text-sm">There are no workshops scheduled for {dayOfWeek} ({selectedDate}).</p>
                     </div>
@@ -253,16 +253,16 @@ export const AbsenceView = () => {
                                     <span className="text-sm font-medium text-slate-400">{slot.students.length} Students Scheduled</span>
                                     {isLive && <span className="ml-auto text-xs font-bold text-red-500 animate-pulse flex items-center gap-1">● LIVE NOW</span>}
                                 </div>
-                                
+
                                 <div className="divide-y divide-slate-800">
                                     {slot.students.map(student => {
                                         const status = getStatus(student.studentId);
                                         // Default "Present" logic: If unmarked, visualize as Present
                                         const isPresent = status === 'present' || status === 'unmarked';
-                                        
-                                        const initials = student.studentName.split(' ').map(n => n[0]).join('').slice(0, 2);
+
+                                        const initials = (student.studentName || '').split(' ').map(n => n[0]).join('').slice(0, 2);
                                         const studentDetails = students.find(s => s.id === student.studentId);
-                                        
+
                                         return (
                                             <div key={student.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors">
                                                 <div className="flex items-center gap-3">
@@ -273,12 +273,12 @@ export const AbsenceView = () => {
                                                         <div className="font-bold text-white text-sm flex items-center gap-2">
                                                             {student.studentName}
                                                             {(status === 'absent' || status === 'late') && studentDetails?.parentPhone && (
-                                                                <button 
+                                                                <button
                                                                     onClick={(e) => { e.stopPropagation(); handleWhatsAppAlert(student.studentName, studentDetails.parentPhone, status); }}
                                                                     className="text-emerald-500 hover:text-emerald-400 bg-emerald-950/30 p-1 rounded hover:bg-emerald-950/50 transition-colors"
                                                                     title="Alert Parent via WhatsApp"
                                                                 >
-                                                                    <MessageCircle size={14}/>
+                                                                    <MessageCircle size={14} />
                                                                 </button>
                                                             )}
                                                         </div>
@@ -291,23 +291,23 @@ export const AbsenceView = () => {
                                                 </div>
 
                                                 <div className="flex gap-2 self-end sm:self-auto">
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleMarkAttendance(student.studentId, student.id, 'present')}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${isPresent ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-emerald-500/50 hover:text-emerald-400'}`}
                                                     >
-                                                        <CheckCircle2 size={14}/> Present
+                                                        <CheckCircle2 size={14} /> Present
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleMarkAttendance(student.studentId, student.id, 'late')}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${status === 'late' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-amber-500/50 hover:text-amber-400'}`}
                                                     >
-                                                        <Clock size={14}/> Late
+                                                        <Clock size={14} /> Late
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent')}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${status === 'absent' ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-red-500/50 hover:text-red-400'}`}
                                                     >
-                                                        <XCircle size={14}/> Absent
+                                                        <XCircle size={14} /> Absent
                                                     </button>
                                                 </div>
                                             </div>

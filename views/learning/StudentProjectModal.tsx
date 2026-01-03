@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal } from '../../components/Modal';
+import { useConfirm } from '../../context/ConfirmContext';
 import { StudentProject, StationType, ProcessTemplate, Badge } from '../../types';
 import { STATION_THEMES } from '../../utils/theme';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
@@ -48,6 +49,8 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 }) => {
     const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
+
+    const { confirm } = useConfirm();
 
     const [isCommitModalOpen, setIsCommitModalOpen] = React.useState(false);
     const [isHistoryModalOpen, setIsHistoryModalOpen] = React.useState(false);
@@ -129,8 +132,13 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
         await handleSaveProject(false);
     };
 
-    const handleRestoreCommit = (snapshot: any[]) => {
-        if (window.confirm("Are you sure? This will overwrite your current steps with this version.")) {
+    const handleRestoreCommit = async (snapshot: any[]) => {
+        if (await confirm({
+            title: "Restore Version?",
+            message: "Are you sure? This will overwrite your current steps with this version.",
+            variant: "warning",
+            confirmText: "Restore"
+        })) {
             setProjectForm({ ...projectForm, steps: snapshot });
             setIsHistoryModalOpen(false);
         }
@@ -600,10 +608,15 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                                                         <GitCommit size={20} /> Commit
                                                     </button>
                                                     <button
-                                                        onClick={() => {
+                                                        onClick={async () => {
                                                             const allDone = projectForm.steps?.every(s => s.status === 'done');
                                                             if (!allDone) {
-                                                                if (!confirm("Not all steps are done! Are you sure you want to finish the mission?")) return;
+                                                                if (!await confirm({
+                                                                    title: "Unfinished Business!",
+                                                                    message: "Not all steps are done! Are you sure you want to finish the mission?",
+                                                                    variant: "warning",
+                                                                    confirmText: "Finish Anyway"
+                                                                })) return;
                                                             }
                                                             if (handleSubmitForReview) {
                                                                 handleSubmitForReview();

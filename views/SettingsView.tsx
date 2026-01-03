@@ -107,10 +107,13 @@ export const SettingsView = () => {
         e.preventDefault();
         if (!db) return;
         try {
-            // Explicitly save the current local state to the global doc
-            await setDoc(doc(db, 'settings', 'global'), settings);
+            // Explicitly save the current local state to the global doc, merging to avoid data loss
+            await setDoc(doc(db, 'settings', 'global'), settings, { merge: true });
             alert('Settings saved successfully!');
-        } catch (err) { console.error(err); }
+        } catch (err: any) {
+            console.error(err);
+            alert(`Failed to save settings: ${err.message}`);
+        }
     };
 
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,11 +129,11 @@ export const SettingsView = () => {
 
             // Auto-save to DB
             if (db) {
-                await setDoc(doc(db, 'settings', 'global'), newSettings);
+                await setDoc(doc(db, 'settings', 'global'), { logoUrl: compressed }, { merge: true });
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            alert("Failed to process logo image.");
+            alert(`Failed to process or save logo image: ${err.message}`);
         }
     };
 
@@ -423,36 +426,39 @@ export const SettingsView = () => {
     // --- RENDER: ADMIN SETTINGS ---
     return (
         <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col">
-            {/* Header */}
-            <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-xl font-bold text-white">System Settings</h2>
-                    <p className="text-slate-500 text-sm">Configure academy parameters and access control.</p>
-                </div>
-                <button onClick={handleSaveSettings} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-lg shadow-emerald-900/20">
-                    <Save size={18} /> <span>Save Global Changes</span>
-                </button>
-            </div>
-
-            {/* Tab Navigation */}
-            <div className="flex gap-2 pb-2 border-b border-slate-800 flex-wrap md:flex-nowrap overflow-x-auto">
-                <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'general' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                    <Settings size={16} /> General
-                </button>
-                <button onClick={() => setActiveTab('forms')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'forms' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                    <FileText size={16} /> Forms
-                </button>
-                <button onClick={() => setActiveTab('data')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'data' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                    <FileSpreadsheet size={16} /> Data
-                </button>
-                <button onClick={() => setActiveTab('api')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'api' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                    <Zap size={16} /> API Integrations
-                </button>
-                {can('settings.manage_team') && (
-                    <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'team' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <Users size={16} /> Team & Access
+            {/* Sticky Header & Tabs Wrapper */}
+            <div className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-sm space-y-4 pb-2 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 border-b border-slate-800/50 md:border-none">
+                {/* Header */}
+                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg shadow-black/20">
+                    <div>
+                        <h2 className="text-xl font-bold text-white">System Settings</h2>
+                        <p className="text-slate-500 text-sm">Configure academy parameters and access control.</p>
+                    </div>
+                    <button onClick={handleSaveSettings} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-lg shadow-emerald-900/20">
+                        <Save size={18} /> <span>Save Global Changes</span>
                     </button>
-                )}
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="flex gap-2 pb-2 border-b border-slate-800 flex-wrap md:flex-nowrap overflow-x-auto no-scrollbar">
+                    <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'general' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <Settings size={16} /> General
+                    </button>
+                    <button onClick={() => setActiveTab('forms')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'forms' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <FileText size={16} /> Forms
+                    </button>
+                    <button onClick={() => setActiveTab('data')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'data' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <FileSpreadsheet size={16} /> Data
+                    </button>
+                    <button onClick={() => setActiveTab('api')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'api' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <Zap size={16} /> API Integrations
+                    </button>
+                    {can('settings.manage_team') && (
+                        <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'team' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                            <Users size={16} /> Team & Access
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* TAB CONTENT */}
@@ -646,8 +652,8 @@ export const SettingsView = () => {
                                         <tr><th className="p-4">User</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800">
-                                        {teamMembers.length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-slate-500">No team members found. Click "Add User" or "Seed Demo Team".</td></tr> :
-                                            teamMembers.map(u => (
+                                        {teamMembers.filter(u => !['student', 'parent'].includes(u.role)).length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-slate-500">No team members found. Click "Add User" or "Seed Demo Team".</td></tr> :
+                                            teamMembers.filter(u => !['student', 'parent'].includes(u.role)).map(u => (
                                                 <tr key={u.email} className="hover:bg-slate-800/30 group">
                                                     <td className="p-4">
                                                         <div className="font-bold text-white">{u.name}</div>

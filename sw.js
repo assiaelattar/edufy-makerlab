@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stemflow-erp-v1';
+const CACHE_NAME = 'stemflow-erp-v2';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,10 +6,13 @@ const urlsToCache = [
 ];
 
 self.addEventListener('install', (event) => {
+  // Force new service worker to activate immediately
+  self.skipWaiting();
+
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('Opened cache');
+        console.log('Opened cache v2');
         return cache.addAll(urlsToCache);
       })
   );
@@ -31,14 +34,19 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheWhitelist.indexOf(cacheName) === -1) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      // Delete old caches
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheWhitelist.indexOf(cacheName) === -1) {
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Take control of all clients immediately
+      self.clients.claim()
+    ])
   );
 });

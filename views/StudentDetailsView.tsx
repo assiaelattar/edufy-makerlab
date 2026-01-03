@@ -320,7 +320,7 @@ export const StudentDetailsView = ({
         if (isRegenerating) { if (!confirm("Are you sure you want to regenerate access? This will create a NEW account and password. The previous login will stop working.")) return; }
         setIsGeneratingAccess(true);
         try {
-            const names = student.name.trim().split(' ').map((n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, ''));
+            const names = (student.name || '').trim().split(' ').map((n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, ''));
             const firstName = names[0];
             const lastName = names.length > 1 ? names[names.length - 1] : names[0];
 
@@ -385,7 +385,7 @@ export const StudentDetailsView = ({
 
         setIsGeneratingAccess(true);
         try {
-            const names = student.name.trim().split(' ');
+            const names = (student.name || '').trim().split(' ');
             const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
             const parentEmail = `p.${lastName}@makerlab.academy`;
             const parentName = student.parentName || "Parent";

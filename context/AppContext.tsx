@@ -188,7 +188,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const settingsUnsub = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
       setLoading(false); // Unblock UI immediately
       if (doc.exists()) {
-        setSettings(doc.data() as AppSettings);
+        // Merge with defaults to ensure all fields exist (e.g. if new fields added to schema)
+        setSettings({ ...DEFAULT_SETTINGS, ...doc.data() } as AppSettings);
       } else {
         // Attempt to create default settings if they don't exist
         setDoc(doc.ref, DEFAULT_SETTINGS).catch(err => {

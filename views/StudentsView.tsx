@@ -5,6 +5,8 @@ import { useAppContext } from '../context/AppContext';
 import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
+import { useConfirm } from '../context/ConfirmContext';
+
 export const StudentsView = ({
     onAddStudent,
     onEditStudent,
@@ -17,6 +19,7 @@ export const StudentsView = ({
     onViewProfile: (id: string) => void
 }) => {
     const { students, enrollments, programs, navigateTo } = useAppContext();
+    const { confirm } = useConfirm();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterProgramId, setFilterProgramId] = useState('');
     const [filterGradeName, setFilterGradeName] = useState('');
@@ -31,7 +34,12 @@ export const StudentsView = ({
             ? "Deactivate this student? They will be hidden from active lists but data is preserved."
             : "Reactivate this student?";
 
-        if (window.confirm(confirmMsg)) {
+        if (await confirm({
+            title: newStatus === 'inactive' ? 'Deactivate Student' : 'Reactivate Student',
+            message: confirmMsg,
+            variant: newStatus === 'inactive' ? 'danger' : 'success',
+            confirmText: newStatus === 'inactive' ? 'Deactivate' : 'Reactivate'
+        })) {
             await updateDoc(doc(db, 'students', student.id), { status: newStatus });
         }
     };
@@ -189,7 +197,7 @@ export const StudentsView = ({
                             ) : filteredStudents.map((student, idx) => {
                                 const activeEnrollments = enrollments.filter(e => e.studentId === student.id);
                                 const isInactive = student.status === 'inactive';
-                                const initials = student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                                const initials = (student.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
                                 const created = student.createdAt as any;
                                 const joinDate = created && created.toDate ? created.toDate() : new Date(created);
 
@@ -246,7 +254,7 @@ export const StudentsView = ({
                     {filteredStudents.map(student => {
                         const activeEnrollments = enrollments.filter(e => e.studentId === student.id);
                         const isInactive = student.status === 'inactive';
-                        const initials = student.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        const initials = (student.name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
                         return (
                             <div key={student.id} onClick={() => onViewProfile(student.id)} className={`bg-slate-950 border border-slate-800 rounded-xl p-4 active:scale-[0.98] transition-all relative overflow-hidden ${isInactive ? 'opacity-60' : ''}`}>
                                 <div className="flex items-start gap-4 mb-3">

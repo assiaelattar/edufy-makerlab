@@ -237,7 +237,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                         <div className="flex-1 border-l border-slate-800 pl-4">
                                                             <h4 className="font-bold text-white text-lg">{slot.templateTitle}</h4>
                                                             <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
-                                                                <span className="flex items-center gap-1"><Clock size={12} /> {slot.endTime ? 'Runs ~' + (parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]) - (parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]))) + 'm' : ''}</span>
+                                                                <span className="flex items-center gap-1"><Clock size={12} /> {slot.endTime && slot.startTime ? 'Runs ~' + (parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]) - (parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]))) + 'm' : ''}</span>
                                                                 <span className="flex items-center gap-1"><MapPin size={12} /> On-site</span>
                                                             </div>
                                                         </div>

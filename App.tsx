@@ -4,6 +4,7 @@ import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench
 import { AppProvider, useAppContext } from './context/AppContext';
 import { ThemeProvider } from './sparkquest/context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ConfirmProvider, useConfirm } from './context/ConfirmContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { getEnabledModules } from './services/moduleRegistry';
 import { DashboardView } from './views/DashboardView';
@@ -95,6 +96,7 @@ const AppContent = () => {
     const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, t } = useAppContext();
     const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser } = useAuth();
     const { requestPermission } = useNotifications();
+    const { alert: showAlert } = useConfirm();
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -226,14 +228,14 @@ const AppContent = () => {
             setPaymentForm(prev => ({ ...prev, proofUrl: compressed }));
         } catch (err) {
             console.error(err);
-            alert("Error uploading proof.");
+            showAlert("Error", "Error uploading proof.", "danger");
         }
     };
 
     const handleSubmitPayment = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db) return;
-        if (!paymentForm.enrollmentId) { alert("Please select a student/enrollment"); return; }
+        if (!paymentForm.enrollmentId) { showAlert("Validation Error", "Please select a student/enrollment", "warning"); return; }
 
         setIsSubmittingPayment(true);
         try {
@@ -276,10 +278,10 @@ const AppContent = () => {
             }
 
             setIsPaymentModalOpen(false);
-            alert("Payment recorded successfully!");
+            showAlert("Success", "Payment recorded successfully!", "success");
         } catch (err) {
             console.error(err);
-            alert("Failed to record payment");
+            showAlert("Error", "Failed to record payment", "danger");
         } finally {
             setIsSubmittingPayment(false);
         }
@@ -302,6 +304,26 @@ const AppContent = () => {
 
     const handleRemoveEnrollmentPayment = (id: number) => {
         setEnrollPayments(enrollPayments.filter(p => p.id !== id));
+    };
+
+    const handleEnrollFromGroup = (programId: string, gradeId: string, groupId: string) => {
+        const selectedProgram = programs.find(p => p.id === programId);
+        // Default to first pack or empty
+        const defaultPack = selectedProgram && selectedProgram.packs.length > 0 ? selectedProgram.packs[0].name : '';
+
+        setEnrollProgramForm({
+            programId,
+            gradeId,
+            groupId,
+            packName: defaultPack,
+            paymentPlan: 'full',
+            secondGroupId: ''
+        });
+
+        // Reset student form for fresh entry
+        setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
+        setQuickEnrollStudentId(null);
+        setIsEnrollmentModalOpen(true);
     };
 
     const handleFinishEnrollment = async () => {
@@ -342,7 +364,7 @@ const AppContent = () => {
             // 1.5 Generate Student Account (Auto-Provisioning)
             try {
                 // NAME PARSING LOGIC FOR CUSTOM EMAIL
-                const names = studentName.trim().split(' ');
+                const names = (studentName || '').trim().split(' ');
                 const firstNameChar = names[0].charAt(0).toLowerCase();
                 const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
 
@@ -475,10 +497,10 @@ const AppContent = () => {
             }
 
             setIsEnrollmentModalOpen(false);
-            alert("Enrollment Successful! Student account created.");
+            showAlert("Success", "Enrollment Successful! Student account created.", "success");
         } catch (err) {
             console.error(err);
-            alert("Error processing enrollment.");
+            showAlert("Error", "Error processing enrollment.", "danger");
         } finally {
             setIsSubmittingEnrollment(false);
         }
@@ -497,7 +519,7 @@ const AppContent = () => {
         switch (currentView) {
             case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
             case 'students': return <StudentsView onAddStudent={() => { setQuickEnrollStudentId(null); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setQuickEnrollStudentId(id || null); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
-            case 'classes': return <ClassesView />;
+            case 'classes': return <ClassesView onEnroll={handleEnrollFromGroup} />;
             case 'programs': return <ProgramsView />;
             case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;
             case 'expenses': return <ExpensesView />;
@@ -790,10 +812,10 @@ const AppContent = () => {
                         {enrollmentStep === 1 && (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-slate-400 block mb-1">Full Name *</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.name} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, name: e.target.value })} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1">Parent Phone *</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.parentPhone} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, parentPhone: e.target.value })} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1">Date of Birth</label><input type="date" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.birthDate} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, birthDate: e.target.value })} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1">School</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollStudentForm.school} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, school: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">Full Name *</label><input className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.name} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, name: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">Parent Phone *</label><input className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.parentPhone} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, parentPhone: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">Date of Birth</label><input type="date" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.birthDate} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, birthDate: e.target.value })} /></div>
+                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">School</label><input className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.school} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, school: e.target.value })} /></div>
                                 </div>
                             </div>
                         )}
@@ -802,8 +824,8 @@ const AppContent = () => {
                         {enrollmentStep === 2 && (
                             <div className="space-y-4">
                                 <div>
-                                    <label className="text-xs text-slate-400 block mb-1">Select Program</label>
-                                    <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.programId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, programId: e.target.value, packName: '', gradeId: '', groupId: '' })}>
+                                    <label className="text-xs text-slate-400 block mb-1 font-semibold">Select Program</label>
+                                    <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.programId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, programId: e.target.value, packName: '', gradeId: '', groupId: '' })}>
                                         <option value="">-- Choose Program --</option>
                                         {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                     </select>
@@ -812,8 +834,8 @@ const AppContent = () => {
                                 {selectedProgram && (
                                     <>
                                         <div>
-                                            <label className="text-xs text-slate-400 block mb-1">Select Pack</label>
-                                            <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.packName} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, packName: e.target.value })}>
+                                            <label className="text-xs text-slate-400 block mb-1 font-semibold">Select Pack</label>
+                                            <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.packName} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, packName: e.target.value })}>
                                                 <option value="">-- Choose Pack --</option>
                                                 {selectedProgram.packs.map(p => <option key={p.name} value={p.name}>{p.name} - {formatCurrency(p.price || p.priceAnnual || 0)}</option>)}
                                             </select>
@@ -821,15 +843,15 @@ const AppContent = () => {
 
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="text-xs text-slate-400 block mb-1">Level / Grade</label>
-                                                <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.gradeId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, gradeId: e.target.value, groupId: '' })}>
+                                                <label className="text-xs text-slate-400 block mb-1 font-semibold">Level / Grade</label>
+                                                <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.gradeId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, gradeId: e.target.value, groupId: '' })}>
                                                     <option value="">-- Choose Level --</option>
                                                     {selectedProgram.grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="text-xs text-slate-400 block mb-1">Group / Time</label>
-                                                <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.groupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, groupId: e.target.value })}>
+                                                <label className="text-xs text-slate-400 block mb-1 font-semibold">Group / Time</label>
+                                                <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.groupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, groupId: e.target.value })}>
                                                     <option value="">-- Choose Group --</option>
                                                     {selectedGrade?.groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.day} {g.time})</option>)}
                                                 </select>
@@ -838,8 +860,8 @@ const AppContent = () => {
 
                                         {/* Secondary / DIY Slot Selection */}
                                         <div className="pt-4 border-t border-slate-800 mt-2">
-                                            <label className="text-xs text-slate-400 block mb-1">Secondary Workshop (DIY) - Optional</label>
-                                            <select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={enrollProgramForm.secondGroupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, secondGroupId: e.target.value })}>
+                                            <label className="text-xs text-slate-400 block mb-1 font-semibold">Secondary Workshop (DIY) - Optional</label>
+                                            <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.secondGroupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, secondGroupId: e.target.value })}>
                                                 <option value="">-- None --</option>
                                                 {selectedProgram.grades.flatMap(g => g.groups).map(g => (
                                                     <option key={g.id} value={g.id}>{g.name} ({g.day} {g.time})</option>
@@ -860,14 +882,14 @@ const AppContent = () => {
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-xs text-slate-400 font-bold uppercase">Final Negotiated Price (MAD)</label>
                                             {discountAmount > 0 && (
-                                                <span className="bg-emerald-950/50 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-900 flex items-center gap-1">
+                                                <span className="bg-emerald-950/30 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-900/50 flex items-center gap-1">
                                                     <TrendingDown size={10} /> Discount Applied: -{formatCurrency(discountAmount)} ({discountPercent}%)
                                                 </span>
                                             )}
                                         </div>
                                         <input
                                             type="number"
-                                            className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-white font-bold text-lg focus:border-blue-500 outline-none"
+                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white font-bold text-lg focus:border-blue-500 outline-none hover:border-slate-700 transition-colors"
                                             value={negotiatedPrice}
                                             onChange={e => setNegotiatedPrice(Number(e.target.value))}
                                         />
@@ -880,12 +902,12 @@ const AppContent = () => {
 
                                     <div className="h-px bg-slate-800"></div>
 
-                                    <div className="flex justify-between text-sm text-emerald-400 mb-1">
+                                    <div className="flex justify-between text-sm text-emerald-400 font-bold mb-1">
                                         <span>Total Paying Now</span>
                                         <span>{formatCurrency(totalPayingNow)}</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
-                                        <span className="text-slate-400">Remaining Balance</span>
+                                        <span className="text-slate-500 font-medium">Remaining Balance</span>
                                         <span className={`${remainingBalance > 0 ? 'text-red-400' : 'text-slate-500'} font-bold`}>{formatCurrency(remainingBalance)}</span>
                                     </div>
                                 </div>
@@ -895,10 +917,10 @@ const AppContent = () => {
                                     <div className="space-y-2 mb-4">
                                         <label className="text-xs text-slate-500 uppercase tracking-wider font-bold">Payments to Record</label>
                                         {enrollPayments.map((p, idx) => (
-                                            <div key={p.id} className="flex justify-between items-center bg-slate-900 p-2 rounded border border-slate-800 text-sm">
+                                            <div key={p.id} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-sm shadow-sm">
                                                 <div>
-                                                    <div className="font-bold text-white">{formatCurrency(p.amount)} <span className="text-slate-500 font-normal text-xs capitalize">via {p.method}</span></div>
-                                                    {p.method === 'check' && <div className="text-[10px] text-slate-400">Check #{p.checkNumber} • Deposit: {p.depositDate}</div>}
+                                                    <div className="font-bold text-slate-200">{formatCurrency(p.amount)} <span className="text-slate-500 font-normal text-xs capitalize">via {p.method}</span></div>
+                                                    {p.method === 'check' && <div className="text-[10px] text-slate-500">Check #{p.checkNumber} • Deposit: {p.depositDate}</div>}
                                                 </div>
                                                 <button onClick={() => handleRemoveEnrollmentPayment(p.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                                             </div>
@@ -911,21 +933,21 @@ const AppContent = () => {
                                     <div className="text-xs font-bold text-blue-400 mb-3 uppercase tracking-wider flex items-center gap-2"><Plus size={12} /> Add Payment</div>
                                     <div className="space-y-3">
                                         <div className="grid grid-cols-2 gap-3">
-                                            <div><label className="text-[10px] text-slate-500 block mb-1">Amount</label><input type="number" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm font-bold" value={currentEnrollPayment.amount} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, amount: e.target.value })} placeholder="0.00" /></div>
-                                            <div><label className="text-[10px] text-slate-500 block mb-1">Method</label><select className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={currentEnrollPayment.method} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, method: e.target.value })}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank Transfer</option></select></div>
+                                            <div><label className="text-[10px] text-slate-500 block mb-1 font-semibold">Amount</label><input type="number" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm font-bold focus:border-blue-500 outline-none" value={currentEnrollPayment.amount} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, amount: e.target.value })} placeholder="0.00" /></div>
+                                            <div><label className="text-[10px] text-slate-500 block mb-1 font-semibold">Method</label><select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none" value={currentEnrollPayment.method} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, method: e.target.value })}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank Transfer</option></select></div>
                                         </div>
 
                                         {currentEnrollPayment.method === 'check' && (
-                                            <div className="bg-slate-950 p-3 rounded border border-slate-800 space-y-2 animate-in slide-in-from-top-1">
+                                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2 animate-in slide-in-from-top-1 shadow-sm">
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" placeholder="Check No." value={currentEnrollPayment.checkNumber} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, checkNumber: e.target.value })} /></div>
-                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" placeholder="Bank Name" value={currentEnrollPayment.bankName} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, bankName: e.target.value })} /></div>
+                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white focus:bg-slate-800 focus:border-blue-500 outline-none transition-colors" placeholder="Check No." value={currentEnrollPayment.checkNumber} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, checkNumber: e.target.value })} /></div>
+                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white focus:bg-slate-800 focus:border-blue-500 outline-none transition-colors" placeholder="Bank Name" value={currentEnrollPayment.bankName} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, bankName: e.target.value })} /></div>
                                                 </div>
-                                                <div><label className="text-[10px] text-slate-500 block mb-1">Deposit Date</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white" value={currentEnrollPayment.depositDate} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, depositDate: e.target.value })} /></div>
+                                                <div><label className="text-[10px] text-slate-500 block mb-1">Deposit Date</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white focus:bg-slate-800 focus:border-blue-500 outline-none transition-colors" value={currentEnrollPayment.depositDate} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, depositDate: e.target.value })} /></div>
                                             </div>
                                         )}
 
-                                        <button onClick={handleAddEnrollmentPayment} disabled={!currentEnrollPayment.amount} className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded transition-colors disabled:opacity-50">Add to List</button>
+                                        <button onClick={handleAddEnrollmentPayment} disabled={!currentEnrollPayment.amount} className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 shadow-md">Add to List</button>
                                     </div>
                                 </div>
                             </div>
@@ -943,8 +965,8 @@ const AppContent = () => {
                         {enrollmentStep < 3 ? (
                             <button
                                 onClick={() => {
-                                    if (enrollmentStep === 1 && !enrollStudentForm.name && !quickEnrollStudentId) return alert("Name is required");
-                                    if (enrollmentStep === 2 && !enrollProgramForm.programId) return alert("Program is required");
+                                    if (enrollmentStep === 1 && !enrollStudentForm.name && !quickEnrollStudentId) return showAlert("Validation Error", "Name is required", "warning");
+                                    if (enrollmentStep === 2 && !enrollProgramForm.programId) return showAlert("Validation Error", "Program is required", "warning");
                                     setEnrollmentStep(s => s + 1);
                                 }}
                                 className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold flex items-center gap-2"
@@ -971,13 +993,15 @@ const AppContent = () => {
 const App = () => {
     return (
         <AuthProvider>
-            <NotificationProvider>
-                <AppProvider>
-                    <ThemeProvider>
-                        <AppContent />
-                    </ThemeProvider>
-                </AppProvider>
-            </NotificationProvider>
+            <ConfirmProvider>
+                <NotificationProvider>
+                    <AppProvider>
+                        <ThemeProvider>
+                            <AppContent />
+                        </ThemeProvider>
+                    </AppProvider>
+                </NotificationProvider>
+            </ConfirmProvider>
         </AuthProvider>
     );
 };
