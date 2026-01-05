@@ -113,6 +113,30 @@ export const AbsenceView = () => {
         }
     };
 
+    const handleConfirmAllPresent = async (studentsInSlot: typeof scheduledStudents) => {
+        if (!db) return;
+        if (!confirm(`Mark all ${studentsInSlot.length} students as PRESENT? (Only 'unmarked' ones will be updated)`)) return;
+
+        const batch: Promise<void>[] = [];
+
+        studentsInSlot.forEach(student => {
+            const currentStatus = getStatus(student.studentId);
+            if (currentStatus === 'unmarked') {
+                const recordId = `${selectedDate}_${student.studentId}`;
+                const promise = setDoc(doc(db, 'attendance', recordId), {
+                    date: selectedDate,
+                    studentId: student.studentId,
+                    enrollmentId: student.id,
+                    status: 'present',
+                    createdAt: serverTimestamp()
+                });
+                batch.push(promise);
+            }
+        });
+
+        await Promise.all(batch);
+    };
+
     const getStatus = (studentId: string) => {
         // Find local record first (optimistic UI provided by AppContext listener)
         const record = attendanceRecords.find(r => r.date === selectedDate && r.studentId === studentId);
@@ -252,6 +276,14 @@ export const AbsenceView = () => {
                                     </div>
                                     <span className="text-sm font-medium text-slate-400">{slot.students.length} Students Scheduled</span>
                                     {isLive && <span className="ml-auto text-xs font-bold text-red-500 animate-pulse flex items-center gap-1">● LIVE NOW</span>}
+
+                                    {/* Confirm All Button */}
+                                    <button
+                                        onClick={() => handleConfirmAllPresent(slot.students)}
+                                        className="ml-auto text-xs font-bold bg-emerald-900/30 text-emerald-400 border border-emerald-900/50 px-3 py-1.5 rounded-lg hover:bg-emerald-900/50 transition-colors flex items-center gap-2"
+                                    >
+                                        <CheckCircle2 size={12} /> Confirm Attendance
+                                    </button>
                                 </div>
 
                                 <div className="divide-y divide-slate-800">

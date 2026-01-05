@@ -3,7 +3,7 @@ import { Modal } from '../../components/Modal';
 import { ProjectTemplate, StationType, Grade } from '../../types';
 import { STATION_THEMES } from '../../utils/theme';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
-import { Database, Play, ExternalLink, List, Trash2, Lock, Star, Rocket, Plus, X, Check } from 'lucide-react';
+import { Database, Play, ExternalLink, List, Trash2, Lock, Star, Rocket, Plus, X, Check, Upload, FileJson } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
 
 interface ProjectFactoryModalProps {
@@ -59,7 +59,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "✏️ Edit Project" : "✨ Create New Project"} size="xl">
             <form onSubmit={handleSaveTemplate} className="flex flex-col h-[80vh] md:h-auto">
-                {/* Tabs */}
+                {/* Header with Import */}
                 <div className="flex items-center justify-between border-b border-slate-200 shrink-0 px-6 pt-2">
                     <div className="flex overflow-x-auto">
                         {tabs.map(tab => (
@@ -73,12 +73,49 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                             </button>
                         ))}
                     </div>
-                    <button
-                        type="submit"
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 ml-4"
-                    >
-                        💾 Save Draft
-                    </button>
+                    <div className="flex gap-2 ml-4">
+                        <input
+                            type="file"
+                            id="import-json"
+                            className="hidden"
+                            accept=".json"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                    const reader = new FileReader();
+                                    reader.onload = (event) => {
+                                        try {
+                                            const json = JSON.parse(event.target?.result as string);
+                                            if (json.title && json.description) {
+                                                setTemplateForm({ ...templateForm, ...json });
+                                                alert("Mission imported successfully!");
+                                            } else {
+                                                alert("Invalid mission JSON format.");
+                                            }
+                                        } catch (err) {
+                                            console.error(err);
+                                            alert("Failed to parse JSON.");
+                                        }
+                                    };
+                                    reader.readAsText(file);
+                                }
+                            }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => document.getElementById('import-json')?.click()}
+                            className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 border border-indigo-200"
+                            title="Import Mission from JSON"
+                        >
+                            <Upload size={16} /> <span className="hidden sm:inline">Import</span>
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+                        >
+                            💾 Save Draft
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
@@ -388,6 +425,6 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                     </button>
                 </div>
             </form>
-        </Modal>
+        </Modal >
     );
 };

@@ -33,6 +33,8 @@ export interface Program {
   grades: Grade[];
   dashboardConfig?: ProgramDashboardConfig;
   resources?: ToolLink[];
+  themeColor?: 'blue' | 'purple' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'slate';
+  duration?: string; // e.g. "Annual", "3 Months", "2 Days"
 }
 
 export interface ProgramDashboardConfig {
@@ -222,9 +224,11 @@ export interface Booking {
   kidName: string;
   kidAge: number;
   kidInterests?: string;
-  status: 'confirmed' | 'attended' | 'no-show' | 'cancelled';
+  status: 'confirmed' | 'attended' | 'no-show' | 'cancelled' | 'reminder_sent' | 'feedback_requested' | 'converted';
   bookedAt: Timestamp;
   notes?: string;
+  feedbackNotes?: string;
+  programInterest?: string;
 }
 
 // --- TEAM & TASK MANAGEMENT TYPES ---
@@ -275,6 +279,14 @@ export interface MarketingPost {
   createdAt: Timestamp;
 }
 
+export interface CampaignAsset {
+  id: string;
+  name: string;
+  type: 'link' | 'image' | 'video' | 'document';
+  url: string;
+  status: 'draft' | 'ready' | 'approved';
+}
+
 export interface Campaign {
   id: string;
   name: string;
@@ -284,6 +296,7 @@ export interface Campaign {
   startDate: string;
   endDate: string;
   goals: string;
+  assets?: CampaignAsset[]; // New field for Campaign Kit
   createdAt: Timestamp;
 }
 
@@ -294,9 +307,18 @@ export interface Lead {
   phone: string;
   email?: string;
   source: string; // e.g., 'Facebook', 'Walk-in'
-  status: 'new' | 'contacted' | 'interested' | 'converted' | 'closed';
-  notes?: string;
+  status: 'new' | 'contacted' | 'interested' | 'workshop_booked' | 'demo_booked' | 'converted' | 'closed';
   createdAt: Timestamp;
+  // Enhanced Fields
+  tags?: string[];
+  interests?: string[]; // Program Names or IDs
+  notes?: string[];     // Legacy simple notes
+  timeline?: {
+    date: string;
+    type: 'workshop' | 'call' | 'note' | 'status_change' | 'conversion';
+    details: string;
+    author?: string;
+  }[];
 }
 
 // --- LEARNING & PORTFOLIO TYPES (LMS) ---
@@ -565,7 +587,7 @@ export interface AppSettings {
 }
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'enrollment-forms';
 
 export interface ViewParams {
   classId?: { pId: string, gId: string, grpId: string };

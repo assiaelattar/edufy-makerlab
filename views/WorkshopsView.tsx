@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { CalendarCheck, Link as LinkIcon, Plus, Clock, Users, Calendar as CalendarIcon, Share2, UserPlus, MessageCircle, Star, UserCheck, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight, MapPin, MoreHorizontal } from 'lucide-react';
-import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { CalendarCheck, Link as LinkIcon, Plus, Clock, Users, Calendar as CalendarIcon, Share2, UserPlus, MessageCircle, Star, UserCheck, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight, MapPin, MoreHorizontal, Magnet } from 'lucide-react';
+import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAppContext } from '../context/AppContext';
 import { Modal } from '../components/Modal';
@@ -18,6 +18,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
     // --- State for Templates ---
     const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+    const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+    const [viewingBookingsTemplateId, setViewingBookingsTemplateId] = useState<string | null>(null); // For history modal
+
     const [templateForm, setTemplateForm] = useState<Partial<WorkshopTemplate>>({
         title: '', description: '', duration: 60, recurrenceType: 'one-time',
         recurrencePattern: { days: [], time: '10:00', date: '' },
@@ -26,24 +29,47 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
     // --- Helpers ---
     const copyLink = (slug: string) => {
-        // Use the new Short Link with Metadata
         const url = `${window.location.origin}/w/${slug}`;
         navigator.clipboard.writeText(url);
         alert(`Link copied! \n${url}`);
     };
 
+    const handleEditTemplate = (template: WorkshopTemplate) => {
+        setTemplateForm({ ...template });
+        setEditingTemplateId(template.id);
+        setIsTemplateModalOpen(true);
+    };
+
+    const handleCreateNew = () => {
+        setTemplateForm({
+            title: '', description: '', duration: 60, recurrenceType: 'one-time',
+            recurrencePattern: { days: [], time: '10:00', date: '' },
+            capacityPerSlot: 10, isActive: true, targetAudience: 'Child'
+        });
+        setEditingTemplateId(null);
+        setIsTemplateModalOpen(true);
+    };
+
     const handleSaveTemplate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db) return;
-        const slug = templateForm.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substr(2, 5);
+
         try {
-            await addDoc(collection(db, 'workshop_templates'), {
-                ...templateForm,
-                shareableSlug: slug,
-                createdAt: serverTimestamp()
-            });
+            if (editingTemplateId) {
+                // Update
+                const { id, ...dataToUpdate } = templateForm as any; // Exclude ID from data
+                await updateDoc(doc(db, 'workshop_templates', editingTemplateId), dataToUpdate);
+            } else {
+                // Create
+                const slug = templateForm.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substr(2, 5);
+                await addDoc(collection(db, 'workshop_templates'), {
+                    ...templateForm,
+                    shareableSlug: slug,
+                    createdAt: serverTimestamp()
+                });
+            }
             setIsTemplateModalOpen(false);
-            setIsTemplateModalOpen(false);
+            setEditingTemplateId(null);
             setTemplateForm({ title: '', description: '', duration: 60, recurrenceType: 'one-time', recurrencePattern: { days: [], time: '10:00', date: '' }, capacityPerSlot: 10, isActive: true, targetAudience: 'Child' });
         } catch (err) { console.error(err); }
     };
@@ -61,6 +87,67 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     const openWhatsApp = (phone: string, name: string) => {
         window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}?text=Hi ${name}, regarding your workshop booking...`, '_blank');
     };
+
+    const handlePushToCRM = async (booking: Booking, templateTitle: string) => {
+        if (!db) return;
+        if (!confirm(`Add ${booking.kidName} (Parent: ${booking.parentName}) to Marketing Leads?`)) return;
+
+        try {
+            // Check if lead exists
+            const q = query(collection(db, 'leads'), where('phone', '==', booking.phoneNumber));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                // Update existing
+                const leadDoc = querySnapshot.docs[0];
+                await updateDoc(doc(db, 'leads', leadDoc.id), {
+                    tags: arrayUnion('Workshop', 'Prospect'),
+                    interests: arrayUnion(templateTitle),
+                    timeline: arrayUnion({
+                        date: new Date().toISOString(),
+                        type: 'workshop',
+                        details: `Attended/Booked workshop: ${templateTitle}`,
+                        author: 'Workshop Manager'
+                    })
+                });
+                alert("Lead updated! Existing profile found for this phone number.");
+            } else {
+                // Create new
+                await addDoc(collection(db, 'leads'), {
+                    name: booking.kidName,
+                    parentName: booking.parentName,
+                    phone: booking.phoneNumber,
+                    source: `Workshop: ${templateTitle}`,
+                    status: 'new',
+                    createdAt: serverTimestamp(),
+                    tags: ['Workshop', 'Prospect'],
+                    interests: [templateTitle],
+                    notes: [booking.notes || 'No initial notes'],
+                    timeline: [{
+                        date: new Date().toISOString(),
+                        type: 'workshop',
+                        details: `Originated from workshop: ${templateTitle}`,
+                        author: 'Workshop Manager'
+                    }]
+                });
+                await updateDoc(doc(db, 'bookings', booking.id), { status: 'converted' });
+                alert("Lead created successfully in Marketing Hub!");
+            }
+        } catch (error) {
+            console.error("Error pushing to CRM:", error);
+            alert("Failed to push to CRM. Check console.");
+        }
+    };
+
+    // --- Bookings History Logic ---
+    const templateBookings = useMemo(() => {
+        if (!viewingBookingsTemplateId) return [];
+        // Find all slots for this template
+        const slots = workshopSlots.filter(s => s.workshopTemplateId === viewingBookingsTemplateId);
+        const slotIds = slots.map(s => s.id);
+        // Find all bookings for these slots
+        return bookings.filter(b => slotIds.includes(b.workshopSlotId)).sort((a, b) => b.bookedAt?.toMillis() - a.bookedAt?.toMillis());
+    }, [viewingBookingsTemplateId, workshopSlots, bookings]);
 
     // --- Calendar Logic ---
     const monthStart = useMemo(() => new Date(viewDate.getFullYear(), viewDate.getMonth(), 1), [viewDate]);
@@ -202,7 +289,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                 </h3>
                                 <p className="text-slate-500 text-sm mt-1">{selectedDaySlots.length} events scheduled</p>
                             </div>
-                            <button onClick={() => setIsTemplateModalOpen(true)} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-pink-900/20">
+                            <button onClick={handleCreateNew} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-pink-900/20">
                                 <Plus size={16} /> Add Event
                             </button>
                         </div>
@@ -295,6 +382,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                                                     {booking.status === 'attended' && (
                                                                                         <button onClick={(e) => { e.stopPropagation(); onConvertProspect({ childName: booking.kidName, parentName: booking.parentName, parentPhone: booking.phoneNumber }); }} className="p-1.5 text-blue-500 hover:bg-blue-950/30 rounded transition-colors" title="Convert to Student"><UserCheck size={14} /></button>
                                                                                     )}
+                                                                                    <button onClick={(e) => { e.stopPropagation(); handlePushToCRM(booking, slot.templateTitle); }} className="p-1.5 text-purple-500 hover:bg-purple-950/30 rounded transition-colors" title="Push to Lead CRM"><Magnet size={14} /></button>
                                                                                 </div>
                                                                             </div>
                                                                         </div>
@@ -317,7 +405,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             {/* TEMPLATES TAB */}
             {activeTab === 'templates' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
-                    <button onClick={() => setIsTemplateModalOpen(true)} className="border-2 border-dashed border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-pink-500 hover:text-pink-400 transition-colors min-h-[200px] group bg-slate-900/30 hover:bg-slate-900">
+                    <button onClick={handleCreateNew} className="border-2 border-dashed border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-pink-500 hover:text-pink-400 transition-colors min-h-[200px] group bg-slate-900/30 hover:bg-slate-900">
                         <div className="w-14 h-14 rounded-full bg-slate-900 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg"><Plus size={28} /></div>
                         <span className="font-bold text-lg">Create New Workshop</span>
                         <span className="text-sm mt-1">Define event details & recurrence</span>
@@ -334,13 +422,14 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                 </div>
                                 <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => copyLink(template.shareableSlug)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-white border border-slate-800 hover:border-slate-700" title="Copy Booking Link"><LinkIcon size={14} /></button>
+                                    <button onClick={() => handleEditTemplate(template)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-blue-400 border border-slate-800 hover:border-blue-900/50" title="Edit Template"><MoreHorizontal size={14} /></button>
                                     <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-red-400 border border-slate-800 hover:border-red-900/50" title="Delete"><Trash2 size={14} /></button>
                                 </div>
                             </div>
 
-                            <div className="p-5 flex-1">
+                            <div className="p-5 flex-1 cursor-pointer" onClick={() => setViewingBookingsTemplateId(template.id)}>
                                 <p className="text-sm text-slate-400 line-clamp-3 mb-4">{template.description}</p>
-
+                                {/* ... existing details ... */}
                                 <div className="space-y-2 text-sm text-slate-300">
                                     <div className="flex items-center gap-3"><Clock size={16} className="text-slate-500" /> {template.duration} mins</div>
                                     <div className="flex items-center gap-3"><Users size={16} className="text-slate-500" /> Max {template.capacityPerSlot} per slot</div>
@@ -386,6 +475,11 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Recurrence Type</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.recurrenceType} onChange={e => setTemplateForm({ ...templateForm, recurrenceType: e.target.value as any })}><option value="one-time">One Time Event</option><option value="weekly">Weekly Recurring</option></select></div>
 
+                    <div className="flex items-center gap-2 mt-4">
+                        <input type="checkbox" id="isActive" className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-pink-600 focus:ring-pink-500" checked={templateForm.isActive ?? true} onChange={e => setTemplateForm({ ...templateForm, isActive: e.target.checked })} />
+                        <label htmlFor="isActive" className="text-sm text-slate-300 font-medium">Active (Visible for booking)</label>
+                    </div>
+
                     {templateForm.recurrenceType === 'weekly' && (
                         <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-4">
                             <div>
@@ -411,8 +505,45 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                         </div>
                     )}
 
-                    <button type="submit" className="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold mt-2 transition-colors">Create Template</button>
+                    <button type="submit" className="w-full py-3 bg-pink-600 hover:bg-pink-500 text-white rounded-lg font-bold mt-2 transition-colors">
+                        {editingTemplateId ? 'Update Template' : 'Create Template'}
+                    </button>
                 </form>
+            </Modal>
+
+            {/* View Bookings Modal */}
+            <Modal isOpen={!!viewingBookingsTemplateId} onClose={() => setViewingBookingsTemplateId(null)} title="Workshop History">
+                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    {templateBookings.length === 0 ? (
+                        <div className="text-center py-8 text-slate-500">No bookings found for this workshop.</div>
+                    ) : (
+                        <div className="space-y-3">
+                            {templateBookings.map(b => {
+                                const slot = workshopSlots.find(s => s.id === b.workshopSlotId);
+                                return (
+                                    <div key={b.id} className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex justify-between items-center">
+                                        <div className="flex gap-3">
+                                            <div className="bg-slate-800 rounded-lg p-2 flex flex-col items-center justify-center min-w-[50px]">
+                                                <span className="text-xs text-slate-400">{slot?.date.split('-')[1]}/{slot?.date.split('-')[2]}</span>
+                                                <span className="text-xs font-bold text-white">{slot?.startTime}</span>
+                                            </div>
+                                            <div>
+                                                <div className="text-sm font-bold text-white">{b.kidName}</div>
+                                                <div className="text-xs text-slate-500">{b.parentName} • {b.phoneNumber}</div>
+                                            </div>
+                                        </div>
+                                        <div className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${b.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
+                                            b.status === 'attended' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                                                'bg-slate-800 text-slate-400 border-slate-700'
+                                            }`}>
+                                            {b.status.replace('_', ' ')}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </Modal>
         </div>
     );

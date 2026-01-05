@@ -12,6 +12,7 @@ import { getRandomMindset, getProjectIcon, MINDSET_LIBRARY } from '../utils/Mind
 import { TypingChallenge } from './TypingChallenge';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useFocusSession } from '../context/FocusSessionContext';
+import { ResourceViewerModal } from './ResourceViewerModal';
 
 // --- Sound Utility (Synthesizer) ---
 const playSound = (type: 'hover' | 'click' | 'success' | 'open') => {
@@ -431,6 +432,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const { activeTheme } = useTheme();
   const theme = THEMES.find(t => t.id === activeTheme) || THEMES[0];
 
+  const [viewingResource, setViewingResource] = useState<{ title: string; url: string; type: 'file' | 'image' | 'video' | 'link' } | null>(null);
+
   const EMAIL_TEMPLATE = `Subject: Mission Report - ${step?.title || 'Unknown Step'}
 
 Dear Commander,
@@ -597,12 +600,20 @@ ${project.studentId || 'Cadet'}`;
 
         <div className="flex flex-wrap gap-3">
           {step.resources && step.resources.map((res, idx) => (
+
             <button
               key={idx}
               onClick={() => {
-                console.log("Launching session for:", res.url);
-                // Pass default duration (30) and the tool title for credential matching
-                startSession(res.url, 30, res.title);
+                const lowerUrl = res.url.toLowerCase();
+                const isEmbeddable = lowerUrl.endsWith('.pdf') || res.type === 'image' || res.type === 'file' || /\.(jpg|jpeg|png|gif|webp)$/i.test(lowerUrl);
+
+                if (isEmbeddable) {
+                  setViewingResource(res);
+                  playSound('open');
+                } else {
+                  console.log("Launching session for:", res.url);
+                  startSession(res.url, 30, res.title);
+                }
               }}
               className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:scale-105 transition-all shadow-sm"
             >
@@ -614,136 +625,138 @@ ${project.studentId || 'Cadet'}`;
       </div>
 
       {/* SUBMISSION FORM (Only if NOT pending OR isEditing) */}
-      {step.status !== 'PENDING_REVIEW' || isEditing ? (
-        <>
-          <div>
-            <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Evidence</label>
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
-            >
-              {preview ? (
-                <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
-              ) : (
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
-                  <span className="text-lg font-bold text-slate-400">Upload Photo / Screenshot</span>
-                </div>
-              )}
-              <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
-            </div>
-
-            {/* SCREENSHOT IMPORT BUTTON */}
-            <div className="mt-2 flex justify-center">
-              <button
-                onClick={() => setShowCommitInput(!showCommitInput)}
-                className="w-full py-4 bg-cyan-600/10 border-2 border-cyan-500/30 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all mb-4"
+      {
+        step.status !== 'PENDING_REVIEW' || isEditing ? (
+          <>
+            <div>
+              <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Evidence</label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
               >
-                💾 Save Progress
-              </button>
-
-              {showCommitInput && (
-                <div className="mb-4 p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100">
-                  <label className="block text-xs font-black text-cyan-600 uppercase tracking-wider mb-2">Commit Message</label>
-                  <input
-                    type="text"
-                    value={commitMessage}
-                    onChange={(e) => setCommitMessage(e.target.value)}
-                    placeholder="e.g., Finished motor assembly"
-                    className="w-full p-3 bg-white border-2 border-cyan-200 rounded-xl font-medium text-slate-600 outline-none focus:border-cyan-500 mb-2"
-                  />
-                  <button
-                    onClick={handleSaveProgress}
-                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold transition-colors"
-                  >
-                    Save Commit
-                  </button>
-                </div>
-              )}
-
-              {/* Show previous commits for this step */}
-              {project.commits?.filter(c => c.stepId === realId).length > 0 && (
-                <div className="mb-4 p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
-                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Previous Saves</h4>
-                  <div className="space-y-2">
-                    {project.commits.filter(c => c.stepId === realId).slice(-3).reverse().map(commit => (
-                      <div key={commit.id} className="p-2 bg-white rounded-lg border border-slate-200">
-                        <p className="text-sm font-bold text-slate-700">{commit.message}</p>
-                        <p className="text-xs text-slate-400">{new Date(commit.timestamp).toLocaleString()}</p>
-                      </div>
-                    ))}
+                {preview ? (
+                  <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
+                ) : (
+                  <div className="relative z-10 flex flex-col items-center">
+                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
+                    <span className="text-lg font-bold text-slate-400">Upload Photo / Screenshot</span>
                   </div>
-                </div>
-              )}
+                )}
+                <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
+              </div>
 
+              {/* SCREENSHOT IMPORT BUTTON */}
+              <div className="mt-2 flex justify-center">
+                <button
+                  onClick={() => setShowCommitInput(!showCommitInput)}
+                  className="w-full py-4 bg-cyan-600/10 border-2 border-cyan-500/30 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all mb-4"
+                >
+                  💾 Save Progress
+                </button>
+
+                {showCommitInput && (
+                  <div className="mb-4 p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100">
+                    <label className="block text-xs font-black text-cyan-600 uppercase tracking-wider mb-2">Commit Message</label>
+                    <input
+                      type="text"
+                      value={commitMessage}
+                      onChange={(e) => setCommitMessage(e.target.value)}
+                      placeholder="e.g., Finished motor assembly"
+                      className="w-full p-3 bg-white border-2 border-cyan-200 rounded-xl font-medium text-slate-600 outline-none focus:border-cyan-500 mb-2"
+                    />
+                    <button
+                      onClick={handleSaveProgress}
+                      className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold transition-colors"
+                    >
+                      Save Commit
+                    </button>
+                  </div>
+                )}
+
+                {/* Show previous commits for this step */}
+                {project.commits?.filter(c => c.stepId === realId).length > 0 && (
+                  <div className="mb-4 p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Previous Saves</h4>
+                    <div className="space-y-2">
+                      {project.commits.filter(c => c.stepId === realId).slice(-3).reverse().map(commit => (
+                        <div key={commit.id} className="p-2 bg-white rounded-lg border border-slate-200">
+                          <p className="text-sm font-bold text-slate-700">{commit.message}</p>
+                          <p className="text-xs text-slate-400">{new Date(commit.timestamp).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    const stored = sessionStorage.getItem('temp_evidence');
+                    if (stored) {
+                      setPreview(stored);
+                      // Convert Base64 to File for upload
+                      fetch(stored)
+                        .then(res => res.blob())
+                        .then(blob => {
+                          const file = new File([blob], "evidence_screenshot.png", { type: "image/png" });
+                          setFile(file);
+                          playSound('click');
+                        });
+                    } else {
+                      alert("No screenshot found! Take a photo in the Mission Tool/Session first.");
+                    }
+                  }}
+                  className="text-xs font-bold text-indigo-500 hover:text-indigo-700 underline flex items-center gap-1"
+                >
+                  📸 Use Last Session Screenshot
+                </button>
+              </div>
+            </div>
+
+            {/* Pro Mode Toggle */}
+            <div className="flex justify-end mb-2">
               <button
-                onClick={() => {
-                  const stored = sessionStorage.getItem('temp_evidence');
-                  if (stored) {
-                    setPreview(stored);
-                    // Convert Base64 to File for upload
-                    fetch(stored)
-                      .then(res => res.blob())
-                      .then(blob => {
-                        const file = new File([blob], "evidence_screenshot.png", { type: "image/png" });
-                        setFile(file);
-                        playSound('click');
-                      });
-                  } else {
-                    alert("No screenshot found! Take a photo in the Mission Tool/Session first.");
-                  }
-                }}
-                className="text-xs font-bold text-indigo-500 hover:text-indigo-700 underline flex items-center gap-1"
+                onClick={() => setIsProMode(!isProMode)}
+                className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-300'}`}
               >
-                📸 Use Last Session Screenshot
+                {isProMode ? '⚡ Pro Mode Active' : 'Enable Pro Mode'}
               </button>
             </div>
-          </div>
 
-          {/* Pro Mode Toggle */}
-          <div className="flex justify-end mb-2">
+            {isProMode ? (
+              <TypingChallenge
+                template={EMAIL_TEMPLATE}
+                onComplete={(text) => {
+                  setNote(text);
+                  // Optional: auto-submit or just fill the note
+                  setIsProMode(false);
+                  playSound('success');
+                }}
+                onCancel={() => setIsProMode(false)}
+              />
+            ) : (
+              <textarea
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
+                placeholder="How did it go? Notes for Commander..."
+              />
+            )}
+
             <button
-              onClick={() => setIsProMode(!isProMode)}
-              className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-300'}`}
+              onClick={handleSubmit}
+              disabled={submitting || (!note && !file)}
+              className="w-full py-4 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:to-indigo-500 transition-all shadow-xl shadow-blue-500/20"
             >
-              {isProMode ? '⚡ Pro Mode Active' : 'Enable Pro Mode'}
+              {submitting ? 'Transmitting...' : 'Submit for Review'}
             </button>
-          </div>
-
-          {isProMode ? (
-            <TypingChallenge
-              template={EMAIL_TEMPLATE}
-              onComplete={(text) => {
-                setNote(text);
-                // Optional: auto-submit or just fill the note
-                setIsProMode(false);
-                playSound('success');
-              }}
-              onCancel={() => setIsProMode(false)}
-            />
-          ) : (
-            <textarea
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
-              placeholder="How did it go? Notes for Commander..."
-            />
-          )}
-
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || (!note && !file)}
-            className="w-full py-4 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:to-indigo-500 transition-all shadow-xl shadow-blue-500/20"
-          >
-            {submitting ? 'Transmitting...' : 'Submit for Review'}
+          </>
+        ) : (
+          <button onClick={closeModal} className="w-full py-4 rounded-3xl bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition-colors">
+            Close
           </button>
-        </>
-      ) : (
-        <button onClick={closeModal} className="w-full py-4 rounded-3xl bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition-colors">
-          Close
-        </button>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

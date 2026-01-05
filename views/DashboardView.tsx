@@ -246,6 +246,8 @@ const StudentDashboard = () => {
 };
 
 // --- ADMIN DASHBOARD COMPONENT ---
+import { WorkshopActionCenter } from './dashboard/WorkshopActionCenter';
+
 const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t, studentProjects, expenses, expenseTemplates, bookings } = useAppContext();
 
@@ -568,6 +570,9 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </button>
                 )}
             </div>
+
+            {/* WORKSHOP ACTION CENTER */}
+            <WorkshopActionCenter />
 
             {/* KPI CARDS */}
             <div className="flex overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 snap-x snap-mandatory no-scrollbar">
