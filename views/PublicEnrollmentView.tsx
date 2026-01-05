@@ -208,7 +208,31 @@ export const PublicEnrollmentView = () => {
 
                         <div>
                             <label className="block text-sm font-bold text-slate-700 mb-1">Preferred Slot</label>
-                            <input name="selectedSlot" value={formData.selectedSlot} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="e.g. Wednesday 15:30 or Saturday Morning" />
+                            {program.grades && program.grades.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                                    {(() => {
+                                        const slots = program.grades.flatMap(g => g.groups.map(grp => `${grp.day} at ${grp.time}`)).filter((v, i, a) => a.indexOf(v) === i);
+
+                                        if (slots.length === 0) return <p className="text-sm text-slate-500 italic">No specific slots available. Please contact us.</p>;
+
+                                        return slots.map((slot, idx) => (
+                                            <label key={idx} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${formData.selectedSlot === slot ? `border-${colorTheme}-600 bg-${colorTheme}-50 ring-1 ring-${colorTheme}-600` : 'border-slate-200 hover:border-slate-300'}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="selectedSlot"
+                                                    value={slot}
+                                                    checked={formData.selectedSlot === slot}
+                                                    onChange={handleChange}
+                                                    className={`accent-${colorTheme}-600 w-4 h-4`}
+                                                />
+                                                <span className="text-sm font-medium text-slate-700 capitalize">{slot}</span>
+                                            </label>
+                                        ));
+                                    })()}
+                                </div>
+                            ) : (
+                                <input name="selectedSlot" value={formData.selectedSlot} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="e.g. Wednesday 15:30 or Saturday Morning" />
+                            )}
                         </div>
                         <div>
                             <label className="block text-sm font-bold text-slate-700 mb-1">Comments / Questions</label>

@@ -39,9 +39,8 @@ export const EnrollmentFormsView = () => {
     useEffect(() => {
         if (!db) return;
 
-        // Listen to "new" leads, ideally those from kiosk. 
-        // We'll fetch all non-closed ones for now to be safe.
-        const q = query(collection(db, 'leads'), orderBy('createdAt', 'desc'));
+        // Listen to "Kiosk Form" leads specifically as per user request
+        const q = query(collection(db, 'leads'), where('source', '==', 'Kiosk Form'), orderBy('createdAt', 'desc'));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const fetchedLeads = snapshot.docs.map(doc => ({

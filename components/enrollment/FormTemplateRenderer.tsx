@@ -160,23 +160,22 @@ export const FormTemplateRenderer = ({ program }: { program: Program }) => {
                     {program.targetAudience === 'adults' ? '3' : '4'}. CRÉNEAUX SOUHAITÉS (Schedule Preferences)
                 </div>
                 <div className="p-4 grid grid-cols-2 gap-y-4 gap-x-8">
-                    {/* Placeholder static slots - ideally logic could be dynamic here too */}
-                    <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
-                        <span className="text-sm font-bold text-slate-600">Mercredi: 14h00 - 15h30</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
-                        <span className="text-sm font-bold text-slate-600">Samedi: 09h00 - 10h30</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
-                        <span className="text-sm font-bold text-slate-600">Mercredi: 16h00 - 17h30</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
-                        <span className="text-sm font-bold text-slate-600">Samedi: 11h00 - 12h30</span>
-                    </div>
+                    {(() => {
+                        // Extract all unique groups/slots from all grades
+                        const allSlots = program.grades.flatMap(g => g.groups.map(grp => `${grp.day}: ${grp.time}`)).filter((v, i, a) => a.indexOf(v) === i);
+
+                        if (allSlots.length === 0) {
+                            return <div className="col-span-2 text-slate-400 italic text-center py-2">Consult Administration for Schedule</div>;
+                        }
+
+                        return allSlots.map((slot, i) => (
+                            <div key={i} className="flex items-center gap-3">
+                                <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
+                                <span className="text-sm font-bold text-slate-600 capitalize">{slot}</span>
+                            </div>
+                        ));
+                    })()}
+
                     <div className="flex items-center gap-3 col-span-2 mt-2 pt-2 border-t border-dashed border-slate-200">
                         <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
                         <span className="text-sm font-bold text-slate-600 w-full border-b border-dashed border-slate-300 pb-1">Autre Créneau / Disponibilité:</span>
