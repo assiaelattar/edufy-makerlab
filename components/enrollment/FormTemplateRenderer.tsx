@@ -33,71 +33,117 @@ export const FormTemplateRenderer = ({ program }: { program: Program }) => {
                 </div>
             </div>
 
-            {/* Section 1: Candidate Info */}
+            {/* Section 1: Participant Info */}
             <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>
                 <div className={`${theme.bg} text-white px-4 py-2 font-bold uppercase text-sm flex items-center gap-2`}>
-                    1. INFOS DU PARTICIPANT (Student Info)
+                    1. INFOS DU STAGIAIRE (Participant Info)
                 </div>
-                <div className="p-4 space-y-6">
+                <div className="p-4 space-y-4">
                     <div className="flex gap-4">
+                        <div className="flex-[2] border-b border-dashed border-slate-300 pb-1">
+                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Nom & Prénom:</span>
+                        </div>
                         <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Nom Complet:</span>
+                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Sexe:</span>
+                            <span className="inline-block w-4 h-4 border border-slate-300 rounded-full mr-1"></span> M
+                            <span className="inline-block w-4 h-4 border border-slate-300 rounded-full ml-2 mr-1"></span> F
                         </div>
                     </div>
                     <div className="flex gap-4">
                         <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
                             <span className="text-xs font-bold text-slate-500 uppercase mr-2">Date de Naissance:</span>
                         </div>
+                        {program.targetAudience !== 'adults' && (
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">École:</span>
+                            </div>
+                        )}
                         <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Âge:</span>
+                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">{program.targetAudience === 'adults' ? 'Profession:' : 'Niveau Scolaire:'}</span>
                         </div>
                     </div>
                     <div className="flex gap-4">
                         <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">École / Établissement:</span>
+                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Adresse:</span>
+                        </div>
+                        <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Ville:</span>
                         </div>
                     </div>
+                    {program.targetAudience === 'adults' && (
+                        <div className="flex gap-4">
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">Email:</span>
+                            </div>
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">Téléphone:</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {/* Section 2: Parent Info */}
-            <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>
-                <div className={`${theme.bg} text-white px-4 py-2 font-bold uppercase text-sm flex items-center gap-2`}>
-                    2. RESPONSABLE LÉGAL (Parent Info)
-                </div>
-                <div className="p-4 space-y-6">
-                    <div className="flex gap-4">
-                        <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Nom du Parent:</span>
+            {/* Section 2: Parent Info (Only for Kids) */}
+            {program.targetAudience !== 'adults' && (
+                <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>
+                    <div className={`${theme.bg} text-white px-4 py-2 font-bold uppercase text-sm flex items-center gap-2`}>
+                        2. RESPONSABLE LÉGAL (Parent / Guardian)
+                    </div>
+                    <div className="p-4 space-y-4">
+                        <div className="flex gap-4">
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">Nom du Père:</span>
+                            </div>
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">GSM:</span>
+                            </div>
                         </div>
-                        <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">GSM (WhatsApp):</span>
+                        <div className="flex gap-4">
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">Nom de la Mère:</span>
+                            </div>
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">GSM:</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-4">
+                            <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
+                                <span className="text-xs font-bold text-slate-500 uppercase mr-2">Email (Suivi & Facturation):</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex gap-4">
-                        <div className="flex-1 border-b border-dashed border-slate-300 pb-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase mr-2">Email (Pour le suivi):</span>
-                        </div>
-                    </div>
                 </div>
-            </div>
+            )}
 
             {/* Section 3: Formula Selection */}
             <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>
                 <div className={`${theme.bg} text-white px-4 py-2 font-bold uppercase text-sm flex items-center gap-2`}>
-                    3. CHOIX DE LA FORMULE (Program Options)
+                    {program.targetAudience === 'adults' ? '2' : '3'}. CHOIX DE LA FORMULE (Program Options)
                 </div>
                 <div className="p-4 grid grid-cols-2 gap-4">
                     {program.packs?.map((pack, idx) => (
-                        <div key={idx} className={`border-2 ${theme.border} rounded-xl p-4 relative`}>
-                            <div className={`w-6 h-6 border-2 ${theme.border} rounded mb-2`}></div>
-                            <h4 className={`font-bold uppercase ${theme.text} text-lg`}>{pack.name}</h4>
-                            <p className="text-xs text-slate-500 mt-1">
-                                {pack.workshopsPerWeek ? `${pack.workshopsPerWeek} atelier(s) / sem` : ''}
-                            </p>
-                            <div className="mt-4 pt-4 border-t border-dashed border-slate-200 flex justify-between items-end">
-                                <div className="w-full">
-                                    <span className="text-[10px] uppercase text-slate-300 block text-right italic">Tarifs sur demande</span>
+                        <div key={idx} className={`border-2 ${theme.border} rounded-xl p-3 relative flex flex-col justify-between`}>
+                            <div>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className={`w-6 h-6 border-2 ${theme.border} rounded`}></div>
+                                    <div>
+                                        <h4 className={`font-bold uppercase ${theme.text} text-base leading-none`}>{pack.name}</h4>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">
+                                            {pack.workshopsPerWeek ? `${pack.workshopsPerWeek} atelier(s) / sem` : ''}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Payment Preference */}
+                                <div className="mt-3 pl-8 space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-4 h-4 border border-slate-300 rounded`}></div>
+                                        <span className="text-[10px] uppercase font-bold text-slate-600">Paiement Annuel</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-4 h-4 border border-slate-300 rounded`}></div>
+                                        <span className="text-[10px] uppercase font-bold text-slate-600">Paiement Trimestriel</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -111,9 +157,10 @@ export const FormTemplateRenderer = ({ program }: { program: Program }) => {
             {/* Section 4: Schedule Preference */}
             <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>
                 <div className={`${theme.bg} text-white px-4 py-2 font-bold uppercase text-sm flex items-center gap-2`}>
-                    4. CRÉNEAUX SOUHAITÉS (Schedule)
+                    {program.targetAudience === 'adults' ? '3' : '4'}. CRÉNEAUX SOUHAITÉS (Schedule Preferences)
                 </div>
                 <div className="p-4 grid grid-cols-2 gap-y-4 gap-x-8">
+                    {/* Placeholder static slots - ideally logic could be dynamic here too */}
                     <div className="flex items-center gap-3">
                         <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
                         <span className="text-sm font-bold text-slate-600">Mercredi: 14h00 - 15h30</span>
@@ -132,7 +179,7 @@ export const FormTemplateRenderer = ({ program }: { program: Program }) => {
                     </div>
                     <div className="flex items-center gap-3 col-span-2 mt-2 pt-2 border-t border-dashed border-slate-200">
                         <div className={`w-5 h-5 border-2 ${theme.border} rounded`}></div>
-                        <span className="text-sm font-bold text-slate-600 w-full border-b border-dashed border-slate-300 pb-1">Autre Créneau (Disponibilité):</span>
+                        <span className="text-sm font-bold text-slate-600 w-full border-b border-dashed border-slate-300 pb-1">Autre Créneau / Disponibilité:</span>
                     </div>
                 </div>
             </div>

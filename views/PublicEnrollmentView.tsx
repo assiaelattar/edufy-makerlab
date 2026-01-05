@@ -20,6 +20,7 @@ export const PublicEnrollmentView = () => {
         email: '',
         selectedPack: '',
         selectedSlot: '',
+        paymentPlan: '',
         comments: ''
     });
 
@@ -62,7 +63,7 @@ export const PublicEnrollmentView = () => {
                 status: 'new',
                 interests: [program.name],
                 // Store form details in notes or timeline
-                notes: [`Kiosk Enrollment Request for ${program.name}`, `Pack: ${formData.selectedPack}`, `Slot: ${formData.selectedSlot}`, `School: ${formData.school}`, `DOB: ${formData.birthDate}`, `Comments: ${formData.comments}`],
+                notes: [`Kiosk Enrollment Request for ${program.name}`, `Pack: ${formData.selectedPack}`, `Payment Preference: ${formData.paymentPlan || 'Not Selected'}`, `Slot: ${formData.selectedSlot}`, `School/Job: ${formData.school}`, `DOB: ${formData.birthDate}`, `Comments: ${formData.comments}`],
                 createdAt: serverTimestamp()
             });
             setSubmitted(true);
@@ -135,35 +136,50 @@ export const PublicEnrollmentView = () => {
                                 <input required type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" />
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-1">School</label>
-                                <input name="school" value={formData.school} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="Current School" />
+                                <label className="block text-sm font-bold text-slate-700 mb-1">{program?.targetAudience === 'adults' ? 'Profession' : 'School'}</label>
+                                <input name="school" value={formData.school} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder={program?.targetAudience === 'adults' ? 'Current Profession' : 'Current School'} />
                             </div>
                         </div>
+
+                        {program?.targetAudience === 'adults' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">Phone Number</label>
+                                    <input required name="parentPhone" value={formData.parentPhone} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="+212 6..." />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                                    <input required type="email" name="email" value={formData.email} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="For contacts" />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Section 2: Parent */}
-                    <div className="space-y-4">
-                        <h3 className={`text-sm font-black uppercase text-${colorTheme}-600 tracking-wider border-b border-slate-100 pb-2`}>2. Parent / Guardian</h3>
+                    {/* Section 2: Parent (Only for children) */}
+                    {program?.targetAudience !== 'adults' && (
+                        <div className="space-y-4">
+                            <h3 className={`text-sm font-black uppercase text-${colorTheme}-600 tracking-wider border-b border-slate-100 pb-2`}>2. Parent / Guardian</h3>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-1">Parent Name</label>
-                                <input required name="parentName" value={formData.parentName} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">Parent Name</label>
+                                    <input required name="parentName" value={formData.parentName} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp Number</label>
+                                    <input required name="parentPhone" value={formData.parentPhone} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="+212 6..." />
+                                </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-1">WhatsApp Number</label>
-                                <input required name="parentPhone" value={formData.parentPhone} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="+212 6..." />
+                                <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
+                                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="For updates & follow-up" />
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-1">Email</label>
-                            <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="For updates & follow-up" />
-                        </div>
-                    </div>
+                    )}
 
                     {/* Section 3: Program Options */}
                     <div className="space-y-4">
-                        <h3 className={`text-sm font-black uppercase text-${colorTheme}-600 tracking-wider border-b border-slate-100 pb-2`}>3. Preferences</h3>
+                        <h3 className={`text-sm font-black uppercase text-${colorTheme}-600 tracking-wider border-b border-slate-100 pb-2`}>{program?.targetAudience === 'adults' ? '2. Preference' : '3. Preferences'}</h3>
 
                         <div>
                             <label className="block text-sm font-bold text-slate-700 mb-1">Select Formula</label>
@@ -174,6 +190,22 @@ export const PublicEnrollmentView = () => {
                                 ))}
                             </select>
                         </div>
+
+                        {/* Payment Preference Checkbox */}
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                            <label className="block text-sm font-bold text-slate-700 mb-3">Preferred Payment Plan</label>
+                            <div className="flex gap-6">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="paymentPlan" value="annual" className={`accent-${colorTheme}-600 w-5 h-5`} />
+                                    <span className="text-slate-700 font-medium">Annual</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="paymentPlan" value="trimester" className={`accent-${colorTheme}-600 w-5 h-5`} />
+                                    <span className="text-slate-700 font-medium">Trimester</span>
+                                </label>
+                            </div>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-bold text-slate-700 mb-1">Preferred Slot</label>
                             <input name="selectedSlot" value={formData.selectedSlot} onChange={handleChange} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-slate-800 transition-colors" placeholder="e.g. Wednesday 15:30 or Saturday Morning" />
