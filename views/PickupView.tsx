@@ -81,6 +81,39 @@ export const PickupView = () => {
         return Array.from(entriesByStudent.values());
     }, [pickupQueue]);
 
+    // --- SOUND ALERTS & ANNOUNCEMENTS ---
+    React.useEffect(() => {
+        const lastAnnouncedKey = 'lastAnnouncedArrival';
+        const lastAnnouncedId = localStorage.getItem(lastAnnouncedKey);
+
+        // Find the MOST RECENT arrival that hasn't been announced yet
+        const newArrivals = uniqueSortedQueue.filter(q => q.status === 'arrived');
+        if (newArrivals.length === 0) return;
+
+        // Sort by arrival time desc
+        const latestArrival = newArrivals.sort((a, b) => {
+            const timeA = a.arrivedAt ? (a.arrivedAt as any).seconds : 0;
+            const timeB = b.arrivedAt ? (b.arrivedAt as any).seconds : 0;
+            return timeB - timeA;
+        })[0];
+
+        if (latestArrival && latestArrival.id !== lastAnnouncedId) {
+            // Play Chime
+            const audio = new Audio('/assets/notification.mp3'); // Fallback or use TTS only
+
+            // Text to Speech
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(`${latestArrival.studentName}'s parent has arrived.`);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+
+            localStorage.setItem(lastAnnouncedKey, latestArrival.id);
+        }
+
+    }, [uniqueSortedQueue]);
+
     return (
         <div className="h-full flex flex-col pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
 
@@ -98,12 +131,29 @@ export const PickupView = () => {
                     </div>
 
                     <div className="flex gap-4 w-full md:w-auto">
+                        {/* New: Quick Stats / Release All */}
+                        {uniqueSortedQueue.some(q => q.status === 'released') && (
+                            <button
+                                onClick={async () => {
+                                    if (!db) return;
+                                    if (!confirm('Clear all released students?')) return;
+                                    const released = uniqueSortedQueue.filter(q => q.status === 'released');
+                                    for (const r of released) {
+                                        await deleteDoc(doc(db, 'pickup_queue', r.id));
+                                    }
+                                }}
+                                className="bg-slate-800 text-slate-400 hover:text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-all text-sm"
+                            >
+                                <X size={16} /> Clear History
+                            </button>
+                        )}
+
                         <button
                             onClick={() => setIsDisplayMode(true)}
-                            className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all border border-slate-700"
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/20"
                             title="Open TV Display Mode"
                         >
-                            <Monitor size={20} /> <span className="hidden md:inline">Launch Display</span>
+                            <Monitor size={20} /> <span className="hidden md:inline">Launch TV Mode</span>
                         </button>
 
                         {isGatekeeper && (
@@ -239,64 +289,35 @@ export const PickupView = () => {
                     </div>
                 </div>
             ) : (
-                /* Normal Queue Display */
-                <div className="flex-1 overflow-y-auto">
+                /* Normal Queue Display - GROUPED BY STATUS */
+                <div className="flex-1 overflow-y-auto space-y-8">
                     {uniqueSortedQueue.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
+                        <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50 py-20">
                             <Clock size={64} className="mb-4 stroke-1" />
                             <h3 className="text-xl font-medium">Waiting for arrivals...</h3>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {uniqueSortedQueue.map(entry => {
-                                const isOnWay = entry.status === 'on_the_way';
-                                const isArrived = entry.status === 'arrived';
-                                const isReleased = entry.status === 'released';
+                        <>
+                            {/* 1. ARRIVED (Action Needed) */}
+                            {uniqueSortedQueue.some(q => q.status === 'arrived') && (
+                                <div>
+                                    <h3 className="text-emerald-400 text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                                        Parents Arrived ({uniqueSortedQueue.filter(q => q.status === 'arrived').length})
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {uniqueSortedQueue.filter(q => q.status === 'arrived').map(entry => (
+                                            <div key={entry.id} className="bg-slate-900 border-2 border-emerald-500/50 rounded-2xl p-6 relative overflow-hidden shadow-xl shadow-emerald-900/10">
+                                                <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl -mr-10 -mt-10 animate-pulse"></div>
 
-                                return (
-                                    <div key={entry.id} className={`border rounded-2xl p-6 relative overflow-hidden shadow-lg animate-in zoom-in duration-300 ${isReleased ? 'bg-slate-900/50 border-slate-800 opacity-60' :
-                                        isArrived ? 'bg-slate-900 border-emerald-500/30' :
-                                            'bg-slate-900 border-indigo-500/30'
-                                        }`}>
-                                        {/* Pulse Effect */}
-                                        {isArrived && <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/10 rounded-full blur-2xl -mr-10 -mt-10 animate-pulse"></div>}
-                                        {isOnWay && <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>}
-
-                                        <div className="relative z-10 flex flex-col h-full justify-between">
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    {isArrived ? (
+                                                <div className="relative z-10">
+                                                    <div className="flex items-center gap-2 mb-2">
                                                         <span className="bg-emerald-500 text-emerald-950 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider animate-pulse">Arrived</span>
-                                                    ) : isReleased ? (
-                                                        <span className="bg-slate-700 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Released</span>
-                                                    ) : (
-                                                        <span className="bg-indigo-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">On The Way</span>
-                                                    )}
-                                                    <span className="text-slate-500 text-xs">{entry.createdAt ? new Date((entry.createdAt as any).toMillis()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}</span>
-                                                </div>
-                                                <h3 className="text-3xl font-bold text-white leading-tight mb-1">{entry.studentName}</h3>
-                                                <div className="space-y-1">
-                                                    <p className="text-slate-400 text-sm flex items-center gap-2"><UserCheck size={14} /> {entry.parentName}</p>
-                                                    {entry.pickerName && entry.pickerName !== entry.parentName && (
-                                                        <p className="text-indigo-400 text-sm flex items-center gap-2 font-bold transform translate-x-3"><span className="text-slate-600">↳</span> {entry.pickerName}</p>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                        <span className="text-emerald-400 text-xs font-mono">{entry.arrivedAt ? new Date((entry.arrivedAt as any).seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}</span>
+                                                    </div>
+                                                    <h3 className="text-2xl font-bold text-white mb-1 truncate">{entry.studentName}</h3>
+                                                    <p className="text-slate-400 text-sm flex items-center gap-2 mb-4"><UserCheck size={14} /> {entry.pickerName || entry.parentName}</p>
 
-                                            <div className="mt-6 pt-4 border-t border-slate-800 flex justify-end gap-2">
-                                                {/* Dismiss (Admin only or if stuck) */}
-                                                {isReleased && (
-                                                    <button
-                                                        onClick={() => removeFromQueue(entry.id)}
-                                                        className="bg-slate-800 hover:bg-slate-700 text-slate-400 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
-                                                        title="Remove from list manually"
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
-                                                )}
-
-                                                {/* Action Button */}
-                                                {isArrived && !isReleased ? (
                                                     <button
                                                         onClick={async () => {
                                                             if (!db) return;
@@ -305,11 +326,33 @@ export const PickupView = () => {
                                                                 releasedAt: serverTimestamp()
                                                             });
                                                         }}
-                                                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors shadow-lg shadow-emerald-900/20"
+                                                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
                                                     >
                                                         Release Student <CheckCircle2 size={16} />
                                                     </button>
-                                                ) : isOnWay ? (
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 2. ON THE WAY */}
+                            {uniqueSortedQueue.some(q => q.status === 'on_the_way') && (
+                                <div>
+                                    <h3 className="text-indigo-400 text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <Car size={14} />
+                                        On The Way ({uniqueSortedQueue.filter(q => q.status === 'on_the_way').length})
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                        {uniqueSortedQueue.filter(q => q.status === 'on_the_way').map(entry => (
+                                            <div key={entry.id} className="bg-slate-900/50 border border-indigo-500/20 rounded-xl p-4 relative overflow-hidden hover:bg-slate-900 transition-colors">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <div className="text-indigo-300 text-[10px] font-bold uppercase tracking-wider mb-1">ETA: Soon</div>
+                                                        <h3 className="text-lg font-bold text-white truncate">{entry.studentName}</h3>
+                                                        <div className="text-xs text-slate-500 mt-1">{entry.pickerName}</div>
+                                                    </div>
                                                     <button
                                                         onClick={async () => {
                                                             if (!db) return;
@@ -318,17 +361,39 @@ export const PickupView = () => {
                                                                 arrivedAt: serverTimestamp()
                                                             });
                                                         }}
-                                                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors border border-indigo-400/30"
+                                                        className="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white p-2 rounded-lg transition-all"
+                                                        title="Mark Arrived Manually"
                                                     >
-                                                        Mark Arrived
+                                                        <CheckCircle2 size={16} />
                                                     </button>
-                                                ) : null}
+                                                </div>
                                             </div>
-                                        </div>
+                                        ))}
                                     </div>
-                                );
-                            })}
-                        </div>
+                                </div>
+                            )}
+
+                            {/* 3. RELEASED (History) */}
+                            {uniqueSortedQueue.some(q => q.status === 'released') && (
+                                <div className="pt-4 border-t border-slate-800">
+                                    <h3 className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <LogOut size={14} />
+                                        Released / History ({uniqueSortedQueue.filter(q => q.status === 'released').length})
+                                    </h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                                        {uniqueSortedQueue.filter(q => q.status === 'released').map(entry => (
+                                            <div key={entry.id} className="bg-slate-900/30 border border-slate-800 rounded-lg p-3 opacity-60 hover:opacity-100 transition-opacity">
+                                                <div className="text-sm font-bold text-slate-400 truncate">{entry.studentName}</div>
+                                                <div className="text-[10px] text-slate-600 flex justify-between items-center mt-1">
+                                                    <span>{entry.releasedAt ? new Date((entry.releasedAt as any).seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Done'}</span>
+                                                    <button onClick={() => removeFromQueue(entry.id)} className="hover:text-red-400"><X size={12} /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}

@@ -304,6 +304,95 @@ export const ParentDashboardView = () => {
         );
     }
 
+    // --- PICKUP BUTTON COMPONENT ---
+    const PickupActionButton = () => {
+        const activeEntry = activePickupEntry; // Uses the useMemo from above
+        const isChildReleased = activeEntry?.status === 'released';
+
+        if (isChildReleased) {
+            return (
+                <div className="mt-4 md:mt-0 w-full md:w-auto bg-indigo-600/20 border border-indigo-500/50 p-3 rounded-xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-indigo-500 p-2 rounded-full animate-bounce">
+                        <Star size={20} className="text-white fill-current" />
+                    </div>
+                    <div>
+                        <div className="text-white font-bold text-sm">Released!</div>
+                        <div className="text-indigo-300 text-xs">Please confirm receipt</div>
+                    </div>
+                    <button
+                        onClick={() => setActiveTab('pickup')}
+                        className="ml-auto bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                    >
+                        View
+                    </button>
+                </div>
+            );
+        }
+
+        if (activeEntry?.status === 'arrived') {
+            return (
+                <div className="mt-4 md:mt-0 w-full md:w-auto bg-emerald-600 p-1 rounded-xl shadow-lg shadow-emerald-900/40 animate-pulse">
+                    <div className="bg-slate-900 rounded-lg p-3 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                            <div className="bg-emerald-500/20 p-2 rounded-full">
+                                <CheckCircle2 size={20} className="text-emerald-500" />
+                            </div>
+                            <div>
+                                <div className="text-white font-bold text-sm leading-tight">You've Arrived</div>
+                                <div className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider">Waiting for Release</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        if (activeEntry?.status === 'on_the_way') {
+            return (
+                <button
+                    disabled={notifyingPickup}
+                    onClick={() => handlePickupAction('arrive')}
+                    className="mt-4 md:mt-0 w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white p-1 rounded-xl shadow-lg shadow-emerald-900/40 transition-all hover:scale-[1.02] active:scale-95 group"
+                >
+                    <div className="bg-emerald-600 border-2 border-emerald-400/30 border-dashed rounded-lg p-3 flex items-center justify-center gap-3 h-full group-hover:border-solid transition-all">
+                        {notifyingPickup ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        ) : (
+                            <>
+                                <MapPin size={20} className="fill-current animate-bounce" />
+                                <span className="font-black text-sm uppercase tracking-wide">I'm Here!</span>
+                            </>
+                        )}
+                    </div>
+                </button>
+            );
+        }
+
+        // Default: Show "On My Way"
+        return (
+            <button
+                disabled={notifyingPickup}
+                onClick={() => handlePickupAction('notify')}
+                className="mt-4 md:mt-0 w-full md:w-auto bg-slate-800 hover:bg-slate-700 text-white p-1 rounded-xl shadow-lg border border-slate-700 transition-all hover:scale-[1.02] active:scale-95 group"
+            >
+                <div className="bg-slate-900/50 rounded-lg p-3 flex items-center justify-center gap-3 h-full">
+                    {notifyingPickup ? (
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                        <>
+                            <Car size={20} className="text-slate-400 group-hover:text-white transition-colors" />
+                            <div className="text-left">
+                                <div className="font-bold text-sm leading-none group-hover:text-emerald-400 transition-colors">On My Way</div>
+                                <div className="text-[10px] text-slate-500 font-medium">Click when leaving</div>
+                            </div>
+                            <ChevronRight size={16} className="text-slate-600 group-hover:text-white opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all ml-2" />
+                        </>
+                    )}
+                </div>
+            </button>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30">
 
@@ -345,6 +434,11 @@ export const ParentDashboardView = () => {
                         <button onClick={signOut} className="bg-slate-900/50 hover:bg-slate-800 p-2 md:p-3 rounded-full text-slate-300 hover:text-white transition-all border border-slate-700/50 shrink-0">
                             <LogOut size={18} className="md:w-5 md:h-5" />
                         </button>
+                    </div>
+
+                    {/* NEW: Pickup Action Button (Hero) */}
+                    <div className="mb-6 md:mb-8">
+                        <PickupActionButton />
                     </div>
 
                     {/* Desktop XP Progress Bar */}
