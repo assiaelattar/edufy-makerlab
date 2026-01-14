@@ -26,6 +26,9 @@ export default defineConfig(({ mode }) => {
       },
       dedupe: ['react', 'react-dom'],
     },
-    envDir: '.'
+    envDir: '.',
+    optimizeDeps: {
+      include: ['papaparse']
+    }
   };
 });
