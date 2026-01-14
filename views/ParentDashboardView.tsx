@@ -37,6 +37,36 @@ export const ParentDashboardView = () => {
     const [selectedImage, setSelectedImage] = useState<any>(null);
     const [localDismissedIds, setLocalDismissedIds] = useState<string[]>([]);
 
+    // --- HISTORY MANAGEMENT (Back Button Fix) ---
+    React.useEffect(() => {
+        // Initial State Replacement (to avoid immediate exit)
+        window.history.replaceState({ tab: 'overview' }, '');
+
+        const handlePopState = (event: PopStateEvent) => {
+            if (event.state && event.state.tab) {
+                // If we have state, go to that tab
+                setActiveTab(event.state.tab);
+            } else {
+                // If no state (e.g. initial load popped), default to overview or let it exit if at root
+                // For safety in this app structure, default to overview
+                setActiveTab('overview');
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, []);
+
+    // Intercept setActiveTab to push history
+    const navigateToTab = (tab: typeof activeTab) => {
+        if (tab === activeTab) return;
+
+        // Push logic
+        window.history.pushState({ tab: tab }, '');
+        setActiveTab(tab);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     // Identify Children
     const myChildren = useMemo(() => {
         if (!user?.email) return [];
@@ -490,7 +520,7 @@ export const ParentDashboardView = () => {
                         ].map(tab => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
+                                onClick={() => navigateToTab(tab.id as any)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === tab.id
                                     ? 'bg-white/10 text-white shadow-inner'
                                     : 'text-slate-400 hover:text-white hover:bg-white/5'
@@ -504,29 +534,25 @@ export const ParentDashboardView = () => {
                 </div>
             </header>
 
-            {/* Bottom Navigation (Mobile) */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl border-t border-slate-800 z-50 flex justify-around items-center px-2 safe-area-pb">
+            {/* Bottom Navigation (Mobile) - SIMPLIFIED */}
+            <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 z-50 flex justify-around items-center px-4 safe-area-pb">
                 {[
-                    { id: 'overview', label: 'Overview', icon: LucideIcons.LayoutDashboard },
+                    { id: 'overview', label: 'Home', icon: LucideIcons.Home }, // Renamed from Overview
                     { id: 'journey', label: 'Journey', icon: LucideIcons.MapPin },
-                    { id: 'portfolio', label: 'Portfolio', icon: LucideIcons.BookOpen }, // Published Work
-                    { id: 'finance', label: 'Billing', icon: LucideIcons.Wallet },
                     { id: 'gallery', label: 'Gallery', icon: LucideIcons.ImageIcon },
-                    { id: 'contact', label: 'Contact', icon: LucideIcons.Phone },
-                    { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car },
-                    { id: 'settings', label: 'Settings', icon: LucideIcons.Settings },
+                    { id: 'menu', label: 'Menu', icon: LucideIcons.Menu }, // New Menu Item
                 ].map((tab) => (
                     <button
                         key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all ${activeTab === tab.id
+                        onClick={() => navigateToTab(tab.id as any)}
+                        className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all ${activeTab === tab.id || (tab.id === 'menu' && !['overview', 'journey', 'gallery'].includes(activeTab))
                             ? 'text-indigo-400'
                             : 'text-slate-500 hover:text-slate-300'
                             }`}
                     >
+                        {activeTab === tab.id && <div className="absolute top-0 w-8 h-1 bg-indigo-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />}
                         <tab.icon size={22} className={activeTab === tab.id ? 'fill-current opacity-20' : ''} />
                         <span className="text-[10px] font-bold tracking-tight">{tab.label}</span>
-                        {activeTab === tab.id && <div className="absolute top-0 w-8 h-1 bg-indigo-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />}
                     </button>
                 ))}
             </div>
@@ -564,6 +590,51 @@ export const ParentDashboardView = () => {
                             <ChevronRight className="ml-auto opacity-50 group-hover:opacity-100 transition-opacity" />
                         </div>
                     </button>
+                )}
+
+                {/* NEW: Menu Grid View */}
+                {(activeTab === 'menu' || !['overview', 'journey', 'gallery'].includes(activeTab)) && activeTab !== 'overview' && activeTab !== 'journey' && activeTab !== 'gallery' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <h2 className="text-2xl font-black text-white px-4">Menu</h2>
+
+                        <div className="grid grid-cols-2 gap-4 px-4">
+                            {[
+                                { id: 'portfolio', label: 'Portfolio', icon: LucideIcons.BookOpen, color: 'bg-purple-500', desc: 'Published Projects' },
+                                { id: 'finance', label: 'Billing', icon: LucideIcons.Wallet, color: 'bg-emerald-500', desc: 'Invoices & Payments' },
+                                { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car, color: 'bg-blue-500', desc: 'Go Home Status' },
+                                { id: 'contact', label: 'Contact', icon: LucideIcons.Phone, color: 'bg-orange-500', desc: 'Get Help' },
+                                { id: 'settings', label: 'Settings', icon: LucideIcons.Settings, color: 'bg-slate-500', desc: 'Profile & App' },
+                            ].map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => navigateToTab(item.id as any)}
+                                    className={`relative overflow-hidden rounded-2xl p-4 text-left border border-slate-700 hover:border-slate-500 transition-all group ${activeTab === item.id ? 'bg-slate-800' : 'bg-slate-900/50'}`}
+                                >
+                                    <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center mb-3 shadow-lg group-hover:scale-110 transition-transform`}>
+                                        <item.icon size={20} className="text-white" />
+                                    </div>
+                                    <div className="font-bold text-white text-lg">{item.label}</div>
+                                    <div className="text-xs text-slate-400">{item.desc}</div>
+                                </button>
+                            ))}
+
+                            {/* Sign Out Button in Grid */}
+                            <button
+                                onClick={handleSignOut}
+                                className="col-span-2 relative overflow-hidden rounded-2xl p-4 flex items-center justify-center gap-2 border border-red-900/30 bg-red-900/10 hover:bg-red-900/20 transition-all mt-4"
+                            >
+                                <LogOut size={18} className="text-red-400" />
+                                <span className="font-bold text-red-400">Sign Out</span>
+                            </button>
+                        </div>
+
+                        {/* Render Active Content Below if it's one of the menu items */}
+                        {activeTab !== 'menu' && (
+                            <div className="mt-8 border-t border-slate-800 pt-8">
+                                {/* Content will be rendered by existing conditionals (portfolio, finance, etc) */}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {activeTab === 'overview' && (
