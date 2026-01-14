@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal } from './Modal';
-import { MAXIMIZE } from 'lucide-react';
+
+import { useSession } from '../context/SessionContext';
 
 interface ResourceViewerModalProps {
     isOpen: boolean;
@@ -13,6 +14,7 @@ interface ResourceViewerModalProps {
 }
 
 export const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ isOpen, onClose, resource }) => {
+    const { startSession } = useSession();
     if (!resource || !isOpen) return null;
 
     const isPdf = resource.url.toLowerCase().endsWith('.pdf') || resource.type === 'file';
@@ -34,9 +36,20 @@ export const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ isOpen
                         </div>
                         <div>
                             <h3 className="font-bold text-slate-800 text-lg">{resource.title}</h3>
-                            <a href={resource.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-500 hover:underline">
+                            <button
+                                onClick={() => {
+                                    const isElectron = !!(window as any).electron;
+                                    if (isElectron) {
+                                        startSession(resource.url, 30, resource.title);
+                                        onClose();
+                                    } else {
+                                        window.open(resource.url, '_blank');
+                                    }
+                                }}
+                                className="text-xs text-indigo-500 hover:underline"
+                            >
                                 Open in Browser ↗
-                            </a>
+                            </button>
                         </div>
                     </div>
                     <button
@@ -59,14 +72,20 @@ export const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ isOpen
                         <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-4">
                             <div className="text-6xl">🔗</div>
                             <p className="font-bold text-lg">This resource cannot be embedded.</p>
-                            <a
-                                href={resource.url}
-                                target="_blank"
-                                rel="noreferrer"
+                            <button
+                                onClick={() => {
+                                    const isElectron = !!(window as any).electron;
+                                    if (isElectron) {
+                                        startSession(resource.url, 30, resource.title);
+                                        onClose();
+                                    } else {
+                                        window.open(resource.url, '_blank');
+                                    }
+                                }}
                                 className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
                             >
                                 Open External Link
-                            </a>
+                            </button>
                         </div>
                     )}
                 </div>

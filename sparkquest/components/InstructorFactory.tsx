@@ -23,13 +23,17 @@ interface SidebarItemProps {
 const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, onClick }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${active
-      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-900/30'
-      : 'text-slate-400 hover:text-white hover:bg-slate-800'
+    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all relative overflow-hidden group ${active
+      ? 'text-white shadow-lg shadow-indigo-900/20'
+      : 'text-slate-400 hover:text-white hover:bg-white/5'
       }`}
   >
-    <Icon size={18} />
-    {label}
+    {active && (
+      <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-indigo-500 opacity-100 transition-opacity"></div>
+    )}
+    <Icon size={18} className="relative z-10 group-hover:scale-110 transition-transform duration-300" />
+    <span className="relative z-10">{label}</span>
+    {active && <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-white z-10 animate-pulse"></div>}
   </button>
 );
 
@@ -37,8 +41,12 @@ import { ReviewModal } from './factory/ReviewModal';
 
 import { StudentManager } from './factory/StudentManager';
 import { ProjectEditor } from './factory/ProjectEditor';
+import { ProjectImporter } from './factory/ProjectImporter';
+import { ProjectDetailsEnhanced } from './ProjectDetailsEnhanced';
 
 export const InstructorFactory: React.FC = () => {
+  // Destructure projectTemplates here
+  const { projectTemplates } = useFactoryData();
   const { userProfile, signOut } = useAuth();
   const [view, setView] = useState<'dashboard' | 'projects' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview'>('dashboard');
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
@@ -48,20 +56,14 @@ export const InstructorFactory: React.FC = () => {
   // Project Editor State
   const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any | null>(null);
+  const [isImportOpen, setIsImportOpen] = useState(false);
 
-  // If Review Modal is open
-  if (reviewingProjectId) {
-    return <ReviewModal projectId={reviewingProjectId} onClose={() => setReviewingProjectId(null)} />;
-  }
 
-  // If Project Editor is open
-  if (isProjectEditorOpen) {
-    return <ProjectEditor
-      templateId={editingProject?.id}
-      initialViewProject={editingProject}
-      onClose={() => setIsProjectEditorOpen(false)}
-    />;
-  }
+
+  const handlePreviewProject = (templateId: string) => {
+    setFilterTemplateId(templateId);
+    setView('preview');
+  };
 
   const handleViewSubmissions = (templateId: string) => {
     setFilterTemplateId(templateId);
@@ -89,7 +91,6 @@ export const InstructorFactory: React.FC = () => {
           onClick={() => setIsMobileOpen(false)}
         />
       )}
-
       {/* Sidebar - Fixed on Mobile, Static/Fixed on Desktop */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-white flex flex-col shrink-0 shadow-2xl transition-transform duration-300 ease-in-out
@@ -161,8 +162,6 @@ export const InstructorFactory: React.FC = () => {
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          {/* Legacy Exit Button can go here or be removed if creating a header dropdown */}
-          {/* Keeping it for quick exit */}
           <button
             onClick={async () => {
               if (confirm("Sign out of Factory Command?")) {
@@ -190,6 +189,14 @@ export const InstructorFactory: React.FC = () => {
             <div className="hidden md:block">
               <h2 className="text-xl font-bold text-slate-800 capitalize">{view.replace('-', ' ')}</h2>
             </div>
+            {view === 'projects' && (
+              <button
+                onClick={() => setIsImportOpen(true)}
+                className="ml-4 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-colors flex items-center gap-2"
+              >
+                Import CSV
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-6">
@@ -222,7 +229,7 @@ export const InstructorFactory: React.FC = () => {
               onClearFilter={() => setFilterTemplateId(null)}
             />
           )}
-          {view === 'projects' && <ProjectManager onViewSubmissions={handleViewSubmissions} />}
+          {view === 'projects' && <ProjectManager onViewSubmissions={handleViewSubmissions} onPreviewProject={handlePreviewProject} />}
           {view === 'grades' && <GradeProjectFilter onCreateMission={handleCreateMission} />}
           {view === 'workflows' && <WorkflowManager />}
           {view === 'stations' && <StationManager />}
@@ -230,16 +237,71 @@ export const InstructorFactory: React.FC = () => {
           {view === 'toolbox' && <FactoryToolbox />}
           {view === 'makers' && <StudentManager onReviewProject={(id) => setReviewingProjectId(id)} />}
           {view === 'preview' && (
-            <div className="h-full">
-              <ProjectSelector
-                studentId={userProfile?.uid || ''}
-                userRole="instructor"
-                onSelectProject={(id) => console.log("Preview select:", id)}
-              />
+            <div className="h-full bg-slate-50 relative">
+              {filterTemplateId ? (
+                <ProjectDetailsEnhanced
+                  project={projectTemplates.find(p => p.id === filterTemplateId)!}
+                  role="instructor"
+                  onBack={() => {
+                    setFilterTemplateId(null);
+                    setView('projects');
+                  }}
+                  onEdit={() => {
+                    setEditingProject(projectTemplates.find(p => p.id === filterTemplateId));
+                    setIsProjectEditorOpen(true);
+                  }}
+                />
+              ) : (
+                <div className="p-10">
+                  <h3 className="text-xl font-bold mb-6">Select a project to preview</h3>
+                  <div className="grid grid-cols-3 gap-6">
+                    {projectTemplates.map(p => (
+                      <div key={p.id} onClick={() => setFilterTemplateId(p.id)} className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md cursor-pointer border border-slate-100">
+                        <h4 className="font-bold text-lg">{p.title}</h4>
+                        <p className="text-sm text-slate-500">{p.hook || p.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>
       </div>
-    </div>
+      {/* Review Modal Overlay */}
+      {
+        reviewingProjectId && (
+          <ReviewModal
+            projectId={reviewingProjectId}
+            onClose={() => setReviewingProjectId(null)}
+          />
+        )
+      }
+
+      {/* Project Editor Overlay */}
+      {
+        isProjectEditorOpen && (
+          <div className="fixed inset-0 z-50 bg-white">
+            <ProjectEditor
+              templateId={editingProject?.id}
+              initialViewProject={editingProject}
+              onClose={() => setIsProjectEditorOpen(false)}
+            />
+          </div>
+        )
+      }
+
+      {/* Importer Modal */}
+      {
+        isImportOpen && (
+          <ProjectImporter
+            onClose={() => setIsImportOpen(false)}
+            onSuccess={() => {
+              alert("Projects imported successfully!");
+            }}
+          />
+        )
+      }
+    </div >
   );
 };

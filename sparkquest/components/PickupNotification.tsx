@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
-import { Car, CheckCircle2, Clock } from 'lucide-react';
+import { Truck, CheckCircle2, Clock } from 'lucide-react';
 
 interface PickupEntry {
     id: string;
@@ -52,9 +52,9 @@ export const PickupNotification: React.FC = () => {
                 ${activePickup.status === 'released' ? 'bg-purple-900/90 border-purple-500 shadow-purple-500/50' : ''}
             `}>
                 <div className={`p-3 rounded-full shrink-0 ${activePickup.status === 'on_the_way' ? 'bg-indigo-500 text-white' :
-                        activePickup.status === 'arrived' ? 'bg-emerald-500 text-white' : 'bg-purple-500 text-white'
+                    activePickup.status === 'arrived' ? 'bg-emerald-500 text-white' : 'bg-purple-500 text-white'
                     }`}>
-                    {activePickup.status === 'on_the_way' && <Car size={32} />}
+                    {activePickup.status === 'on_the_way' && <Truck size={32} />}
                     {activePickup.status === 'arrived' && <Clock size={32} />}
                     {activePickup.status === 'released' && <CheckCircle2 size={32} />}
                 </div>

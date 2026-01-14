@@ -64,20 +64,26 @@ export const PlatformBrowser: React.FC<PlatformBrowserProps> = ({ platform, isOp
             <div className={`relative bg-white rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ${isFullscreen ? 'w-full h-full' : 'w-[95%] h-[90%] max-w-7xl'
                 }`}>
                 {/* @ts-ignore - Webview is an Electron element */}
-                {window.electronAPI ? (
+                {(window as any).electronAPI ? (
                     <webview
                         src={platform.url}
                         className="w-full h-full"
                         allowpopups={true}
                     />
                 ) : (
-                    <iframe
-                        src={platform.url}
-                        className="w-full h-full border-0"
-                        title={platform.name}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                    />
+                    <>
+                        {/* Web Fallback Overlay - Helpful if iframe is blocked */}
+                        <div className="absolute top-0 w-full bg-indigo-600/90 text-white text-center text-sm py-1 z-20 backdrop-blur-sm">
+                            If the content below is blocked or refuses to connect, <a href={platform.url} target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-indigo-200">Open in New Tab ↗</a>
+                        </div>
+                        <iframe
+                            src={platform.url}
+                            className="w-full h-full border-0 pt-6" // pt-6 to account for the banner
+                            title={platform.name}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                        />
+                    </>
                 )}
             </div>
 

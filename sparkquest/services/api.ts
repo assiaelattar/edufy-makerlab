@@ -79,7 +79,7 @@ export const api = {
     return { success: false, error: 'Failed to sync project' };
   },
 
-  async submitStepEvidence(stepId: string, data: { note: string; image?: string }): Promise<boolean> {
+  async submitStepEvidence(stepId: string, data: { note: string; image?: string; link?: string }): Promise<boolean> {
     console.log(`[ERP] Submitting evidence for step ${stepId}`);
 
     // Create Notification for Instructor

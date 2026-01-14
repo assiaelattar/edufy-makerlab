@@ -1,9 +1,16 @@
 import React from 'react';
+import { useAuth } from '../context/AuthContext';
 import { useFocusSession } from '../context/FocusSessionContext';
-import { Play, Square, Clock } from 'lucide-react';
+import { Square, Clock } from 'lucide-react';
 
 export const SessionControls: React.FC = () => {
+    const { user, userProfile } = useAuth();
     const { activeSession, elapsedSeconds, startSession, endSession } = useFocusSession();
+
+    // Hide for non-students or logged out
+    if (!user || userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
+        return null;
+    }
 
     const formatTime = (seconds: number) => {
         const hrs = Math.floor(seconds / 3600);

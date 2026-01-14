@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useMissionData } from './hooks/useMissionData';
+import { useFactoryData } from './hooks/useFactoryData';
 import { StudentWizard } from './components/StudentWizard';
 import { InstructorFactory } from './components/InstructorFactory';
 import { RoadmapStep, StepStatus, Peer, User, Assignment, StudentProject } from './types';
@@ -20,6 +21,8 @@ import { InactivityMonitor } from './components/InactivityMonitor';
 import { PickupNotification } from './components/PickupNotification';
 import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
+import { ProjectDetailsEnhanced } from './components/ProjectDetailsEnhanced';
+
 
 // Mock Data for Old Roadmap (Legacy View)
 const INITIAL_STEPS: RoadmapStep[] = [
@@ -50,126 +53,128 @@ import { BootSequence } from './components/BootSequence';
 
 // Wrapper component to use Auth Context
 const SparkQuestApp: React.FC = () => {
+  // 1. ALL HOOKS
   const { user, userProfile, signInWithToken, signOut, loading: authLoading } = useAuth();
-  const { fetchMission, assignment, project, loading: missionLoading, error, isConnected } = useMissionData();
-
-  useEffect(() => { console.log("App Version: Fixed hooks"); }, []);
+  const { fetchMission, clearMission, assignment, project, loading: missionLoading, error, isConnected } = useMissionData();
+  const { projectTemplates, studentProjects } = useFactoryData();
 
   const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
 
   const [bootComplete, setBootComplete] = useState(() => {
-    return localStorage.getItem('sparkquest_boot_complete') === 'true'; // Changed to localStorage for persistence across reloads/sessions
+    return localStorage.getItem('sparkquest_boot_complete') === 'true';
   });
 
-  // Parse projectId from URL on mount (ONCE, before auth redirect clears params)
+  // URL State Hooks (Moved Up)
   const [initialProjectId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    const pId = params.get('projectId');
-    return pId;
+    return params.get('projectId');
   });
 
+  const [initialRole] = useState<'student' | 'instructor' | 'parent'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const r = params.get('role');
+    return (r === 'instructor' || r === 'parent') ? r : 'student';
+  });
 
+  const [initialViewMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view');
+  });
+
+  const [erpUrl, setErpUrl] = useState(() => localStorage.getItem('erp_url') || import.meta.env.VITE_ERP_URL || 'http://localhost:5173');
+  const [showConfig, setShowConfig] = useState(false);
+
+  // Effects
+  useEffect(() => { console.log("App Version: Fixed hooks v2"); }, []);
 
   useEffect(() => {
-    // Check for token in URL on load (Bridge from ERP Legacy)
-    // Only process if we are NOT already logged in, or if we want to switch users (rare)
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
-
     if (token) {
       console.log("Token detected, attempting sign in...");
       signInWithToken(token).then(() => {
-        // SUCCESS: Do NOT clear token yet. Wait for 'user' state to update.
-        // If we clear it now, we race with the AuthProvider update, causing a redirect loop.
-        console.log("Sign in promise resolved. Waiting for auth state change...");
-      }).catch(err => {
-        console.error("Auth Token Error", err);
-      });
+        console.log("Sign in promise resolved.");
+      }).catch(err => console.error("Auth Token Error", err));
     }
   }, []);
 
-  // --- CLEANUP TOKEN AFTER LOGIN ---
   useEffect(() => {
     if (user) {
       const params = new URLSearchParams(window.location.search);
       if (params.get('token')) {
-        console.log("User authenticated, cleaning up URL token.");
-        const newUrl = new URL(window.location.href);
-        newUrl.searchParams.delete('token');
-        window.history.replaceState({}, document.title, newUrl.toString());
+        const timer = setTimeout(() => {
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('token');
+          window.history.replaceState({}, document.title, newUrl.toString());
+        }, 2000);
+        return () => clearTimeout(timer);
       }
     }
   }, [user]);
 
-  // --- TRAFFIC CONTROL: ROUTING LOGIC ---
+  // Routing Logic
   useEffect(() => {
     if (!user || authLoading) return;
-
     console.log("🚦 Routing Check. User:", user.email, "Role:", userProfile?.role, "Current View:", view);
 
-    // 1. If actively working on a mission (WIZARD mode), stay there
+    // If active mission, stay
     if (assignment && project) {
       setView('WIZARD');
       return;
     }
 
-    // 2. Role Based Routing
-    // FIXED: Route Instructors/Admins to FACTORY
+    // Role Routing
     if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
-      console.log("👉 Routing to FACTORY (Instructor/Admin)");
       setView('FACTORY');
       return;
     }
 
-    console.log("👉 Routing to HOME (Unified View)");
     setView('HOME');
   }, [user, userProfile, assignment, project, authLoading]);
 
-
-  // Auto-fetch data ONLY if we have a specific project ID active
+  // Data Fetching
   useEffect(() => {
     if (user && (selectedProjectId || initialProjectId)) {
-      // INSTRUCTOR GUARD: Instructors should not trigger mission data fetch here
-      // They use 'FACTORY' view which has its own data hooks.
-      if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
-        return;
-      }
-
+      if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') return;
       const pId = selectedProjectId || initialProjectId;
       console.log("🚀 [SparkQuest] Loading Mission:", pId);
-      // Logic: If user selects a project, we fetch it. 
-      // This hook will eventually set 'project' and 'assignment', causing view -> WIZARD
       fetchMission(user.uid, pId || undefined);
     }
   }, [selectedProjectId, initialProjectId, user, userProfile]);
+
+  // Deep Link Handling for Preview
+  useEffect(() => {
+    if (initialViewMode === 'details' && initialProjectId && !previewProjectId) {
+      setPreviewProjectId(initialProjectId);
+    }
+  }, [initialViewMode, initialProjectId]);
 
   const handleLogout = async () => {
     await signOut();
     window.location.reload();
   };
 
-  // --- UNIFIED LOGIN REDIRECT LOGIC (MANUAL TRIGGER ONLY) ---
-  const [erpUrl, setErpUrl] = useState(() => localStorage.getItem('erp_url') || import.meta.env.VITE_ERP_URL || 'http://localhost:5173');
-  const [showConfig, setShowConfig] = useState(false);
-
-  // REMOVED AUTO REDIRECT EFFECT TO PREVENT LOOPS
-
   const handleLogin = () => {
     const currentUrl = window.location.href;
     window.location.href = `${erpUrl}?service=sparkquest&redirect=${encodeURIComponent(currentUrl)}`;
   };
 
-  // --- ONBOARDING: BOOT SEQUENCE ---
+  // 2. EARLY RETURNS (Guard Clauses)
+  // 2. EARLY RETURNS (Guard Clauses)
+
+  // Boot
   if (!bootComplete) {
     return <BootSequence onComplete={() => {
-      localStorage.setItem('sparkquest_boot_complete', 'true'); // Persist to localStorage
+      localStorage.setItem('sparkquest_boot_complete', 'true');
       setBootComplete(true);
     }} />;
   }
 
-  // --- LOADING STATE ---
-  if (authLoading || (missionLoading && view === 'WIZARD')) {
+  // Loading
+  // Removed missionLoading to prevent blocking UI on navigation
+  if (authLoading) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white gap-4">
         <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
@@ -178,13 +183,10 @@ const SparkQuestApp: React.FC = () => {
     );
   }
 
-  // --- LOGIN / AUTHENTICATING STATE ---
+  // Auth Guard
   if (!user) {
     const params = new URLSearchParams(window.location.search);
-    const hasToken = params.get('token');
-
-    // If we have a token, we are currently authenticating. Show spinner.
-    if (hasToken) {
+    if (params.get('token')) {
       return (
         <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white p-8 text-center space-y-6">
           <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
@@ -193,30 +195,59 @@ const SparkQuestApp: React.FC = () => {
         </div>
       );
     }
-
-    // Otherwise, show Manual Login Screen
     return <LoginView />;
   }
 
-  // --- INSTRUCTOR VIEW: THE FACTORY ---
+  // 3. MAIN RENDER LOGIC
+
   if (view === 'FACTORY') {
     return <InstructorFactory />;
   }
 
-  // --- STUDENT VIEW: STUDIO / HOME ---
-  if (view === 'HOME' && !project) {
+  // PREVIEW / DETAILS INTERSTITIAL
+  // Renders if previewProjectId is set (either from ProjectSelector click or Deep Link)
+  if (previewProjectId) {
+    // Resolve Project Data
+    const effectivePreviewId = previewProjectId;
+    let template = projectTemplates.find(p => p.id === effectivePreviewId);
+
+    if (!template) {
+      const existingProject = studentProjects?.find((p: any) => p.id === effectivePreviewId);
+      if (existingProject && existingProject.templateId) {
+        template = projectTemplates.find(p => p.id === existingProject.templateId);
+      } else if (existingProject) {
+        template = existingProject as any;
+      }
+    }
+
+    const finalProject = template || {
+      id: effectivePreviewId,
+      title: 'Mission Loading...',
+      description: 'Fetching details from server...',
+      station: 'General',
+      difficulty: 'intermediate',
+      skills: []
+    } as any;
+
     return (
-      <ProjectSelector
-        studentId={user.uid}
-        onSelectProject={(projectId) => {
-          setSelectedProjectId(projectId);
+      <ProjectDetailsEnhanced
+        project={finalProject}
+        role={initialRole}
+        onLaunch={() => {
+          // If student wants to start, they click Launch.
+          // We clear preview, set "selected" which triggers the fetchMission effect
+          setPreviewProjectId(null);
+          setSelectedProjectId(effectivePreviewId);
         }}
-        onLogout={handleLogout}
+        onBack={() => {
+          setPreviewProjectId(null);
+          if (initialViewMode === 'details') window.close();
+        }}
       />
     );
   }
 
-  // --- ERROR STATE ---
+  // Error State
   if (error) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white p-8 text-center space-y-6">
@@ -232,7 +263,27 @@ const SparkQuestApp: React.FC = () => {
     );
   }
 
-  // --- ACTIVE MISSION: WIZARD ---
+  // HOME View (Project Selector)
+  if (view === 'HOME' && !project) {
+    return (
+      <ProjectSelector
+        studentId={user.uid}
+        onSelectProject={(projectId) => {
+          // DIRECT LAUNCH to Wizard (as requested by user)
+          console.log("Launching Mission Direct:", projectId);
+          setSelectedProjectId(projectId);
+        }}
+        // We'll need to modify ProjectSelector to accept an onPreview prop if we want the button
+        // For now, let's assume we will add it.
+        onPreviewProject={(projectId) => {
+          setPreviewProjectId(projectId);
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // WIZARD View
   return (
     <div className="h-screen w-full flex flex-col bg-slate-900 overflow-hidden relative">
       <StudentWizard
@@ -240,11 +291,11 @@ const SparkQuestApp: React.FC = () => {
         initialProject={project!}
         isConnected={isConnected}
         onExit={() => {
-          // Clear selection to go back to Home
           setSelectedProjectId(null);
+          clearMission();
           setView('HOME');
-          // Force reload to clear hooks is safer for now
-          window.location.href = window.location.pathname;
+          // Clear URL params if any
+          window.history.pushState({}, '', window.location.pathname);
         }}
       />
     </div>

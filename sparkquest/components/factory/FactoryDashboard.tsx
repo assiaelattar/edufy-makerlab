@@ -58,7 +58,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
     }, [filter, stats]);
 
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-10 animate-in fade-in duration-500">
+        <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-10 animate-in fade-in duration-500 pb-24 md:pb-8">
             {/* Header & Quick Actions */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
@@ -183,7 +183,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
 
                         <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                             {stats.review.length > 0 ? stats.review.slice(0, 10).map(p => {
-                                const studentName = students?.find(s => s.id === p.studentId)?.name || p.studentName || 'Unknown Student';
+                                const studentName = p.studentName || students?.find(s => s.id === p.studentId)?.name || 'Unknown Student';
                                 return (
                                     <div
                                         key={p.id}
@@ -220,7 +220,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
 
                         <div className="flex-1 overflow-y-auto space-y-6 pr-2">
                             {stats.recent.map((p, i) => {
-                                const studentName = students?.find(s => s.id === p.studentId)?.name || p.studentName || 'Unknown Student';
+                                const studentName = p.studentName || students?.find(s => s.id === p.studentId)?.name || 'Unknown Student';
                                 return (
                                     <div key={p.id} className="flex gap-4 group cursor-pointer hover:bg-slate-50 p-2 rounded-xl transition-colors" onClick={() => onReviewProject(p.id)}>
                                         <div className="flex flex-col items-center">
@@ -254,7 +254,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProj
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
                     {filteredList.map(p => {
-                        const studentName = students?.find(s => s.id === p.studentId)?.name || p.studentName || 'Student';
+                        const studentName = p.studentName || students?.find(s => s.id === p.studentId)?.name || 'Student';
                         return (
                             <div
                                 key={p.id}

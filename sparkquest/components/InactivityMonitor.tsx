@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Power } from 'lucide-react';
 
+import { useAuth } from '../context/AuthContext';
+
 export const InactivityMonitor: React.FC = () => {
+    const { userProfile } = useAuth();
     const [warningStep, setWarningStep] = useState<'none' | 'warning' | 'shutdown'>('none');
     const [countdown, setCountdown] = useState(10); // 10s grace period after warning to click button
     const [quote, setQuote] = useState('');
@@ -45,6 +48,25 @@ export const InactivityMonitor: React.FC = () => {
     };
 
     useEffect(() => {
+        // --- 0. SECURITY & CONFIG CHECKS ---
+        const isDesktopApp = !!(window as any).sparkquest;
+        const isKioskMode = new URLSearchParams(window.location.search).get('kiosk') === 'true';
+        const isAdminOrInstructor = userProfile?.role === 'admin' || userProfile?.role === 'instructor';
+
+        // RULE: Disable for Admins/Instructors ALWAYS
+        if (isAdminOrInstructor) {
+            console.log("🛡️ InactivityMonitor: Disabled for Admin/Instructor");
+            return;
+        }
+
+        // RULE: Web Version -> Only enable if explicitly 'kiosk=true'
+        if (!isDesktopApp && !isKioskMode) {
+            console.log("🌍 InactivityMonitor: Disabled for Web (Standard Mode)");
+            return;
+        }
+
+        console.log("👁️ InactivityMonitor: ACTIVE");
+
         let backgroundTimer: NodeJS.Timeout;
         let shutdownInterval: NodeJS.Timeout;
         let idleTimer: NodeJS.Timeout;
@@ -56,10 +78,6 @@ export const InactivityMonitor: React.FC = () => {
             clearTimeout(idleTimer);
             idleTimer = setTimeout(() => {
                 console.log('💤 Idle Timeout - Logging out to protect session');
-                // Force logout by reloading (App.tsx checks auth, but simplest is clear + reload)
-                // Actually, let's notify or reload.
-                // Better: Clear local storage "session" if any, and reload.
-                // Since this is a hard reset for shared devices:
                 window.location.reload();
             }, IDLE_TIMEOUT);
         };

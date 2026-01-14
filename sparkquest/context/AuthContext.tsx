@@ -87,6 +87,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+            // URL Token Priority: If we have a bridge token, ignore existing Firebase session
+            // forcing the app to use the signInWithToken logic instead.
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('token')) {
+                console.log("🔒 Bridge Token Detected: Ignoring Firebase Session to allow impersonation.");
+                return;
+            }
+
             if (currentUser) {
                 isDemoMode.current = false;
                 setUser(currentUser);
@@ -117,7 +125,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             // 1. Try Bridge Token (Base64 JSON from ERP)
             try {
-                const decoded = atob(token);
+                // Decode base64 with unicode support
+                const decoded = decodeURIComponent(atob(token).split('').map(function (c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+
                 // Simple validation to ensure it looks like JSON
                 if (decoded.trim().startsWith('{')) {
                     const payload = JSON.parse(decoded);

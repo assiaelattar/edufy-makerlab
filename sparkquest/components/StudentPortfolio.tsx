@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, TrendingUp, Star, Download, X } from 'lucide-react';
+import { Award, TrendingUp, Star, Download, X, ExternalLink } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -8,10 +8,12 @@ import { StudentProject, Badge } from '../types';
 interface StudentPortfolioProps {
     isOpen: boolean;
     onClose: () => void;
+    onSelectProject?: (projectId: string) => void;
 }
 
-export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose }) => {
+export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject }) => {
     const { user } = useAuth();
+    // Force Rebuild: Navigation Fix Applied
     const [projects, setProjects] = useState<StudentProject[]>([]);
     const [badges, setBadges] = useState<Badge[]>([]);
     const [loading, setLoading] = useState(true);
@@ -143,21 +145,48 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                                     {projects.map(project => (
                                         <div
                                             key={project.id}
-                                            className="group bg-slate-800/50 rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all overflow-hidden hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)]"
+                                            onClick={() => {
+                                                console.log('🖱️ [Portfolio] Project Clicked:', project.id);
+                                                console.log('🖱️ [Portfolio] onSelectProject exists?', !!onSelectProject);
+                                                if (onSelectProject) {
+                                                    console.log('🖱️ [Portfolio] Invoking onSelectProject...');
+                                                    onSelectProject(project.id);
+                                                    onClose();
+                                                } else {
+                                                    console.warn('⚠️ [Portfolio] onSelectProject prop IS MISSING');
+                                                }
+                                            }}
+                                            className="group bg-slate-800/50 rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all overflow-hidden hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)] cursor-pointer"
                                         >
                                             {/* Project Thumbnail */}
-                                            <div className="aspect-video bg-gradient-to-br from-emerald-900/20 to-slate-900 flex items-center justify-center border-b border-slate-700">
-                                                {project.coverImage ? (
-                                                    <img src={project.coverImage} alt={project.title} className="w-full h-full object-cover" />
+                                            <div className="aspect-video bg-gradient-to-br from-emerald-900/20 to-slate-900 flex items-center justify-center border-b border-slate-700 relative group">
+                                                {(project.thumbnailUrl || project.coverImage) ? (
+                                                    <img src={project.thumbnailUrl || project.coverImage} alt={project.title} className="w-full h-full object-cover" />
                                                 ) : (
                                                     <div className="text-6xl">{project.station === 'robotics' ? '🤖' : project.station === 'coding' ? '💻' : '🎨'}</div>
+                                                )}
+
+                                                {/* Overlay Link */}
+                                                {project.presentationUrl && (
+                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                                                        <a
+                                                            href={project.presentationUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-lg"
+                                                            onClick={e => e.stopPropagation()}
+                                                        >
+                                                            <ExternalLink size={16} />
+                                                            View Project
+                                                        </a>
+                                                    </div>
                                                 )}
                                             </div>
 
                                             {/* Project Info */}
                                             <div className="p-4">
                                                 <h3 className="font-bold text-white mb-2 line-clamp-1">{project.title}</h3>
-                                                <p className="text-xs text-slate-400 line-clamp-2 mb-3">{project.description}</p>
+                                                <p className="text-xs text-slate-400 line-clamp-3 mb-3 whitespace-pre-wrap">{project.description}</p>
 
                                                 {/* Stats */}
                                                 <div className="flex items-center justify-between text-xs mb-3">
@@ -169,11 +198,27 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                                                     </span>
                                                 </div>
 
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex items-center justify-between gap-3">
                                                     <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/20">
                                                         {project.status}
                                                     </span>
-                                                    <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+
+                                                    {/* Explicit View Button */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            // DEBUG: Alert to confirm click and ID
+                                                            // window.alert(`Navigating to: ${project.id}`);
+
+                                                            if (onSelectProject) {
+                                                                onSelectProject(project.id);
+                                                                onClose();
+                                                            }
+                                                        }}
+                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shadow-lg flex items-center gap-1"
+                                                    >
+                                                        View Details
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>

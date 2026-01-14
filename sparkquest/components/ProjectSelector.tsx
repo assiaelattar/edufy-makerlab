@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, Timestamp } from 'firebase/firestore';
 import { StudentProject, Station } from '../types';
-import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Car, Key, LogOut, Settings, TrendingUp } from 'lucide-react';
+import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, LayoutGrid, List } from 'lucide-react';
+
 import { AvatarSelector } from './AvatarSelector';
 import { CredentialWallet } from './CredentialWallet';
 import { StudentPortfolio } from './StudentPortfolio';
@@ -17,10 +19,14 @@ import { ThemeProvider, useTheme, THEMES } from '../context/ThemeContext';
 import { SparkStore } from './SparkStore';
 import { ProductivityDashboard } from './ProductivityDashboard';
 import { ModernAlert } from './ModernAlert';
+import { SidebarItem } from './SidebarItem';
+import { Sidebar } from './Sidebar';
+import { MobileNavigation } from './MobileNavigation';
 
 interface ProjectSelectorProps {
     studentId: string;
     onSelectProject: (projectId: string) => void;
+    onPreviewProject?: (projectId: string) => void; // New prop for details view
     onLogout?: () => void;
     userRole?: string;
 }
@@ -30,8 +36,8 @@ export const ProjectSelector: React.FC<ProjectSelectorProps> = (props) => {
     return <ProjectSelectorContent {...props} />;
 };
 
-const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onSelectProject, onLogout, userRole }) => {
-    const { activeTheme, coins } = useTheme();
+const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onSelectProject, onPreviewProject, onLogout, userRole }) => {
+    const { activeTheme, coins, playSound } = useTheme();
     const activeThemeDef = THEMES.find(t => t.id === activeTheme) || THEMES[0];
 
     // Auth context might be missing if imported in main app
@@ -135,6 +141,48 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         };
         fetchStudentData();
     }, [studentId]);
+
+    // Search & Filter State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState<'all' | 'mission' | 'custom'>('all');
+
+    // Helper: Get Status Badge
+    const getStatusBadge = (status: string, templateId?: string) => {
+        const isCustom = templateId === 'free-build-template' || templateId === 'showcase-template';
+
+        // Special handling for Showcase/Free Build
+        if (isCustom && status === 'PENDING_REVIEW') {
+            return { label: 'Waiting Approval', color: 'bg-amber-500 text-amber-950', border: 'border-amber-500/20' };
+        }
+
+        switch (status) {
+            case 'COMPLETED':
+            case 'DONE':
+                return { label: 'Completed', color: 'bg-emerald-500 text-emerald-950', border: 'border-emerald-500/20' };
+            case 'IN_PROGRESS':
+                return { label: 'In Progress', color: 'bg-blue-500 text-white', border: 'border-blue-500/20' };
+            case 'PENDING_REVIEW':
+                return { label: 'In Review', color: 'bg-orange-500 text-white', border: 'border-orange-500/20' };
+            case 'DRAFT':
+                return { label: 'Draft', color: 'bg-slate-500 text-slate-200', border: 'border-slate-500/20' };
+            default:
+                return { label: status, color: 'bg-slate-700 text-slate-300', border: 'border-slate-700/50' };
+        }
+    };
+
+    // Filter Logic
+    const filteredProjects = projects.filter(project => {
+        // 1. Search Filter
+        const matchesSearch = project.title.toLowerCase().includes(searchQuery.toLowerCase());
+
+        // 2. Tab Filter
+        const isCustom = project.templateId === 'free-build-template' || project.templateId === 'showcase-template';
+        let matchesType = true;
+        if (filterType === 'mission') matchesType = !isCustom;
+        if (filterType === 'custom') matchesType = isCustom;
+
+        return matchesSearch && matchesType;
+    });
 
     const handleSaveAvatar = async (url: string) => {
         if (!db || !studentId) return;
@@ -287,7 +335,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 // Helper to get status
                 const getStationState = (s: Station) => {
-                    const isGradeActive = s.activeForGradeIds?.some(gid => effectiveGradeIds.includes(gid));
+                    // FIX: Robust string comparison for IDs
+                    const isGradeActive = s.activeForGradeIds?.some(gid =>
+                        effectiveGradeIds.map(String).includes(String(gid))
+                    );
                     if (!isGradeActive) return 'hidden'; // Not for this grade at all
 
                     const now = Date.now();
@@ -318,9 +369,11 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             return false;
                         }
 
-                        // 🚨 STRICT Grade filtering
+                        // 🚨 STRICT Grade filtering (Robust String Check)
                         if (t.targetAudience?.grades && t.targetAudience.grades.length > 0) {
-                            const studentHasAccess = t.targetAudience.grades.some((gradeId: any) => effectiveGradeIds.includes(gradeId));
+                            const studentHasAccess = t.targetAudience.grades.some((gradeId: any) =>
+                                effectiveGradeIds.map(String).includes(String(gradeId))
+                            );
                             if (!studentHasAccess) {
                                 console.log(`❌ [Filter Debug] Rejected "${t.title}": Grade mismatch. Student Grades: ${effectiveGradeIds}, Target Grades: ${t.targetAudience.grades}`);
                                 return false;
@@ -329,17 +382,36 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             console.log(`ℹ️ [Filter Debug] "${t.title}": No specific grades targeted (Open to all?)`);
                         }
 
-                        // 🚨 STRICT Group filtering
+                        // 🚨 STRICT Group filtering (Robust String Check)
                         if (t.targetAudience?.groups && t.targetAudience.groups.length > 0) {
                             // If we are in PREVIEW MODE, we ignore group mismatch (act as if we are in valid group)
                             if (previewGradeId) {
                                 console.log(`🎭 [Filter Debug] Instructor Preview: Bypassing group check for "${t.title}"`);
                             } else {
-                                const studentHasGroupAccess = t.targetAudience.groups.some((groupId: any) => effectiveGroupIds.includes(groupId));
+                                const studentHasGroupAccess = t.targetAudience.groups.some((groupId: any) =>
+                                    effectiveGroupIds.map(String).includes(String(groupId))
+                                );
                                 if (!studentHasGroupAccess) {
                                     console.log(`❌ [Filter Debug] Rejected "${t.title}": Group mismatch. Student Groups: ${effectiveGroupIds}, Target Groups: ${t.targetAudience.groups}`);
                                     return false;
                                 }
+                            }
+                        }
+
+                        // 🎯 STUDENT SPECIFIC TARGETING (Highest Priority)
+                        if (t.targetAudience?.students && t.targetAudience.students.length > 0) {
+                            // If explicit students are listed, ONLY they can see it
+                            const istargeted = t.targetAudience.students.includes(studentId);
+                            if (!istargeted) {
+                                console.log(`❌ [Filter Debug] Rejected "${t.title}": Explicitly targeted to other students.`);
+                                return false;
+                            } else {
+                                console.log(`🎯 [Filter Debug] MATCH "${t.title}": Explicitly targeted to this student.`);
+                                return true; // Bypass other checks? No, we still want to respect status, but maybe it overrides Grade? 
+                                // Taking "Limit to specific students" literally: It implies it must match student ID.
+                                // It should probably STILL match Grade if we want to keep it organized, but usually specific targeting overrides weak grade matches.
+                                // However, keeping Grade match ensures it appears in the right "context" (Grade view). 
+                                // Let's keep strict AND logic: Must match Grade AND Student.
                             }
                         }
 
@@ -382,6 +454,11 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 setAvailableTemplates(newMissions);
 
+                // --- INJECT STATIC TEMPLATES (Free Build & Showcase) ---
+                // We inject these AFTER filtering started IDs so they are always available (or available if not currently active?)
+                // Actually, "Free Build" should always be available for multiple projects.
+                setAvailableTemplates(newMissions);
+
             } catch (error) {
                 console.error('❌ [ProjectSelector] Error fetching projects:', error);
             } finally {
@@ -398,9 +475,73 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         template: any | null;
     }>({ isOpen: false, template: null });
 
+    const [namingModal, setNamingModal] = useState<{
+        isOpen: boolean;
+        template: any | null;
+        name: string;
+    }>({ isOpen: false, template: null, name: '' });
+
     const handleStartMissionClick = (template: any) => {
         if (template.isLocked) return;
+
+        // Force Naming for Free Build & Showcase
+        if (template.id === 'free-build-template' || template.id === 'showcase-template') {
+            setNamingModal({ isOpen: true, template, name: '' });
+            return;
+        }
+
         setStartMissionAlert({ isOpen: true, template });
+    };
+
+    const handleDeleteProject = async (projectId: string, projectTitle: string) => {
+        if (!confirm(`Are you sure you want to delete "${projectTitle}"? This cannot be undone.`)) return;
+
+        try {
+            if (!db) return;
+            await deleteDoc(doc(db, 'student_projects', projectId));
+            // Optimistic update
+            setProjects(prev => prev.filter(p => p.id !== projectId));
+
+            // Also update availableTemplates if it was a started mission (restore it)
+            // But we fetch fresh on load, so maybe just let it be.
+            playSound('trash'); // Assuming sound exists or standard generic sound
+        } catch (error) {
+            console.error("Failed to delete project:", error);
+            alert("Could not delete project.");
+        }
+    };
+
+    const handleCreateNamedProject = async () => {
+        const { template, name } = namingModal;
+        if (!template || !name.trim() || !db) return;
+
+        setNamingModal({ isOpen: false, template: null, name: '' });
+        setLoading(true); // Reuse main loading
+
+        try {
+            // 1. Create new Student Project
+            const newProject = {
+                studentId: effectiveStudentId || studentId,
+                templateId: template.id,
+                title: name.trim(), // USER ENTERED NAME
+                description: template.description || '',
+                thumbnailUrl: template.thumbnailUrl || '',
+                station: template.station || 'General',
+                difficulty: template.difficulty || 'beginner',
+                status: 'planning',
+                workflowId: template.defaultWorkflowId || '',
+                steps: [], // Will be auto-generated by Wizard if needed, or empty for Free Build
+                createdAt: new Date(),
+                updatedAt: new Date()
+            };
+
+            const docRef = await (await import('firebase/firestore')).addDoc(collection(db, 'student_projects'), newProject);
+            onSelectProject(docRef.id);
+
+        } catch (error) {
+            console.error("Error creating named project:", error);
+            setLoading(false);
+        }
     };
 
     const confirmStartMission = async () => {
@@ -436,14 +577,25 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             }
 
             // 2. Create new Student Project
+
+            // SPECIAL HANDLING: Unique Titles for Static Templates to prevent De-Dupe Deletion
+            let projectTitle = template.title;
+            if (template.id === 'free-build-template') {
+                projectTitle = `Free Build #${Math.floor(Math.random() * 1000)}`;
+            } else if (template.id === 'showcase-template') {
+                projectTitle = `Showcase #${Math.floor(Math.random() * 1000)}`;
+            }
+
             const newProject = {
                 studentId: effectiveStudentId || studentId,
                 templateId: template.id,
-                title: template.title,
+                title: projectTitle,
                 description: template.description || '',
+                thumbnailUrl: template.thumbnailUrl || '',
                 station: template.station || 'General',
                 difficulty: template.difficulty || 'beginner',
                 status: 'planning',
+                workflowId: template.defaultWorkflowId || '', // CRITICAL: Save workflow ID so Wizard knows which view to show
                 steps: initialSteps,
                 createdAt: new Date(),
                 updatedAt: new Date()
@@ -471,7 +623,8 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Students can access Arcade, Gallery, Portfolio, Pickup, Inventory even without missions
 
     return (
-        <div className={`min-h-screen w-full overflow-y-auto relative selection:bg-blue-500 selection:text-white pb-20 transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
+        <div className={`flex h-screen w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
+
             {/* Background Effects */}
             <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black"></div>
             <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
@@ -483,350 +636,404 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 </svg>
             </div>
 
-            {/* Ambient Glows */}
-            <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none animate-pulse"></div>
-            <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[140px] pointer-events-none"></div>
+            {/* SIDEBAR (Desktop) */}
+            <Sidebar
+                studentName={studentName}
+                avatarUrl={avatarUrl}
+                coins={coins}
+                isAdminOrInstructor={isAdminOrInstructor}
+                onEditProfile={() => setIsProfileOpen(true)}
+                onOpenStore={() => setIsStoreOpen(true)}
+                onOpenArcade={() => setIsArcadeOpen(true)}
+                onOpenPortfolio={() => setIsPortfolioOpen(true)}
+                onOpenGallery={() => setIsGalleryOpen(true)}
+                onOpenPickup={() => setIsPickupOpen(true)}
+                onOpenWallet={() => setIsWalletOpen(true)}
+                onOpenProgress={() => setIsProgressOpen(true)}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+                onLogout={() => setIsLogoutConfirmOpen(true)}
+            />
 
-            <div className="relative z-10 container mx-auto px-6 py-12 max-w-7xl">
+            {/* MOBILE NAVIGATION (Bottom Bar) */}
+            <MobileNavigation
+                onOpenStore={() => setIsStoreOpen(true)}
+                onOpenArcade={() => setIsArcadeOpen(true)}
+                onOpenPortfolio={() => setIsPortfolioOpen(true)}
+                onOpenGallery={() => setIsGalleryOpen(true)}
+                onOpenWallet={() => setIsWalletOpen(true)}
+                onOpenProfile={() => setIsProfileOpen(true)}
+            />
 
-                {/* 🎭 INSTRUCTOR PREVIEW MODE SELECTOR */}
-                {isAdminOrInstructor && availableGrades.length > 0 && (
-                    <div className="mb-6 p-4 bg-yellow-500/10 border-2 border-yellow-500/30 rounded-2xl backdrop-blur-sm">
-                        <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center">
-                                    <span className="text-2xl">🎭</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-black text-yellow-400 uppercase tracking-wider">Preview Mode</h3>
-                                    <p className="text-xs text-yellow-300/70">See what students from each grade see</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <select
-                                    value={previewGradeId || ''}
-                                    onChange={(e) => setPreviewGradeId(e.target.value || null)}
-                                    className="px-4 py-2 bg-slate-900/50 border-2 border-yellow-500/30 rounded-xl text-white font-bold text-sm focus:outline-none focus:border-yellow-400 cursor-pointer"
-                                >
-                                    <option value="">🔴 Live Mode (Real Data)</option>
-                                    {availableGrades.map(grade => (
-                                        <option key={grade.id} value={grade.id}>
-                                            🎭 Preview: {grade.name} ({grade.programName})
-                                        </option>
-                                    ))}
-                                </select>
-                                {previewGradeId && (
-                                    <button
-                                        onClick={() => setPreviewGradeId(null)}
-                                        className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border-2 border-red-500/50 rounded-xl text-red-300 font-bold text-sm transition-colors"
-                                    >
-                                        Exit Preview
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
+            {/* MODALS */}
+            {console.log('🔍 [ProjectSelector] Rendering Portfolio Modal. onPreviewProject passed?', !!onPreviewProject)}
+            <StudentPortfolio
+                isOpen={isPortfolioOpen}
+                onClose={() => setIsPortfolioOpen(false)}
+                onSelectProject={(pid) => {
+                    console.log('🔗 [ProjectSelector] Portfolio requested preview for:', pid);
+                    if (onPreviewProject) onPreviewProject(pid);
+                }}
+            />
 
-                {/* HERO SECTION */}
-                <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-8">
-                    <div className="flex items-center gap-6">
-                        <button
-                            onClick={() => setIsProfileOpen(true)}
-                            className="w-24 h-24 rounded-3xl bg-slate-800 border-4 border-indigo-500/50 hover:border-indigo-400 hover:scale-105 transition-all shadow-[0_0_30px_rgba(99,102,241,0.3)] overflow-hidden relative group"
-                        >
-                            {avatarUrl ? (
-                                <img src={avatarUrl} alt="Hero" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center text-4xl">😎</div>
-                            )}
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <span className="text-xs font-bold text-white uppercase">Edit</span>
-                            </div>
-                        </button>
+            {/* MAIN CONTENT AREA */}
+            <div className="flex-1 overflow-y-auto relative z-10 scroll-smooth pb-32 md:pb-20">
+                <div className="container mx-auto px-8 py-10 max-w-[1800px]">
+
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h1 className="text-5xl font-black text-white tracking-tight drop-shadow-2xl uppercase">
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">{studentName || 'MY'}'S</span> STUDIO
-                            </h1>
-                            <p className="text-blue-400 font-bold tracking-widest text-sm uppercase mt-1">Ready for the next mission, {studentName || 'Maker'}?</p>
+                            <h2 className="text-3xl font-black text-white tracking-tight uppercase drop-shadow-lg">Mission Control</h2>
+                            <p className="text-slate-400 text-sm font-medium">Select your next objective to launch.</p>
                         </div>
+                        {/* Preview Mode Banner */}
+                        {isAdminOrInstructor && availableGrades.length > 0 && (
+                            <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-yellow-500/30">
+                                <span className="text-yellow-400 text-xs font-bold uppercase">Preview:</span>
+                                <select value={previewGradeId || ''} onChange={(e) => setPreviewGradeId(e.target.value || null)} className="bg-transparent text-yellow-100 text-xs outline-none cursor-pointer font-bold uppercase">
+                                    <option value="">🔴 Live View</option>
+                                    {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                                </select>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Quick Access or Status */}
-                    {/* Settings - Only for Admin/Instructor */}
-                    {/* Quick Access or Status */}
-                    {/* Settings - Only for Admin/Instructor */}
-                    <div className="flex gap-4">
+
+
+
+                    {/* QUICK STARTER: New Project & Upload Buttons */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
                         <button
-                            onClick={() => setIsStoreOpen(true)}
-                            className="px-4 py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-400 border border-yellow-500/30 rounded-2xl font-black flex items-center gap-2 hover:scale-105 transition-transform"
+                            onClick={() => handleStartMissionClick(availableTemplates.find(t => t.id === 'free-build-template') || {
+                                id: 'free-build-template',
+                                title: 'Free Build',
+                                description: 'Start a blank project.',
+                                station: 'General',
+                                status: 'assigned',
+                                isLocked: false,
+                                defaultWorkflowId: 'custom-workflow'
+                            })}
+                            className="group relative h-40 rounded-3xl overflow-hidden border border-white/10 hover:border-amber-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-amber-500/20 active:scale-[0.98]"
                         >
-                            <ShoppingBag size={20} />
-                            <span>{coins} 🪙</span>
+                            <div className="absolute inset-0 bg-gradient-to-br from-amber-600/20 to-orange-900/40 group-hover:from-amber-600/30 group-hover:to-orange-900/50 transition-colors"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <span className="p-4 bg-amber-500 rounded-2xl text-amber-950 mb-4 shadow-lg group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                                    <Zap size={32} strokeWidth={2.5} />
+                                </span>
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Start New Project</h3>
+                                <p className="text-xs font-bold text-amber-200/60 uppercase tracking-widest mt-1">Build from scratch</p>
+                            </div>
                         </button>
 
-                        {isAdminOrInstructor && (
-                            <button
-                                onClick={() => setIsSettingsOpen(true)}
-                                className="p-4 bg-slate-800/50 rounded-2xl border border-slate-700 hover:bg-slate-800 transition-colors"
-                            >
-                                <Settings size={20} className="text-slate-400" />
-                            </button>
-                        )}
-                        {onLogout && (
-                            <button
-                                onClick={() => setIsLogoutConfirmOpen(true)}
-                                className="p-4 bg-red-500/10 rounded-2xl border border-red-500/20 hover:bg-red-500/20 text-red-500 font-bold transition-all"
-                            >
-                                <LogOut size={20} />
-                            </button>
-                        )}
+                        <button
+                            onClick={() => handleStartMissionClick(availableTemplates.find(t => t.id === 'showcase-template') || {
+                                id: 'showcase-template',
+                                title: 'Showcase',
+                                description: 'Upload completed work.',
+                                station: 'General',
+                                status: 'assigned',
+                                isLocked: false,
+                                defaultWorkflowId: 'showcase'
+                            })}
+                            className="group relative h-40 rounded-3xl overflow-hidden border border-white/10 hover:border-fuchsia-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-fuchsia-500/20 active:scale-[0.98]"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-600/20 to-purple-900/40 group-hover:from-fuchsia-600/30 group-hover:to-purple-900/50 transition-colors"></div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10">
+                                <span className="p-4 bg-fuchsia-500 rounded-2xl text-white mb-4 shadow-lg group-hover:scale-110 group-hover:-rotate-6 transition-all duration-300">
+                                    <ImageIcon size={32} strokeWidth={2.5} />
+                                </span>
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tight">Upload Project</h3>
+                                <p className="text-xs font-bold text-fuchsia-200/60 uppercase tracking-widest mt-1">Share your work</p>
+                            </div>
+                        </button>
                     </div>
-                </div>
 
-                {/* GAME MENU CARDS - PRIMARY NAVIGATION */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-16">
-                    {/* ARCADE */}
-                    <button
-                        onClick={() => setIsArcadeOpen(true)}
-                        className="group relative h-48 bg-gradient-to-br from-purple-900/50 to-indigo-900/50 rounded-3xl border border-purple-500/30 overflow-hidden hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(168,85,247,0.4)] transition-all duration-300"
-                    >
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=500&q=80')] bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity mix-blend-overlay"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div className="absolute bottom-6 left-6 text-left">
-                            <Gamepad2 className="w-8 h-8 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
-                            <h3 className="text-2xl font-black text-white p-0 m-0 leading-none">ARCADE</h3>
-                            <p className="text-purple-300 text-xs font-bold uppercase tracking-wider mt-1">Play & Learn</p>
+                    {/* CONTROL BAR: Search & Filter */}
+                    <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-8 sticky top-0 z-40 py-4 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 -mx-8 px-8">
+                        {/* Search */}
+                        <div className="relative w-full md:w-96 group">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-400 transition-colors">
+                                <Search size={20} />
+                            </div>
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Find a mission..."
+                                className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all font-medium"
+                            />
                         </div>
-                    </button>
 
-                    {/* PORTFOLIO */}
-                    <button
-                        onClick={() => setIsPortfolioOpen(true)}
-                        className="group relative h-48 bg-gradient-to-br from-emerald-900/50 to-teal-900/50 rounded-3xl border border-emerald-500/30 overflow-hidden hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(16,185,129,0.4)] transition-all duration-300"
-                    >
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=500&q=80')] bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity mix-blend-overlay"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div className="absolute bottom-6 left-6 text-left">
-                            <Award className="w-8 h-8 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
-                            <h3 className="text-2xl font-black text-white p-0 m-0 leading-none">PORTFOLIO</h3>
-                            <p className="text-emerald-300 text-xs font-bold uppercase tracking-wider mt-1">Achievements</p>
-                        </div>
-                    </button>
-
-                    {/* GALLERY */}
-                    <button
-                        onClick={() => setIsGalleryOpen(true)}
-                        className="group relative h-48 bg-gradient-to-br from-pink-900/50 to-rose-900/50 rounded-3xl border border-pink-500/30 overflow-hidden hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(244,114,182,0.4)] transition-all duration-300"
-                    >
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1542202229-7d93c33f5d07?w=500&q=80')] bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity mix-blend-overlay"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div className="absolute bottom-6 left-6 text-left">
-                            <ImageIcon className="w-8 h-8 text-pink-400 mb-2 group-hover:scale-110 transition-transform" />
-                            <h3 className="text-2xl font-black text-white p-0 m-0 leading-none">GALLERY</h3>
-                            <p className="text-pink-300 text-xs font-bold uppercase tracking-wider mt-1">Your Creations</p>
-                        </div>
-                    </button>
-
-                    {/* PICKUP */}
-                    <button
-                        onClick={() => setIsPickupOpen(true)}
-                        className="group relative h-48 bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-3xl border border-amber-500/30 overflow-hidden hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(245,158,11,0.4)] transition-all duration-300"
-                    >
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=500&q=80')] bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity mix-blend-overlay"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div className="absolute bottom-6 left-6 text-left">
-                            <Car className="w-8 h-8 text-amber-400 mb-2 group-hover:scale-110 transition-transform" />
-                            <h3 className="text-2xl font-black text-white p-0 m-0 leading-none">PICKUP</h3>
-                            <p className="text-amber-300 text-xs font-bold uppercase tracking-wider mt-1">Schedule Ride</p>
-                        </div>
-                    </button>
-
-                    {/* WALLET / INVENTORY */}
-                    <button
-                        onClick={() => setIsWalletOpen(true)}
-                        className="group relative h-48 bg-gradient-to-br from-cyan-900/50 to-blue-900/50 rounded-3xl border border-cyan-500/30 overflow-hidden hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(6,182,212,0.4)] transition-all duration-300"
-                    >
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80')] bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity mix-blend-overlay"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div className="absolute bottom-6 left-6 text-left">
-                            <Key className="w-8 h-8 text-cyan-400 mb-2 group-hover:scale-110 transition-transform" />
-                            <h3 className="text-2xl font-black text-white p-0 m-0 leading-none">INVENTORY</h3>
-                            <p className="text-cyan-300 text-xs font-bold uppercase tracking-wider mt-1">Items & Keys</p>
-                        </div>
-                    </button>
-
-                    {/* MY PROGRESS */}
-                    <button
-                        onClick={() => setIsProgressOpen(true)}
-                        className="group relative h-48 bg-gradient-to-br from-violet-900/50 to-fuchsia-900/50 rounded-3xl border border-violet-500/30 overflow-hidden hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(167,139,250,0.4)] transition-all duration-300"
-                    >
-                        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500&q=80')] bg-cover bg-center opacity-30 group-hover:opacity-50 transition-opacity mix-blend-overlay"></div>
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                        <div className="absolute bottom-6 left-6 text-left">
-                            <TrendingUp className="w-8 h-8 text-violet-400 mb-2 group-hover:scale-110 transition-transform" />
-                            <h3 className="text-2xl font-black text-white p-0 m-0 leading-none">MY PROGRESS</h3>
-                            <p className="text-violet-300 text-xs font-bold uppercase tracking-wider mt-1">Productivity</p>
-                        </div>
-                    </button>
-                </div>
-
-
-                {/* MISSION CONTROL CENTER */}
-                <div className="flex items-center gap-4 mb-8">
-                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-slate-600 to-transparent opacity-50"></div>
-                    <span className="text-slate-500 font-black tracking-[0.3em] uppercase text-sm">Active Missions</span>
-                    <div className="h-[2px] flex-1 bg-gradient-to-r from-transparent via-slate-600 to-transparent opacity-50"></div>
-                </div>
-
-                {/* Projects Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-
-                    {/* 1. New Missions (Available Templates) */}
-                    {availableTemplates.map((template, idx) => {
-                        const isRecommended = projects.length === 0 && idx === 0;
-
-                        return (
+                        {/* Filter Tabs */}
+                        <div className="flex p-1 bg-slate-900 rounded-xl border border-slate-800">
                             <button
-                                key={template.id}
-                                onClick={() => handleStartMissionClick(template)}
-                                disabled={template.isLocked}
-                                className={`group relative min-h-[320px] flex flex-col items-center justify-center p-8 rounded-[2.5rem] border-2 transition-all duration-500
-                                ${template.isLocked
-                                        ? 'bg-slate-900 border-slate-700 opacity-70 cursor-not-allowed'
-                                        : isRecommended
-                                            ? 'bg-gradient-to-b from-indigo-900/40 to-slate-900/80 border-indigo-500 shadow-[0_0_40px_-10px_rgba(99,102,241,0.5)] scale-[1.02]'
-                                            : 'bg-slate-800/30 backdrop-blur-sm border-dashed border-indigo-500/30 hover:border-indigo-500 hover:bg-indigo-600/10 hover:scale-[1.02] cursor-pointer'
-                                    }`}
+                                onClick={() => setFilterType('all')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filterType === 'all' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                             >
-                                {/* LOCKED STATE */}
-                                {template.isLocked && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-20 backdrop-blur-[2px] rounded-[2.3rem]">
-                                        <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center border-2 border-slate-600 text-slate-400 mb-4">
-                                            <Key size={24} />
-                                        </div>
-                                        <h3 className="text-lg font-black text-white uppercase tracking-wider">Locked</h3>
-                                        {template.unlockDate && (
-                                            <p className="text-slate-400 text-xs font-bold mt-1">
-                                                Opens on {new Date(template.unlockDate.seconds * 1000).toLocaleDateString()}
-                                            </p>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* RECOMMENDED BADGE */}
-                                {!template.isLocked && isRecommended && (
-                                    <div className="absolute -top-4 w-full flex justify-center z-20">
-                                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2 animate-bounce">
-                                            <Zap size={14} className="fill-white" /> Start Here
-                                        </div>
-                                    </div>
-                                )}
-
-                                {!template.isLocked && !isRecommended && (
-                                    <div className="absolute top-6 right-6">
-                                        <span className="px-3 py-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold uppercase tracking-wider rounded-full">New</span>
-                                    </div>
-                                )}
-
-                                <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-6 border-4 text-5xl transition-all duration-500 relative
-                                ${template.isLocked
-                                        ? 'bg-slate-800 border-slate-700 text-slate-600'
-                                        : 'bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border-indigo-500/50 text-white group-hover:scale-110 group-hover:rotate-6 group-hover:shadow-[0_0_30px_rgba(99,102,241,0.5)]'}`}>
-                                    <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                    🚀
-                                </div>
-
-                                <h3 className={`text-2xl font-black text-center transition-colors mb-2 ${template.isLocked ? 'text-slate-600' : 'text-white group-hover:text-indigo-300'}`}>
-                                    {template.title}
-                                </h3>
-
-                                <p className="text-slate-400 text-sm font-medium mt-0 text-center max-w-[240px] line-clamp-2 leading-relaxed">
-                                    {template.description}
-                                </p>
-
-                                {!template.isLocked && (
-                                    <div className={`mt-8 px-8 py-3 rounded-2xl font-black text-sm uppercase tracking-wider transition-all transform flex items-center gap-2
-                                    ${isRecommended
-                                            ? 'bg-indigo-500 hover:bg-indigo-400 text-white shadow-xl hover:shadow-indigo-500/50 scale-100'
-                                            : 'bg-white/10 hover:bg-white/20 text-white translate-y-4 opacity-0 group-hover:opacity-100 group-hover:translate-y-0'
-                                        }`}>
-                                        Start Mission <span className="group-hover:translate-x-1 transition-transform">→</span>
-                                    </div>
-                                )}
+                                All
                             </button>
-                        );
-                    })}
-
-                    {/* 2. Active Projects */}
-                    {projects.map((project, idx) => {
-                        const isMostRecent = idx === 0;
-
-                        return (
                             <button
-                                key={project.id}
-                                onClick={() => onSelectProject(project.id)}
-                                className={`group relative flex flex-col text-left bg-gradient-to-b from-slate-800/90 to-slate-900/90 backdrop-blur-xl border rounded-[2.5rem] p-8 transition-all duration-300 overflow-hidden
-                                ${isMostRecent
-                                        ? 'border-blue-500 shadow-[0_0_50px_-10px_rgba(59,130,246,0.3)] scale-[1.02] ring-4 ring-blue-500/20'
-                                        : 'border-white/10 hover:border-blue-500/50 hover:shadow-xl hover:-translate-y-2'
-                                    }`}
-                                style={{ animationDelay: `${idx * 100}ms` }}
+                                onClick={() => setFilterType('mission')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filterType === 'mission' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
                             >
-                                {/* Hover Highlight */}
-                                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:to-blue-500/10 transition-all duration-500"></div>
+                                <LayoutGrid size={14} /> Missions
+                            </button>
+                            <button
+                                onClick={() => setFilterType('custom')}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filterType === 'custom' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                <Zap size={14} /> My Projects
+                            </button>
+                        </div>
+                    </div>
 
-                                {/* Status Badge */}
-                                <div className="flex items-center justify-between mb-8 relative z-10 w-full">
-                                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border flex items-center gap-2 ${project.status === 'planning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                        project.status === 'building' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                            project.status === 'submitted' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                                project.status === 'published' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                                                    'bg-gray-500/10 text-gray-400 border-gray-500/20'
-                                        }`}>
-                                        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
-                                        {project.status || 'PLANNING'}
-                                    </span>
+                    {/* HERO SECTION: Current Active Mission (First Filtered Result) */}
+                    {filteredProjects.length > 0 && (() => {
+                        const heroProject = filteredProjects[0];
+                        const badge = getStatusBadge(heroProject.status, heroProject.templateId);
+                        return (
+                            <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                <button
+                                    onClick={() => onSelectProject(heroProject.id)}
+                                    className="group relative w-full h-[55vh] min-h-[400px] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl transition-all duration-500 hover:shadow-[0_0_80px_-20px_rgba(59,130,246,0.5)] hover:border-blue-500/50 text-left"
+                                >
+                                    {/* INFO BUTTON (Hero) - For Details View */}
+                                    <div
+                                        onClick={(e) => { e.stopPropagation(); onPreviewProject?.(heroProject.id); }}
+                                        className="absolute top-6 right-6 z-30 p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
+                                    >
+                                        <span className="text-xs font-bold uppercase tracking-wider">Info</span>
+                                        <Search size={20} />
+                                    </div>
 
-                                    {isMostRecent && (
-                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest animate-pulse">
-                                            Continue
-                                        </span>
+                                    {/* DELETE BUTTON (Hero) - Only for Custom Projects */}
+                                    {(heroProject.templateId === 'free-build-template' || heroProject.templateId === 'showcase-template') && (
+                                        <div
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(heroProject.id, heroProject.title); }}
+                                            className="absolute top-6 right-28 z-30 p-3 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-xl border border-red-500/30 transition-all opacity-0 group-hover:opacity-100"
+                                        >
+                                            <Trash2 size={20} />
+                                        </div>
                                     )}
-                                </div>
+                                    {/* Hero Background */}
+                                    {heroProject.thumbnailUrl ? (
+                                        <div className="absolute inset-0">
+                                            <img
+                                                src={heroProject.thumbnailUrl}
+                                                className="w-full h-full object-cover transition-transform duration-[20s] ease-linear group-hover:scale-110"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent"></div>
+                                            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/40 to-transparent"></div>
+                                        </div>
+                                    ) : (
+                                        <div className={`absolute inset-0 ${heroProject.station === 'Robotics' ? 'bg-gradient-to-br from-red-600 to-orange-900' :
+                                            heroProject.station === 'Coding' ? 'bg-gradient-to-br from-blue-600 to-indigo-900' :
+                                                'bg-gradient-to-br from-indigo-600 to-purple-900'
+                                            }`}>
+                                            <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                                        </div>
+                                    )}
 
-                                <div className="flex items-center gap-6 mb-6 z-10">
-                                    <div className="text-5xl filter drop-shadow-xl transform group-hover:scale-110 group-hover:rotate-12 transition-transform duration-500">
-                                        {getProjectIcon(project.title)}
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-black text-white leading-tight group-hover:text-blue-300 transition-colors">
-                                            {project.title}
-                                        </h3>
-                                        <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mt-1">
-                                            {project.station} Station
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                    <span>Progress</span>
-                                    <span>In Progress</span>
-                                </div>
+                                    {/* Hero Content */}
+                                    <div className="absolute bottom-0 left-0 p-12 max-w-3xl z-20 flex flex-col gap-6">
+                                        <div className="flex items-center gap-3">
+                                            <span className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/20 rounded text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
+                                                Active Mission
+                                            </span>
+                                            <span className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest shadow-lg animate-pulse ${badge.color} border ${badge.border}`}>
+                                                {badge.label}
+                                            </span>
+                                        </div>
 
-                                <div className="absolute bottom-6 right-6 opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-300">
-                                    <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-lg">
-                                        <span className="text-xl">→</span>
+                                        <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[0.9] drop-shadow-2xl tracking-tight">
+                                            {heroProject.title}
+                                        </h1>
+
+                                        <div className="flex items-center gap-4 mt-2">
+                                            <p className="text-slate-300 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                {heroProject.station} Station
+                                            </p>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 mt-4 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-100">
+                                            <div className="px-8 py-4 bg-white text-slate-950 rounded-xl font-black uppercase tracking-widest hover:bg-blue-50 transition-colors flex items-center gap-3 text-sm shadow-xl shadow-white/10">
+                                                <Zap className="fill-slate-950" size={18} /> Continue Mission
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </button >
+
+                                    {/* Icon Overlay if no thumbnail */}
+                                    {!heroProject.thumbnailUrl && (
+                                        <div className="absolute right-12 bottom-12 opacity-20 text-[12rem] text-white rotate-12 transform group-hover:scale-110 transition-transform duration-700">
+                                            {getProjectIcon(heroProject.title)}
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
                         );
-                    })}
-                </div >
+                    })()}
 
-                {/* Footer Quote */}
-                < div className="text-center mt-24 opacity-30 pointer-events-none" >
-                    <p className="text-white font-serif italic text-lg">"The best way to predict the future is to create it."</p>
-                </div >
+
+                    {/* SLIDER 1: Continue Watching (Other Active Projects) */}
+                    {filteredProjects.length > 1 && (
+                        <div className="mb-12">
+                            <h3 className="text-xl font-black text-white mb-6 px-2 flex items-center gap-3">
+                                <span>Continue Playing</span>
+                                <span className="text-sm font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{filteredProjects.length - 1} more</span>
+                            </h3>
+                            <div className="flex overflow-x-auto pb-8 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
+                                {filteredProjects.slice(1).map((project, idx) => {
+                                    const badge = getStatusBadge(project.status, project.templateId);
+                                    return (
+                                        <button
+                                            key={project.id}
+                                            onClick={() => onSelectProject(project.id)}
+                                            className="snap-start flex-none w-[320px] aspect-[4/3] group relative rounded-3xl overflow-hidden border border-white/10 bg-slate-900 shadow-lg hover:scale-105 hover:z-10 hover:shadow-2xl transition-all duration-300"
+                                        >
+                                            {/* Fallback Gradient (Always Rendered) */}
+                                            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 group-hover:from-indigo-900 group-hover:to-slate-900 transition-colors">
+                                                <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-30 group-hover:scale-110 transition-transform">
+                                                    {getProjectIcon(project.title)}
+                                                </div>
+                                            </div>
+
+                                            {/* Image Overlay */}
+                                            {project.thumbnailUrl && (
+                                                <img
+                                                    src={project.thumbnailUrl}
+                                                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity z-10"
+                                                    onError={(e) => e.currentTarget.style.display = 'none'}
+                                                />
+                                            )}
+
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent z-20"></div>
+                                            <div className="absolute bottom-0 left-0 p-6 w-full text-left">
+                                                <div className="mb-2 flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${badge.color.split(' ')[0].replace('bg-', 'bg-')}`}></span>
+                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${badge.color.split(' ')[1]}`}>{badge.label}</span>
+                                                    </div>
+
+                                                    {/* INFO BUTTON (Grid) */}
+                                                    <div
+                                                        onClick={(e) => { e.stopPropagation(); onPreviewProject?.(project.id); }}
+                                                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-all opacity-0 group-hover:opacity-100 border border-slate-700 hover:border-slate-500"
+                                                    >
+                                                        <Search size={14} />
+                                                    </div>
+
+                                                    {/* DELETE BUTTON (Grid) - Only for Custom Projects */}
+                                                    {(project.templateId === 'free-build-template' || project.templateId === 'showcase-template') && (
+                                                        <div
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id, project.title); }}
+                                                            className="p-1.5 hover:bg-red-500/20 text-red-400/50 hover:text-red-400 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <h4 className="text-lg font-black text-white leading-tight line-clamp-2 group-hover:text-blue-200 transition-colors">{project.title}</h4>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+
+                    {/* SLIDER 2: New Adventures (Templates) */}
+                    <div className="mb-8">
+                        <h3 className="text-xl font-black text-white mb-6 px-2">New Adventures</h3>
+                        <div className="flex overflow-x-auto pb-12 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
+                            {availableTemplates.map((template, idx) => {
+                                const isLocked = template.isLocked;
+                                return (
+                                    <button
+                                        key={template.id}
+                                        onClick={() => handleStartMissionClick(template)}
+                                        disabled={isLocked}
+                                        className={`snap-start flex-none w-[280px] lg:w-[340px] aspect-[3/4] group relative rounded-[2rem] overflow-hidden border transition-all duration-300 text-left
+                                        ${isLocked
+                                                ? 'bg-slate-900/50 border-slate-800 opacity-60 grayscale'
+                                                : 'bg-slate-900/40 border-white/10 hover:border-indigo-500/50 hover:shadow-[0_0_40px_-10px_rgba(99,102,241,0.4)] hover:-translate-y-2'
+                                            }`}
+                                    >
+                                        {/* Thumbnail / Gradient */}
+                                        {/* Fallback Gradient (Always Rendered) */}
+                                        <div className={`absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity ${template.station === 'Robotics' ? 'bg-gradient-to-br from-red-600 to-amber-700' :
+                                            template.station === 'Coding' ? 'bg-gradient-to-br from-blue-600 to-cyan-700' :
+                                                'bg-gradient-to-br from-purple-600 to-pink-700'
+                                            }`}></div>
+
+                                        {/* Image Overlay */}
+                                        {template.thumbnailUrl && (
+                                            <div className="absolute inset-0 z-10">
+                                                <img
+                                                    src={template.thumbnailUrl}
+                                                    className="w-full h-full object-cover opacity-60 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                                                    onError={(e) => e.currentTarget.style.display = 'none'}
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
+
+                                        {/* Lock Overlay */}
+                                        {isLocked && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-20">
+                                                <div className="bg-slate-900/90 p-4 rounded-full border border-white/10 shadow-xl">
+                                                    <Key className="text-slate-400" size={24} />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* "New" Badge & Info Button */}
+                                        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+                                            {/* Info Button */}
+                                            <div
+                                                onClick={(e) => { e.stopPropagation(); onPreviewProject?.(template.id); }}
+                                                className="p-2 bg-slate-900/50 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-sm transition-all shadow-lg hover:scale-110"
+                                            >
+                                                <Search size={16} />
+                                            </div>
+
+                                            {!isLocked && !template.thumbnailUrl && (
+                                                <div className="">
+                                                    <span className="px-3 py-1.5 bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">New</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Content */}
+                                        <div className="absolute bottom-0 left-0 p-8 w-full">
+                                            {!template.thumbnailUrl && (
+                                                <div className="text-4xl mb-4 text-white/50 group-hover:text-white transition-colors group-hover:scale-110 origin-left duration-300">
+                                                    {getProjectIcon(template.title)}
+                                                </div>
+                                            )}
+                                            <h4 className="text-2xl font-black text-white leading-tight mb-2 group-hover:text-indigo-200 transition-colors">{template.title}</h4>
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 line-clamp-1">{template.station || 'General'} Station</p>
+
+                                            {!isLocked && (
+                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-400 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300">
+                                                    Start Mission <span className="text-lg">→</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Footer Quote */}
+                    <div className="text-center mt-12 mb-12 opacity-20 hover:opacity-40 transition-opacity">
+                        <p className="text-white font-serif italic text-lg">"The best way to predict the future is to create it."</p>
+                    </div>
+
+                </div>
             </div >
 
             {/* Profile Modal */}
@@ -888,6 +1095,57 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             />
             {/* Productivity Dashboard */}
             <ProductivityDashboard isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
+
+            {/* NAMING MODAL */}
+            <AnimatePresence>
+                {namingModal.isOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+                            onClick={() => setNamingModal({ ...namingModal, isOpen: false })}
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="relative w-full max-w-lg bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl p-8 overflow-hidden border-t-4 border-t-white/20"
+                        >
+                            <div className="absolute inset-0 z-0 bg-gradient-to-b from-blue-600/10 to-transparent pointer-events-none"></div>
+
+                            <h3 className="text-3xl font-black text-white mb-2 relative z-10">Name Your Mission</h3>
+                            <p className="text-slate-400 mb-8 relative z-10 font-bold">Give a cool name to your {namingModal.template?.title} project.</p>
+
+                            <input
+                                autoFocus
+                                value={namingModal.name}
+                                onChange={(e) => setNamingModal({ ...namingModal, name: e.target.value })}
+                                placeholder="e.g. The Moon Base Alpha..."
+                                className="w-full bg-slate-800 border-2 border-slate-700 text-white font-bold text-xl p-5 rounded-2xl mb-8 focus:border-blue-500 focus:outline-none placeholder:text-slate-600 relative z-10 shadow-inner"
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreateNamedProject()}
+                            />
+
+                            <div className="flex gap-4 relative z-10">
+                                <button
+                                    onClick={() => setNamingModal({ ...namingModal, isOpen: false })}
+                                    className="flex-1 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateNamedProject}
+                                    disabled={!namingModal.name.trim()}
+                                    className="flex-1 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-600/20 active:translate-y-1"
+                                >
+                                    🚀 Launch
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div >
     );
 };

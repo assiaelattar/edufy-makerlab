@@ -2,6 +2,7 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Configuration type definition
 export interface FirebaseConfig {
@@ -29,6 +30,7 @@ const firebaseConfig: FirebaseConfig = {
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let auth: Auth | undefined;
+let storage: FirebaseStorage | undefined;
 let initializationError: Error | null = null;
 
 // Initialize Firebase
@@ -43,9 +45,12 @@ try {
     auth = getAuth(app);
     console.log('✅ Auth initialized:', auth ? 'Connected' : 'Failed');
 
+    storage = getStorage(app);
+    console.log('✅ Storage initialized:', storage ? 'Connected' : 'Failed');
+
 } catch (error) {
     console.error("❌ Firebase initialization failed:", error);
     initializationError = error as Error;
 }
 
-export { app, db, auth, firebaseConfig, initializationError };
+export { app, db, auth, storage, firebaseConfig, initializationError };

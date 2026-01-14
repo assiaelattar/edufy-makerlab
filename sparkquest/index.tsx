@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './cleanup-projects'; // Load cleanup script for console access
+import './cleanup-projects';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Car, Clock, QrCode, X, MapPin } from 'lucide-react';
+import { Truck, Clock, QrCode, X, MapPin } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
@@ -93,7 +93,7 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
                     <div className="flex items-center gap-4">
                         <div className={`p-3 rounded-2xl border ${realtimeStatus ? 'bg-white/10 border-white/20' : 'bg-amber-950/50 border-amber-500/20'
                             }`}>
-                            <Car className={`w-8 h-8 ${realtimeStatus ? 'text-white' : 'text-amber-400'}`} />
+                            <Truck className={`w-8 h-8 ${realtimeStatus ? 'text-white' : 'text-amber-400'}`} />
                         </div>
                         <div>
                             <h2 className="text-3xl font-black text-white">

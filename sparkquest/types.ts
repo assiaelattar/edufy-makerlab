@@ -67,7 +67,7 @@ export interface ProcessTemplate {
 export interface Resource {
   id: string;
   title: string;
-  type: 'video' | 'link' | 'file';
+  type: 'video' | 'link' | 'file' | 'image';
   url: string;
 }
 
@@ -113,12 +113,16 @@ export interface StudentProject {
 
   // Media
   coverImage?: string;
+  thumbnailUrl?: string; // Consistent with ProjectTemplate
   presentationUrl?: string;
   mediaUrls?: string[];
+  videoUrl?: string; // Optional: Project video
+  gallery?: string[]; // Optional: Gallery images
 
   // Meta
   skills: string[];
   resources: Resource[];
+  stepResources?: Record<string, Resource[]>; // Map stepId/phaseId -> specific resources
   dueDate?: Date;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -132,6 +136,7 @@ export interface Assignment {
   description: string;
   badges: Badge[];
   recommendedWorkflow: string;
+  stepResources?: Record<string, Resource[]>; // Map stepId/phaseId -> specific resources
 }
 
 // Legacy Roadmap Types
@@ -168,6 +173,7 @@ export interface ProjectTemplate {
   id: string;
   title: string;
   description: string;
+  hook?: string; // New: Engagement hook
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   skills: string[];
   defaultSteps?: string[];
@@ -179,8 +185,22 @@ export interface ProjectTemplate {
   targetAudience?: {
     grades?: string[];
     groups?: string[];
+    students?: string[]; // Specific student UIDs
   };
   defaultWorkflowId?: string; // Legacy or specific workflow overide
+  stepResources?: Record<string, Resource[]>; // Mission-specific resources for workflow steps
+
+  // Enhanced Fields
+  realWorldApp?: {
+    title?: string;
+    description: string;
+    companies: { name: string, color?: string }[]
+  };
+  keyChallenges?: { title: string, desc: string, color?: string }[];
+  learningOutcomes?: { id: number | string, title: string, desc: string, theme: string }[];
+  technologies?: { name: string, icon: string, color?: string, bg?: string }[];
+  duration?: string; // "4 Sessions (8 Hours)"
+
   dueDate?: Timestamp;
   createdAt?: Timestamp;
 }

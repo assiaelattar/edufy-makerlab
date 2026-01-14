@@ -7,6 +7,7 @@ import { WizardNode, WizardNodeProps } from './WizardNode';
 import { WizardModal } from './WizardModal';
 import { ConnectionStatus } from './ConnectionStatus';
 import { useSession } from '../context/SessionContext';
+import { useAuth } from '../context/AuthContext';
 import { useFactoryData } from '../hooks/useFactoryData';
 import { getRandomMindset, getProjectIcon, MINDSET_LIBRARY } from '../utils/MindsetLibrary';
 import { TypingChallenge } from './TypingChallenge';
@@ -237,6 +238,12 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
     icon: '🚀'
   }));
 
+  // Add Static Templates
+  displayWorkflows.push(
+    { id: 'custom-workflow', name: 'Free Build', description: 'No rules. Just you and your imagination.', color: 'bg-amber-500', icon: '✨' },
+    { id: 'showcase', name: 'Showcase', description: 'Already finished? Upload and show off!', color: 'bg-fuchsia-600', icon: '🏆' }
+  );
+
   // Auto-select recommended workflow
   // Auto-select recommended workflow
   useEffect(() => {
@@ -253,98 +260,206 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
     }
   }, [assignment.recommendedWorkflow, project.workflowId, updateProject, displayWorkflows]);
 
-  const handleLockIn = async () => {
+  // Refactored to accept ID directly to avoid state race conditions
+  const handleLockIn = async (specificWorkflowId?: string) => {
+    const targetId = specificWorkflowId || project.workflowId;
+
+    if (!targetId) {
+      console.error("❌ [StudentWizard] Cannot lock in: No workflow ID provided or selected.");
+      return;
+    }
+
+    console.log("🔒 [StudentWizard] Locking in strategy:", targetId);
     playSound('success');
 
-    // Auto-generate steps if missing OR FIX existing steps
-    if (project.workflowId) {
-      try {
-        const { getFirestore, doc, getDoc, Firestore } = await import('firebase/firestore');
-        const { db } = await import('../services/firebase');
-        if (!db) throw new Error("Firestore not initialized");
+    // Update project state first if it's a new selection
+    if (specificWorkflowId && project.workflowId !== specificWorkflowId) {
+      updateProject({ workflowId: specificWorkflowId });
+    }
 
-        const workflowSnap = await getDoc(doc(db as any, 'process_templates', project.workflowId));
+    try {
+      const { doc, getDoc } = await import('firebase/firestore');
+      const { db } = await import('../services/firebase');
+      if (!db) throw new Error("Firestore not initialized");
+
+      // Check if we have the template data in memory first (faster)
+      let templateData: any = processTemplates.find(t => t.id === targetId);
+
+      // If not, fetch from DB
+      if (!templateData) {
+        console.log("⚠️ [StudentWizard] Template not in memory, fetching from DB...");
+        const workflowSnap = await getDoc(doc(db as any, 'process_templates', targetId));
         if (workflowSnap.exists()) {
-          const data = workflowSnap.data();
-          console.log("🔥 [DEBUG] Raw Workflow Template Data:", data);
+          templateData = workflowSnap.data();
+        }
+      }
 
-          if (data?.phases) {
-            let updatedSteps = [...(project.steps || [])];
-            let hasChanges = false;
+      // Handle Custom/Showcase Logic
+      if (targetId === 'custom-workflow') {
+        console.log("✨ [StudentWizard] Initializing Free Build");
+        if ((project.steps || []).length === 0) {
+          updateProject({ workflowId: targetId, steps: [] });
+        }
+        closeModal();
+        return;
+      }
 
-            // SCENARIO 1: No steps yet -> Generate all
-            if (updatedSteps.length === 0) {
-              updatedSteps = data.phases.map((p: any) => ({
-                id: p.id || Date.now().toString() + Math.random(),
-                title: p.name,
-                status: 'todo',
-                resources: p.resources || []
-              }));
-              hasChanges = true;
-              console.log('✨ Generated new steps from workflow');
-            }
-            // SCENARIO 2: Steps exist -> MERGE Resources (Fix for existing missions)
-            else {
-              updatedSteps = updatedSteps.map((step, idx) => {
-                const phase = data.phases[idx];
-                // If titles match (or index alignment assumed), update resources
-                if (phase && (phase.name === step.title || idx < data.phases.length)) {
-                  // Force update resources
-                  return { ...step, resources: phase.resources || [] };
-                }
-                return step;
-              });
-              hasChanges = true;
-              console.log('🔧 Merged resources into existing steps');
-            }
+      if (targetId === 'showcase') {
+        console.log("🏆 [StudentWizard] Initializing Showcase");
+        updateProject({ workflowId: targetId, steps: [] }); // No steps needed
+        closeModal();
+        return;
+      }
 
-            if (hasChanges) {
-              updateProject({ steps: updatedSteps });
-            }
+      if (templateData) {
+        console.log("🔥 [StudentWizard] Using Workflow Template Data:", templateData);
+
+        if (templateData?.phases) {
+          let updatedSteps = [...(project.steps || [])];
+          let hasChanges = false;
+
+          // SCENARIO 1: No steps yet -> Generate all
+          if (updatedSteps.length === 0) {
+            updatedSteps = templateData.phases.map((p: any) => ({
+              id: p.id || Date.now().toString() + Math.random(),
+              title: p.name,
+              status: 'todo',
+              resources: p.resources || []
+            }));
+            hasChanges = true;
+            console.log('✨ Generated new steps from workflow');
+          }
+          // SCENARIO 2: Steps exist -> MERGE Resources (Fix for existing missions)
+          else {
+            updatedSteps = updatedSteps.map((step, idx) => {
+              const phase = templateData.phases[idx];
+              // If titles match (or index alignment assumed), update resources
+              if (phase && (phase.name === step.title || idx < templateData.phases.length)) {
+                // Force update resources
+                return { ...step, resources: phase.resources || [] };
+              }
+              return step;
+            });
+            hasChanges = true;
+            console.log('🔧 Merged resources into existing steps');
+          }
+
+          if (hasChanges) {
+            updateProject({
+              workflowId: targetId,
+              steps: updatedSteps
+            });
           }
         }
-      } catch (e) {
-        console.error("Failed to auto-generate steps:", e);
+      } else {
+        console.warn("⚠️ [StudentWizard] Workflow template not found for ID:", targetId);
       }
+    } catch (e) {
+      console.error("Failed to auto-generate steps:", e);
     }
 
     closeModal();
   };
 
+  // Loading State
+  if (processTemplates.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-4xl animate-spin mb-4">⏳</div>
+        <p className="font-black text-slate-400 uppercase tracking-wider">Accessing Strategy Database...</p>
+      </div>
+    );
+  }
+
+  // Determine which workflows to show (Restrict if assigned)
+  // Support matching by ID OR Name
+  const relevantWorkflows = assignment.recommendedWorkflow
+    ? displayWorkflows.filter(w => w.id === assignment.recommendedWorkflow || w.name === assignment.recommendedWorkflow)
+    : displayWorkflows;
+
+  // Get name for header (Look up from our list using the ID, or fallback to Name match, or Raw Value)
+  const recommendedName = assignment.recommendedWorkflow
+    ? (
+      displayWorkflows.find(w => w.id === assignment.recommendedWorkflow)?.name ||
+      displayWorkflows.find(w => w.name === assignment.recommendedWorkflow)?.name ||
+      assignment.recommendedWorkflow
+    )
+    : null;
+
   return (
-    <div className="space-y-8">
-      <div className="bg-indigo-50 p-4 rounded-2xl border-2 border-indigo-100 text-center">
-        <p className="text-indigo-600 font-bold">Recommended for this mission: <span className="uppercase font-black">{assignment.recommendedWorkflow}</span></p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {displayWorkflows.map(wf => (
-          <div
-            key={wf.id}
-            onClick={() => { playSound('click'); updateProject({ workflowId: wf.id }); }}
-            className={`
-                relative p-6 rounded-[2rem] border-4 cursor-pointer transition-all transform hover:scale-105 duration-300
-                ${project.workflowId === wf.id ? `${wf.color} border-white shadow-xl scale-105 text-white ring-4 ring-offset-2 ring-blue-200` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}
-              `}
-          >
-            {/* Highlight Recommended */}
-            {wf.id === assignment.recommendedWorkflow && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-sm z-10 whitespace-nowrap">
-                Suggested
-              </div>
-            )}
-            <div className="text-5xl mb-4 transform transition-transform group-hover:rotate-12">{wf.icon}</div>
-            <h3 className="text-xl font-black mb-2">{wf.name}</h3>
-            <p className={`text-sm font-bold ${project.workflowId === wf.id ? 'text-white/90' : 'text-slate-400'}`}>{wf.description}</p>
+    <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
+      {assignment.recommendedWorkflow ? (
+        <div className="text-center space-y-6 max-w-lg mx-auto">
+          <div className="w-24 h-24 bg-indigo-100 rounded-full mx-auto flex items-center justify-center text-5xl shadow-inner animate-pulse">
+            🎯
           </div>
-        ))}
-      </div>
-      <button
-        onClick={handleLockIn}
-        disabled={!project.workflowId}
-        className="w-full py-4 rounded-3xl bg-green-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-green-400 transition-colors"
-      >
-        Lock In Strategy
-      </button>
+          <div>
+            <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tight mb-2">Protocol Assigned</h3>
+            <p className="text-slate-500 font-bold text-lg leading-relaxed">
+              Commander has designated the <span className="text-indigo-600 font-black">"{recommendedName}"</span> strategy for your mission.
+            </p>
+          </div>
+
+          <div className="bg-blue-50 p-6 rounded-3xl border-4 border-blue-100/50">
+            <p className="text-blue-800 font-bold italic">
+              "Are you ready to initialize this strategy and discover your tasks?"
+            </p>
+          </div>
+
+          <div className="pt-4">
+            {/* We only show the ONE card, centered and larger */}
+            {relevantWorkflows.map(wf => (
+              <div key={wf.id} className="hidden">
+                {/* Hidden because we just want the button to act as the confirmation now, or we can show a mini preview */}
+              </div>
+            ))}
+
+            <button
+              onClick={() => {
+                // Force selection of the first matching workflow
+                const targetWf = relevantWorkflows[0];
+                const targetId = targetWf ? targetWf.id : assignment.recommendedWorkflow;
+
+                console.log("🚀 Initializing Protocol:", targetId);
+                handleLockIn(targetId);
+              }}
+              className="w-full py-5 rounded-3xl bg-indigo-600 text-white font-black text-2xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-3"
+            >
+              <span>🚀 Initialize {recommendedName}</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-200 text-center">
+            <p className="text-slate-500 font-bold">Select a protocol to begin your mission</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {displayWorkflows.map(wf => (
+              <div
+                key={wf.id}
+                onClick={() => { playSound('click'); updateProject({ workflowId: wf.id }); }}
+                className={`
+                    relative p-8 rounded-[2rem] border-4 cursor-pointer transition-all transform hover:scale-105 duration-300 flex flex-col items-center text-center
+                    ${project.workflowId === wf.id ? `${wf.color} border-white shadow-xl scale-105 text-white ring-4 ring-offset-2 ring-blue-200` : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}
+                  `}
+              >
+                <div className="text-6xl mb-6 transform transition-transform group-hover:rotate-12 mt-2">{wf.icon}</div>
+                <h3 className="text-2xl font-black mb-2">{wf.name}</h3>
+                <p className={`text-sm font-bold leading-relaxed ${project.workflowId === wf.id ? 'text-white/90' : 'text-slate-400'}`}>{wf.description}</p>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => handleLockIn()}
+            disabled={!project.workflowId}
+            className="w-full py-4 rounded-3xl bg-green-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-green-400 transition-colors shadow-lg shadow-green-500/30"
+          >
+            Lock In Strategy
+          </button>
+        </>
+      )}
     </div>
   );
 };
@@ -389,9 +504,7 @@ const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProje
               <span className="bg-slate-200 text-slate-500 font-black w-8 h-8 flex items-center justify-center rounded-full">{idx + 1}</span>
               <span className="font-bold text-slate-700 text-lg">{step.title}</span>
             </div>
-            {!isLocked && (
-              <button onClick={() => removeStep(step.id)} className="text-red-300 hover:text-red-500 p-2">🗑️</button>
-            )}
+            {/* Delete button removed to lock workflow */}
           </div>
         ))}
       </div>
@@ -418,7 +531,11 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const realId = taskId.replace('step-', '');
   const step = project.steps.find(s => s.id === realId);
 
+  // STAGE MANAGEMENT: 'INSTRUCTION' | 'EVIDENCE'
+  const [submissionStage, setSubmissionStage] = useState<'INSTRUCTION' | 'EVIDENCE'>('INSTRUCTION');
+
   const [note, setNote] = useState('');
+  const [link, setLink] = useState(''); // NEW: Evidence Link
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -436,18 +553,18 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
   const EMAIL_TEMPLATE = `Subject: Mission Report - ${step?.title || 'Unknown Step'}
 
-Dear Commander,
+          Dear Commander,
 
-I have successfully completed the tasks for this mission step.
-Attached is the evidence of my work.
+          I have successfully completed the tasks for this mission step.
+          Attached is the evidence of my work.
 
-Key Learnings:
-- [Enter 1 key learning here]
+          Key Learnings:
+          - [Enter 1 key learning here]
 
-Ready for inspection.
+          Ready for inspection.
 
-Signed,
-${project.studentId || 'Cadet'}`;
+          Signed,
+          ${project.studentId || 'Cadet'}`;
 
   if (!step) return <div>Error: Step not found</div>;
 
@@ -468,29 +585,6 @@ ${project.studentId || 'Cadet'}`;
     if (preview) base64 = preview.split(',')[1];
 
     // 1. AI Analysis (Optional Check)
-    const result = await analyzeSubmission(step.title, note, base64);
-
-    // 2. Submit for Review
-    if (result.approved) {
-      playSound('success');
-      // Change status to PENDING_REVIEW instead of DONE
-      const updatedSteps = project.steps.map(s => s.id === realId ? {
-        ...s,
-        status: 'PENDING_REVIEW' as TaskStatus,
-        evidence: preview || undefined,
-        note: note
-      } : s);
-
-      updateProject({ steps: updatedSteps });
-
-      // Background sync (triggers Notification)
-      console.log('🔧 [StudentWizard] About to call api.syncProject with station:', project.station);
-      await api.syncProject({ ...project, steps: updatedSteps }); // Force immediate sync!
-      console.log('🔧 [StudentWizard] api.syncProject completed!');
-      api.submitStepEvidence(step.id, { note, image: base64 });
-
-      setTimeout(() => closeModal(), 1500);
-    }
     setSubmitting(false);
   };
 
@@ -566,11 +660,10 @@ ${project.studentId || 'Cadet'}`;
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 p-6 rounded-3xl border-4 border-blue-100 text-blue-900 font-bold text-center text-lg relative overflow-hidden">
-        <div className="relative z-10">Mission: {step.title}</div>
+        <div className="relative z-10">{step.title}</div>
         <div className="absolute top-0 right-0 w-16 h-16 bg-blue-200 rounded-bl-full opacity-50"></div>
       </div>
 
-      {/* PENDING REVIEW BANNER */}
       {step.status === 'PENDING_REVIEW' && (
         <div className="bg-amber-50 p-6 rounded-3xl border-4 border-amber-100 flex flex-col items-center text-center space-y-4 animate-in fade-in slide-in-from-top-4">
           <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center animate-pulse text-3xl">
@@ -587,175 +680,194 @@ ${project.studentId || 'Cadet'}`;
         </div>
       )}
 
-      {/* Resources / Tool Links - ALWAYS VISIBLE FOR DEBUGGING */}
-      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div className="flex justify-between">
-          <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Project Tools (Debug v3)</label>
-          <span className="text-xs text-slate-300 font-mono">Res: {step.resources?.length || 0}</span>
-        </div>
+      {/* STAGE 1: INSTRUCTION & RESOURCES */}
+      {(submissionStage === 'INSTRUCTION' && step.status !== 'PENDING_REVIEW') && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 text-center">
+            <p className="text-slate-500 font-bold text-lg mb-4">
+              Execute the tasks below using your tools.
+            </p>
 
-        {(!step.resources || step.resources.length === 0) && (
-          <div className="text-sm text-slate-400 italic">No tools attached to this step. (Check Factory)</div>
-        )}
-
-        <div className="flex flex-wrap gap-3">
-          {step.resources && step.resources.map((res, idx) => (
-
-            <button
-              key={idx}
-              onClick={() => {
-                const lowerUrl = res.url.toLowerCase();
-                const isEmbeddable = lowerUrl.endsWith('.pdf') || res.type === 'image' || res.type === 'file' || /\.(jpg|jpeg|png|gif|webp)$/i.test(lowerUrl);
-
-                if (isEmbeddable) {
-                  setViewingResource(res);
-                  playSound('open');
-                } else {
-                  console.log("Launching session for:", res.url);
-                  startSession(res.url, 30, res.title);
-                }
-              }}
-              className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-slate-200 rounded-xl font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:scale-105 transition-all shadow-sm"
-            >
-              <span>{res.title}</span>
-              <span className="text-xs opacity-50">↗</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* SUBMISSION FORM (Only if NOT pending OR isEditing) */}
-      {
-        step.status !== 'PENDING_REVIEW' || isEditing ? (
-          <>
-            <div>
-              <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Evidence</label>
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
-              >
-                {preview ? (
-                  <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
-                ) : (
-                  <div className="relative z-10 flex flex-col items-center">
-                    <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
-                    <span className="text-lg font-bold text-slate-400">Upload Photo / Screenshot</span>
-                  </div>
-                )}
-                <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
-              </div>
-
-              {/* SCREENSHOT IMPORT BUTTON */}
-              <div className="mt-2 flex justify-center">
+            {/* Resources */}
+            <div className="flex flex-wrap justify-center gap-4 mb-6">
+              {(!step.resources || step.resources.length === 0) && (
+                <div className="text-sm text-slate-400 italic">No specific tools required for this step.</div>
+              )}
+              {step.resources && step.resources.map((res, idx) => (
                 <button
-                  onClick={() => setShowCommitInput(!showCommitInput)}
-                  className="w-full py-4 bg-cyan-600/10 border-2 border-cyan-500/30 hover:bg-cyan-600 hover:text-white text-cyan-400 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all mb-4"
-                >
-                  💾 Save Progress
-                </button>
-
-                {showCommitInput && (
-                  <div className="mb-4 p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100">
-                    <label className="block text-xs font-black text-cyan-600 uppercase tracking-wider mb-2">Commit Message</label>
-                    <input
-                      type="text"
-                      value={commitMessage}
-                      onChange={(e) => setCommitMessage(e.target.value)}
-                      placeholder="e.g., Finished motor assembly"
-                      className="w-full p-3 bg-white border-2 border-cyan-200 rounded-xl font-medium text-slate-600 outline-none focus:border-cyan-500 mb-2"
-                    />
-                    <button
-                      onClick={handleSaveProgress}
-                      className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold transition-colors"
-                    >
-                      Save Commit
-                    </button>
-                  </div>
-                )}
-
-                {/* Show previous commits for this step */}
-                {project.commits?.filter(c => c.stepId === realId).length > 0 && (
-                  <div className="mb-4 p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
-                    <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Previous Saves</h4>
-                    <div className="space-y-2">
-                      {project.commits.filter(c => c.stepId === realId).slice(-3).reverse().map(commit => (
-                        <div key={commit.id} className="p-2 bg-white rounded-lg border border-slate-200">
-                          <p className="text-sm font-bold text-slate-700">{commit.message}</p>
-                          <p className="text-xs text-slate-400">{new Date(commit.timestamp).toLocaleString()}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <button
+                  key={idx}
                   onClick={() => {
-                    const stored = sessionStorage.getItem('temp_evidence');
-                    if (stored) {
-                      setPreview(stored);
-                      // Convert Base64 to File for upload
-                      fetch(stored)
-                        .then(res => res.blob())
-                        .then(blob => {
-                          const file = new File([blob], "evidence_screenshot.png", { type: "image/png" });
-                          setFile(file);
-                          playSound('click');
-                        });
+                    const lowerUrl = res.url.toLowerCase();
+                    const isEmbeddable = lowerUrl.endsWith('.pdf') || res.type === 'image' || res.type === 'file' || /\.(jpg|jpeg|png|gif|webp)$/i.test(lowerUrl);
+
+                    if (isEmbeddable) {
+                      setViewingResource(res);
+                      playSound('open');
                     } else {
-                      alert("No screenshot found! Take a photo in the Mission Tool/Session first.");
+                      const isElectron = !!(window as any).electron;
+                      if (isElectron) {
+                        console.log("Launching session for:", res.url);
+                        startSession(res.url, 30, res.title, project);
+                      } else {
+                        window.open(res.url, '_blank');
+                      }
                     }
                   }}
-                  className="text-xs font-bold text-indigo-500 hover:text-indigo-700 underline flex items-center gap-1"
+                  className="flex items-center gap-3 px-6 py-4 bg-white border-b-4 border-slate-200 rounded-2xl font-black text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:-translate-y-1 transition-all shadow-sm text-lg"
                 >
-                  📸 Use Last Session Screenshot
+                  <span>{res.title}</span>
+                  <span className="text-xs opacity-50 bg-slate-100 px-2 py-1 rounded-md">↗</span>
                 </button>
-              </div>
+              ))}
             </div>
 
-            {/* Pro Mode Toggle */}
-            <div className="flex justify-end mb-2">
-              <button
-                onClick={() => setIsProMode(!isProMode)}
-                className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-300'}`}
-              >
-                {isProMode ? '⚡ Pro Mode Active' : 'Enable Pro Mode'}
-              </button>
-            </div>
-
-            {isProMode ? (
-              <TypingChallenge
-                template={EMAIL_TEMPLATE}
-                onComplete={(text) => {
-                  setNote(text);
-                  // Optional: auto-submit or just fill the note
-                  setIsProMode(false);
-                  playSound('success');
-                }}
-                onCancel={() => setIsProMode(false)}
-              />
-            ) : (
-              <textarea
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
-                placeholder="How did it go? Notes for Commander..."
-              />
-            )}
+            <div className="h-px bg-slate-200 w-full my-6"></div>
 
             <button
-              onClick={handleSubmit}
-              disabled={submitting || (!note && !file)}
-              className="w-full py-4 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:to-indigo-500 transition-all shadow-xl shadow-blue-500/20"
+              onClick={() => { playSound('click'); setSubmissionStage('EVIDENCE'); }}
+              className="w-full py-5 rounded-3xl bg-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-3"
             >
-              {submitting ? 'Transmitting...' : 'Submit for Review'}
+              <span>✅ I Have Finished This Step</span>
             </button>
-          </>
-        ) : (
-          <button onClick={closeModal} className="w-full py-4 rounded-3xl bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition-colors">
-            Close
+          </div>
+        </div>
+      )}
+
+      {/* STAGE 2: EVIDENCE UPLOAD */}
+      {(submissionStage === 'EVIDENCE' || (step.status === 'PENDING_REVIEW' && isEditing)) && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <button
+            onClick={() => setSubmissionStage('INSTRUCTION')}
+            className="text-slate-400 font-bold hover:text-slate-600 flex items-center gap-2 mb-2"
+          >
+            <span>← Back to Instructions</span>
           </button>
-        )
-      }
+
+          <div>
+            <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Evidence</label>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
+            >
+              {preview ? (
+                <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
+              ) : (
+                <div className="relative z-10 flex flex-col items-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
+                  <span className="text-lg font-bold text-slate-400">Upload Photo / Screenshot</span>
+                </div>
+              )}
+              <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
+            </div>
+
+            {/* NEW: Evidence Link Input */}
+            <div className="mt-4">
+              <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Or add a Link (Google Doc, Video, etc.)</label>
+              <input
+                value={link}
+                onChange={(e) => setLink(e.target.value)}
+                placeholder="https://..."
+                className="w-full p-4 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 focus:border-blue-400 outline-none"
+              />
+            </div>
+
+            {/* SCREENSHOT IMPORT & SAVE */}
+            <div className="mt-4 flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  const stored = sessionStorage.getItem('temp_evidence');
+                  if (stored) {
+                    setPreview(stored);
+                    fetch(stored)
+                      .then(res => res.blob())
+                      .then(blob => {
+                        const file = new File([blob], "evidence_screenshot.png", { type: "image/png" });
+                        setFile(file);
+                        playSound('click');
+                      });
+                  } else {
+                    alert("No screenshot found! Take a photo in the Mission Tool/Session first.");
+                  }
+                }}
+                className="text-xs font-bold text-indigo-500 hover:text-indigo-700 underline flex items-center justify-center gap-1 py-2"
+              >
+                📸 Use Last Session Screenshot
+              </button>
+
+              <button
+                onClick={() => setShowCommitInput(!showCommitInput)}
+                className="w-full py-3 bg-cyan-50 text-cyan-600 rounded-xl font-bold border-2 border-cyan-100 hover:bg-cyan-100 transition-colors"
+              >
+                💾 Save Progress for Later
+              </button>
+
+              {showCommitInput && (
+                <div className="p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100 animate-in fade-in slide-in-from-top-2">
+                  <label className="block text-xs font-black text-cyan-600 uppercase tracking-wider mb-2">Commit Message</label>
+                  <input
+                    type="text"
+                    value={commitMessage}
+                    onChange={(e) => setCommitMessage(e.target.value)}
+                    placeholder="e.g., Finished motor assembly"
+                    className="w-full p-3 bg-white border-2 border-cyan-200 rounded-xl font-medium text-slate-600 outline-none focus:border-cyan-500 mb-2"
+                  />
+                  <button
+                    onClick={handleSaveProgress}
+                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold transition-colors"
+                  >
+                    Save Commit
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pro Mode Toggle */}
+          <div className="flex justify-end mb-2 mt-4">
+            <button
+              onClick={() => setIsProMode(!isProMode)}
+              className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-300'}`}
+            >
+              {isProMode ? '⚡ Pro Mode Active' : 'Enable Pro Mode'}
+            </button>
+          </div>
+
+          {isProMode ? (
+            <TypingChallenge
+              template={EMAIL_TEMPLATE}
+              onComplete={(text) => {
+                setNote(text);
+                setIsProMode(false);
+                playSound('success');
+              }}
+              onCancel={() => setIsProMode(false)}
+            />
+          ) : (
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
+              placeholder="How did it go? Notes for Commander..."
+            />
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || (!note && !file && !link)}
+            className="w-full py-4 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:to-indigo-500 transition-all shadow-xl shadow-blue-500/20"
+          >
+            {submitting ? 'Transmitting...' : 'Submit Evidence & Complete'}
+          </button>
+        </div>
+      )}
+
+      {/* PENDING REVIEW VIEW (Read Only) */}
+      {(step.status === 'PENDING_REVIEW' && !isEditing) && (
+        <button onClick={closeModal} className="w-full py-4 rounded-3xl bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition-colors">
+          Close
+        </button>
+      )}
+
     </div >
   );
 };
@@ -777,6 +889,90 @@ const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject
   </div>
 );
 
+const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
+  const [link, setLink] = useState(project.presentationUrl || '');
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(project.mediaUrls?.[0] || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      playSound('click');
+      setFile(e.target.files[0]);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+        // Auto-save preview to project mediaUrls logic would go here or on submit
+        // For now, let's just update local state until they click submit
+      };
+      reader.readAsDataURL(e.target.files[0]);
+    }
+  };
+
+  const handleSubmit = async () => {
+    playSound('success');
+
+    // Simplistic save: update project status and media/link
+    updateProject({
+      status: 'submitted',
+      presentationUrl: link,
+      // If we had real file upload, we'd upload here. 
+      // For now storing base64 preview in mediaUrls if exists
+      mediaUrls: preview ? [preview] : project.mediaUrls
+    });
+
+    closeModal();
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in slide-in-from-right-8">
+      <div className="text-center space-y-4">
+        <h3 className="text-3xl font-black text-slate-800">Showcase Your Work 📸</h3>
+        <p className="text-slate-500 font-bold">Upload a photo or paste a link to your completed project.</p>
+      </div>
+
+      <div className="flex flex-col gap-6 max-w-xl mx-auto">
+        {/* File Upload */}
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
+        >
+          {preview ? (
+            <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
+          ) : (
+            <div className="relative z-10 flex flex-col items-center">
+              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
+              <span className="text-lg font-bold text-slate-400">Upload Photo</span>
+            </div>
+          )}
+          <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
+        </div>
+
+        {/* Link Input */}
+        <div>
+          <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Video / Project Link</label>
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="https://youtube.com/..."
+            className="w-full p-4 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 focus:border-indigo-400 outline-none"
+          />
+        </div>
+
+        <button
+          onClick={handleSubmit}
+          disabled={!preview && !link}
+          className="w-full py-5 rounded-3xl bg-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30"
+        >
+          🚀 Publish to Gallery
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+
 interface StudentWizardProps {
   assignment: Assignment;
   initialProject: StudentProject;
@@ -785,6 +981,8 @@ interface StudentWizardProps {
 }
 
 export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initialProject, isConnected = true, onExit }) => {
+  const { user, userProfile } = useAuth();
+
   // Theme
   const { activeTheme } = useTheme();
   const activeThemeDef = THEMES.find(t => t.id === activeTheme) || THEMES[0];
@@ -797,6 +995,9 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [mindset] = useState(getRandomMindset()); // Random quote for this session
   const [projectIcon, setProjectIcon] = useState('⚡');
+
+  // Load Factory Data for Auto-Workflow
+  const { processTemplates } = useFactoryData();
 
   // Peer Mock Data (Simulating other students working)
   const [peers] = useState([
@@ -833,6 +1034,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     };
   }, []); // Only on mount
 
+
+
   // Sync state if prop changes (e.g. from real-time listener)
   useEffect(() => {
     console.log('📥 [StudentWizard] Received project update from parent:', initialProject.id);
@@ -864,6 +1067,100 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     }
   };
 
+  // SELF-HEALING: Ensure studentName is set on the project if missing
+  // Placed AFTER updateProject is defined
+  // SELF-HEALING: Ensure studentName is set on the project if missing
+  // Placed AFTER updateProject is defined
+  useEffect(() => {
+    // Safety: Only heal if the user is a logged-in student (prevents instructors from overwriting names)
+    // We check userProfile.role or assume if missing? Safer to require role check if possible.
+    // If checking 'student' role strictly:
+    const isStudent = userProfile?.role === 'student' || !userProfile?.role; // Default to allow if no profile yet? No, risky. 
+    // Actually, safest is just check if we have a display name.
+    // But to prevent instructor overwrite:
+    if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') return;
+
+    if (user?.displayName && (!project.studentName || project.studentName === 'Student')) {
+      // Only heal if we have a real name to give
+      console.log('✨ [StudentWizard] Healing missing student name:', user.displayName);
+      updateProject({ studentName: user.displayName });
+    }
+  }, [user, project.studentName, userProfile]);
+
+
+
+  // --- AUTO-APPLY RECOMMENDED WORKFLOW ---
+  useEffect(() => {
+    // Only run if:
+    // 1. Assignment has a recommended workflow
+    // 2. Project doesn't imply it's already set up (no steps or explicit ID mismatch)
+    // 3. We have templates loaded
+    // 3. We have templates loaded
+    if (assignment.recommendedWorkflow && processTemplates.length > 0) {
+      const template = processTemplates.find(t => t.id === assignment.recommendedWorkflow);
+
+      if (template && template.phases) {
+        // CASE 1: Brand New Project (No Workflow)
+        if (!project.workflowId) {
+          console.log("⚡ [Auto-Workflow] Applying NEW workflow:", template.name);
+          const newSteps = template.phases.map((p: any) => {
+            const templateResources = p.resources || [];
+            const specificResources = assignment.stepResources?.[p.id] || [];
+            return {
+              id: p.id || Date.now().toString() + Math.random(),
+              title: p.name,
+              status: 'todo' as TaskStatus,
+              resources: [...templateResources, ...specificResources]
+            };
+          });
+          updateProject({ workflowId: template.id, steps: newSteps });
+        }
+        // CASE 2: Existing Project (Sync Resources)
+        else if (project.workflowId === template.id) {
+          // Check if we need to inject missing resources (Mission-Specific ones)
+          let hasUpdates = false;
+          const updatedSteps = project.steps.map((step, index) => {
+            // STRATEGY 1: Match by ID (Best)
+            let phase = template.phases.find((p: any) => p.id === step.id);
+
+            // STRATEGY 2: Match by Index (Fallback for legacy steps with random IDs)
+            // We only do this if IDs don't match but we are confident found the corresponding phase
+            if (!phase && template.phases[index]) {
+              // Verify title similarity or just trust index for locked workflows?
+              // For now, valid assumption: workflow steps don't move.
+              phase = template.phases[index];
+              console.log(`[Auto-Workflow] Matched step '${step.title}' to phase '${phase.name}' by index ${index}`);
+            }
+
+            if (!phase) return step; // No corresponding template phase found
+
+            // Get resources keyed by the TEMPLATE PHASE ID
+            const specificResources = assignment.stepResources?.[phase.id] || [];
+
+            if (specificResources.length > 0) {
+              const currentResourceUrls = new Set(step.resources?.map(r => r.url));
+              const missingResources = specificResources.filter(r => !currentResourceUrls.has(r.url));
+
+              if (missingResources.length > 0) {
+                hasUpdates = true;
+                console.log(`⚡ [Auto-Workflow] Injecting ${missingResources.length} new resources into step '${step.title}'`);
+                return {
+                  ...step,
+                  resources: [...(step.resources || []), ...missingResources]
+                };
+              }
+            }
+            return step;
+          });
+
+          if (hasUpdates) {
+            updateProject({ steps: updatedSteps });
+          }
+        }
+      }
+    }
+  }, [assignment.recommendedWorkflow, project.workflowId, processTemplates, updateProject, assignment.stepResources]); // Added assignment.stepResources to dependency
+
   const handleNodeClick = (id: string) => {
     playSound('open');
     setActiveNodeId(id);
@@ -884,30 +1181,49 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       onHover: () => playSound('hover')
     });
 
-    // 2. Strategy
-    nodes.push({
-      id: 'strategy',
-      type: 'STRATEGY',
-      title: 'Compass',
-      status: !project.title ? 'LOCKED' : project.workflowId ? 'COMPLETED' : 'ACTIVE',
-      icon: '🧭',
-      onClick: () => handleNodeClick('strategy'),
-      onHover: () => playSound('hover')
-    });
 
-    // 3. Blueprint
-    nodes.push({
-      id: 'blueprint',
-      type: 'BLUEPRINT',
-      title: 'Blueprint',
-      status: !project.workflowId ? 'LOCKED' : (project.status === 'building' || project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : 'ACTIVE',
-      icon: '📝',
-      onClick: () => handleNodeClick('blueprint'),
-      onHover: () => playSound('hover')
-    });
 
-    // 4. Tasks
-    if (project.status === 'building' || project.status === 'submitted' || project.status === 'published') {
+    // 2. Strategy - Show always (modified to allow viewing assigned workflow)
+    // HIDE STRATEGY for Free Build (Custom Workflow)
+    if (project.workflowId !== 'custom-workflow') {
+      nodes.push({
+        id: 'strategy',
+        type: 'STRATEGY',
+        title: 'Compass',
+        status: !project.title ? 'LOCKED' : project.workflowId ? 'COMPLETED' : 'ACTIVE',
+        icon: '🧭',
+        onClick: () => handleNodeClick('strategy'),
+        onHover: () => playSound('hover')
+      });
+    }
+
+
+
+    // 3. Blueprint OR Showcase Upload
+    if (project.workflowId === 'showcase') {
+      nodes.push({
+        id: 'showcase_upload',
+        type: 'BLUEPRINT', // Visual type
+        title: 'Exhibit',
+        status: (project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : 'ACTIVE',
+        icon: '📸',
+        onClick: () => handleNodeClick('showcase_upload'),
+        onHover: () => playSound('hover')
+      });
+    } else {
+      nodes.push({
+        id: 'blueprint',
+        type: 'BLUEPRINT',
+        title: project.workflowId === 'custom-workflow' ? 'Workbench' : 'Blueprint',
+        status: !project.workflowId ? 'LOCKED' : (project.status === 'building' || project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : 'ACTIVE',
+        icon: project.workflowId === 'custom-workflow' ? '🔨' : '📝',
+        onClick: () => handleNodeClick('blueprint'),
+        onHover: () => playSound('hover')
+      });
+    }
+
+    // 4. Tasks (Hide for Showcase)
+    if (project.workflowId !== 'showcase' && (project.status === 'building' || project.status === 'submitted' || project.status === 'published')) {
       project.steps.forEach((step, index) => {
         let status: 'LOCKED' | 'ACTIVE' | 'COMPLETED' | 'REVIEW' = 'LOCKED';
         if (step.status === 'done') {
@@ -918,7 +1234,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           status = 'ACTIVE';
         } else {
           const prevStep = project.steps[index - 1];
-          if (!prevStep || prevStep.status === 'done') {
+          if (!prevStep || prevStep.status === 'done' || prevStep.status === 'PENDING_REVIEW') {
             status = 'ACTIVE';
           }
         }
@@ -942,18 +1258,21 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     }
 
     // 5. Publish
-    const allStepsDone = project.steps.length > 0 && project.steps.every(s => s.status === 'done');
-    const canPublish = project.status === 'building' && allStepsDone;
+    // 5. Publish (Hide for Showcase as Upload handles it)
+    if (project.workflowId !== 'showcase') {
+      const allStepsDone = project.steps.length > 0 && project.steps.every(s => s.status === 'done');
+      const canPublish = project.status === 'building' && allStepsDone;
 
-    nodes.push({
-      id: 'publish',
-      type: 'PUBLISH',
-      title: 'Launch',
-      status: (project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : canPublish ? 'ACTIVE' : 'LOCKED',
-      icon: '🚀',
-      onClick: () => handleNodeClick('publish'),
-      onHover: () => playSound('hover')
-    });
+      nodes.push({
+        id: 'publish',
+        type: 'PUBLISH',
+        title: 'Launch',
+        status: (project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : canPublish ? 'ACTIVE' : 'LOCKED',
+        icon: '🚀',
+        onClick: () => handleNodeClick('publish'),
+        onHover: () => playSound('hover')
+      });
+    }
 
     return nodes;
   };
@@ -1031,6 +1350,44 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   }, [nodes, activeNodeIndex, project.status]);
 
   const { basePath, progressPath } = generatePaths();
+
+  // --- SPECIAL VIEW: SHOWCASE MODE ---
+  if (project.workflowId === 'showcase') {
+    // Re-using the content component but wrapping it in a full-screen layout
+    return (
+      <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
+        <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+          <svg width="100%" height="100%"><pattern id="cosmic-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#60a5fa" strokeWidth="1" /></pattern><rect width="100%" height="100%" fill="url(#cosmic-grid)" /></svg>
+        </div>
+
+        {/* Simple Header */}
+        <div className="relative z-20 px-8 py-6 flex justify-between items-center">
+          <button
+            onClick={onExit}
+            className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-black border border-white/20 backdrop-blur-md flex items-center gap-2 transition-all"
+          >
+            ← Back to Mission Control
+          </button>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center p-8 relative z-10">
+          <div className="max-w-2xl w-full bg-white/90 backdrop-blur-xl p-8 rounded-[3rem] shadow-2xl border-4 border-white/50 animate-in zoom-in-95 duration-500">
+            <ShowcaseUploadContent
+              project={project}
+              assignment={assignment}
+              updateProject={updateProject}
+              closeModal={() => {
+                // On submit/close, maybe we exit or show success?
+                // For now, let's play sound and exit
+                playSound('success');
+                if (onExit) onExit();
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
@@ -1183,6 +1540,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           {activeNodeId === 'identity' && <IdentityStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId === 'strategy' && <StrategyStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId === 'blueprint' && <BlueprintStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
+          {activeNodeId === 'showcase_upload' && <ShowcaseUploadContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId.startsWith('step-') && <TaskStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} taskId={activeNodeId} />}
           {activeNodeId === 'publish' && <PublishStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
         </WizardModal>

@@ -27,6 +27,14 @@ export const useMissionData = () => {
 
     const fetchMission = async (studentId: string, projectId?: string) => {
         if (!db) return;
+
+        // OPTIMIZATION: Cache Hit Check
+        // If we already have this project loaded (and it's not a demo switch), skip the loading screen.
+        if (project && projectId && project.id === projectId) {
+            console.log(`⚡ [useMissionData] Cache Hit: ${projectId}. Skipping fetch.`);
+            return;
+        }
+
         setLoading(true);
         try {
             // DEMO MODE BYPASS
@@ -87,7 +95,8 @@ export const useMissionData = () => {
                         description: pData.description,
                         station: normalizeStation(pData.station),
                         badges: [],
-                        recommendedWorkflow: pData.workflowId || 'default'
+                        recommendedWorkflow: pData.workflowId || 'default',
+                        stepResources: pData.stepResources || {}
                     };
                     setAssignment(derivedAssignment);
                     setProject(pData);
@@ -123,7 +132,8 @@ export const useMissionData = () => {
                         description: pData.description,
                         station: normalizeStation(pData.station),
                         badges: [],
-                        recommendedWorkflow: pData.workflowId || 'default'
+                        recommendedWorkflow: pData.workflowId || 'default',
+                        stepResources: pData.stepResources || {}
                     };
                     setAssignment(derivedAssignment);
                     setProject(pData);
@@ -202,6 +212,7 @@ export const useMissionData = () => {
                     const newProject: StudentProject = {
                         id: `proj_${studentId}_${Date.now()}`,
                         studentId: studentId, // CRITICAL: Add studentId for queries to work
+                        studentName: user?.displayName || 'Student', // ✅ CRITICAL FIX: Add studentName for Manager View
                         templateId: programId,
                         title: mappedAssignment.title,
                         description: mappedAssignment.description,
@@ -272,5 +283,11 @@ export const useMissionData = () => {
         };
     }, [project?.id]);
 
-    return { fetchMission, assignment, project, loading, error, isConnected };
+    const clearMission = () => {
+        setAssignment(null);
+        setProject(null);
+        setError(null);
+    };
+
+    return { fetchMission, clearMission, assignment, project, loading, error, isConnected };
 };

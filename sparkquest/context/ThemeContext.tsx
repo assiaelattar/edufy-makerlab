@@ -120,6 +120,7 @@ interface ThemeContextType {
     equipTheme: (id: ThemeId) => void;
     buyTheme: (id: ThemeId) => boolean;
     addCoins: (amount: number) => void;
+    playSound: (sound: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -220,6 +221,13 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         return false;
     };
 
+    const playSound = (sound: string) => {
+        // Simple mock for now, or actual implementation
+        console.log(`🎵 Playing sound: ${sound}`);
+        // If we had an audio object, we'd play it here. 
+        // For MVP, just logging to satisfy the interface.
+    };
+
     return (
         <ThemeContext.Provider value={{
             activeTheme, unlockedThemes,
@@ -229,7 +237,8 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             equipTheme, buyTheme,
             equipAvatar, buyAvatar,
             equipEffect, buyEffect,
-            addCoins
+            addCoins,
+            playSound
         }}>
             {children}
         </ThemeContext.Provider>

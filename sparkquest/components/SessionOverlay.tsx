@@ -2,14 +2,16 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useSession } from '../context/SessionContext';
 import { useAuth } from '../context/AuthContext';
 import { Credential } from '../types';
-import { X, Clock, Plus, Minus, Maximize, Camera, Key, Copy, Eye, EyeOff } from 'lucide-react';
+import { X, Clock, Plus, Minus, Maximize, Camera, Key, Copy, Eye, EyeOff, Info } from 'lucide-react';
 import { CredentialWallet } from './CredentialWallet';
+import { ProjectDetailsEnhanced } from './ProjectDetailsEnhanced';
 
 export const SessionOverlay: React.FC = () => {
-    const { isActive, sessionUrl, sessionTool, timeLeft, endSession, formatTime } = useSession();
+    const { isActive, sessionUrl, sessionTool, timeLeft, endSession, formatTime, activeProject } = useSession();
     const { userProfile } = useAuth();
     const webviewRef = useRef<any>(null);
     const [showWallet, setShowWallet] = React.useState(false);
+    const [showDetails, setShowDetails] = useState(false);
 
     // Quick Match Logic
     const [matchingCred, setMatchingCred] = useState<Credential | null>(null);
@@ -139,6 +141,16 @@ export const SessionOverlay: React.FC = () => {
                         </button>
                     </div>
 
+                    {activeProject && (
+                        <button
+                            onClick={() => setShowDetails(!showDetails)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors font-bold text-sm ${showDetails ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'}`}
+                        >
+                            <Info className="w-4 h-4" />
+                            <span className="hidden md:inline">Mission Info</span>
+                        </button>
+                    )}
+
                     <button
                         onClick={handleCapture}
                         className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-bold shadow-lg shadow-indigo-500/20 text-sm"
@@ -163,6 +175,17 @@ export const SessionOverlay: React.FC = () => {
                 onClose={() => setShowWallet(false)}
                 highlightService={matchingCred?.service || sessionTool || undefined}
             />
+
+            {/* MISSION INFO DRAWER */}
+            {activeProject && showDetails && (
+                <div className="absolute top-[60px] right-0 bottom-0 w-full md:w-[600px] lg:w-[800px] bg-slate-50 z-50 shadow-2xl border-l border-slate-200 overflow-y-auto animate-in slide-in-from-right duration-300">
+                    <ProjectDetailsEnhanced
+                        project={activeProject}
+                        role="student" // Or 'instructor' depending on context, keeping simple for now
+                        onBack={() => setShowDetails(false)}
+                    />
+                </div>
+            )}
 
             {/* WEBVIEW CONTAINER */}
             <div className="flex-1 bg-white relative z-0">

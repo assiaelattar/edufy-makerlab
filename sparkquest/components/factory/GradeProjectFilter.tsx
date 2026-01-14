@@ -80,7 +80,11 @@ export const GradeProjectFilter: React.FC<GradeProjectFilterProps> = ({ onCreate
                 const fetchedPrograms: Program[] = [];
                 programsSnap.docs.forEach(d => {
                     const data = d.data();
-                    if (data.status === 'active') {
+                    // FILTER: Only Active programs AND Exclude Adult/Teacher programs
+                    const nameLower = (data.name || '').toLowerCase();
+                    const isAdultProgram = nameLower.includes('adult') || nameLower.includes('teacher');
+
+                    if (data.status === 'active' && !isAdultProgram) {
                         fetchedPrograms.push({
                             id: d.id,
                             name: data.name,
@@ -334,46 +338,49 @@ export const GradeProjectFilter: React.FC<GradeProjectFilterProps> = ({ onCreate
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {selectedProgram.grades.map(grade => {
-                        const count = projects.filter(p => p.grade === grade.id).length;
-                        return (
-                            <button
-                                key={grade.id}
-                                onClick={() => { setSelectedGrade(grade.id); setView('MISSIONS'); }}
-                                className="group relative overflow-hidden bg-white hover:bg-slate-50 border-2 border-slate-100 hover:border-slate-300 rounded-[2.5rem] p-8 text-left transition-all hover:-translate-y-2 hover:shadow-xl"
-                            >
-                                <div className="absolute top-0 right-0 p-32 bg-gradient-to-br from-indigo-400 to-purple-500 opacity-5 group-hover:opacity-10 rounded-bl-full transition-opacity" />
+                    {selectedProgram.grades
+                        // FILTER: Exclude DIY/Workshop "grades" which are not for the student flow
+                        .filter(g => !g.name.toLowerCase().includes('diy') && !g.name.toLowerCase().includes('workshop'))
+                        .map(grade => {
+                            const count = projects.filter(p => p.grade === grade.id).length;
+                            return (
+                                <button
+                                    key={grade.id}
+                                    onClick={() => { setSelectedGrade(grade.id); setView('MISSIONS'); }}
+                                    className="group relative overflow-hidden bg-white hover:bg-slate-50 border-2 border-slate-100 hover:border-slate-300 rounded-[2.5rem] p-8 text-left transition-all hover:-translate-y-2 hover:shadow-xl"
+                                >
+                                    <div className="absolute top-0 right-0 p-32 bg-gradient-to-br from-indigo-400 to-purple-500 opacity-5 group-hover:opacity-10 rounded-bl-full transition-opacity" />
 
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg mb-6 group-hover:scale-110 transition-transform">
-                                    <GraduationCap size={32} />
-                                </div>
-
-                                <h3 className="text-2xl font-black text-slate-800 mb-3">{grade.name}</h3>
-
-                                {/* Display Groups */}
-                                {grade.groups && grade.groups.length > 0 && (
-                                    <div className="mb-4 space-y-2">
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Groups:</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {grade.groups.map(group => (
-                                                <span
-                                                    key={group.id}
-                                                    className="text-xs px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-200 font-medium"
-                                                    title={`${group.day} at ${group.time}`}
-                                                >
-                                                    {group.name}
-                                                </span>
-                                            ))}
-                                        </div>
+                                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg mb-6 group-hover:scale-110 transition-transform">
+                                        <GraduationCap size={32} />
                                     </div>
-                                )}
 
-                                <div className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-wider bg-slate-100 w-fit px-3 py-1.5 rounded-lg">
-                                    <Folder size={14} /> {count} Projects
-                                </div>
-                            </button>
-                        );
-                    })}
+                                    <h3 className="text-2xl font-black text-slate-800 mb-3">{grade.name}</h3>
+
+                                    {/* Display Groups */}
+                                    {grade.groups && grade.groups.length > 0 && (
+                                        <div className="mb-4 space-y-2">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Groups:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {grade.groups.map(group => (
+                                                    <span
+                                                        key={group.id}
+                                                        className="text-xs px-2 py-1 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-200 font-medium"
+                                                        title={`${group.day} at ${group.time}`}
+                                                    >
+                                                        {group.name}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center gap-2 text-slate-500 font-bold text-xs uppercase tracking-wider bg-slate-100 w-fit px-3 py-1.5 rounded-lg">
+                                        <Folder size={14} /> {count} Projects
+                                    </div>
+                                </button>
+                            );
+                        })}
 
                     {/* Uncategorized */}
                     <button

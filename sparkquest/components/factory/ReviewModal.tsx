@@ -125,7 +125,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ projectId, onClose }) 
                                     {/* Description */}
                                     <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                                         <h4 className="font-bold text-slate-800 mb-2">Project Description</h4>
-                                        <p className="text-slate-600 leading-relaxed text-sm">
+                                        <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">
                                             {project.description || "No description provided by the student."}
                                         </p>
                                     </div>
