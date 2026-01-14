@@ -33,9 +33,9 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       const totalDue = enrolledStudents.reduce((acc, curr) => acc + curr.enrollment.balance, 0);
 
       return (
-         <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-right-8 duration-500">
+         <div className="space-y-6 md:space-y-6 pb-24 md:pb-8 h-full flex flex-col overflow-y-auto md:overflow-hidden animate-in fade-in slide-in-from-right-8 duration-500 custom-scrollbar">
             {/* Header Card */}
-            <div className="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 relative overflow-hidden group">
+            <div className="bg-slate-900 rounded-2xl p-6 shadow-xl border border-slate-800 relative overflow-hidden group shrink-0">
                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity duration-500 transform group-hover:scale-110 origin-top-right">
                   <School size={180} className="text-indigo-500" />
                </div>
@@ -80,7 +80,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-lg flex items-center justify-between">
                   <div>
                      <p className="text-slate-500 text-xs font-bold uppercase tracking-wider">Total Revenue</p>
@@ -105,7 +105,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
             </div>
 
             {/* Students Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col overflow-hidden flex-1">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl flex flex-col md:overflow-hidden min-h-0 md:flex-1 shrink-0">
                <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
                   <h3 className="font-bold text-white flex items-center gap-2">
                      Class Roster
@@ -113,7 +113,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                   <div className="text-xs text-slate-500 font-medium">Sorted by Name</div>
                </div>
 
-               <div className="overflow-y-auto flex-1 custom-scrollbar">
+               <div className="md:overflow-y-auto md:flex-1 custom-scrollbar">
                   <table className="w-full text-left text-sm">
                      <thead className="bg-slate-950/50 text-slate-400 font-semibold sticky top-0 z-10 shadow-sm backdrop-blur-sm">
                         <tr>

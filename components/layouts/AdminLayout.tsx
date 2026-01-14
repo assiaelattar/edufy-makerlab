@@ -100,7 +100,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <div className="ml-auto"><NotificationDropdown /></div>
                     </div>
                 </header>
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 relative scroll-smooth pb-24 md:pb-8">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-0 md:p-8 relative scroll-smooth pb-24 md:pb-8">
                     {children}
                 </div>
             </main>

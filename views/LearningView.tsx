@@ -804,8 +804,10 @@ export const LearningView = () => {
             description: template ? template.description : 'A verified mission started in SparkQuest',
             externalLink: '',
             embedUrl: '',
+            thumbnailUrl: template?.thumbnailUrl || '', // Preserve thumbnail
             mediaUrls: template?.thumbnailUrl ? [template.thumbnailUrl] : [],
             resources: template?.resources || [],
+            stepResources: template?.stepResources || {}, // Copy mission-specific resources
             skillsAcquired: template ? template.skills : [],
             steps: initialSteps,
             templateId: template?.id || null,
@@ -1308,11 +1310,19 @@ export const LearningView = () => {
                                                     return (
                                                         <div key={project.id} className="group bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-emerald-500/50 transition-all hover:shadow-2xl hover:shadow-emerald-900/20 flex flex-col">
                                                             <div className="aspect-video bg-slate-800 relative overflow-hidden">
-                                                                {project.mediaUrls?.[0] ? (
-                                                                    <img src={project.mediaUrls[0]} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={project.title} />
+                                                                {project.thumbnailUrl || project.mediaUrls?.[0] ? (
+                                                                    <img src={project.thumbnailUrl || project.mediaUrls?.[0]} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt={project.title} />
                                                                 ) : (
-                                                                    <div className="w-full h-full bg-slate-800 flex items-center justify-center">
-                                                                        <ImageIcon size={32} className="text-slate-700" />
+                                                                    <div className={`w-full h-full flex items-center justify-center
+                                                                        ${project.station === 'Robotics' ? 'bg-gradient-to-br from-red-900/50 to-orange-900/50' :
+                                                                            project.station === 'Coding' ? 'bg-gradient-to-br from-blue-900/50 to-cyan-900/50' :
+                                                                                project.station === 'Design' ? 'bg-gradient-to-br from-purple-900/50 to-pink-900/50' :
+                                                                                    'bg-gradient-to-br from-slate-800 to-slate-900'
+                                                                        }`}>
+                                                                        <div className="text-slate-600 transform scale-150 opacity-50">
+                                                                            {/* Allow generic icon or specific if needed */}
+                                                                            <Zap size={48} />
+                                                                        </div>
                                                                     </div>
                                                                 )}
                                                                 <div className="absolute top-3 right-3">
@@ -1378,154 +1388,156 @@ export const LearningView = () => {
                             </div>
                         )}
                     </>
-                )}
+                )
+                }
 
                 {/* TRACK PROJECTS TAB */}
-                {activeTab === 'track' && (
-                    <div className="flex flex-col space-y-6">
-                        {/* Status Overview Cards */}
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                            {[
-                                { status: 'all', label: 'All Projects', count: studentProjects.length, color: 'slate', icon: LayoutGrid },
-                                { status: 'planning', label: 'Planning', count: studentProjects.filter(p => p.status === 'planning').length, color: 'amber', icon: ClipboardList },
-                                { status: 'building', label: 'Building', count: studentProjects.filter(p => p.status === 'building').length, color: 'cyan', icon: Zap },
-                                { status: 'testing', label: 'Testing', count: studentProjects.filter(p => p.status === 'testing').length, color: 'blue', icon: CheckCircle2 },
-                                { status: 'delivered', label: 'Delivered', count: studentProjects.filter(p => p.status === 'delivered').length, color: 'purple', icon: Send },
-                                { status: 'submitted', label: 'Submitted', count: studentProjects.filter(p => p.status === 'submitted').length, color: 'indigo', icon: Send },
-                                { status: 'changes_requested', label: 'Changes Needed', count: studentProjects.filter(p => p.status === 'changes_requested').length, color: 'orange', icon: AlertCircle },
-                                { status: 'published', label: 'Published', count: studentProjects.filter(p => p.status === 'published').length, color: 'emerald', icon: CheckCircle2 }
-                            ].map(({ status, label, count, color, icon: Icon }) => (
-                                <button
-                                    key={status}
-                                    onClick={() => setStatusFilter(status as any)}
-                                    className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === status
-                                        ? `bg-${color}-950/30 border-${color}-500/50`
-                                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                                        }`}
-                                >
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Icon size={16} className={statusFilter === status ? `text-${color}-400` : 'text-slate-500'} />
-                                        <span className={`text-xs font-bold uppercase tracking-wider ${statusFilter === status ? `text-${color}-400` : 'text-slate-500'}`}>
-                                            {label}
-                                        </span>
-                                    </div>
-                                    <div className={`text-2xl font-bold text-white`}>
-                                        {count}
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Filtered Projects List */}
-                        <div className="pb-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {studentProjects
-                                    .filter(p => statusFilter === 'all' || p.status === statusFilter)
-                                    .map(project => {
-                                        const theme = getTheme(project.station);
-                                        const progress = project.steps && project.steps.length > 0
-                                            ? Math.round((project.steps.filter(s => s.status === 'done').length / project.steps.length) * 100)
-                                            : 0;
-                                        return (
-                                            <div key={project.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-600 transition-all">
-                                                {/* Project Header */}
-                                                <div className="h-32 bg-slate-800 relative overflow-hidden">
-                                                    {project.mediaUrls?.[0] ? (
-                                                        <img src={project.mediaUrls[0]} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={project.title} />
-                                                    ) : (
-                                                        <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                                                            <ImageIcon size={32} className="text-slate-700" />
-                                                        </div>
-                                                    )}
-                                                    {/* Status Badge */}
-                                                    <div className="absolute top-2 right-2">
-                                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase bg-slate-950/80 text-white border border-slate-800`}>
-                                                            {project.status.replace('_', ' ')}
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Project Info */}
-                                                <div className="p-4">
-                                                    <div className="flex items-center gap-2 mb-2">
-                                                        <theme.icon size={12} style={{ color: theme.colorHex }} />
-                                                        <span className={`text-[9px] font-bold uppercase ${theme.text}`}>{theme.label}</span>
-                                                    </div>
-                                                    <h3 className="font-bold text-white text-sm mb-1 line-clamp-1">{project.title}</h3>
-                                                    <p className="text-xs text-slate-400 mb-3">by {project.studentName}</p>
-
-                                                    {/* Progress Bar */}
-                                                    <div className="mb-3">
-                                                        <div className="flex justify-between text-[10px] text-slate-500 mb-1">
-                                                            <span>Progress</span>
-                                                            <span className={progress === 100 ? 'text-emerald-400' : ''}>{progress}%</span>
-                                                        </div>
-                                                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                                            <div className={`h-full bg-gradient-to-r ${theme.gradient} transition-all`} style={{ width: `${progress}%` }} />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Instructor Feedback Preview */}
-                                                    {project.instructorFeedback && (
-                                                        <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg p-2 mb-3">
-                                                            <p className="text-[10px] text-amber-400 font-bold mb-1">FEEDBACK</p>
-                                                            <p className="text-[10px] text-amber-100 italic line-clamp-2">"{project.instructorFeedback}"</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Action Buttons */}
-                                                    <div className="flex gap-2">
-                                                        {/* Watch Presentation Button */}
-                                                        {project.presentationUrl && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    window.open(project.presentationUrl, '_blank');
-                                                                }}
-                                                                className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
-                                                            >
-                                                                <Play size={12} fill="currentColor" />
-                                                            </button>
-                                                        )}
-                                                        {/* Review Button (for submitted projects) */}
-                                                        {project.status === 'submitted' && (
-                                                            <button
-                                                                onClick={() => { setSelectedSubmission(project); setReviewModalOpen(true); }}
-                                                                className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-colors"
-                                                            >
-                                                                Review Now
-                                                            </button>
-                                                        )}
-
-                                                        {/* Edit Button (for admins/instructors OR own projects for students) */}
-                                                        {(userProfile?.role !== 'student' || project.studentId === userProfile?.uid) && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setActiveProject(project);
-                                                                    setProjectForm(project);
-                                                                    setIsProjectModalOpen(true);
-                                                                }}
-                                                                className={`${project.status === 'submitted' ? 'flex-1' : 'w-full'} py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1`}
-                                                            >
-                                                                <Edit3 size={12} />
-                                                                Edit Project
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+                {
+                    activeTab === 'track' && (
+                        <div className="flex flex-col space-y-6">
+                            {/* Status Overview Cards */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {[
+                                    { status: 'all', label: 'All Projects', count: studentProjects.length, color: 'slate', icon: LayoutGrid },
+                                    { status: 'planning', label: 'Planning', count: studentProjects.filter(p => p.status === 'planning').length, color: 'amber', icon: ClipboardList },
+                                    { status: 'building', label: 'Building', count: studentProjects.filter(p => p.status === 'building').length, color: 'cyan', icon: Zap },
+                                    { status: 'testing', label: 'Testing', count: studentProjects.filter(p => p.status === 'testing').length, color: 'blue', icon: CheckCircle2 },
+                                    { status: 'delivered', label: 'Delivered', count: studentProjects.filter(p => p.status === 'delivered').length, color: 'purple', icon: Send },
+                                    { status: 'submitted', label: 'Submitted', count: studentProjects.filter(p => p.status === 'submitted').length, color: 'indigo', icon: Send },
+                                    { status: 'changes_requested', label: 'Changes Needed', count: studentProjects.filter(p => p.status === 'changes_requested').length, color: 'orange', icon: AlertCircle },
+                                    { status: 'published', label: 'Published', count: studentProjects.filter(p => p.status === 'published').length, color: 'emerald', icon: CheckCircle2 }
+                                ].map(({ status, label, count, color, icon: Icon }) => (
+                                    <button
+                                        key={status}
+                                        onClick={() => setStatusFilter(status as any)}
+                                        className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === status
+                                            ? `bg-${color}-950/30 border-${color}-500/50`
+                                            : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Icon size={16} className={statusFilter === status ? `text-${color}-400` : 'text-slate-500'} />
+                                            <span className={`text-xs font-bold uppercase tracking-wider ${statusFilter === status ? `text-${color}-400` : 'text-slate-500'}`}>
+                                                {label}
+                                            </span>
+                                        </div>
+                                        <div className={`text-2xl font-bold text-white`}>
+                                            {count}
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
-                            {studentProjects.filter(p => statusFilter === 'all' || p.status === statusFilter).length === 0 && (
-                                <div className="p-12 text-center text-slate-500 italic bg-slate-900/50 rounded-xl border border-slate-800">
-                                    No projects found with status: {statusFilter}
-                                </div>
-                            )}
-                        </div>
-                    </div>
 
-                )
+                            {/* Filtered Projects List */}
+                            <div className="pb-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {studentProjects
+                                        .filter(p => statusFilter === 'all' || p.status === statusFilter)
+                                        .map(project => {
+                                            const theme = getTheme(project.station);
+                                            const progress = project.steps && project.steps.length > 0
+                                                ? Math.round((project.steps.filter(s => s.status === 'done').length / project.steps.length) * 100)
+                                                : 0;
+                                            return (
+                                                <div key={project.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-slate-600 transition-all">
+                                                    {/* Project Header */}
+                                                    <div className="h-32 bg-slate-800 relative overflow-hidden">
+                                                        {project.thumbnailUrl || project.mediaUrls?.[0] ? (
+                                                            <img src={project.thumbnailUrl || project.mediaUrls?.[0]} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" alt={project.title} />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center bg-slate-900">
+                                                                <ImageIcon size={32} className="text-slate-700" />
+                                                            </div>
+                                                        )}
+                                                        {/* Status Badge */}
+                                                        <div className="absolute top-2 right-2">
+                                                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase bg-slate-950/80 text-white border border-slate-800`}>
+                                                                {project.status.replace('_', ' ')}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Project Info */}
+                                                    <div className="p-4">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <theme.icon size={12} style={{ color: theme.colorHex }} />
+                                                            <span className={`text-[9px] font-bold uppercase ${theme.text}`}>{theme.label}</span>
+                                                        </div>
+                                                        <h3 className="font-bold text-white text-sm mb-1 line-clamp-1">{project.title}</h3>
+                                                        <p className="text-xs text-slate-400 mb-3">by {project.studentName}</p>
+
+                                                        {/* Progress Bar */}
+                                                        <div className="mb-3">
+                                                            <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+                                                                <span>Progress</span>
+                                                                <span className={progress === 100 ? 'text-emerald-400' : ''}>{progress}%</span>
+                                                            </div>
+                                                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                                <div className={`h-full bg-gradient-to-r ${theme.gradient} transition-all`} style={{ width: `${progress}%` }} />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Instructor Feedback Preview */}
+                                                        {project.instructorFeedback && (
+                                                            <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg p-2 mb-3">
+                                                                <p className="text-[10px] text-amber-400 font-bold mb-1">FEEDBACK</p>
+                                                                <p className="text-[10px] text-amber-100 italic line-clamp-2">"{project.instructorFeedback}"</p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Action Buttons */}
+                                                        <div className="flex gap-2">
+                                                            {/* Watch Presentation Button */}
+                                                            {project.presentationUrl && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        window.open(project.presentationUrl, '_blank');
+                                                                    }}
+                                                                    className="px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                                                                >
+                                                                    <Play size={12} fill="currentColor" />
+                                                                </button>
+                                                            )}
+                                                            {/* Review Button (for submitted projects) */}
+                                                            {project.status === 'submitted' && (
+                                                                <button
+                                                                    onClick={() => { setSelectedSubmission(project); setReviewModalOpen(true); }}
+                                                                    className="flex-1 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition-colors"
+                                                                >
+                                                                    Review Now
+                                                                </button>
+                                                            )}
+
+                                                            {/* Edit Button (for admins/instructors OR own projects for students) */}
+                                                            {(userProfile?.role !== 'student' || project.studentId === userProfile?.uid) && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setActiveProject(project);
+                                                                        setProjectForm(project);
+                                                                        setIsProjectModalOpen(true);
+                                                                    }}
+                                                                    className={`${project.status === 'submitted' ? 'flex-1' : 'w-full'} py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1`}
+                                                                >
+                                                                    <Edit3 size={12} />
+                                                                    Edit Project
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                                {studentProjects.filter(p => statusFilter === 'all' || p.status === statusFilter).length === 0 && (
+                                    <div className="p-12 text-center text-slate-500 italic bg-slate-900/50 rounded-xl border border-slate-800">
+                                        No projects found with status: {statusFilter}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                    )
                 }
 
                 {/* STUDIO TAB - Instructor Project Monitoring */}
@@ -1585,8 +1597,8 @@ export const LearningView = () => {
                                                     <div key={project.id} className="bg-white border-2 border-purple-200 rounded-xl overflow-hidden hover:border-purple-400 transition-all shadow-sm hover:shadow-lg">
                                                         {/* Project Header */}
                                                         <div className="h-32 bg-slate-800 relative overflow-hidden">
-                                                            {project.mediaUrls?.[0] ? (
-                                                                <img src={project.mediaUrls[0]} className="w-full h-full object-cover" alt={project.title} />
+                                                            {project.thumbnailUrl || project.mediaUrls?.[0] ? (
+                                                                <img src={project.thumbnailUrl || project.mediaUrls?.[0]} className="w-full h-full object-cover" alt={project.title} />
                                                             ) : (
                                                                 <div className="w-full h-full flex items-center justify-center bg-slate-900">
                                                                     <ImageIcon size={32} className="text-slate-700" />
@@ -2450,8 +2462,9 @@ export const LearningView = () => {
                                 </div>
                             </Modal>
                         </div>
-                    )}
-            </div>
+                    )
+                }
+            </div >
         );
     }
 

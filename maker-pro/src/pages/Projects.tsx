@@ -4,13 +4,18 @@ import { Plus, Search, Filter, MoreHorizontal, Calendar, ArrowRight, PlayCircle,
 import { useStudentData } from '../hooks/useStudentData';
 import { useNavigate } from 'react-router-dom';
 
+import { ProjectImporter } from '../components/ProjectImporter';
+
 export function Projects() {
     const { projects, loading } = useStudentData();
     const navigate = useNavigate();
+    const [isImportOpen, setIsImportOpen] = React.useState(false);
 
     if (loading) return <div className="p-8 text-center animate-pulse">Loading projects...</div>;
 
-    const getProjectImage = (station: string) => {
+    const getProjectImage = (station: string, thumbnailUrl?: string) => {
+        if (thumbnailUrl) return thumbnailUrl;
+
         const images: Record<string, string> = {
             'robotics': 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&q=80&w=800',
             'coding': 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?auto=format&fit=crop&q=80&w=800',
@@ -38,6 +43,13 @@ export function Projects() {
                             className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 w-full md:w-64"
                         />
                     </div>
+                    <button
+                        onClick={() => setIsImportOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition shadow-sm font-bold"
+                    >
+                        <Plus className="w-5 h-5 text-indigo-500" />
+                        <span>Import Showcase</span>
+                    </button>
                     {/* <button className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600">
                         <Filter className="w-5 h-5" />
                     </button> */}
@@ -78,7 +90,7 @@ export function Projects() {
                                 {/* Image Cover */}
                                 <div className="h-48 relative overflow-hidden">
                                     <img
-                                        src={getProjectImage(project.station)}
+                                        src={getProjectImage(project.station, (project as any).thumbnailUrl)}
                                         alt={project.title}
                                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                     />
@@ -140,6 +152,17 @@ export function Projects() {
                     })
                 )}
             </div>
+
+            {isImportOpen && (
+                <ProjectImporter
+                    onClose={() => setIsImportOpen(false)}
+                    onSuccess={() => {
+                        // Ideally trigger a refresh or notify
+                        alert('Projects imported successfully! Reload to see changes if they are assigned to you.');
+                        window.location.reload();
+                    }}
+                />
+            )}
         </div>
     );
 }

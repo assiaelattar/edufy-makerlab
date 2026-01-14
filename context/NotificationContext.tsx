@@ -4,6 +4,10 @@ import { collection, onSnapshot, query, orderBy, limit, where, addDoc, serverTim
 import { ToastContainer, ToastMessage } from '../components/Toast';
 import { AppNotification } from '../types';
 import { useAuth } from './AuthContext';
+import { getToken } from 'firebase/messaging';
+import { messaging } from '../services/firebase';
+import { arrayUnion } from 'firebase/firestore';
+
 
 interface NotificationContextType {
   addToast: (title: string, message: string, type?: ToastMessage['type']) => void;
@@ -35,10 +39,30 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, []);
 
+
+
   const requestPermission = async () => {
     if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-      await Notification.requestPermission();
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        if (messaging && userProfile?.uid) {
+          try {
+            const token = await getToken(messaging);
+            if (token) {
+              console.log('FCM Token:', token);
+              await updateDoc(doc(db!, 'users', userProfile.uid), {
+                fcmTokens: arrayUnion(token)
+              });
+            }
+          } catch (error) {
+            console.error("FCM Token Error", error);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error requesting notification permission:', err);
     }
   };
 

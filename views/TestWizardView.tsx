@@ -7,6 +7,8 @@ const MOCK_TEMPLATES = [
     { id: 'engineering-process', name: 'Engineering', description: 'Ask, Imagine, Plan, Create, Improve', icon: '⚙️', color: 'from-blue-500 to-cyan-500' },
     { id: 'scientific-method', name: 'Science', description: 'Hypothesis, Experiment, Analysis, Conclusion', icon: '🧬', color: 'from-emerald-500 to-teal-500' },
     { id: 'coding', name: 'Coding', description: 'Plan, Code, Review, Debug, Deploy', icon: '💻', color: 'from-violet-500 to-purple-500' },
+    { id: 'free-build', name: 'Free Build', description: 'No rules. Just you and your imagination.', icon: '✨', color: 'from-amber-400 to-orange-500' },
+    { id: 'showcase', name: 'Showcase', description: 'Already finished? Upload and show off!', icon: '🏆', color: 'from-indigo-500 to-purple-600' },
 ];
 // Types
 interface Step {
@@ -84,8 +86,13 @@ export const TestWizardView = () => {
 
     const handleStartBuilding = () => {
         // Confetti effect or transition here
-        setViewMode('building');
-        setProjectForm(prev => ({ ...prev, status: 'building' }));
+        if (selectedWorkflowId === 'showcase') {
+            setProjectForm(prev => ({ ...prev, status: 'published', isPresentationCompleted: true }));
+            setViewMode('presentation');
+        } else {
+            setViewMode('building');
+            setProjectForm(prev => ({ ...prev, status: 'building' }));
+        }
     };
 
     const handleSubmitProject = () => {
@@ -110,7 +117,9 @@ export const TestWizardView = () => {
     // -- RENDER HELPERS --
     const isStep1Valid = projectForm.title.length > 3;
     const isStep2Valid = !!selectedWorkflowId;
-    const isStep3Valid = (projectForm.steps?.length || 0) > 0;
+    const isStep3Valid = selectedWorkflowId === 'showcase'
+        ? (!!projectForm.presentationUrl || (projectForm.mediaUrls?.length || 0) > 0)
+        : (projectForm.steps?.length || 0) > 0;
 
     const renderKanbanColumn = (status: 'todo' | 'doing' | 'done', title: string, icon: any, colorClass: string, bgClass: string) => {
         const steps = projectForm.steps?.filter((s) => s.status === status) || [];
@@ -236,7 +245,7 @@ export const TestWizardView = () => {
                         <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">
                             <span className={wizardStep >= 1 ? 'text-indigo-600' : ''}>Identity</span>
                             <span className={wizardStep >= 2 ? 'text-amber-500' : ''}>Strategy</span>
-                            <span className={wizardStep >= 3 ? 'text-emerald-500' : ''}>Blueprint</span>
+                            <span className={wizardStep >= 3 ? 'text-emerald-500' : ''}>{selectedWorkflowId === 'showcase' ? 'Upload' : 'Blueprint'}</span>
                         </div>
                         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                             <div
@@ -383,64 +392,101 @@ export const TestWizardView = () => {
                         </div>
                     )}
 
-                    {/* STEP 3: BLUEPRINT */}
+                    {/* STEP 3: BLUEPRINT OR SHOWCASE UPLOAD */}
                     {wizardStep === 3 && (
                         <div className="animate-in fade-in slide-in-from-right-8 duration-500 h-[calc(100vh-340px)] flex flex-col relative z-20">
                             <div className="text-center mb-8 shrink-0">
                                 <h1 className="text-6xl font-black text-slate-900 mb-4 drop-shadow-sm">
-                                    The <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">Blueprint</span> 📝
+                                    {selectedWorkflowId === 'showcase' ? (
+                                        <>The <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-500">Exhibit</span> 📸</>
+                                    ) : (
+                                        <>The <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-500 to-teal-500">Blueprint</span> 📝</>
+                                    )}
                                 </h1>
-                                <p className="text-2xl text-slate-500 font-medium">Break it down via small, conquerable steps.</p>
+                                <p className="text-2xl text-slate-500 font-medium">
+                                    {selectedWorkflowId === 'showcase'
+                                        ? "Show the world what you've created."
+                                        : "Break it down via small, conquerable steps."}
+                                </p>
                             </div>
 
                             <div className="flex-1 bg-white/60 backdrop-blur-2xl border border-white/60 rounded-[3rem] shadow-2xl overflow-hidden flex flex-col relative">
-                                <div className="absolute top-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400 opacity-50"></div>
+                                <div className={`absolute top-0 w-full h-1 bg-gradient-to-r opacity-50 ${selectedWorkflowId === 'showcase' ? 'from-indigo-400 to-purple-400' : 'from-emerald-400 to-teal-400'}`}></div>
 
-                                <div className="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar">
-                                    {projectForm.steps?.length === 0 && (
-                                        <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 gap-4">
-                                            <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center animate-bounce">
-                                                <ListChecks size={48} className="text-slate-300" />
+                                {selectedWorkflowId === 'showcase' ? (
+                                    // --- SHOWCASE MODE ---
+                                    <div className="flex-1 overflow-y-auto p-12 flex flex-col items-center justify-center gap-8">
+                                        <div className="w-full max-w-2xl bg-white/80 p-8 rounded-3xl border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors group text-center cursor-pointer">
+                                            <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+                                                <ImageIcon size={32} />
                                             </div>
-                                            <div className="text-center">
-                                                <p className="font-black text-2xl text-slate-300">Blank Canvas</p>
-                                                <p className="font-medium text-slate-400">Add your first mission step below</p>
+                                            <h3 className="text-2xl font-bold text-slate-700 mb-2">Upload Evidence</h3>
+                                            <p className="text-slate-400 font-medium">Drag & drop photos or videos of your project here</p>
+                                        </div>
+
+                                        <div className="w-full max-w-2xl">
+                                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3 ml-1">External Link (Scratch, YouTube, etc.)</label>
+                                            <div className="relative group/input">
+                                                <LinkIcon className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within/input:text-indigo-500 transition-colors" />
+                                                <input
+                                                    className="w-full pl-14 pr-6 py-5 bg-white border-2 border-slate-200 rounded-2xl font-bold text-lg text-slate-700 outline-none focus:border-indigo-500 focus:shadow-xl transition-all placeholder:text-slate-300"
+                                                    placeholder="https://..."
+                                                    value={projectForm.presentationUrl || ''}
+                                                    onChange={e => setProjectForm({ ...projectForm, presentationUrl: e.target.value })}
+                                                />
                                             </div>
                                         </div>
-                                    )}
-                                    {projectForm.steps?.map((step, index) => (
-                                        <div
-                                            key={step.id}
-                                            className="bg-white p-5 rounded-2xl border-2 border-slate-100 shadow-sm flex items-center gap-5 group hover:border-emerald-200 hover:shadow-lg hover:-translate-x-1 transition-all duration-300 animate-in slide-in-from-bottom-4 fill-mode-backwards"
-                                            style={{ animationDelay: `${index * 50}ms` }}
-                                        >
-                                            <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center font-black text-lg shadow-sm group-hover:rotate-6 transition-transform">
-                                                {index + 1}
-                                            </div>
-                                            <span className="flex-1 font-bold text-slate-700 text-lg">{step.title}</span>
-                                            <button onClick={() => handleDeleteStep(step.id)} className="p-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
-                                                <Trash2 size={20} />
+                                    </div>
+                                ) : (
+                                    // --- BLUEPRINT MODE ---
+                                    <>
+                                        <div className="flex-1 overflow-y-auto p-8 space-y-4 custom-scrollbar">
+                                            {projectForm.steps?.length === 0 && (
+                                                <div className="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 gap-4">
+                                                    <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center animate-bounce">
+                                                        <ListChecks size={48} className="text-slate-300" />
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="font-black text-2xl text-slate-300">Blank Canvas</p>
+                                                        <p className="font-medium text-slate-400">Add your first mission step below</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {projectForm.steps?.map((step, index) => (
+                                                <div
+                                                    key={step.id}
+                                                    className="bg-white p-5 rounded-2xl border-2 border-slate-100 shadow-sm flex items-center gap-5 group hover:border-emerald-200 hover:shadow-lg hover:-translate-x-1 transition-all duration-300 animate-in slide-in-from-bottom-4 fill-mode-backwards"
+                                                    style={{ animationDelay: `${index * 50}ms` }}
+                                                >
+                                                    <div className="w-10 h-10 bg-emerald-100 text-emerald-700 rounded-xl flex items-center justify-center font-black text-lg shadow-sm group-hover:rotate-6 transition-transform">
+                                                        {index + 1}
+                                                    </div>
+                                                    <span className="flex-1 font-bold text-slate-700 text-lg">{step.title}</span>
+                                                    <button onClick={() => handleDeleteStep(step.id)} className="p-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
+                                                        <Trash2 size={20} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="p-6 bg-white/80 border-t border-slate-100 flex gap-4 backdrop-blur-md">
+                                            <input
+                                                className="flex-1 bg-slate-50 border-2 border-slate-200 rounded-2xl px-6 py-4 font-bold text-lg text-slate-700 outline-none focus:border-emerald-500 focus:bg-white focus:shadow-lg transition-all placeholder:text-slate-400"
+                                                placeholder="Add a step (e.g., 'Sketch ideas')"
+                                                value={newStepTitle}
+                                                onChange={e => setNewStepTitle(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleAddStep()}
+                                                autoFocus
+                                            />
+                                            <button
+                                                onClick={handleAddStep}
+                                                disabled={!newStepTitle.trim()}
+                                                className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl font-black shadow-xl shadow-emerald-500/30 transition-all disabled:opacity-50 hover:-translate-y-1"
+                                            >
+                                                <Plus size={28} />
                                             </button>
                                         </div>
-                                    ))}
-                                </div>
-                                <div className="p-6 bg-white/80 border-t border-slate-100 flex gap-4 backdrop-blur-md">
-                                    <input
-                                        className="flex-1 bg-slate-50 border-2 border-slate-200 rounded-2xl px-6 py-4 font-bold text-lg text-slate-700 outline-none focus:border-emerald-500 focus:bg-white focus:shadow-lg transition-all placeholder:text-slate-400"
-                                        placeholder="Add a step (e.g., 'Sketch ideas')"
-                                        value={newStepTitle}
-                                        onChange={e => setNewStepTitle(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && handleAddStep()}
-                                        autoFocus
-                                    />
-                                    <button
-                                        onClick={handleAddStep}
-                                        disabled={!newStepTitle.trim()}
-                                        className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-2xl font-black shadow-xl shadow-emerald-500/30 transition-all disabled:opacity-50 hover:-translate-y-1"
-                                    >
-                                        <Plus size={28} />
-                                    </button>
-                                </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}

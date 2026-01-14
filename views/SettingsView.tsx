@@ -16,6 +16,7 @@ export const SettingsView = () => {
     const { settings: globalSettings, teamMembers } = useAppContext();
     const { can, roles: authRoles, createSecondaryUser: createAuthUser, userProfile, user } = useAuth();
     const [settings, setSettings] = useState<AppSettings>(globalSettings);
+    const [isDirty, setIsDirty] = useState(false);
     const [activeTab, setActiveTab] = useState<'general' | 'forms' | 'data' | 'team' | 'api'>('general');
     const [isImporting, setIsImporting] = useState(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(globalSettings.logoUrl || null);
@@ -47,9 +48,16 @@ export const SettingsView = () => {
 
     // Sync state when global settings change (Fixes persistence issue)
     useEffect(() => {
-        setSettings(globalSettings);
-        setLogoPreview(globalSettings.logoUrl);
-    }, [globalSettings]);
+        if (!isDirty) {
+            setSettings(globalSettings);
+            setLogoPreview(globalSettings.logoUrl);
+        }
+    }, [globalSettings, isDirty]);
+
+    const updateSettings = (newSettings: AppSettings) => {
+        setSettings(newSettings);
+        setIsDirty(true);
+    };
 
     // Team & Access State
     const [roles, setRoles] = useState<RoleDefinition[]>([]);
@@ -109,6 +117,7 @@ export const SettingsView = () => {
         try {
             // Explicitly save the current local state to the global doc, merging to avoid data loss
             await setDoc(doc(db, 'settings', 'global'), settings, { merge: true });
+            setIsDirty(false);
             alert('Settings saved successfully!');
         } catch (err: any) {
             console.error(err);
@@ -491,7 +500,7 @@ export const SettingsView = () => {
                                                 type="password"
                                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-emerald-500 outline-none font-mono text-sm"
                                                 value={settings.apiConfig?.googleApiKey || ''}
-                                                onChange={e => setSettings({ ...settings, apiConfig: { ...settings.apiConfig, googleApiKey: e.target.value } })}
+                                                onChange={e => updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, googleApiKey: e.target.value } })}
                                                 placeholder="AIzaSy..."
                                             />
                                         </div>
@@ -531,10 +540,10 @@ export const SettingsView = () => {
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">System Language</label>
                                 <div className="flex gap-3">
-                                    <button onClick={() => setSettings({ ...settings, language: 'en' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${settings.language === 'en' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
+                                    <button onClick={() => updateSettings({ ...settings, language: 'en' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${settings.language === 'en' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
                                         <span className="text-lg">🇺🇸</span> English
                                     </button>
-                                    <button onClick={() => setSettings({ ...settings, language: 'fr' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${settings.language === 'fr' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
+                                    <button onClick={() => updateSettings({ ...settings, language: 'fr' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${settings.language === 'fr' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
                                         <span className="text-lg">🇫🇷</span> Français
                                     </button>
                                 </div>
@@ -558,11 +567,11 @@ export const SettingsView = () => {
 
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Academy Name</label>
-                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.academyName} onChange={e => setSettings({ ...settings, academyName: e.target.value })} />
+                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.academyName} onChange={e => updateSettings({ ...settings, academyName: e.target.value })} />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Academic Year</label>
-                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.academicYear} onChange={e => setSettings({ ...settings, academicYear: e.target.value })} />
+                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.academicYear} onChange={e => updateSettings({ ...settings, academicYear: e.target.value })} />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Academy Logo</label>
@@ -581,11 +590,11 @@ export const SettingsView = () => {
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Receipt Contact Info</label>
-                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.receiptContact} onChange={e => setSettings({ ...settings, receiptContact: e.target.value })} />
+                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.receiptContact} onChange={e => updateSettings({ ...settings, receiptContact: e.target.value })} />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Receipt Footer</label>
-                                <textarea className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white h-20 focus:border-blue-500 outline-none" value={settings.receiptFooter} onChange={e => setSettings({ ...settings, receiptFooter: e.target.value })} />
+                                <textarea className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white h-20 focus:border-blue-500 outline-none" value={settings.receiptFooter} onChange={e => updateSettings({ ...settings, receiptFooter: e.target.value })} />
                             </div>
                         </div>
                     </div>

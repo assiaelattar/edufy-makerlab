@@ -14,7 +14,12 @@ import { LeadProfileModal } from './marketing/LeadProfileModal'; // New Modal
 import { GrowthWizardModal } from './marketing/GrowthWizardModal'; // New Wizard
 import { CampaignKitModal } from './marketing/CampaignKitModal'; // New Kit Modal
 
-export const MarketingView = () => {
+
+interface MarketingViewProps {
+    onEnrollLead?: (lead: Lead) => void;
+}
+
+export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) => {
     const { marketingPosts, campaigns, leads, programs, students, bookings } = useAppContext(); // Get students for unified view
     const { userProfile, can } = useAuth();
     const [activeTab, setActiveTab] = useState<'content' | 'campaigns' | 'leads' | 'upsell'>('content');
@@ -579,6 +584,7 @@ export const MarketingView = () => {
                         isOpen={!!selectedLeadForProfile}
                         onClose={() => setSelectedLeadForProfile(null)}
                         lead={selectedLeadForProfile}
+                        onEnroll={() => onEnrollLead && onEnrollLead(selectedLeadForProfile)}
                     />
                 )
             }

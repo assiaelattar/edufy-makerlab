@@ -1,19 +1,30 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays } from 'lucide-react'; // Added CalendarDays
+import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays, Percent, Printer, Tablet } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Modal } from '../components/Modal';
 import { formatCurrency } from '../utils/helpers';
 import { addDoc, collection, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Program, ProgramPack, Grade, Group } from '../types';
+import { Program, ProgramPack, Grade, Group, Lead } from '../types';
 import { useReactToPrint } from 'react-to-print';
 import { FormTemplateRenderer } from '../components/enrollment/FormTemplateRenderer';
 import { QRCodeSVG } from 'qrcode.react';
-import { Printer, Tablet, Copy, ArrowLeft } from 'lucide-react';
+import { Copy, ArrowLeft, UserPlus, User } from 'lucide-react';
 
-export const ProgramsView = () => {
-  const { programs, navigateTo } = useAppContext();
+import { ProgramDetailsView } from './ProgramDetailsView';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../services/firebase';
+import { compressImage } from '../utils/image-compression';
+import { Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+
+interface ProgramsViewProps {
+  onEnrollLead?: (lead: Lead) => void;
+}
+
+export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
+  const { programs, navigateTo, leads } = useAppContext();
   const [isProgramModalOpen, setProgramModalOpen] = useState(false);
+  const [viewDetailProgramId, setViewDetailProgramId] = useState<string | null>(null); // NEW: For Detail Modal
   const [isEditingProgram, setIsEditingProgram] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
 
@@ -26,6 +37,57 @@ export const ProgramsView = () => {
     contentRef: printComponentRef,
     documentTitle: `Inscription_${printTargetProgram?.name || 'Form'}`,
   });
+
+  // Image Upload State
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'thumbnailUrl' | 'partnerLogoUrl') => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    if (!storage) {
+      alert("Firebase Storage is not initialized.");
+      return;
+    }
+    const file = e.target.files[0];
+    const target = e.target; // Capture target to reset value
+
+    // 20s Timeout Safety
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Upload timed out")), 20000)
+    );
+
+    try {
+      setUploadingField(field);
+
+      const type = field === 'thumbnailUrl' ? 'Thumbnail' : 'Logo';
+      console.log(`[Upload] Starting ${type} upload...`);
+
+      // Race between Upload/Compress and Timeout
+      const url = await Promise.race([
+        (async () => {
+          // Compress
+          console.log(`[Upload] Compressing ${type}...`);
+          const compressedBlob = await compressImage(file, 800, 0.82);
+
+          // Upload
+          console.log(`[Upload] Uploading ${type} to Firebase...`);
+          const storageRef = ref(storage, `programs/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`);
+          await uploadBytes(storageRef, compressedBlob);
+
+          return await getDownloadURL(storageRef);
+        })(),
+        timeoutPromise
+      ]) as string;
+
+      console.log(`[Upload] Success: ${url}`);
+      setProgramForm(prev => ({ ...prev, [field]: url }));
+    } catch (error) {
+      console.error("[Upload] Failed:", error);
+      alert('Upload failed or timed out. Please check your connection and try again.');
+    } finally {
+      setUploadingField(null);
+      target.value = ''; // Reset input so same file can be selected again
+    }
+  };
 
   const triggerPrint = (program: Program) => {
     setPrintTargetProgram(program);
@@ -45,18 +107,21 @@ export const ProgramsView = () => {
     packs: [],
     grades: [],
     themeColor: 'blue',
-    duration: ''
+    duration: '',
+    paymentTerms: []
   };
   const [programForm, setProgramForm] = useState<Partial<Program>>(initialProgramForm);
   const [tempPack, setTempPack] = useState<ProgramPack>({ name: '', workshopsPerWeek: 1, priceAnnual: 0, priceTrimester: 0, price: 0 });
   const [tempGradeName, setTempGradeName] = useState('');
   const [tempGroup, setTempGroup] = useState<Group>({ id: '', name: '', day: 'Monday', time: '10:00' });
+  const [newPaymentTerm, setNewPaymentTerm] = useState('');
 
   // Inline editing state
   const [editingGradeId, setEditingGradeId] = useState<string | null>(null);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editGradeName, setEditGradeName] = useState('');
   const [editGroup, setEditGroup] = useState<Partial<Group>>({});
+  const [editingPackIndex, setEditingPackIndex] = useState<number | null>(null);
 
   const [activeTab, setActiveTab] = useState<'details' | 'makerpro'>('details');
 
@@ -188,8 +253,23 @@ export const ProgramsView = () => {
 
   const colorOptions = ['blue', 'purple', 'emerald', 'amber', 'rose', 'cyan', 'slate'];
 
+  // Render Full Page Details if selected
+  if (viewDetailProgramId) {
+    return (
+      <ProgramDetailsView
+        programIdProp={viewDetailProgramId}
+        onEnrollLead={(lead) => {
+          setViewDetailProgramId(null);
+          if (onEnrollLead) onEnrollLead(lead);
+        }}
+        onClose={() => setViewDetailProgramId(null)}
+        onPrintProgram={triggerPrint}
+      />
+    );
+  }
+
   return (
-    <div className="space-y-8 pb-32 md:pb-8 h-full flex flex-col">
+    <div className="space-y-8 pb-32 md:pb-8 md:h-full flex flex-col">
 
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900/50 backdrop-blur-xl p-6 rounded-3xl border border-slate-800 gap-4 shadow-xl">
@@ -206,13 +286,13 @@ export const ProgramsView = () => {
       </div>
 
       {/* Programs Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 overflow-y-auto pb-4 px-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 md:overflow-y-auto pb-4 px-1">
         {programs.map(program => {
           const theme = program.themeColor || 'blue';
           return (
-            <div key={program.id} className={`bg-slate-900/40 backdrop-blur-md border rounded-3xl overflow-hidden flex flex-col relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${getBorderColor(theme)} ${getGlowColor(theme)}`}>
+            <div key={program.id} className={`bg-slate-900/40 backdrop-blur-md border rounded-2xl md:rounded-3xl overflow-hidden flex flex-col relative group transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl ${getBorderColor(theme)} ${getGlowColor(theme)}`}>
               {/* Card Header */}
-              <div className="p-6 pb-4 border-b border-white/5 relative bg-gradient-to-b from-white/5 to-transparent">
+              <div className="p-5 md:p-6 pb-4 border-b border-white/5 relative bg-gradient-to-b from-white/5 to-transparent">
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex flex-wrap gap-2">
                     {/* Type Badge */}
@@ -233,70 +313,103 @@ export const ProgramsView = () => {
                         Adults 18+
                       </span>
                     )}
+                    {program.discountAvailable && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider border mb-1 bg-red-500/10 text-red-500 border-red-500/20 animate-pulse">
+                        <Percent size={10} /> PROMO
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-1 -mr-2 -mt-2">
-                    <button onClick={() => { setPrintTargetProgram(program); triggerPrint(program); }} title="Print Enrollment Form" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                    <button onClick={() => { setPrintTargetProgram(program); triggerPrint(program); }} title="Print Enrollment Form" className="p-3 md:p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors active:scale-90">
                       <Printer size={18} />
                     </button>
-                    <button onClick={() => setQrProgram(program)} title="Kiosk Mode" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                    <button onClick={() => setQrProgram(program)} title="Kiosk Mode" className="p-3 md:p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors active:scale-90">
                       <Tablet size={18} />
                     </button>
-                    <button onClick={() => openEditProgram(program)} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
+                    <button onClick={() => openEditProgram(program)} className="p-3 md:p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors active:scale-90">
                       <Pencil size={18} />
                     </button>
                   </div>
                 </div>
-                <h3 className="text-xl font-black text-white leading-tight">{program.name}</h3>
-                <p className="text-sm text-slate-400 mt-2 line-clamp-2 leading-relaxed">{program.description || "No description provided."}</p>
+                <h3 onClick={() => setViewDetailProgramId(program.id)} className="text-lg md:text-xl font-black text-white leading-tight cursor-pointer hover:text-blue-400 transition-colors">{program.name}</h3>
+                <p onClick={() => setViewDetailProgramId(program.id)} className="text-sm text-slate-400 mt-2 line-clamp-2 leading-relaxed cursor-pointer hover:text-slate-300 transition-colors">{program.description || "No description provided."}</p>
+                <button onClick={() => setViewDetailProgramId(program.id)} className="absolute bottom-4 right-4 text-xs font-bold text-slate-500 hover:text-white bg-slate-800/50 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition-all opacity-0 group-hover:opacity-100 uppercase tracking-wider">
+                  View Details
+                </button>
               </div>
 
               {/* Card Body */}
-              <div className="p-6 flex-1 space-y-6">
+              <div className="p-5 md:p-6 flex-1 space-y-6">
                 {/* Pricing Section */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Pricing & Plans</p>
                   <div className="space-y-2">
                     {program.packs?.map((pack, idx) => (
                       <div key={idx} className="bg-slate-950/50 border border-white/5 rounded-xl p-3 flex justify-between items-center group/pack hover:border-white/10 transition-colors">
-                        <span className="font-bold text-slate-300 text-sm">{pack.name}</span>
+                        <span className="font-bold text-slate-300 text-xs md:text-sm">{pack.name}</span>
                         <span className={`font-black text-sm ${getPriceColor(theme)}`}>
-                          {program.type === 'Regular Program' ? formatCurrency(pack.priceAnnual || 0) : formatCurrency(pack.price || 0)}
+                          {pack.promoPrice ? (
+                            <span className="flex items-center gap-2">
+                              {program.discountAvailable && <span className="text-[10px] text-slate-500 line-through font-normal">{formatCurrency(pack.priceAnnual || pack.price || 0)}</span>}
+                              {formatCurrency(pack.promoPrice)}
+                            </span>
+                          ) : (
+                            formatCurrency(pack.priceAnnual || pack.price || 0)
+                          )}
                         </span>
                       </div>
                     ))}
-                    {(!program.packs || program.packs.length === 0) && <div className="text-xs text-slate-600 italic">No pricing plans configured.</div>}
+                    {(!program.packs || program.packs.length === 0) && <div className="text-slate-500 italic text-xs">No active plans</div>}
                   </div>
                 </div>
 
-                {/* Schedule Section */}
-                {program.grades && program.grades.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Schedule</p>
-                    <div className="space-y-3">
-                      {program.grades.map(g => (
-                        <div key={g.id}>
-                          <div className="flex items-center gap-2 mb-2">
+                {/* Active Schedule Section */}
+                <div className="space-y-3 max-h-48 overflow-y-auto custom-scrollbar">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Schedule</p>
+                  {program.grades?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {program.grades.map(grade => (
+                        grade.groups.map(group => (
+                          <div key={group.id} className={`px-3 py-1.5 rounded-lg border border-white/5 text-xs text-slate-300 font-medium transition-all cursor-default flex items-center gap-2 ${getChipHoverStyle(theme)}`}>
                             <div className={`w-1.5 h-1.5 rounded-full ${getDotColor(theme)}`}></div>
-                            <span className="text-xs font-bold text-slate-300">{g.name}</span>
+                            {group.day.substring(0, 3)} {group.time}
                           </div>
-                          <div className="flex flex-wrap gap-2 pl-3.5">
-                            {g.groups?.map(grp => (
-                              <button
-                                key={grp.id}
-                                onClick={() => navigateTo('classes', { classId: { pId: program.id, gId: g.id, grpId: grp.id } })}
-                                className={`text-[10px] px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all active:scale-95 bg-slate-800/50 border-slate-700 text-slate-300 ${getChipHoverStyle(theme)}`}
-                              >
-                                <Clock size={12} className={theme === 'purple' ? 'text-purple-400' : 'text-blue-400'} />
-                                <span className="font-semibold">{grp.day.slice(0, 3)} {grp.time}</span>
-                              </button>
-                            ))}
-                            {(!g.groups || g.groups.length === 0) && <span className="text-[10px] text-slate-600 italic">No groups.</span>}
-                          </div>
-                        </div>
+                        ))
                       ))}
                     </div>
+                  ) : (
+                    <div className="text-slate-500 italic text-xs">No classes scheduled</div>
+                  )}
+                </div>
+
+                {/* Waiting List / Leads Section */}
+                <div className="space-y-3 pt-4 border-t border-white/5 max-h-48 overflow-y-auto custom-scrollbar">
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Waiting List</p>
+                    {/* Calculate Leads Count */}
+                    <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      {leads.filter(l => (l.programId === program.id || l.interests?.includes(program.name)) && l.status !== 'converted' && l.status !== 'closed').length} Pending
+                    </span>
                   </div>
-                )}
+                  {leads.filter(l => (l.programId === program.id || l.interests?.includes(program.name)) && l.status !== 'converted' && l.status !== 'closed').slice(0, 3).map(lead => (
+                    <div key={lead.id} className="flex justify-between items-center text-xs bg-slate-950/30 p-2 rounded-lg border border-slate-800/50">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full bg-slate-800 text-slate-500 flex items-center justify-center font-bold text-[10px]">{lead.name.charAt(0)}</div>
+                        <span className="text-slate-300 truncate max-w-[100px]">{lead.name}</span>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent opening details
+                          if (onEnrollLead) onEnrollLead(lead);
+                        }}
+                        className="text-[10px] font-bold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-500 px-2 py-1 rounded transition-colors"
+                      >
+                        Enroll
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
               </div>
             </div>
           );
@@ -322,7 +435,13 @@ export const ProgramsView = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Type</label>
-                  <select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-blue-500" value={programForm.type} onChange={e => setProgramForm({ ...programForm, type: e.target.value as any })}><option>Regular Program</option><option>Holiday Camp</option><option>Workshop</option></select>
+                  <select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-blue-500" value={programForm.type} onChange={e => setProgramForm({ ...programForm, type: e.target.value as any })}>
+                    <option>Regular Program</option>
+                    <option>Holiday Camp</option>
+                    <option>Camp</option>
+                    <option>Workshop</option>
+                    <option>Internship</option>
+                  </select>
                 </div>
 
                 <div>
@@ -348,9 +467,150 @@ export const ProgramsView = () => {
                   </div>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="md:col-span-2 space-y-4">
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Description</label>
                   <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white h-24 text-sm focus:border-blue-500 outline-none resize-none" value={programForm.description} onChange={e => setProgramForm({ ...programForm, description: e.target.value })} placeholder="Short description..." />
+                </div>
+
+                {/* VISUAL ASSETS */}
+                <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                  <div className="col-span-2 text-xs font-bold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-2">
+                    <image className="w-4 h-4" /> Visual Assets
+                  </div>
+
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">
+                      Background Thumbnail
+                      <span className="block text-[10px] text-slate-600 font-normal mt-0.5">Rec: 800x800px or 1200x630px. Max 500KB.</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs pr-8"
+                          placeholder="https://..." value={programForm.thumbnailUrl || ''} onChange={e => setProgramForm({ ...programForm, thumbnailUrl: e.target.value })} />
+                        {programForm.thumbnailUrl && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded overflow-hidden border border-slate-700">
+                            <img src={programForm.thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                      </div>
+                      <label className={`cursor-pointer p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors ${uploadingField === 'thumbnailUrl' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        {uploadingField === 'thumbnailUrl' ? <Loader2 size={16} className="animate-spin text-blue-500" /> : <Upload size={16} className="text-slate-400" />}
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'thumbnailUrl')} disabled={!!uploadingField} />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Brochure PDF URL</label>
+                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs"
+                      placeholder="https://..." value={programForm.brochureUrl || ''} onChange={e => setProgramForm({ ...programForm, brochureUrl: e.target.value })} />
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Partner Logo URL</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs pr-8"
+                          placeholder="https://..." value={programForm.partnerLogoUrl || ''} onChange={e => setProgramForm({ ...programForm, partnerLogoUrl: e.target.value })} />
+                        {programForm.partnerLogoUrl && (
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded overflow-hidden border border-slate-700 bg-white p-0.5">
+                            <img src={programForm.partnerLogoUrl} alt="Preview" className="w-full h-full object-contain" />
+                          </div>
+                        )}
+                      </div>
+                      <label className={`cursor-pointer p-2 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors ${uploadingField === 'partnerLogoUrl' ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        {uploadingField === 'partnerLogoUrl' ? <Loader2 size={16} className="animate-spin text-blue-500" /> : <Upload size={16} className="text-slate-400" />}
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'partnerLogoUrl')} disabled={!!uploadingField} />
+                      </label>
+                    </div>
+                  </div>
+                  <div className="col-span-2 md:col-span-1">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Partner Name</label>
+                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs"
+                      placeholder="e.g. Algorora Center" value={programForm.partnerName || ''} onChange={e => setProgramForm({ ...programForm, partnerName: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* NEW: Payment Facilities */}
+                <div className="md:col-span-2 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                  <label className="block text-xs font-bold text-slate-400 mb-3 uppercase tracking-wide">Payment Terms / Facilities</label>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        placeholder="e.g. Advance 50%"
+                        className="flex-1 p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none"
+                        value={newPaymentTerm}
+                        onChange={e => setNewPaymentTerm(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const val = newPaymentTerm.trim();
+                            if (val) {
+                              setProgramForm(prev => ({ ...prev, paymentTerms: [...(prev.paymentTerms || []), val] }));
+                              setNewPaymentTerm('');
+                            }
+                          }
+                        }}
+                      />
+                      <button type="button" className="px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold" onClick={() => {
+                        const val = newPaymentTerm.trim();
+                        if (val) {
+                          setProgramForm(prev => ({ ...prev, paymentTerms: [...(prev.paymentTerms || []), val] }));
+                          setNewPaymentTerm('');
+                        }
+                      }}>Add</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {programForm.paymentTerms?.map((term, i) => (
+                        <div key={i} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 px-3 py-1.5 rounded-lg">
+                          <span className="text-sm text-slate-300">{term}</span>
+                          <button onClick={() => {
+                            const newTerms = [...(programForm.paymentTerms || [])];
+                            newTerms.splice(i, 1);
+                            setProgramForm({ ...programForm, paymentTerms: newTerms });
+                          }} className="text-slate-500 hover:text-red-400"><X size={14} /></button>
+                        </div>
+                      ))}
+                      {(!programForm.paymentTerms || programForm.paymentTerms.length === 0) && (
+                        <p className="text-xs text-slate-600 italic">No custom payment terms defined. Defaults (Annual/Trimester) will be used if empty.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* NEW: Discount / Promo Configuration */}
+                <div className="md:col-span-2 bg-indigo-950/20 p-4 rounded-xl border border-indigo-500/30">
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-xs font-bold text-indigo-300 uppercase tracking-wide flex items-center gap-2">
+                      <Percent size={14} /> Promotional Discount
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-indigo-400 font-medium">{programForm.discountAvailable ? 'Enabled' : 'Disabled'}</span>
+                      <button
+                        onClick={() => setProgramForm({ ...programForm, discountAvailable: !programForm.discountAvailable })}
+                        className={`w-10 h-5 rounded-full transition-colors relative ${programForm.discountAvailable ? 'bg-indigo-500' : 'bg-slate-700'}`}
+                      >
+                        <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${programForm.discountAvailable ? 'left-6' : 'left-1'}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {programForm.discountAvailable && (
+                    <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-2">
+                      <div className="flex flex-col justify-center">
+                        <p className="text-xs text-indigo-300 italic">
+                          Enable this to activate promo pricing. Set the specific "Promo Price" for each Pack in the <strong>Pricing Plans</strong> section below.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Offer Ends On</label>
+                        <input
+                          type="date"
+                          className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-indigo-500 outline-none"
+                          value={programForm.discountEndDate || ''}
+                          onChange={e => setProgramForm({ ...programForm, discountEndDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -439,26 +699,49 @@ export const ProgramsView = () => {
               <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-800">
                 <h4 className="text-sm font-black text-white uppercase tracking-wide mb-3">Pricing Plans</h4>
                 <div className="grid grid-cols-12 gap-2 mb-3">
-                  <div className="col-span-4"><input placeholder="Plan Name" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.name} onChange={e => setTempPack({ ...tempPack, name: e.target.value })} /></div>
+                  <div className="col-span-3"><input placeholder="Plan Name" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.name} onChange={e => setTempPack({ ...tempPack, name: e.target.value })} /></div>
                   {programForm.type === 'Regular Program' ? (
                     <>
-                      <div className="col-span-3"><input type="number" placeholder="Annual" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.priceAnnual || ''} onChange={e => setTempPack({ ...tempPack, priceAnnual: Number(e.target.value) })} /></div>
-                      <div className="col-span-3"><input type="number" placeholder="Trimester" className="w-full p-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.priceTrimester || ''} onChange={e => setTempPack({ ...tempPack, priceTrimester: Number(e.target.value) })} /></div>
+                      <div className="col-span-2"><input type="number" placeholder="Annual" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.priceAnnual || ''} onChange={e => setTempPack({ ...tempPack, priceAnnual: Number(e.target.value) })} /></div>
+                      <div className="col-span-2"><input type="number" placeholder="Trimester" className="w-full p-2 bg-slate-900 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.priceTrimester || ''} onChange={e => setTempPack({ ...tempPack, priceTrimester: Number(e.target.value) })} /></div>
                     </>
                   ) : (
-                    <div className="col-span-6"><input type="number" placeholder="Total Price" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.price || ''} onChange={e => setTempPack({ ...tempPack, price: Number(e.target.value) })} /></div>
+                    <div className="col-span-4"><input type="number" placeholder="Total Price" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs" value={tempPack.price || ''} onChange={e => setTempPack({ ...tempPack, price: Number(e.target.value) })} /></div>
                   )}
-                  <div className="col-span-2">
-                    <button onClick={() => { if (tempPack.name) { setProgramForm(prev => ({ ...prev, packs: [...(prev.packs || []), tempPack] })); setTempPack({ name: '', priceAnnual: 0, priceTrimester: 0, price: 0 }); } }} className="w-full h-full bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition-colors">Add</button>
+                  <div className="col-span-3"><input type="number" placeholder="Promo Price (Optional)" className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs border-dashed border-slate-700" value={tempPack.promoPrice || ''} onChange={e => setTempPack({ ...tempPack, promoPrice: Number(e.target.value) })} /></div>
+                  <div className="col-span-2 flex gap-1">
+                    {editingPackIndex !== null ? (
+                      <>
+                        <button onClick={() => {
+                          if (tempPack.name && programForm.packs) {
+                            const updatedPacks = [...programForm.packs];
+                            updatedPacks[editingPackIndex] = tempPack;
+                            setProgramForm({ ...programForm, packs: updatedPacks });
+                            setTempPack({ name: '', priceAnnual: 0, priceTrimester: 0, price: 0, promoPrice: 0 });
+                            setEditingPackIndex(null);
+                          }
+                        }} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">Save</button>
+                        <button onClick={() => {
+                          setTempPack({ name: '', priceAnnual: 0, priceTrimester: 0, price: 0, promoPrice: 0 });
+                          setEditingPackIndex(null);
+                        }} className="w-8 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"><X size={14} /></button>
+                      </>
+                    ) : (
+                      <button onClick={() => { if (tempPack.name) { setProgramForm(prev => ({ ...prev, packs: [...(prev.packs || []), tempPack] })); setTempPack({ name: '', priceAnnual: 0, priceTrimester: 0, price: 0, promoPrice: 0 }); } }} className="w-full h-full bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold transition-colors">Add</button>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
                   {programForm.packs?.map((p, i) => (
-                    <div key={i} className="flex justify-between text-xs text-slate-300 bg-slate-950 p-3 rounded-xl border border-slate-800/50 items-center group">
-                      <span className="font-bold">{p.name}</span>
-                      <div className="flex items-center gap-4">
-                        <span className="text-emerald-400 font-mono">{p.priceAnnual ? `${formatCurrency(p.priceAnnual)}` : formatCurrency(p.price || 0)}</span>
-                        <button onClick={() => { const newRes = [...(programForm.packs || [])]; newRes.splice(i, 1); setProgramForm({ ...programForm, packs: newRes }); }} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                    <div key={i} className={`flex justify-between text-xs text-slate-300 p-3 rounded-xl border items-center group ${editingPackIndex === i ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-950 border-slate-800/50'}`}>
+                      <div>
+                        <span className="font-bold block">{p.name}</span>
+                        {p.promoPrice && p.promoPrice > 0 && <span className="text-[10px] text-red-400 font-bold">Promo: {formatCurrency(p.promoPrice)}</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-emerald-400 font-mono mr-2">{p.priceAnnual ? `${formatCurrency(p.priceAnnual)}` : formatCurrency(p.price || 0)}</span>
+                        <button onClick={() => { setTempPack(p); setEditingPackIndex(i); }} className="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors"><Pencil size={14} /></button>
+                        <button onClick={() => { const newRes = [...(programForm.packs || [])]; newRes.splice(i, 1); setProgramForm({ ...programForm, packs: newRes }); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   ))}
@@ -531,6 +814,46 @@ export const ProgramsView = () => {
           </div>
         </div>
       )}
+      {/* QR Code Modal for Kiosk */}
+      {qrProgram && (
+        <Modal isOpen={!!qrProgram} onClose={() => setQrProgram(null)} title="Kiosk Access Link" size="md">
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-bold text-slate-900">{qrProgram.name}</h3>
+            <p className="text-sm text-slate-500">Scan to fill enrollment form</p>
+          </div>
+
+          <div className="flex justify-center mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <QRCodeSVG value={`${baseUrl}/enroll?program=${qrProgram.id}`} size={200} />
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => window.open(`${baseUrl}/enroll?program=${qrProgram.id}`, '_blank')}
+              className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors"
+            >
+              <Tablet size={18} /> Open Kiosk Mode
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${baseUrl}/enroll?program=${qrProgram.id}`);
+                alert('Link copied!');
+              }}
+              className="w-full py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
+            >
+              <Copy size={18} /> Copy Link
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Hidden Print Renderer */}
+      <div style={{ display: 'none' }}>
+        <div ref={printComponentRef}>
+          {printTargetProgram && (
+            <FormTemplateRenderer program={printTargetProgram} />
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -30,7 +30,7 @@ export function PrivateRoute({ requiredRole, children }: Props) {
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 mb-2">Access Restricted</h2>
                     <p className="text-slate-600 mb-6">
-                        {authError || 'This portal is reserved for participants of the MakerPro (Adults) program.'}
+                        {authError || (userRole === 'parent' ? 'Access to this area is restricted.' : 'This portal is reserved for participants of the MakerPro (Adults) program.')}
                     </p>
                     <button
                         onClick={() => signOut()}

@@ -39,7 +39,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
         }
     }, [isOpen, availableGrades, availableGroups]);
 
-    const tabs = ['details', 'resources', 'targeting', 'publishing'];
+    const tabs = ['details', 'resources', 'workflow', 'targeting', 'publishing'];
     const currentTabIndex = tabs.indexOf(activeModalTab);
     const isFirstTab = currentTabIndex === 0;
     const isLastTab = currentTabIndex === tabs.length - 1;
@@ -56,12 +56,32 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
         }
     };
 
+    // Helper to add resource to a specific step
+    const addStepResource = (stepId: string, title: string, type: 'link' | 'video' | 'file' | 'image', url: string) => {
+        const currentResources = templateForm.stepResources?.[stepId] || [];
+        const newResource = { id: Date.now().toString(), title, type, url };
+        const updatedStepResources = {
+            ...templateForm.stepResources,
+            [stepId]: [...currentResources, newResource]
+        };
+        setTemplateForm({ ...templateForm, stepResources: updatedStepResources });
+    };
+
+    const removeStepResource = (stepId: string, resId: string) => {
+        const currentResources = templateForm.stepResources?.[stepId] || [];
+        const updatedStepResources = {
+            ...templateForm.stepResources,
+            [stepId]: currentResources.filter(r => r.id !== resId)
+        };
+        setTemplateForm({ ...templateForm, stepResources: updatedStepResources });
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "✏️ Edit Project" : "✨ Create New Project"} size="xl">
             <form onSubmit={handleSaveTemplate} className="flex flex-col h-[80vh] md:h-auto">
                 {/* Header with Import */}
                 <div className="flex items-center justify-between border-b border-slate-200 shrink-0 px-6 pt-2">
-                    <div className="flex overflow-x-auto">
+                    <div className="flex overflow-x-auto no-scrollbar">
                         {tabs.map(tab => (
                             <button
                                 key={tab}
@@ -165,7 +185,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                             <option key={wf.id} value={wf.id}>{wf.name}</option>
                                         ))}
                                     </select>
-                                    <p className="text-xs text-slate-400 mt-1">If selected, students will not see the workflow selection screen.</p>
+                                    <p className="text-xs text-slate-400 mt-1">If selected, you can customize steps in the "Workflow" tab.</p>
                                 </div>
                             </div>
 
@@ -187,8 +207,9 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                         <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
                             <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200">
                                 <h4 className={studioClass("text-sm font-bold mb-4 flex items-center gap-2", STUDIO_THEME.text.primary)}>
-                                    <Database size={16} className="text-indigo-500" /> Attached Resources
+                                    <Database size={16} className="text-indigo-500" /> Attached Resources (General)
                                 </h4>
+                                <p className="text-xs text-slate-500 mb-4">These resources are available throughout the entire mission.</p>
 
                                 <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
                                     {templateForm.resources?.map((res, idx) => (
@@ -211,7 +232,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                     ))}
                                     {(!templateForm.resources || templateForm.resources.length === 0) && (
                                         <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl bg-white">
-                                            <p className="text-sm text-slate-400 font-medium">No resources added yet.</p>
+                                            <p className="text-sm text-slate-400 font-medium">No general resources added yet.</p>
                                         </div>
                                     )}
                                 </div>
@@ -228,6 +249,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                                 <option value="link">Link</option>
                                                 <option value="video">Video</option>
                                                 <option value="file">File</option>
+                                                <option value="image">Image</option>
                                             </select>
                                         </div>
                                         <div className="md:col-span-5 flex gap-2">
@@ -257,6 +279,115 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                     className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-colors flex items-center gap-2"
                                 >
                                     ← Back: Details
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleNext}
+                                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2"
+                                >
+                                    Next: Workflow →
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* WORKFLOW TAB (NEW) */}
+                    {activeModalTab === 'workflow' && (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                            {!templateForm.defaultWorkflowId ? (
+                                <div className="text-center py-12 p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-300">
+                                    <p className="text-slate-400 font-bold mb-4">No specific workflow selected for this mission.</p>
+                                    <button
+                                        onClick={() => setActiveModalTab('details')}
+                                        className="text-indigo-600 font-bold hover:underline"
+                                    >
+                                        Go to Details and select a Default Workflow first.
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-8">
+                                    <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center gap-3 text-indigo-800">
+                                        <Rocket size={20} />
+                                        <span className="font-bold">Customizing: {processTemplates.find(t => t.id === templateForm.defaultWorkflowId)?.name || 'Unknown Workflow'}</span>
+                                    </div>
+
+                                    {/* Steps List */}
+                                    <div className="space-y-6">
+                                        {processTemplates.find(t => t.id === templateForm.defaultWorkflowId)?.phases.map((phase: any, index: number) => (
+                                            <div key={phase.id} className="bg-white rounded-2xl border-2 border-slate-100 overflow-hidden shadow-sm">
+                                                {/* Step Header */}
+                                                <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">{index + 1}</span>
+                                                        <span className="font-bold text-slate-700">{phase.name}</span>
+                                                        <span className="text-xs bg-slate-200 px-2 py-1 rounded text-slate-500">{phase.resources?.length || 0} Default Tools</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Custom Resources Area */}
+                                                <div className="p-4">
+                                                    <p className="text-xs font-bold text-slate-400 uppercase mb-3">Mission-Specific Resources</p>
+
+                                                    {/* Existing Custom Resources */}
+                                                    <div className="space-y-2 mb-4">
+                                                        {templateForm.stepResources?.[phase.id]?.map((res) => (
+                                                            <div key={res.id} className="flex items-center justify-between bg-indigo-50 p-3 rounded-lg border border-indigo-100">
+                                                                <div className="flex items-center gap-3">
+                                                                    {res.type === 'video' ? <Play size={14} className="text-red-500" /> : res.type === 'image' ? <Upload size={14} className="text-purple-500" /> : <ExternalLink size={14} className="text-blue-500" />}
+                                                                    <span className="text-sm font-bold text-indigo-900">{res.title}</span>
+                                                                    <span className="text-xs text-indigo-400 truncate max-w-[150px]">{res.url}</span>
+                                                                </div>
+                                                                <button onClick={() => removeStepResource(phase.id, res.id)} className="text-indigo-300 hover:text-red-500"><X size={14} /></button>
+                                                            </div>
+                                                        ))}
+                                                        {(!templateForm.stepResources?.[phase.id] || templateForm.stepResources[phase.id].length === 0) && (
+                                                            <p className="text-xs text-slate-400 italic">No custom resources added for this step.</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Add Resource Small Form */}
+                                                    <div className="flex gap-2">
+                                                        <input id={`title-${phase.id}`} placeholder="Title" className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-400" />
+                                                        <select id={`type-${phase.id}`} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none">
+                                                            <option value="link">Link</option>
+                                                            <option value="image">Image</option>
+                                                            <option value="video">Video</option>
+                                                            <option value="file">File</option>
+                                                        </select>
+                                                        <input id={`url-${phase.id}`} placeholder="URL" className="flex-[2] p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-400" />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const titleInput = document.getElementById(`title-${phase.id}`) as HTMLInputElement;
+                                                                const typeInput = document.getElementById(`type-${phase.id}`) as HTMLSelectElement;
+                                                                const urlInput = document.getElementById(`url-${phase.id}`) as HTMLInputElement;
+
+                                                                if (titleInput.value && urlInput.value) {
+                                                                    addStepResource(phase.id, titleInput.value, typeInput.value as any, urlInput.value);
+                                                                    titleInput.value = '';
+                                                                    urlInput.value = '';
+                                                                }
+                                                            }}
+                                                            className="p-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg"
+                                                        >
+                                                            <Plus size={16} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Navigation Buttons */}
+                            <div className="flex justify-between gap-3 pt-6 mt-6 border-t border-slate-200">
+                                <button
+                                    type="button"
+                                    onClick={handlePrevious}
+                                    className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-colors flex items-center gap-2"
+                                >
+                                    ← Back: Resources
                                 </button>
                                 <button
                                     type="button"
@@ -346,7 +477,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                     onClick={handlePrevious}
                                     className="px-6 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-colors flex items-center gap-2"
                                 >
-                                    ← Back: Resources
+                                    ← Back: Workflow
                                 </button>
                                 <button
                                     type="button"

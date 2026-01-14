@@ -77,7 +77,16 @@ export const StudentDetailsView = ({
         e.preventDefault();
         if (!db || !student.id) return;
         try {
-            await updateDoc(doc(db, 'students', student.id), editFormData);
+            // Remove undefined values to prevent Firestore errors
+            const cleanData: any = {};
+            Object.keys(editFormData).forEach(key => {
+                const value = editFormData[key as keyof typeof editFormData];
+                if (value !== undefined) {
+                    cleanData[key] = value;
+                }
+            });
+
+            await updateDoc(doc(db, 'students', student.id), cleanData);
             setIsEditingStudent(false);
             alert("Student details updated successfully!");
         } catch (err: any) {
@@ -532,6 +541,34 @@ export const StudentDetailsView = ({
 
 
 
+    const handleImpersonate = () => {
+        if (!student.loginInfo?.email) {
+            alert("Student does not have login credentials.");
+            return;
+        }
+
+        // Create a bridge token payload
+        const payload = {
+            uid: student.loginInfo.uid || student.id,
+            email: student.loginInfo.email,
+            role: 'student',
+            name: student.name,
+            photoURL: null
+        };
+
+        const bridgeToken = btoa(JSON.stringify(payload));
+
+        // Determine SparkQuest URL 
+        // Logic: If on localhost, assume SparkQuest is on :3000 (standard vite dev port for 2nd app) or :5174? 
+        // Better: Use a config or assume localhost:3000 for dev, and production URL for prod.
+        const isLocal = window.location.hostname === 'localhost';
+        const sparkQuestUrl = isLocal
+            ? 'http://localhost:3000'
+            : 'https://sparkquest-makerlab.vercel.app';
+
+        window.open(`${sparkQuestUrl}/?token=${bridgeToken}`, '_blank');
+    };
+
     return (
         <div className="space-y-6 flex flex-col animate-in fade-in slide-in-from-right-4">
             <div className="relative rounded-3xl overflow-hidden border border-slate-800 shadow-2xl mb-8">
@@ -607,6 +644,9 @@ export const StudentDetailsView = ({
                     </div>
 
                     <div className="flex gap-3 w-full md:w-auto">
+                        <button onClick={handleImpersonate} title="Login as Student (SparkQuest)" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-900/30 transition-all hover:scale-105 active:scale-95">
+                            <Rocket size={18} />
+                        </button>
                         <button onClick={() => setViewMode('student_preview')} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95 text-sm font-bold">
                             <LayoutDashboard size={18} /> <span className="hidden sm:inline">Portal Preview</span>
                         </button>

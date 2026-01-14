@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, Calendar, CreditCard, Car, Bell, Phone, Clock, MapPin, CheckCircle2, ChevronRight, LogOut, Wallet, AlertCircle, Trophy, Star, Target, TrendingUp, Zap, BookOpen, Brain, Rocket, ChevronDown, Award, Code, Sparkles, ListChecks, Lock, Unlock, ClipboardList, Play, Send, Maximize2, ImageIcon, Link as LinkIcon, Quote, Filter } from 'lucide-react';
+import { User, Calendar, CreditCard, Car, Bell, Phone, Clock, MapPin, CheckCircle2, ChevronRight, LogOut, Wallet, AlertCircle, Trophy, Star, Target, TrendingUp, Zap, BookOpen, Brain, Rocket, ChevronDown, Award, Code, Sparkles, ListChecks, Lock, Unlock, ClipboardList, Play, Send, Maximize2, ImageIcon, Link as LinkIcon, Quote, Filter, X } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,29 +8,59 @@ import { db } from '../services/firebase';
 import { formatCurrency, formatDate } from '../utils/helpers';
 import { StudentProject, Payment, Enrollment } from '../types';
 import { getTheme } from '../utils/theme';
+import { ParentProjectModal } from './parent/ParentProjectModal';
+import { ProjectDetailsEnhanced } from '../sparkquest/components/ProjectDetailsEnhanced';
 
 export const ParentDashboardView = () => {
-    const { students, enrollments, payments, pickupQueue, settings, studentProjects, projectTemplates, badges } = useAppContext();
-    const { userProfile, signOut } = useAuth();
+    const { students, enrollments, payments, pickupQueue, settings, studentProjects, projectTemplates, badges, galleryItems } = useAppContext();
+    const { user, userProfile, signOut } = useAuth();
 
     const [notifyingPickup, setNotifyingPickup] = useState(false);
     const [selectedChildIndex, setSelectedChildIndex] = useState(0);
     const [expandedProject, setExpandedProject] = useState<string | null>(null);
+    const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+    const [selectedProject, setSelectedProject] = useState<StudentProject | null>(null);
+
+    const handleOpenProject = (project: StudentProject) => {
+        setSelectedProject(project);
+        setIsProjectModalOpen(true);
+    };
+
+    const handleCloseProject = () => {
+        setIsProjectModalOpen(false);
+        setSelectedProject(null);
+    };
+
     const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'completed' | 'submitted'>('all');
     const [filterStation, setFilterStation] = useState<string>('all');
-    const [activeTab, setActiveTab] = useState<'overview' | 'finance' | 'profile' | 'pickup'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'journey' | 'portfolio' | 'finance' | 'profile' | 'pickup' | 'gallery' | 'contact'>('overview');
+    const [selectedImage, setSelectedImage] = useState<any>(null);
+    const [localDismissedIds, setLocalDismissedIds] = useState<string[]>([]);
 
     // Identify Children
     const myChildren = useMemo(() => {
-        if (!userProfile?.email) return [];
-        return students.filter(s =>
-            s.email === userProfile.email ||
-            s.loginInfo?.email === userProfile.email ||
-            s.parentLoginInfo?.email === userProfile.email
-        );
-    }, [students, userProfile]);
+        if (!user?.email) return [];
+
+        return students.filter(s => {
+            const parentEmail = s.parentLoginInfo?.email?.toLowerCase();
+            const studentLoginEmail = s.loginInfo?.email?.toLowerCase();
+            const studentEmail = s.email?.toLowerCase();
+            const currentUserEmail = user.email?.toLowerCase();
+
+            return (
+                parentEmail === currentUserEmail ||
+                studentLoginEmail === currentUserEmail ||
+                studentEmail === currentUserEmail
+            );
+        });
+    }, [students, user]);
 
     const activeChild = myChildren[selectedChildIndex];
+
+    const handleSignOut = async () => {
+        await signOut();
+        window.location.href = '/';
+    };
 
     // Aggregate Financials
     const financialStatus = useMemo(() => {
@@ -44,15 +74,60 @@ export const ParentDashboardView = () => {
     const childData = useMemo(() => {
         if (!activeChild) return null;
 
-        const projects = studentProjects.filter(p => p.studentId === activeChild.id);
-        const completedProjects = projects.filter(p => p.status === 'published');
-        const submittedProjects = projects.filter(p => p.status === 'submitted');
-        const activeProjects = projects.filter(p => p.status === 'building' || p.status === 'testing' || p.status === 'planning' || p.status === 'changes_requested');
+        // Match by Firestore ID OR Auth UID (critical for linked accounts)
+        const projects = studentProjects.filter(p =>
+            p.studentId === activeChild.id ||
+            (activeChild.loginInfo?.uid && p.studentId === activeChild.loginInfo.uid)
+        );
+
+        // Helper for flexible status checking
+        const checkStatus = (p: any, status: string) => p.status?.toLowerCase() === status.toLowerCase();
+
+        const completedProjects = projects.filter(p => checkStatus(p, 'published'));
+
+        // Also fix other status checks just in case
+        const submittedProjects = projects.filter(p => checkStatus(p, 'submitted'));
+        const activeProjects = projects.filter(p =>
+            checkStatus(p, 'building') ||
+            checkStatus(p, 'testing') ||
+            checkStatus(p, 'planning') ||
+            checkStatus(p, 'changes_requested') ||
+            checkStatus(p, 'working on it') // Handle potential variations
+        );
 
         // Get assigned templates that haven't been started yet (future projects)
         const startedProjectTitles = projects.map(p => p.title);
         const futureProjects = projectTemplates
-            .filter(template => !startedProjectTitles.includes(template.title))
+            .filter(template => {
+                // 1. Exclude already started
+                if (startedProjectTitles.includes(template.title)) return false;
+
+                // 2. Student Specific Targeting (High Priority)
+                if (template.targetAudience?.students && template.targetAudience.students.length > 0) {
+                    return template.targetAudience.students.includes(activeChild.id);
+                }
+
+                // 3. Grade & Group Matching
+                // Get active enrollments for this child
+                const childEnrollments = enrollments.filter(e => e.studentId === activeChild.id && e.status === 'active');
+
+                // If template has specific grades, child must be enrolled in at least one
+                if (template.targetAudience?.grades && template.targetAudience.grades.length > 0) {
+                    const hasGradeMatch = childEnrollments.some(e => template.targetAudience?.grades?.includes(e.gradeId));
+                    if (!hasGradeMatch) return false;
+
+                    // If grade matches, check groups (if template restricts groups)
+                    if (template.targetAudience?.groups && template.targetAudience.groups.length > 0) {
+                        const hasGroupMatch = childEnrollments.some(e =>
+                            template.targetAudience?.grades?.includes(e.gradeId) && // Must match the grade constraint too
+                            (template.targetAudience.groups?.includes(e.groupName) || false)
+                        );
+                        if (!hasGroupMatch) return false;
+                    }
+                }
+
+                return true;
+            })
             .map(template => ({
                 id: `template-${template.id}`,
                 title: template.title,
@@ -101,9 +176,9 @@ export const ParentDashboardView = () => {
             if (filterStatus === 'active') {
                 filtered = filtered.filter(p => ['building', 'testing', 'planning', 'changes_requested'].includes(p.status));
             } else if (filterStatus === 'completed') {
-                filtered = filtered.filter(p => p.status === 'published');
+                filtered = filtered.filter(p => p.status?.toLowerCase() === 'published');
             } else if (filterStatus === 'submitted') {
-                filtered = filtered.filter(p => p.status === 'submitted');
+                filtered = filtered.filter(p => p.status?.toLowerCase() === 'submitted');
             }
         }
 
@@ -157,7 +232,7 @@ export const ParentDashboardView = () => {
         try {
             if (action === 'notify') {
                 // "On my way"
-                const picker = selectedPicker || userProfile?.name || 'Parent';
+                const picker = selectedPicker || user?.displayName || 'Parent';
                 for (const child of myChildren) {
                     // Check if already active to prevent duplicates
                     const existing = pickupQueue.find(q => q.studentId === child.id && ['on_the_way', 'arrived', 'released'].includes(q.status));
@@ -166,7 +241,7 @@ export const ParentDashboardView = () => {
                     await addDoc(collection(db, 'pickup_queue'), {
                         studentId: child.id,
                         studentName: child.name,
-                        parentName: userProfile?.name || 'Parent',
+                        parentName: user?.displayName || 'Parent',
                         pickerName: picker,
                         status: 'on_the_way',
                         notifiedAt: serverTimestamp(),
@@ -205,6 +280,7 @@ export const ParentDashboardView = () => {
     };
 
     const getProjectProgress = (project: StudentProject) => {
+        if (project.status?.toLowerCase() === 'published') return 100;
         if (!project.steps || project.steps.length === 0) return 0;
         const completedCount = project.steps.filter(t => t.status === 'done').length;
         return Math.floor((completedCount / project.steps.length) * 100);
@@ -221,8 +297,8 @@ export const ParentDashboardView = () => {
                 <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl max-w-md">
                     <User size={64} className="text-slate-600 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-white mb-2">Welcome Parent</h2>
-                    <p className="text-slate-400 text-sm mb-6">We couldn't find any student profiles linked to <span className="text-blue-400 font-mono">{userProfile?.email}</span>.</p>
-                    <button onClick={signOut} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center justify-center gap-2 w-full"><LogOut size={16} /> Sign Out</button>
+                    <p className="text-slate-400 text-sm mb-6">We couldn't find any student profiles linked to <span className="text-blue-400 font-mono">{user?.email}</span>.</p>
+                    <button onClick={handleSignOut} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center justify-center gap-2 w-full"><LogOut size={16} /> Sign Out</button>
                 </div>
             </div>
         );
@@ -310,9 +386,13 @@ export const ParentDashboardView = () => {
                     <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar">
                         {[
                             { id: 'overview', label: 'Overview', icon: LucideIcons.LayoutDashboard },
-                            { id: 'finance', label: 'Billing', icon: LucideIcons.CreditCard },
-                            { id: 'profile', label: 'Settings', icon: LucideIcons.Settings },
+                            { id: 'journey', label: 'Journey', icon: LucideIcons.MapPin },
+                            { id: 'portfolio', label: 'Portfolio', icon: LucideIcons.BookOpen }, // Published Work
+                            { id: 'finance', label: 'Billing', icon: LucideIcons.Wallet },
+                            { id: 'gallery', label: 'Gallery', icon: LucideIcons.ImageIcon },
+                            { id: 'contact', label: 'Contact', icon: LucideIcons.Phone },
                             { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car },
+                            { id: 'settings', label: 'Settings', icon: LucideIcons.Settings },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -333,11 +413,15 @@ export const ParentDashboardView = () => {
             {/* Bottom Navigation (Mobile) */}
             <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/90 backdrop-blur-xl border-t border-slate-800 z-50 flex justify-around items-center px-2 safe-area-pb">
                 {[
-                    { id: 'overview', label: 'Home', icon: LucideIcons.LayoutDashboard },
-                    { id: 'finance', label: 'Billing', icon: LucideIcons.CreditCard },
+                    { id: 'overview', label: 'Overview', icon: LucideIcons.LayoutDashboard },
+                    { id: 'journey', label: 'Journey', icon: LucideIcons.MapPin },
+                    { id: 'portfolio', label: 'Portfolio', icon: LucideIcons.BookOpen }, // Published Work
+                    { id: 'finance', label: 'Billing', icon: LucideIcons.Wallet },
+                    { id: 'gallery', label: 'Gallery', icon: LucideIcons.ImageIcon },
+                    { id: 'contact', label: 'Contact', icon: LucideIcons.Phone },
                     { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car },
-                    { id: 'profile', label: 'Profile', icon: LucideIcons.User },
-                ].map(tab => (
+                    { id: 'settings', label: 'Settings', icon: LucideIcons.Settings },
+                ].map((tab) => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
@@ -346,8 +430,8 @@ export const ParentDashboardView = () => {
                             : 'text-slate-500 hover:text-slate-300'
                             }`}
                     >
-                        <tab.icon size={20} className={activeTab === tab.id ? 'fill-current opacity-20' : ''} />
-                        <span className="text-[10px] font-bold">{tab.label}</span>
+                        <tab.icon size={22} className={activeTab === tab.id ? 'fill-current opacity-20' : ''} />
+                        <span className="text-[10px] font-bold tracking-tight">{tab.label}</span>
                         {activeTab === tab.id && <div className="absolute top-0 w-8 h-1 bg-indigo-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />}
                     </button>
                 ))}
@@ -390,6 +474,60 @@ export const ParentDashboardView = () => {
 
                 {activeTab === 'overview' && (
                     <div className="space-y-10">
+                        {/* Next Session Card (Dynamic Workshop Focus) */}
+                        {(() => {
+                            // Find the most relevant active project (most recently updated 'doing' or 'building')
+                            // Sort by updated time desc to get the one being worked on right now
+                            const currentProject = childData?.activeProjects[0];
+
+                            // Find the current active step (doing) or next step (todo)
+                            const currentStep = currentProject?.steps?.find(s => s.status === 'doing')
+                                || currentProject?.steps?.find(s => s.status === 'todo');
+
+                            const workshopTheme = currentStep
+                                ? `Next Mission: ${currentStep.title}`
+                                : "Next Mission: New Project Launch 🚀";
+
+                            const workshopDescription = currentStep && currentProject
+                                ? `${activeChild.name.split(' ')[0]} will be working on "${currentStep.title}" for their ${currentProject.title} project.`
+                                : "Getting ready to start their next big engineering adventure!";
+
+                            // Get Schedule from Enrollments
+                            const activeEnrollment = financialStatus.myEnrollments.find(e => e.studentId === activeChild.id && e.status === 'active');
+                            const scheduleText = activeEnrollment?.schedule || "Check Schedule";
+
+                            return (
+                                <div className="bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 relative">
+                                            <Calendar size={24} />
+                                            {currentStep && (
+                                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center border-2 border-slate-900">
+                                                    <Sparkles size={10} className="text-white fill-current" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Next Session</span>
+                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium">
+                                                    {scheduleText}
+                                                </span>
+                                            </div>
+                                            <h3 className="text-white font-bold">{workshopTheme}</h3>
+                                            <p className="text-slate-400 text-xs mt-1 max-w-md">
+                                                {workshopDescription}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setActiveTab('journey')}
+                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all shrink-0">
+                                        View Schedule
+                                    </button>
+                                </div>
+                            );
+                        })()}
 
                         {/* Stats Row with Creative Titles */}
                         <div>
@@ -397,22 +535,28 @@ export const ParentDashboardView = () => {
                                 <Sparkles size={20} className="text-yellow-400" />
                                 {activeChild.name.split(' ')[0]}'s Achievements ✨
                             </h2>
-                            <div className="grid grid-cols-3 gap-4 md:gap-6">
-                                <div className="bg-gradient-to-br from-emerald-900/50 to-emerald-950/50 border-2 border-emerald-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl">
+                            <div className="grid grid-cols-3 gap-4 md:gap-6 mb-10">
+                                <div
+                                    onClick={() => setActiveTab('portfolio')}
+                                    className="bg-gradient-to-br from-emerald-900/50 to-emerald-950/50 border-2 border-emerald-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl cursor-pointer">
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/20 rounded-full blur-3xl"></div>
                                     <Trophy size={28} className="text-emerald-400 mb-3 relative z-10 drop-shadow-lg" />
                                     <div className="text-4xl font-black text-white relative z-10 mb-1">{childData?.completedProjects.length || 0}</div>
                                     <div className="text-xs text-emerald-200 font-bold relative z-10 leading-tight">Projects<br />Mastered</div>
                                 </div>
 
-                                <div className="bg-gradient-to-br from-cyan-900/50 to-cyan-950/50 border-2 border-cyan-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl">
+                                <div
+                                    onClick={() => setActiveTab('portfolio')}
+                                    className="bg-gradient-to-br from-cyan-900/50 to-cyan-950/50 border-2 border-cyan-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl cursor-pointer">
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/20 rounded-full blur-3xl"></div>
                                     <Zap size={28} className="text-cyan-400 mb-3 relative z-10 drop-shadow-lg" fill="currentColor" />
                                     <div className="text-4xl font-black text-white relative z-10 mb-1">{childData?.earnedSkills.length || 0}</div>
                                     <div className="text-xs text-cyan-200 font-bold relative z-10 leading-tight">New Skills<br />Unlocked</div>
                                 </div>
 
-                                <div className="bg-gradient-to-br from-purple-900/50 to-purple-950/50 border-2 border-purple-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl">
+                                <div
+                                    onClick={() => setActiveTab('journey')}
+                                    className="bg-gradient-to-br from-purple-900/50 to-purple-950/50 border-2 border-purple-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl cursor-pointer">
                                     <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/20 rounded-full blur-3xl"></div>
                                     <Rocket size={28} className="text-purple-400 mb-3 relative z-10 drop-shadow-lg" />
                                     <div className="text-4xl font-black text-white relative z-10 mb-1">{childData?.activeProjects.length || 0}</div>
@@ -421,6 +565,232 @@ export const ParentDashboardView = () => {
                             </div>
                         </div>
 
+                        {/* Unified 'What's New' Feed */}
+                        <div className="mb-10">
+                            <h2 className="text-lg font-bold text-white/90 mb-4 flex items-center gap-2">
+                                <LucideIcons.Activity size={20} className="text-blue-400" />
+                                What's New 🔔
+                            </h2>
+
+                            {(() => {
+                                // --- AGGREGATION LOGIC ---
+                                type FeedItem = {
+                                    id: string;
+                                    type: 'photo' | 'achievement' | 'payment';
+                                    date: any; // Timestamp or Date object
+                                    title: string;
+                                    subtitle?: string;
+                                    image?: string;
+                                    action?: { label: string; onClick: () => void };
+                                    theme: { bg: string; border: string; icon: any; iconColor: string };
+                                };
+
+                                const feed: FeedItem[] = [];
+
+                                // Helper to dismiss item
+                                const handleFeedInteraction = async (itemId: string, actionCallback?: () => void) => {
+                                    if (actionCallback) actionCallback();
+
+                                    // 1. Optimistic Update (Instant Removal)
+                                    setLocalDismissedIds(prev => [...prev, itemId]);
+
+                                    // 2. Persist to Firestore
+                                    if (!db) return;
+                                    try {
+                                        await updateDoc(doc(db as Firestore, 'students', activeChild.id), {
+                                            dismissedFeedIds: arrayUnion(itemId)
+                                        });
+                                    } catch (err) {
+                                        console.error("Error dismissing feed item:", err);
+                                    }
+                                };
+
+                                // 1. Gallery Photos
+                                const relevantPhotos = galleryItems
+                                    .filter(item => !item.studentId || item.studentId === activeChild.id)
+                                    .slice(0, 5); // Check more initially, then filter.
+
+                                relevantPhotos.forEach(p => {
+                                    const feedId = `photo-${p.id}`;
+                                    // Filter ALREADY DISMISSED (Check Global + Local)
+                                    if (activeChild.dismissedFeedIds?.includes(feedId) || localDismissedIds.includes(feedId)) return;
+
+                                    feed.push({
+                                        id: feedId,
+                                        type: 'photo',
+                                        date: p.createdAt,
+                                        title: 'New Photo Added',
+                                        subtitle: p.caption || 'A new memory from the Makerspace!',
+                                        image: p.url,
+                                        action: {
+                                            label: 'View Gallery',
+                                            onClick: () => handleFeedInteraction(feedId, () => setActiveTab('gallery'))
+                                        },
+                                        theme: { bg: 'from-pink-900/40 to-rose-900/40', border: 'border-pink-500/30', icon: LucideIcons.Camera, iconColor: 'text-pink-400' }
+                                    });
+                                });
+
+                                // 2. Achievements (Completed Steps)
+                                childData?.projects.forEach(p => {
+                                    p.steps.filter(s => s.status === 'done').forEach(s => {
+                                        const feedId = `step-${s.id}`;
+                                        if (activeChild.dismissedFeedIds?.includes(feedId) || localDismissedIds.includes(feedId)) return;
+
+                                        feed.push({
+                                            id: feedId,
+                                            type: 'achievement',
+                                            // Fallback date if step doesn't have one
+                                            date: p.updatedAt,
+                                            title: `Mission Accomplished: ${s.title}`,
+                                            subtitle: `Completed step in "${p.title}"`,
+                                            image: s.proofUrl, // Optional proof
+                                            action: s.proofUrl ? { label: 'View Proof', onClick: () => handleFeedInteraction(feedId, () => window.open(s.proofUrl, '_blank')) } : undefined,
+                                            theme: { bg: 'from-emerald-900/40 to-teal-900/40', border: 'border-emerald-500/30', icon: LucideIcons.Trophy, iconColor: 'text-emerald-400' }
+                                        });
+                                    });
+                                });
+
+                                // 3. Pending Payments (DO NOT DISMISS UNTIL PAID ideally, but user asked for logic. 
+                                // Actually, for payments, we probably shouldn't allow dismissal until paid, OR just dismiss notification but keep bill.
+                                // Let's allow dismissal of the *news item* as requested.)
+                                const pendingPayments = payments.filter(pay => pay.studentId === activeChild.id && pay.status === 'pending');
+                                pendingPayments.forEach(pay => {
+                                    const feedId = `pay-${pay.id}`;
+                                    if (activeChild.dismissedFeedIds?.includes(feedId) || localDismissedIds.includes(feedId)) return;
+
+                                    feed.push({
+                                        id: feedId,
+                                        type: 'payment',
+                                        date: pay.dueDate || new Date().toISOString(), // Use string or timestamp
+                                        title: 'Invoice Due',
+                                        subtitle: `${pay.amount} ${settings.currency} - ${pay.description || 'Tuition Fee'}`,
+                                        action: { label: 'Pay Now', onClick: () => handleFeedInteraction(feedId, () => setActiveTab('finance')) },
+                                        theme: { bg: 'from-orange-900/40 to-amber-900/40', border: 'border-orange-500/30', icon: LucideIcons.CreditCard, iconColor: 'text-orange-400' }
+                                    });
+                                });
+
+                                // 4. Published Projects (Showcase)
+                                childData?.projects.filter(p => p.status === 'published').forEach(p => {
+                                    const feedId = `proj-pub-${p.id}`;
+                                    if (activeChild.dismissedFeedIds?.includes(feedId) || localDismissedIds.includes(feedId)) return;
+
+                                    feed.push({
+                                        id: feedId,
+                                        type: 'achievement',
+                                        date: p.updatedAt,
+                                        title: 'New Project Published! 🚀',
+                                        subtitle: `"${p.title}" is now live in the showcase.`,
+                                        image: p.thumbnailUrl || p.coverImage,
+                                        action: { label: 'View Portfolio', onClick: () => handleFeedInteraction(feedId, () => setActiveTab('portfolio')) },
+                                        theme: { bg: 'from-fuchsia-900/40 to-purple-900/40', border: 'border-fuchsia-500/30', icon: LucideIcons.Award, iconColor: 'text-fuchsia-400' }
+                                    });
+                                });
+
+                                // --- HELPER: GET SECONDS ---
+                                const getSeconds = (date: any) => {
+                                    if (date?.seconds) return date.seconds;
+                                    if (typeof date === 'string') return new Date(date).getTime() / 1000;
+                                    return 0;
+                                };
+
+                                // --- SORTING & LIMITING ---
+                                // Sort by Date Descending
+                                feed.sort((a, b) => {
+                                    return getSeconds(b.date) - getSeconds(a.date);
+                                });
+
+                                // Take top 5 items
+                                const displayFeed = feed.slice(0, 5);
+
+                                if (displayFeed.length === 0) {
+                                    // Smart Empty State (Still "Ready for Launch" but formatted for feed)
+                                    return (
+                                        <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8 text-center relative overflow-hidden">
+                                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
+                                            <LucideIcons.Radar size={48} className="mx-auto text-blue-500 mb-4 animate-spin-slow" />
+                                            <h3 className="text-xl font-bold text-white mb-2">Up to Date! 🌟</h3>
+                                            <p className="text-slate-400 max-w-sm mx-auto mb-6">
+                                                You're all caught up on {activeChild.name.split(' ')[0]}'s latest news.
+                                                Check the <strong>Portfolio</strong> tab for full progress history.
+                                            </p>
+                                        </div>
+                                    );
+                                }
+
+                                // --- RENDERING ---
+                                return (
+                                    <div className="space-y-4">
+                                        {displayFeed.map(item => (
+                                            <div key={item.id} className={`bg-gradient-to-r ${item.theme.bg} border ${item.theme.border} rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center gap-4 transition-all hover:scale-[1.01] hover:shadow-lg relative group`}>
+
+                                                {/* Close Button (Hover only) */}
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleFeedInteraction(item.id); }}
+                                                    className="absolute top-2 right-2 p-1 text-slate-400 hover:text-white hover:bg-white/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    title="Dismiss"
+                                                >
+                                                    <LucideIcons.X size={14} />
+                                                </button>
+
+                                                {/* Image/Icon */}
+                                                <div className="shrink-0 relative">
+                                                    {item.image ? (
+                                                        <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shadow-sm relative group">
+                                                            <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                                                            <img src={item.image} className="w-full h-full object-cover" alt="Feed thumbnail" />
+                                                            <div className="absolute bottom-1 right-1 bg-slate-900/80 rounded-full p-1">
+                                                                <item.theme.icon size={10} className={item.theme.iconColor} />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`w-14 h-14 rounded-xl bg-slate-900/50 flex items-center justify-center border border-white/5`}>
+                                                            <item.theme.icon size={24} className={item.theme.iconColor} />
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Content */}
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <h4 className="text-white font-bold truncate">{item.title}</h4>
+                                                        {/* Optional Tag based on type */}
+                                                        {item.type === 'payment' && <span className="bg-orange-500/20 text-orange-300 text-[10px] px-2 py-0.5 rounded font-bold uppercase">Action Required</span>}
+                                                        {item.type === 'achievement' && <span className="text-emerald-500 text-xs font-bold">+XP</span>}
+                                                    </div>
+                                                    <p className="text-slate-300 text-sm line-clamp-2">{item.subtitle}</p>
+                                                    <p className="text-slate-500 text-xs mt-1">
+                                                        {new Date(getSeconds(item.date) * 1000).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                                    </p>
+                                                </div>
+
+                                                {/* Action Button */}
+                                                {item.action && (
+                                                    <button
+                                                        onClick={item.action.onClick}
+                                                        className="self-end md:self-center shrink-0 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg border border-slate-700 transition-colors flex items-center gap-2"
+                                                    >
+                                                        {item.action.label}
+                                                        <LucideIcons.ChevronRight size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+
+                                        {feed.length > 5 && (
+                                            <button className="w-full py-2 text-center text-slate-500 text-xs font-bold uppercase tracking-widest hover:text-white transition-colors">
+                                                See {feed.length - 5} older updates
+                                            </button>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                    </div>
+                )}
+
+                {activeTab === 'journey' && (
+                    <div className="space-y-10">
                         {/* Badges Showcase */}
                         {childData?.badges && childData.badges.length > 0 && (
                             <div>
@@ -569,9 +939,9 @@ export const ParentDashboardView = () => {
                                                             {/* Card Content Wrapper */}
                                                             <div className="flex flex-col md:flex-row">
                                                                 {/* Thumbnail (if available) - New Addition */}
-                                                                {project.mediaUrls?.[0] && (
+                                                                {(project.thumbnailUrl || project.mediaUrls?.[0]) && (
                                                                     <div className="h-48 md:h-auto md:w-1/3 bg-slate-950 relative overflow-hidden group-hover:brightness-110 transition-all">
-                                                                        <img src={project.mediaUrls[0]} className="w-full h-full object-cover" alt="Project Thumbnail" />
+                                                                        <img src={project.thumbnailUrl || project.mediaUrls![0]} className="w-full h-full object-cover" alt="Project Thumbnail" />
                                                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60"></div>
                                                                         <div className="absolute bottom-2 left-2 flex gap-1">
                                                                             {hasPresentation && <div className="p-1 bg-red-600 rounded-md"><Play size={12} className="text-white" fill="currentColor" /></div>}
@@ -593,10 +963,17 @@ export const ParentDashboardView = () => {
                                                                                 {isCompleted ? '🎉 Mastered!' : isSubmitted ? '⏳ Under Review' : isActive ? '🔥 Working On It' : '🔐 Coming Soon'}
                                                                             </span>
                                                                         </div>
-                                                                        <ChevronDown
-                                                                            size={22}
-                                                                            className={`text-slate-400 transition-transform ml-4 ${isExpanded ? 'rotate-180' : ''}`}
-                                                                        />
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="hidden md:inline-block text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-cyan-400 transition-colors">
+                                                                                {isExpanded ? 'Close Details' : 'View Progress'}
+                                                                            </span>
+                                                                            <div className={`p-2 rounded-full transition-all duration-300 ${isExpanded ? 'bg-slate-800 text-white' : 'bg-slate-900 text-slate-500 group-hover:bg-slate-800 group-hover:text-cyan-400'}`}>
+                                                                                <ChevronDown
+                                                                                    size={20}
+                                                                                    className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
                                                                     </div>
 
                                                                     <h3 className="text-xl font-black text-white mb-2 leading-tight">{project.title}</h3>
@@ -627,6 +1004,42 @@ export const ParentDashboardView = () => {
                                                     {/* Expanded Content */}
                                                     {isExpanded && (
                                                         <div className="mt-4 bg-slate-950/70 backdrop-blur-sm border-2 border-slate-800/50 rounded-2xl p-5 md:p-6 animate-in slide-in-from-top-2 fade-in duration-200 shadow-xl">
+
+                                                            {/* Evidence Gallery (New) */}
+                                                            {(() => {
+                                                                const evidenceResources = project.steps
+                                                                    ?.filter(s => s.status === 'done' && s.proofUrl && (s.proofUrl.startsWith('http') || s.proofUrl.startsWith('data:')))
+                                                                    .map(s => ({ url: s.proofUrl, title: s.title }));
+
+                                                                if (evidenceResources && evidenceResources.length > 0) {
+                                                                    return (
+                                                                        <div className="mb-8 p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50">
+                                                                            <h4 className="text-sm text-cyan-400 font-bold mb-3 flex items-center gap-2">
+                                                                                <LucideIcons.Camera size={16} /> PROJECT EVIDENCE 📸
+                                                                            </h4>
+                                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                                                {evidenceResources.map((proof, idx) => (
+                                                                                    <div
+                                                                                        key={idx}
+                                                                                        onClick={() => window.open(proof.url, '_blank')}
+                                                                                        className="group relative aspect-video bg-slate-800 rounded-lg overflow-hidden border border-slate-700 cursor-pointer shadow-md hover:shadow-cyan-900/20 transition-all hover:scale-[1.02]"
+                                                                                    >
+                                                                                        <img src={proof.url} className="w-full h-full object-cover" alt="Proof" />
+                                                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                                                                                            <span className="text-[10px] text-white font-bold truncate">{proof.title}</span>
+                                                                                        </div>
+                                                                                        <div className="absolute top-1 right-1 bg-black/60 rounded px-1.5 py-0.5">
+                                                                                            <Maximize2 size={10} className="text-white" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })()}
+
                                                             {/* Actions Toolbar */}
                                                             <div className="flex flex-wrap gap-2 mb-6 pb-6 border-b border-slate-800">
                                                                 {hasPresentation && (
@@ -637,9 +1050,9 @@ export const ParentDashboardView = () => {
                                                                         <Play size={18} fill="currentColor" /> Watch Presentation
                                                                     </button>
                                                                 )}
-                                                                {project.mediaUrls?.[0] && !hasPresentation && (
+                                                                {(project.thumbnailUrl || project.mediaUrls?.[0]) && !hasPresentation && (
                                                                     <button
-                                                                        onClick={() => project.mediaUrls && window.open(project.mediaUrls[0], '_blank')}
+                                                                        onClick={() => window.open(project.thumbnailUrl || project.mediaUrls![0], '_blank')}
                                                                         className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-indigo-900/50"
                                                                     >
                                                                         <ImageIcon size={18} /> View Project Image
@@ -651,62 +1064,28 @@ export const ParentDashboardView = () => {
                                                             {project.description && (
                                                                 <div className="mb-8">
                                                                     <h4 className="text-sm text-slate-400 font-bold mb-2">PROJECT BRIEF</h4>
-                                                                    <p className="text-sm text-slate-200 leading-relaxed max-w-2xl">{project.description}</p>
+                                                                    <p className="text-sm text-slate-200 leading-relaxed max-w-2xl whitespace-pre-wrap">{project.description}</p>
                                                                 </div>
                                                             )}
 
-                                                            {/* Engineering Process Steps with PROOF */}
+                                                            {/* Engineering Process Steps */}
                                                             {project.steps && project.steps.length > 0 && (
                                                                 <div>
                                                                     <h4 className="text-sm text-slate-400 font-bold mb-4 flex items-center gap-2">
                                                                         <ListChecks size={16} className="text-cyan-400" /> MISSION LOG
                                                                     </h4>
-                                                                    <div className="space-y-4">
+                                                                    <div className="space-y-3">
                                                                         {project.steps.map((step, idx) => (
-                                                                            <div key={step.id} className={`p-4 rounded-xl border-2 transition-all ${step.status === 'done' ? 'bg-slate-900/80 border-slate-800' : 'bg-transparent border-transparent'}`}>
-                                                                                <div className="flex items-center gap-3 text-sm">
-                                                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border-2 ${step.status === 'done'
-                                                                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500'
-                                                                                        : step.status === 'doing'
-                                                                                            ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500 animate-pulse'
-                                                                                            : 'bg-slate-800 text-slate-600 border-slate-700'
-                                                                                        }`}>
-                                                                                        {step.status === 'done' ? (
-                                                                                            <CheckCircle2 size={16} />
-                                                                                        ) : step.status === 'doing' ? (
-                                                                                            <Play size={14} fill="currentColor" />
-                                                                                        ) : (
-                                                                                            <span className="text-xs font-bold">{idx + 1}</span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <div className="flex-1">
-                                                                                        <span className={`block font-bold ${step.status === 'done' ? 'text-slate-200' : 'text-slate-400'}`}>
-                                                                                            {step.title}
-                                                                                        </span>
-                                                                                        {step.status === 'done' && <span className="text-xs text-emerald-500 font-bold">✓ COMPLETED</span>}
-                                                                                        {step.status === 'doing' && <span className="text-xs text-cyan-400 font-bold animate-pulse">IN PROGRESS</span>}
-                                                                                    </div>
+                                                                            <div key={step.id} className={`flex items-start gap-3 p-3 rounded-xl transition-all ${step.status === 'done' ? 'bg-slate-900/40' : 'opacity-70'}`}>
+                                                                                <div className={`mt-0.5 w-5 h-5 rounded-full flex items-center justify-center shrink-0 border ${step.status === 'done' ? 'bg-emerald-500 border-emerald-500 text-white' :
+                                                                                    step.status === 'doing' ? 'bg-cyan-500/20 border-cyan-500 text-cyan-400' :
+                                                                                        'border-slate-600 text-slate-500'
+                                                                                    }`}>
+                                                                                    {step.status === 'done' ? <CheckCircle2 size={12} /> : <span className="text-[10px] font-bold">{idx + 1}</span>}
                                                                                 </div>
-
-                                                                                {/* PROOF OF WORK DISPLAY */}
-                                                                                {step.status === 'done' && step.proofUrl && (
-                                                                                    <div className="mt-3 ml-11">
-                                                                                        <div className="bg-slate-950 rounded-lg p-2 border border-slate-800 inline-block overflow-hidden relative group/proof">
-                                                                                            {step.proofUrl.startsWith('data:image') || step.proofUrl.startsWith('http') ? (
-                                                                                                <>
-                                                                                                    <img src={step.proofUrl} className="h-24 md:h-32 rounded-md object-cover cursor-pointer transition-transform hover:scale-105" onClick={() => window.open(step.proofUrl, '_blank')} alt="Proof of work" />
-                                                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/proof:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                                                                                                        <Maximize2 size={16} className="text-white" />
-                                                                                                    </div>
-                                                                                                </>
-                                                                                            ) : (
-                                                                                                <a href={step.proofUrl} target="_blank" rel="noreferrer" className="text-blue-400 text-xs hover:underline flex items-center gap-1">
-                                                                                                    <LinkIcon size={12} /> View Attached Proof
-                                                                                                </a>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
+                                                                                <div className="flex-1">
+                                                                                    <p className={`text-sm font-medium ${step.status === 'done' ? 'text-slate-200 line-through decoration-slate-600' : 'text-slate-400'}`}>{step.title}</p>
+                                                                                </div>
                                                                             </div>
                                                                         ))}
                                                                     </div>
@@ -733,7 +1112,7 @@ export const ParentDashboardView = () => {
                                                                     <p className="text-sm text-slate-400 font-bold mb-3 flex items-center gap-2"><Sparkles size={14} className="text-yellow-400" /> Skills Unlocked</p>
                                                                     <div className="flex flex-wrap gap-2">
                                                                         {project.skillsAcquired.map(skill => (
-                                                                            <span key={skill} className="text-xs bg-gradient-to-r from-slate-800 to-slate-700 text-slate-200 px-4 py-2 rounded-full border-2 border-slate-600 font-bold shadow-lg hover:scale-105 transition-transform">
+                                                                            <span key={skill} className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700 font-bold">
                                                                                 {skill}
                                                                             </span>
                                                                         ))}
@@ -766,348 +1145,793 @@ export const ParentDashboardView = () => {
                     </div>
                 )}
 
-                {activeTab === 'finance' && (
-                    <div className="space-y-6">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                <LucideIcons.CreditCard className="text-emerald-400" />
-                                Financial Overview
-                            </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="p-6 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700">
-                                    <div className="text-sm text-slate-400 font-bold uppercase mb-2">Total Due</div>
-                                    <div className="text-3xl font-black text-white">{formatCurrency(financialStatus.totalDue)}</div>
+                {activeTab === 'portfolio' && (
+                    <div className="space-y-10">
+                        {/* Portfolio Header */}
+                        <div>
+                            <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-3">
+                                <div className="p-2 bg-gradient-to-br from-fuchsia-600 to-purple-600 rounded-xl shadow-lg shadow-purple-500/20">
+                                    <BookOpen size={24} className="text-white" />
                                 </div>
-                            </div>
+                                {activeChild.name.split(' ')[0]}'s Portfolio 🌟
+                            </h2>
+                            <p className="text-slate-400 text-sm">A collection of published projects and mastered skills.</p>
+                        </div>
 
-                            <h3 className="text-lg font-bold text-white mt-8 mb-4">Enrollments & Payments</h3>
-                            <div className="space-y-4">
-                                {financialStatus.myEnrollments.map(enrollment => {
-                                    const EnrPayments = payments.filter(p => p.enrollmentId === enrollment.id);
+                        {/* Projects Grid */}
+                        {childData?.completedProjects && childData.completedProjects.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {childData.completedProjects.map(project => {
+                                    const theme = getTheme(project.station);
                                     return (
-                                        <div key={enrollment.id} className="border border-slate-800 rounded-xl p-4 bg-slate-950/50">
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div>
-                                                    <div className="font-bold text-white">{enrollment.programName}</div>
-                                                    <div className="text-xs text-slate-400">{enrollment.packName}</div>
-                                                </div>
-                                                <div className={`px-2 py-1 rounded text-xs font-bold ${enrollment.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                                                    {enrollment.status.toUpperCase()}
+                                        <div
+                                            key={project.id}
+                                            onClick={() => handleOpenProject(project)}
+                                            className="group bg-slate-900 border border-slate-700 hover:border-fuchsia-500/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300 flex flex-col h-full cursor-pointer hover:-translate-y-1"
+                                        >
+                                            {/* Cover Image */}
+                                            <div className="h-48 bg-slate-950 relative overflow-hidden">
+                                                {project.thumbnailUrl || project.mediaUrls?.[0] ? (
+                                                    <img
+                                                        src={project.thumbnailUrl || project.mediaUrls![0]}
+                                                        alt={project.title}
+                                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                                    />
+                                                ) : (
+                                                    <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${theme.bg}`}>
+                                                        <theme.icon size={48} className="text-white/20" />
+                                                    </div>
+                                                )}
+
+                                                {/* Overlay Grade/Badge */}
+                                                <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1">
+                                                    <theme.icon size={10} className={theme.text} />
+                                                    {theme.label}
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <div className="flex justify-between text-sm">
-                                                    <span className="text-slate-400">Total Program Cost</span>
-                                                    <span className="text-white font-mono">{formatCurrency(enrollment.totalAmount)}</span>
-                                                </div>
-                                                <div className="flex justify-between text-sm">
-                                                    <span className="text-slate-400">Paid So Far</span>
-                                                    <span className="text-emerald-400 font-mono">{formatCurrency(enrollment.paidAmount)}</span>
-                                                </div>
-                                                <div className="flex justify-between text-sm pt-2 border-t border-slate-800">
-                                                    <span className="text-slate-300 font-bold">Remaining Balance</span>
-                                                    <span className="text-red-400 font-mono font-bold">{formatCurrency(enrollment.balance)}</span>
-                                                </div>
+                                            {/* Content */}
+                                            <div className="p-5 flex-1 flex flex-col">
+                                                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors leading-tight">
+                                                    {project.title}
+                                                </h3>
+                                                <p className="text-slate-400 text-xs line-clamp-3 mb-4 flex-1">
+                                                    {project.description || "No description provided."}
+                                                </p>
+
+                                                {/* Skills Footer */}
+                                                {project.skillsAcquired && project.skillsAcquired.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mb-4">
+                                                        {project.skillsAcquired.slice(0, 3).map(skill => (
+                                                            <span key={skill} className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded border border-slate-700">
+                                                                {skill}
+                                                            </span>
+                                                        ))}
+                                                        {project.skillsAcquired.length > 3 && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded border border-slate-700">
+                                                                +{project.skillsAcquired.length - 3}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenProject(project);
+                                                    }}
+                                                    className="w-full py-2 bg-slate-800 hover:bg-fuchsia-600 text-white text-xs font-bold rounded-xl transition-all border border-slate-700 hover:border-fuchsia-500 flex items-center justify-center gap-2"
+                                                >
+                                                    View Project <ChevronRight size={14} />
+                                                </button>
                                             </div>
 
-                                            {/* Payment History */}
-                                            {EnrPayments.length > 0 && (
-                                                <div className="mt-4 pt-4 border-t border-slate-800/50">
-                                                    <div className="text-xs font-bold text-slate-500 mb-2 uppercase">Payment History</div>
-                                                    {EnrPayments.map(p => (
-                                                        <div key={p.id} className="flex justify-between items-center text-xs py-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-slate-300">{formatDate(p.date)}</span>
-                                                                <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-500">{p.method}</span>
+                                            {/* Details Expansion (Inline for now to save complexity of new modal) */}
+                                            {expandedProject === project.id && (
+                                                <div className="absolute inset-0 bg-slate-900 z-20 p-6 flex flex-col animate-in slide-in-from-bottom-5 fade-in duration-300">
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <h3 className="font-bold text-white">Project Details</h3>
+                                                        <button onClick={(e) => { e.stopPropagation(); setExpandedProject(null); }} className="p-1 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                                                            <X size={20} />
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="overflow-y-auto pr-2 space-y-4">
+                                                        {project.presentationUrl && (
+                                                            <a href={project.presentationUrl} target="_blank" rel="noopener noreferrer" className="block w-full py-3 bg-red-600 hover:bg-red-500 text-white text-center font-bold rounded-xl flex items-center justify-center gap-2">
+                                                                <Play size={16} fill="currentColor" /> Watch Presentation
+                                                            </a>
+                                                        )}
+
+                                                        {/* Images/Evidence Grid */}
+                                                        {project.mediaUrls && project.mediaUrls.length > 0 && (
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                {project.mediaUrls.map((url, i) => (
+                                                                    <img key={i} src={url} className="w-full h-24 object-cover rounded-lg border border-slate-700" onClick={() => window.open(url, '_blank')} />
+                                                                ))}
                                                             </div>
-                                                            <span className="text-emerald-400 font-mono">+{formatCurrency(p.amount)}</span>
-                                                        </div>
-                                                    ))}
+                                                        )}
+
+                                                        <p className="text-sm text-slate-300">{project.description}</p>
+
+                                                        {project.instructorFeedback && (
+                                                            <div className="p-3 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+                                                                <p className="text-xs text-amber-500 font-bold mb-1">Feedback</p>
+                                                                <p className="text-xs text-amber-200 italic">"{project.instructorFeedback}"</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
                                     );
                                 })}
                             </div>
-                        </div>
+                        ) : (
+                            <div className="text-center py-20 bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed">
+                                <BookOpen size={48} className="mx-auto text-slate-700 mb-4" />
+                                <h3 className="text-white font-bold mb-2">Portfolio is Empty</h3>
+                                <p className="text-slate-500 text-sm max-w-xs mx-auto">
+                                    {activeChild.name.split(' ')[0]} hasn't published any projects yet.
+                                    Check the <strong>Journey</strong> tab to see what they are working on!
+                                </p>
+                                <button
+                                    onClick={() => setActiveTab('journey')}
+                                    className="mt-6 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-full transition-colors"
+                                >
+                                    Go to Journey
+                                </button>
+
+                                {/* DEBUG INFO */}
+                                <div className="mt-8 p-4 bg-black/50 overflow-auto max-h-64 text-[10px] text-left font-mono rounded">
+                                    <p className="font-bold text-indigo-400 mb-2">DEBUGGING ID MISMATCH</p>
+                                    <p>Active Child Name: {activeChild.name}</p>
+                                    <p>Active Child ID (Firestore): "{activeChild.id}"</p>
+                                    <p>Active Child LoginInfo: {JSON.stringify(activeChild.loginInfo)}</p>
+                                    <p>Active Child Full Object Keys: {Object.keys(activeChild).join(', ')}</p>
+
+                                    <div className="my-2 border-t border-slate-700 pt-2">
+                                        <p>Project Matches using ID: {studentProjects.filter(p => p.studentId === activeChild.id).length}</p>
+                                        <p>Project Matches using Auth UID: {activeChild.loginInfo?.uid ? studentProjects.filter(p => p.studentId === activeChild.loginInfo?.uid).length : 'N/A'}</p>
+                                    </div>
+
+                                    <div className="my-2 border-t border-slate-700 pt-2">
+                                        <p>First 3 Projects IDs:</p>
+                                        {studentProjects.slice(0, 3).map(p => (
+                                            <div key={p.id} className="pl-2 border-l-2 border-slate-700 mb-1">
+                                                <p>Title: {p.title}</p>
+                                                <p>StudentId: "{p.studentId}"</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {activeTab === 'profile' && (
-                    <div className="space-y-6">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                <LucideIcons.User className="text-blue-400" />
-                                Student Profile & Settings
-                            </h2>
+                {activeTab === 'contact' && (
+                    <div className="space-y-8 max-w-2xl mx-auto">
+                        <div className="text-center mb-8">
+                            <h2 className="text-2xl font-black text-white mb-2">We're Here to Help! 👋</h2>
+                            <p className="text-slate-400">Need assistance? Reach out to the right person directly.</p>
+                        </div>
 
-                            <div className="grid gap-6">
-                                {/* Parent Info */}
-                                <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
-                                    <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.Phone size={16} /> Contact Info</h3>
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">Parent Name</label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
-                                                defaultValue={activeChild.parentName}
-                                                onBlur={async (e) => {
-                                                    if (!db) return;
-                                                    await updateDoc(doc(db as Firestore, 'students', activeChild.id), { parentName: e.target.value });
-                                                }}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">Parent Phone</label>
-                                            <input
-                                                type="text"
-                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
-                                                defaultValue={activeChild.parentPhone}
-                                                onBlur={async (e) => {
-                                                    if (!db) return;
-                                                    await updateDoc(doc(db as Firestore, 'students', activeChild.id), { parentPhone: e.target.value });
-                                                }}
-                                            />
-                                        </div>
+                        {/* Curriculum Contact */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-blue-500/50 transition-colors">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <LucideIcons.BookOpen size={100} />
+                            </div>
+                            <div className="flex items-start gap-4 relative z-10">
+                                <div className="w-14 h-14 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 border border-blue-500/30 shrink-0">
+                                    <LucideIcons.GraduationCap size={28} />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-white">Mr. Younes</h3>
+                                    <p className="text-blue-400 text-xs font-bold uppercase tracking-wider mb-2">Curriculum & Education</p>
+                                    <p className="text-slate-400 text-sm mb-4">For questions about the projects, learning path, or student progress.</p>
+
+                                    <div className="flex flex-wrap gap-3">
+                                        <a href="tel:0621877106" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-blue-600 hover:text-white text-slate-300 rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.Phone size={16} /> Call
+                                        </a>
+                                        <a href="https://wa.me/212621877106" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-emerald-900/30 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 hover:border-transparent rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.MessageCircle size={16} /> WhatsApp
+                                        </a>
+                                        <a href="mailto:d.younes@makerlab.academy" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.Mail size={16} /> Email
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Finance & Schedule Contact */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-purple-500/50 transition-colors">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <LucideIcons.CalendarClock size={100} />
+                            </div>
+                            <div className="flex items-start gap-4 relative z-10">
+                                <div className="w-14 h-14 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30 shrink-0">
+                                    <LucideIcons.CreditCard size={28} />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-white">Mme. Noufissa</h3>
+                                    <p className="text-purple-400 text-xs font-bold uppercase tracking-wider mb-2">Finance & Scheduling</p>
+                                    <p className="text-slate-400 text-sm mb-4">For billing inquiries, invoices, payment plans, or schedule changes.</p>
+
+                                    <div className="flex flex-wrap gap-3">
+                                        <a href="tel:0661198278" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-purple-600 hover:text-white text-slate-300 rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.Phone size={16} /> Call
+                                        </a>
+                                        <a href="https://wa.me/212661198278" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-emerald-900/30 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 hover:border-transparent rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.MessageCircle size={16} /> WhatsApp
+                                        </a>
+                                        <a href="mailto:e.noufissa@makerlab.academy" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.Mail size={16} /> Email
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* General Makerspace Info */}
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-orange-500/50 transition-colors">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <LucideIcons.Wrench size={100} />
+                            </div>
+                            <div className="flex items-start gap-4 relative z-10">
+                                <div className="w-14 h-14 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 border border-orange-500/30 shrink-0">
+                                    <LucideIcons.PhoneCall size={28} />
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-bold text-white">Makerspace Fix</h3>
+                                    <p className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">General Inquiries</p>
+                                    <p className="text-slate-400 text-sm mb-4">For general questions or urgent matters.</p>
+
+                                    <div className="flex flex-wrap gap-3">
+                                        <a href="tel:0520990202" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-orange-600 hover:text-white text-slate-300 rounded-xl text-sm font-bold transition-all">
+                                            <LucideIcons.Phone size={16} /> Call Fix: 05 20 99 02 02
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-12 p-6 bg-slate-900/50 rounded-2xl border border-slate-800 text-center">
+                            <p className="text-slate-500 text-sm">
+                                📍 <span className="font-bold text-white">MakerLab Academy</span> • Casablanca, Morocco
+                            </p>
+                        </div>
+                    </div>
+                )
+                }
+
+                {
+                    activeTab === 'finance' && (
+                        <div className="space-y-6">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <LucideIcons.CreditCard className="text-emerald-400" />
+                                    Financial Overview
+                                </h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="p-6 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700">
+                                        <div className="text-sm text-slate-400 font-bold uppercase mb-2">Total Due</div>
+                                        <div className="text-3xl font-black text-white">{formatCurrency(financialStatus.totalDue)}</div>
                                     </div>
                                 </div>
 
-                                {/* Medical Info */}
-                                <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
-                                    <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.HeartPulse size={16} className="text-rose-400" /> Medical & Important Notes</h3>
-                                    <textarea
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none min-h-[100px]"
-                                        placeholder="Allergies, medical conditions, or other important notes..."
-                                        defaultValue={activeChild.medicalInfo}
-                                        onBlur={async (e) => {
-                                            if (!db) return;
-                                            await updateDoc(doc(db as Firestore, 'students', activeChild.id), { medicalInfo: e.target.value });
-                                        }}
-                                    />
+                                <h3 className="text-lg font-bold text-white mt-8 mb-4">Enrollments & Payments</h3>
+                                <div className="space-y-4">
+                                    {financialStatus.myEnrollments.map(enrollment => {
+                                        const EnrPayments = payments.filter(p => p.enrollmentId === enrollment.id);
+                                        return (
+                                            <div key={enrollment.id} className="border border-slate-800 rounded-xl p-4 bg-slate-950/50">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <div className="font-bold text-white">{enrollment.programName}</div>
+                                                        <div className="text-xs text-slate-400">{enrollment.packName}</div>
+                                                    </div>
+                                                    <div className={`px-2 py-1 rounded text-xs font-bold ${enrollment.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                                                        {enrollment.status.toUpperCase()}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-slate-400">Total Program Cost</span>
+                                                        <span className="text-white font-mono">{formatCurrency(enrollment.totalAmount)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm">
+                                                        <span className="text-slate-400">Paid So Far</span>
+                                                        <span className="text-emerald-400 font-mono">{formatCurrency(enrollment.paidAmount)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-sm pt-2 border-t border-slate-800">
+                                                        <span className="text-slate-300 font-bold">Remaining Balance</span>
+                                                        <span className="text-red-400 font-mono font-bold">{formatCurrency(enrollment.balance)}</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Payment History */}
+                                                {EnrPayments.length > 0 && (
+                                                    <div className="mt-4 pt-4 border-t border-slate-800/50">
+                                                        <div className="text-xs font-bold text-slate-500 mb-2 uppercase">Payment History</div>
+                                                        {EnrPayments.map(p => (
+                                                            <div key={p.id} className="flex justify-between items-center text-xs py-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-slate-300">{formatDate(p.date)}</span>
+                                                                    <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-500">{p.method}</span>
+                                                                </div>
+                                                                <span className="text-emerald-400 font-mono">+{formatCurrency(p.amount)}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
+                            </div>
+                        </div>
+                    )
+                }
 
-                                {/* Pickup List */}
-                                <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
-                                    <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.Car size={16} className="text-amber-400" /> Authorized Pickups</h3>
-                                    <p className="text-xs text-slate-400 mb-4">List the names of people authorized to pick up {activeChild.name.split(' ')[0]}.</p>
+                {
+                    activeTab === 'profile' && (
+                        <div className="space-y-6">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <LucideIcons.User className="text-blue-400" />
+                                    Student Profile & Settings
+                                </h2>
 
-                                    <div className="space-y-2 mb-4">
-                                        {(activeChild.authorizedPickups || []).map((name, idx) => (
-                                            <div key={idx} className="flex justify-between items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-700">
-                                                <span className="text-sm text-slate-300">{name}</span>
-                                                <button
-                                                    onClick={async () => {
-                                                        const newPickups = activeChild.authorizedPickups?.filter((_, i) => i !== idx) || [];
+                                <div className="grid gap-6">
+                                    {/* Parent Info */}
+                                    <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
+                                        <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.Phone size={16} /> Contact Info</h3>
+                                        <div className="grid md:grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 mb-1">Parent Name</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
+                                                    defaultValue={activeChild.parentName}
+                                                    onBlur={async (e) => {
+                                                        if (!db) return;
+                                                        await updateDoc(doc(db as Firestore, 'students', activeChild.id), { parentName: e.target.value });
+                                                    }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-slate-500 mb-1">Parent Phone</label>
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
+                                                    defaultValue={activeChild.parentPhone}
+                                                    onBlur={async (e) => {
+                                                        if (!db) return;
+                                                        await updateDoc(doc(db as Firestore, 'students', activeChild.id), { parentPhone: e.target.value });
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Medical Info */}
+                                    <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
+                                        <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.HeartPulse size={16} className="text-rose-400" /> Medical & Important Notes</h3>
+                                        <textarea
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none min-h-[100px]"
+                                            placeholder="Allergies, medical conditions, or other important notes..."
+                                            defaultValue={activeChild.medicalInfo}
+                                            onBlur={async (e) => {
+                                                if (!db) return;
+                                                await updateDoc(doc(db as Firestore, 'students', activeChild.id), { medicalInfo: e.target.value });
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Pickup List */}
+                                    <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
+                                        <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.Car size={16} className="text-amber-400" /> Authorized Pickups</h3>
+                                        <p className="text-xs text-slate-400 mb-4">List the names of people authorized to pick up {activeChild.name.split(' ')[0]}.</p>
+
+                                        <div className="space-y-2 mb-4">
+                                            {(activeChild.authorizedPickups || []).map((name, idx) => (
+                                                <div key={idx} className="flex justify-between items-center bg-slate-900 px-3 py-2 rounded-lg border border-slate-700">
+                                                    <span className="text-sm text-slate-300">{name}</span>
+                                                    <button
+                                                        onClick={async () => {
+                                                            const newPickups = activeChild.authorizedPickups?.filter((_, i) => i !== idx) || [];
+                                                            if (!db) return;
+                                                            await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
+                                                        }}
+                                                        className="text-red-400 hover:text-red-300"
+                                                    >
+                                                        <LucideIcons.X size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            {(!activeChild.authorizedPickups || activeChild.authorizedPickups.length === 0) && (
+                                                <div className="text-xs text-slate-500 italic">No additional authorized pickups listed.</div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <input
+                                                id="newPickupParams"
+                                                type="text"
+                                                placeholder="Add Name (e.g. Uncle John)"
+                                                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
+                                                onKeyDown={async (e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const input = e.currentTarget;
+                                                        if (!input.value.trim()) return;
+                                                        const newPickups = [...(activeChild.authorizedPickups || []), input.value.trim()];
                                                         if (!db) return;
                                                         await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
-                                                    }}
-                                                    className="text-red-400 hover:text-red-300"
-                                                >
-                                                    <LucideIcons.X size={14} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                        {(!activeChild.authorizedPickups || activeChild.authorizedPickups.length === 0) && (
-                                            <div className="text-xs text-slate-500 italic">No additional authorized pickups listed.</div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                        <input
-                                            id="newPickupParams"
-                                            type="text"
-                                            placeholder="Add Name (e.g. Uncle John)"
-                                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
-                                            onKeyDown={async (e) => {
-                                                if (e.key === 'Enter') {
-                                                    const input = e.currentTarget;
-                                                    if (!input.value.trim()) return;
+                                                        input.value = '';
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                onClick={async () => {
+                                                    const input = document.getElementById('newPickupParams') as HTMLInputElement;
+                                                    if (!input?.value.trim()) return;
                                                     const newPickups = [...(activeChild.authorizedPickups || []), input.value.trim()];
                                                     if (!db) return;
                                                     await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
                                                     input.value = '';
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            onClick={async () => {
-                                                const input = document.getElementById('newPickupParams') as HTMLInputElement;
-                                                if (!input?.value.trim()) return;
-                                                const newPickups = [...(activeChild.authorizedPickups || []), input.value.trim()];
-                                                if (!db) return;
-                                                await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
-                                                input.value = '';
-                                            }}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold"
-                                        >
-                                            Add
-                                        </button>
+                                                }}
+                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
-                {activeTab === 'pickup' && (
-                    <div className="space-y-6">
-                        {/* Status Checker */}
-                        {!activePickupEntry ? (
-                            completedPickupToday ? (
-                                // STEP 3: COMPLETED STATE
-                                <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                                    <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 p-8 rounded-2xl text-center">
-                                        <div className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-900/50">
-                                            <CheckCircle2 size={48} className="text-white" />
+                {
+                    activeTab === 'gallery' && (
+                        <div className="space-y-6">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                                    <LucideIcons.Camera className="text-pink-400" />
+                                    Photo Gallery
+                                </h2>
+                                <p className="text-slate-400 text-sm mb-6">
+                                    Memories from {activeChild.name.split(' ')[0]}'s workshops and general academy highlights.
+                                </p>
+
+                                {(() => {
+                                    // Filter Logic: Show items relevant to this student OR public items (no studentId)
+                                    const myPhotos = galleryItems.filter(item =>
+                                        !item.studentId || item.studentId === activeChild.id
+                                    );
+
+                                    if (myPhotos.length === 0) {
+                                        return (
+                                            <div className="text-center py-20 bg-slate-950 rounded-xl border border-slate-800 border-dashed">
+                                                <LucideIcons.Image size={48} className="mx-auto mb-4 text-slate-700" />
+                                                <h3 className="text-slate-200 font-bold mb-1">No Photos Yet</h3>
+                                                <p className="text-slate-500 text-sm">Check back after the next workshop!</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return (
+                                        <>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                                                {myPhotos.map(item => (
+                                                    <div
+                                                        key={item.id}
+                                                        onClick={() => setSelectedImage(item)}
+                                                        className="group relative aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-lg hover:shadow-pink-900/20 transition-all cursor-pointer"
+                                                    >
+                                                        <img
+                                                            src={item.url}
+                                                            alt={item.caption || 'Gallery photo'}
+                                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                        />
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                                            <div className="flex items-center gap-2 text-white font-bold text-xs mb-1">
+                                                                <LucideIcons.Maximize2 size={14} /> View Full
+                                                            </div>
+                                                            {item.caption && <p className="text-slate-300 text-xs line-clamp-1">{item.caption}</p>}
+
+                                                            {item.studentId === activeChild.id && (
+                                                                <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
+                                                                    Tagged
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Lightbox Modal */}
+                                            {selectedImage && (
+                                                <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-200">
+                                                    <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
+
+                                                        {/* Header */}
+                                                        <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-900/50">
+                                                            <h3 className="font-bold text-white max-w-[80%] truncate">
+                                                                {selectedImage.caption || 'Photo Viewer'}
+                                                            </h3>
+                                                            <button
+                                                                onClick={() => setSelectedImage(null)}
+                                                                className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+                                                            >
+                                                                <LucideIcons.X size={24} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Image Container */}
+                                                        <div className="flex-1 overflow-hidden bg-black flex items-center justify-center p-4">
+                                                            <img
+                                                                src={selectedImage.url}
+                                                                alt={selectedImage.caption || 'Full view'}
+                                                                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                                                            />
+                                                        </div>
+
+                                                        {/* Footer / Actions */}
+                                                        <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
+                                                            <div className="text-xs text-slate-500">
+                                                                {new Date((selectedImage.createdAt as any)?.seconds * 1000 || Date.now()).toLocaleDateString(undefined, { dateStyle: 'long' })}
+                                                            </div>
+
+                                                            <div className="flex gap-3">
+                                                                {/* Share Button (Web Share API with File) */}
+                                                                <button
+                                                                    onClick={async () => {
+                                                                        const shareData = {
+                                                                            title: 'MakerLab Photo',
+                                                                            text: selectedImage.caption || 'Check out this photo from MakerLab!',
+                                                                        };
+
+                                                                        if (navigator.share) {
+                                                                            try {
+                                                                                // Attempt to fetch and share FILE
+                                                                                const response = await fetch(selectedImage.url);
+                                                                                const blob = await response.blob();
+                                                                                const file = new File([blob], "makerlab-photo.jpg", { type: blob.type });
+
+                                                                                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                                                                    await navigator.share({
+                                                                                        ...shareData,
+                                                                                        files: [file]
+                                                                                    });
+                                                                                } else {
+                                                                                    // Fallback to URL if files not supported
+                                                                                    await navigator.share({
+                                                                                        ...shareData,
+                                                                                        url: selectedImage.url
+                                                                                    });
+                                                                                }
+                                                                            } catch (err) {
+                                                                                console.error('Share failed, trying link fallback:', err);
+                                                                                // Final Fallback: URL share
+                                                                                try {
+                                                                                    await navigator.share({
+                                                                                        ...shareData,
+                                                                                        url: selectedImage.url
+                                                                                    });
+                                                                                } catch (fallbackErr) {
+                                                                                    // Clipboard Fallback
+                                                                                    navigator.clipboard.writeText(selectedImage.url);
+                                                                                    alert("Link copied to clipboard!");
+                                                                                }
+                                                                            }
+                                                                        } else {
+                                                                            // Fallback: Copy Link
+                                                                            navigator.clipboard.writeText(selectedImage.url);
+                                                                            alert("Link copied to clipboard!");
+                                                                        }
+                                                                    }}
+                                                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all"
+                                                                >
+                                                                    <LucideIcons.Share2 size={16} /> Share
+                                                                </button>
+
+                                                                {/* Download Button */}
+                                                                <a
+                                                                    href={selectedImage.url}
+                                                                    download={`makerlab-photo-${selectedImage.id}.jpg`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-sm font-bold transition-all border border-slate-700"
+                                                                >
+                                                                    <LucideIcons.Download size={16} /> Download
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+                    )
+                }
+
+                {
+                    activeTab === 'pickup' && (
+                        <div className="space-y-6">
+                            {/* Status Checker */}
+                            {!activePickupEntry ? (
+                                completedPickupToday ? (
+                                    // STEP 3: COMPLETED STATE
+                                    <div className="space-y-6 animate-in zoom-in-95 duration-300">
+                                        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 p-8 rounded-2xl text-center">
+                                            <div className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-900/50">
+                                                <CheckCircle2 size={48} className="text-white" />
+                                            </div>
+                                            <h3 className="text-2xl font-black text-white mb-2">Pickup Completed! 🌟</h3>
+                                            <p className="text-slate-300 text-sm mb-6">
+                                                {completedPickupToday.pickerName || 'You'} successfully picked up {activeChild.name.split(' ')[0]} at {new Date((completedPickupToday.confirmedAt as any).seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+                                            </p>
+                                            <div className="p-4 bg-slate-900/50 rounded-xl text-xs text-slate-400 italic">
+                                                Have a wonderful evening! See you next time. 👋
+                                            </div>
                                         </div>
-                                        <h3 className="text-2xl font-black text-white mb-2">Pickup Completed! 🌟</h3>
-                                        <p className="text-slate-300 text-sm mb-6">
-                                            {completedPickupToday.pickerName || 'You'} successfully picked up {activeChild.name.split(' ')[0]} at {new Date((completedPickupToday.confirmedAt as any).seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
-                                        </p>
-                                        <div className="p-4 bg-slate-900/50 rounded-xl text-xs text-slate-400 italic">
-                                            Have a wonderful evening! See you next time. 👋
-                                        </div>
+
+                                        {/* Override Button (e.g. if they need to pick up again or error) */}
+                                        {/* Hidden behind a safe guard or just smaller transparency? */}
                                     </div>
-
-                                    {/* Override Button (e.g. if they need to pick up again or error) */}
-                                    {/* Hidden behind a safe guard or just smaller transparency? */}
-                                </div>
-                            ) : (
-                                // STEP 1: PRE-PICKUP (Selection)
-                                <div className="space-y-6 animate-in slide-in-from-bottom-4">
-                                    <div>
-                                        <label className="block text-slate-400 text-sm font-bold mb-3 uppercase">Who is picking up today?</label>
-                                        <div className="grid gap-3">
-                                            <button
-                                                onClick={() => setSelectedPicker(userProfile?.name || 'Me')}
-                                                className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${selectedPicker === (userProfile?.name || 'Me') || !selectedPicker
-                                                    ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
-                                            >
-                                                <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
-                                                    {(userProfile?.name || 'Me').charAt(0)}
-                                                </div>
-                                                <div className="text-left">
-                                                    <div className="font-bold">Me ({userProfile?.name || 'Parent'})</div>
-                                                    <div className="text-xs opacity-70">Primary Parent</div>
-                                                </div>
-                                                {(!selectedPicker || selectedPicker === (userProfile?.name || 'Me')) && <CheckCircle2 className="ml-auto text-indigo-400" />}
-                                            </button>
-
-                                            {activeChild.authorizedPickups?.map(name => (
+                                ) : (
+                                    // STEP 1: PRE-PICKUP (Selection)
+                                    <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                                        <div>
+                                            <label className="block text-slate-400 text-sm font-bold mb-3 uppercase">Who is picking up today?</label>
+                                            <div className="grid gap-3">
                                                 <button
-                                                    key={name}
-                                                    onClick={() => setSelectedPicker(name)}
-                                                    className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${selectedPicker === name
+                                                    onClick={() => setSelectedPicker(userProfile?.name || 'Me')}
+                                                    className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${selectedPicker === (userProfile?.name || 'Me') || !selectedPicker
                                                         ? 'bg-indigo-600/20 border-indigo-500 text-white'
                                                         : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
                                                 >
-                                                    <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold">
-                                                        {name.charAt(0)}
+                                                    <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
+                                                        {(userProfile?.name || 'Me').charAt(0)}
                                                     </div>
                                                     <div className="text-left">
-                                                        <div className="font-bold">{name}</div>
-                                                        <div className="text-xs opacity-70">Authorized Pickup</div>
+                                                        <div className="font-bold">Me ({userProfile?.name || 'Parent'})</div>
+                                                        <div className="text-xs opacity-70">Primary Parent</div>
                                                     </div>
-                                                    {selectedPicker === name && <CheckCircle2 className="ml-auto text-indigo-400" />}
+                                                    {(!selectedPicker || selectedPicker === (userProfile?.name || 'Me')) && <CheckCircle2 className="ml-auto text-indigo-400" />}
                                                 </button>
-                                            ))}
-                                        </div>
-                                    </div>
 
-                                    <button
-                                        onClick={() => handlePickupAction('notify')}
-                                        disabled={notifyingPickup}
-                                        className="w-full py-6 rounded-2xl font-black text-xl flex flex-col items-center justify-center gap-2 transition-all shadow-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-indigo-900/30 active:scale-[0.98]"
-                                    >
-                                        {notifyingPickup ? (
-                                            <div className="w-8 h-8 border-4 border-white-400 border-t-transparent rounded-full animate-spin" />
-                                        ) : (
-                                            <>
-                                                <div className="flex items-center gap-3">
-                                                    <Car size={28} />
-                                                    <span>I'm On My Way 🚀</span>
-                                                </div>
-                                                <span className="text-sm font-normal opacity-80">Tap when you leave home/work</span>
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            )
-                        ) : (
-                            // STEP 2: ACTIVE PICKUP PHASES
-                            <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                                {activePickupEntry.status === 'on_the_way' && (
-                                    <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 p-6 rounded-2xl text-center">
-                                        <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                                            <Car size={40} className="text-indigo-400" />
+                                                {activeChild.authorizedPickups?.map(name => (
+                                                    <button
+                                                        key={name}
+                                                        onClick={() => setSelectedPicker(name)}
+                                                        className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${selectedPicker === name
+                                                            ? 'bg-indigo-600/20 border-indigo-500 text-white'
+                                                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+                                                    >
+                                                        <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold">
+                                                            {name.charAt(0)}
+                                                        </div>
+                                                        <div className="text-left">
+                                                            <div className="font-bold">{name}</div>
+                                                            <div className="text-xs opacity-70">Authorized Pickup</div>
+                                                        </div>
+                                                        {selectedPicker === name && <CheckCircle2 className="ml-auto text-indigo-400" />}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">Have a safe drive! 🚗</h3>
-                                        <p className="text-slate-400 text-sm mb-6">We've notified the team that <b>{activePickupEntry.pickerName}</b> is coming.</p>
 
                                         <button
-                                            onClick={() => handlePickupAction('arrive')}
-                                            className="w-full py-4 rounded-xl font-bold bg-white text-indigo-900 hover:bg-indigo-50 transition-colors shadow-lg"
+                                            onClick={() => handlePickupAction('notify')}
+                                            disabled={notifyingPickup}
+                                            className="w-full py-6 rounded-2xl font-black text-xl flex flex-col items-center justify-center gap-2 transition-all shadow-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-indigo-900/30 active:scale-[0.98]"
                                         >
-                                            I've Arrived at the Gate 👋
+                                            {notifyingPickup ? (
+                                                <div className="w-8 h-8 border-4 border-white-400 border-t-transparent rounded-full animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-center gap-3">
+                                                        <Car size={28} />
+                                                        <span>I'm On My Way 🚀</span>
+                                                    </div>
+                                                    <span className="text-sm font-normal opacity-80">Tap when you leave home/work</span>
+                                                </>
+                                            )}
                                         </button>
                                     </div>
-                                )}
-
-                                {activePickupEntry.status === 'arrived' && (
-                                    <div className="bg-gradient-to-br from-emerald-900/50 to-teal-900/50 border border-emerald-500/30 p-6 rounded-2xl text-center">
-                                        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <CheckCircle2 size={40} className="text-emerald-400 animate-bounce" />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-white mb-2">You're Checked In! ✅</h3>
-                                        <p className="text-slate-400 text-sm mb-6">Please wait at the designated area. We are bringing <b>{activeChild.name.split(' ')[0]}</b> out to you.</p>
-                                        <div className="p-3 bg-slate-900/50 rounded-lg text-xs text-slate-500 animate-pulse">
-                                            Waiting for instructor to release student...
-                                        </div>
-                                    </div>
-                                )}
-
-                                {activePickupEntry.status === 'released' && (
-                                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-2xl shadow-xl shadow-blue-900/50">
-                                        <div className="bg-slate-900/90 rounded-xl p-6 text-center h-full">
-                                            <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-slate-900 relative">
-                                                <div className="absolute inset-0 bg-white/30 rounded-full animate-ping opacity-75"></div>
-                                                <Star size={48} className="text-white relative z-10" fill="currentColor" />
+                                )
+                            ) : (
+                                // STEP 2: ACTIVE PICKUP PHASES
+                                <div className="space-y-6 animate-in zoom-in-95 duration-300">
+                                    {activePickupEntry.status === 'on_the_way' && (
+                                        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 p-6 rounded-2xl text-center">
+                                            <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                                                <Car size={40} className="text-indigo-400" />
                                             </div>
-                                            <h3 className="text-2xl font-black text-white mb-2">{activeChild.name.split(' ')[0]} is Released! 🎉</h3>
-                                            <p className="text-blue-200 text-sm mb-8">They have left the Makerlab and are coming to you.</p>
+                                            <h3 className="text-xl font-bold text-white mb-2">Have a safe drive! 🚗</h3>
+                                            <p className="text-slate-400 text-sm mb-6">We've notified the team that <b>{activePickupEntry.pickerName}</b> is coming.</p>
 
                                             <button
-                                                onClick={() => handlePickupAction('confirm')}
-                                                className="w-full py-4 rounded-xl font-black text-lg bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:to-orange-600 transition-all shadow-lg active:scale-95"
+                                                onClick={() => handlePickupAction('arrive')}
+                                                className="w-full py-4 rounded-xl font-bold bg-white text-indigo-900 hover:bg-indigo-50 transition-colors shadow-lg"
                                             >
-                                                Confirm Pickup & Close
+                                                I've Arrived at the Gate 👋
                                             </button>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                    )}
 
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-                            <h3 className="font-bold text-white mb-2">Pickup Guidelines</h3>
-                            <ul className="list-disc pl-5 text-slate-400 text-sm space-y-2">
-                                <li>Please ensure you are parked safely.</li>
-                                <li>Only tap "I've Arrived" when you are physically at the location.</li>
-                                <li>If someone else is picking up, ensure they are on the <b>Authorized Pickups</b> list in Settings.</li>
-                            </ul>
+                                    {activePickupEntry.status === 'arrived' && (
+                                        <div className="bg-gradient-to-br from-emerald-900/50 to-teal-900/50 border border-emerald-500/30 p-6 rounded-2xl text-center">
+                                            <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <CheckCircle2 size={40} className="text-emerald-400 animate-bounce" />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-white mb-2">You're Checked In! ✅</h3>
+                                            <p className="text-slate-400 text-sm mb-6">Please wait at the designated area. We are bringing <b>{activeChild.name.split(' ')[0]}</b> out to you.</p>
+                                            <div className="p-3 bg-slate-900/50 rounded-lg text-xs text-slate-500 animate-pulse">
+                                                Waiting for instructor to release student...
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {activePickupEntry.status === 'released' && (
+                                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-2xl shadow-xl shadow-blue-900/50">
+                                            <div className="bg-slate-900/90 rounded-xl p-6 text-center h-full">
+                                                <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-slate-900 relative">
+                                                    <div className="absolute inset-0 bg-white/30 rounded-full animate-ping opacity-75"></div>
+                                                    <Star size={48} className="text-white relative z-10" fill="currentColor" />
+                                                </div>
+                                                <h3 className="text-2xl font-black text-white mb-2">{activeChild.name.split(' ')[0]} is Released! 🎉</h3>
+                                                <p className="text-blue-200 text-sm mb-8">They have left the Makerlab and are coming to you.</p>
+
+                                                <button
+                                                    onClick={() => handlePickupAction('confirm')}
+                                                    className="w-full py-4 rounded-xl font-black text-lg bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:to-orange-600 transition-all shadow-lg active:scale-95"
+                                                >
+                                                    Confirm Pickup & Close
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                                <h3 className="font-bold text-white mb-2">Pickup Guidelines</h3>
+                                <ul className="list-disc pl-5 text-slate-400 text-sm space-y-2">
+                                    <li>Please ensure you are parked safely.</li>
+                                    <li>Only tap "I've Arrived" when you are physically at the location.</li>
+                                    <li>If someone else is picking up, ensure they are on the <b>Authorized Pickups</b> list in Settings.</li>
+                                </ul>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* Footer */}
                 <div className="text-center text-slate-500 text-xs pb-8 pt-4 space-y-2 border-t border-slate-800/50">
                     <p className="font-bold text-slate-400">{settings.academyName}</p>
                     <p>Questions? Contact us: {settings.receiptContact}</p>
                 </div>
-            </main>
-        </div>
+
+                {isProjectModalOpen && selectedProject && (
+                    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950 animate-in fade-in duration-300">
+                        <ProjectDetailsEnhanced
+                            project={selectedProject}
+                            role="parent"
+                            onBack={handleCloseProject}
+                        />
+                    </div>
+                )}
+            </main >
+        </div >
     );
 };

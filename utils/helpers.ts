@@ -581,7 +581,7 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
   const logoHtml = `<img src="${window.location.origin}/images/logo.png" alt="MakerLab Academy" style="height: 60px; object-fit: contain;" />`;
 
   // Construct Parent Portal URL for QR Code
-  const parentPortalUrl = `${window.location.origin}/parent-portal`;
+  const parentPortalUrl = `${window.location.origin}/parent-login`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(parentPortalUrl)}`;
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -774,7 +774,7 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
                         <div class="cred-row"><span class="label">Email</span> <span class="value">${student.parentLoginInfo.email}</span></div>
                         <div class="cred-row"><span class="label">Password</span> <span class="value">${student.parentLoginInfo.initialPassword || '********'}</span></div>
                         <div style="margin-top:10px; font-size:11px; color:#2563eb; display:flex; align-items:center; gap:5px;">
-                            <strong>URL:</strong> ${window.location.host}/parent-portal
+                            <strong>URL:</strong> ${window.location.host}/parent-login
                         </div>
                     ` : `
                         <div style="text-align:center; padding:10px; color:#94a3b8; font-size:12px;">No active parent account</div>

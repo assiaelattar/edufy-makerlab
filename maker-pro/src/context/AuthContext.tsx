@@ -7,7 +7,7 @@ import { Student, Enrollment, Program } from '../types';
 interface AuthContextType {
     user: User | null;
     studentProfile: Student | null;
-    userRole: 'student' | 'instructor' | null;
+    userRole: 'student' | 'instructor' | 'parent' | null;
     loading: boolean;
     isAuthorized: boolean;
     authError: string | null;
@@ -29,7 +29,7 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [studentProfile, setStudentProfile] = useState<Student | null>(null);
-    const [userRole, setUserRole] = useState<'student' | 'instructor' | null>(null);
+    const [userRole, setUserRole] = useState<'student' | 'instructor' | 'parent' | null>(null);
     const [loading, setLoading] = useState(true);
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
@@ -55,6 +55,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (directDoc.exists()) {
                         const studentData = { id: directDoc.id, ...directDoc.data() } as Student;
                         verifyAccess(currentUser, studentData, firestore);
+                        return;
+                    }
+
+                    // 1c. Try identifying as PARENT
+                    const parentQ = query(studentsRef, where('parentLoginInfo.email', '==', currentUser.email));
+                    const parentSnap = await getDocs(parentQ);
+
+                    if (!parentSnap.empty) {
+                        setIsAuthorized(true);
+                        setUserRole('parent');
+                        // Parent doesn't have a specific "student profile", but is authorized
+                        setStudentProfile(null);
+                        setLoading(false);
                         return;
                     }
 

@@ -50,25 +50,27 @@ export const AbsenceView = () => {
             if (selectedGroup !== 'All' && e.groupName !== selectedGroup && e.secondGroupName !== selectedGroup) return false;
 
             return mainHasClass || secHasClass;
-        }).map(e => {
-            // Determine which time slot applies today
-            // If both apply (rare), we might list twice or prefer one. For now, list main if valid, else sec.
-            let timeStr = "";
-            let groupName = "";
+        }).flatMap(e => {
+            // Use flatMap to allow One Student -> Multiple Slots (e.g. 15:30 AND 17:30)
+            const slots = [];
 
             if (e.groupTime?.includes(dayString)) {
-                timeStr = e.groupTime.replace(dayString, '').trim(); // "14:00"
-                groupName = e.groupName || '';
-            } else if (e.secondGroupTime?.includes(dayString)) {
-                timeStr = e.secondGroupTime.replace(dayString, '').trim();
-                groupName = e.secondGroupName || '';
+                slots.push({
+                    ...e,
+                    displayTime: e.groupTime.replace(dayString, '').trim(),
+                    displayGroup: e.groupName || ''
+                });
             }
 
-            return {
-                ...e,
-                displayTime: timeStr,
-                displayGroup: groupName
-            };
+            if (e.secondGroupTime?.includes(dayString)) {
+                slots.push({
+                    ...e,
+                    displayTime: e.secondGroupTime.replace(dayString, '').trim(),
+                    displayGroup: e.secondGroupName || ''
+                });
+            }
+
+            return slots;
         });
     }, [enrollments, students, dayOfWeek, searchQuery, selectedGroup]);
 
@@ -94,11 +96,12 @@ export const AbsenceView = () => {
     }, [scheduledStudents]);
 
     // 5. Attendance Handler
-    const handleMarkAttendance = async (studentId: string, enrollmentId: string, status: AttendanceRecord['status']) => {
+    const handleMarkAttendance = async (studentId: string, enrollmentId: string, status: AttendanceRecord['status'], timeSlot: string) => {
         if (!db) return;
 
-        // Use a composite ID: DATE_STUDENTID to prevent duplicates easily
-        const recordId = `${selectedDate}_${studentId}`;
+        // Use a composite ID: DATE_STUDENTID_TIMESLOT to support multiple slots per day
+        const sanitizedTime = timeSlot.replace(':', '');
+        const recordId = `${selectedDate}_${studentId}_${sanitizedTime}`;
 
         try {
             await setDoc(doc(db, 'attendance', recordId), {
@@ -106,6 +109,7 @@ export const AbsenceView = () => {
                 studentId,
                 enrollmentId,
                 status,
+                slotTime: timeSlot,
                 createdAt: serverTimestamp() // Updates timestamp on change
             });
         } catch (err) {
@@ -120,14 +124,17 @@ export const AbsenceView = () => {
         const batch: Promise<void>[] = [];
 
         studentsInSlot.forEach(student => {
-            const currentStatus = getStatus(student.studentId);
+            const currentStatus = getStatus(student.studentId, student.displayTime);
             if (currentStatus === 'unmarked') {
-                const recordId = `${selectedDate}_${student.studentId}`;
-                const promise = setDoc(doc(db, 'attendance', recordId), {
+                const sanitizedTime = student.displayTime.replace(':', '');
+                const recordId = `${selectedDate}_${student.studentId}_${sanitizedTime}`;
+
+                const promise = setDoc(doc(db!, 'attendance', recordId), {
                     date: selectedDate,
                     studentId: student.studentId,
                     enrollmentId: student.id,
                     status: 'present',
+                    slotTime: student.displayTime,
                     createdAt: serverTimestamp()
                 });
                 batch.push(promise);
@@ -137,10 +144,28 @@ export const AbsenceView = () => {
         await Promise.all(batch);
     };
 
-    const getStatus = (studentId: string) => {
+    const getStatus = (studentId: string, timeSlot: string) => {
         // Find local record first (optimistic UI provided by AppContext listener)
-        const record = attendanceRecords.find(r => r.date === selectedDate && r.studentId === studentId);
-        return record?.status || 'unmarked';
+        // Try strict match first (NewID)
+        const sanitizedTime = timeSlot.replace(':', '');
+        const newId = `${selectedDate}_${studentId}_${sanitizedTime}`;
+
+        const strictRecord = attendanceRecords.find(r => r.id === newId);
+        if (strictRecord) return strictRecord.status;
+
+        // Validating uniqueness: If we don't find a strict match, do we fallback to `Date_Student`?
+        // Only if we want backward compatibility for single-slot days.
+        // But for this specific "double slot" bug, falling back is what causes the glitch (ambiguity).
+        // So we should NOT fallback if we want to enforce separation. 
+        // However, existing records for today are likely saved as `Date_Student`.
+        // If we don't fallback, they will appear unmarked.
+
+        // Compromise: check legacy only if there is ONLY ONE slot for this student today?
+        // Easier: Just check legacy ID. If it exists, use it. But this risks showing the SAME status for both slots.
+        // Since the user wants to separate them, showing "Present" for both when only one was clicked is confusing.
+        // It's better to show "Unmarked" for the new slot logic and force re-marking for clarity.
+
+        return 'unmarked';
     };
 
     // Helper to see if a time block is "Current"
@@ -160,7 +185,7 @@ export const AbsenceView = () => {
         const total = scheduledStudents.length;
 
         scheduledStudents.forEach(student => {
-            const status = getStatus(student.studentId);
+            const status = getStatus(student.studentId, student.displayTime);
             if (status === 'absent') absent++;
             else if (status === 'late') late++;
             // Treat 'unmarked' as 'present' for the daily report, assuming default presence
@@ -288,7 +313,7 @@ export const AbsenceView = () => {
 
                                 <div className="divide-y divide-slate-800">
                                     {slot.students.map(student => {
-                                        const status = getStatus(student.studentId);
+                                        const status = getStatus(student.studentId, student.displayTime);
                                         // Default "Present" logic: If unmarked, visualize as Present
                                         const isPresent = status === 'present' || status === 'unmarked';
 
@@ -296,7 +321,7 @@ export const AbsenceView = () => {
                                         const studentDetails = students.find(s => s.id === student.studentId);
 
                                         return (
-                                            <div key={student.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors">
+                                            <div key={`${student.id}_${student.displayTime}`} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">
                                                         {initials}
@@ -324,19 +349,19 @@ export const AbsenceView = () => {
 
                                                 <div className="flex gap-2 self-end sm:self-auto">
                                                     <button
-                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'present')}
+                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'present', student.displayTime)}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${isPresent ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-emerald-500/50 hover:text-emerald-400'}`}
                                                     >
                                                         <CheckCircle2 size={14} /> Present
                                                     </button>
                                                     <button
-                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'late')}
+                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'late', student.displayTime)}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${status === 'late' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-amber-500/50 hover:text-amber-400'}`}
                                                     >
                                                         <Clock size={14} /> Late
                                                     </button>
                                                     <button
-                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent')}
+                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent', student.displayTime)}
                                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${status === 'absent' ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-red-500/50 hover:text-red-400'}`}
                                                     >
                                                         <XCircle size={14} /> Absent

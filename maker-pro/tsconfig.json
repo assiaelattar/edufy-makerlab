@@ -21,7 +21,9 @@
         "noFallthroughCasesInSwitch": true
     },
     "include": [
-        "src"
+        "src",
+        "../views",
+        "../context"
     ],
     "references": [
         {

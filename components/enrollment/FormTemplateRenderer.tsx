@@ -115,44 +115,7 @@ export const FormTemplateRenderer = ({ program }: { program: Program }) => {
                 </div>
             )}
 
-            {/* Section 3: Formula Selection */}
-            <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>
-                <div className={`${theme.bg} text-white px-4 py-2 font-bold uppercase text-sm flex items-center gap-2`}>
-                    {program.targetAudience === 'adults' ? '2' : '3'}. CHOIX DE LA FORMULE (Program Options)
-                </div>
-                <div className="p-4 grid grid-cols-2 gap-4">
-                    {program.packs?.map((pack, idx) => (
-                        <div key={idx} className={`border-2 ${theme.border} rounded-xl p-3 relative flex flex-col justify-between`}>
-                            <div>
-                                <div className="flex items-center gap-2 mb-2">
-                                    <div className={`w-6 h-6 border-2 ${theme.border} rounded`}></div>
-                                    <div>
-                                        <h4 className={`font-bold uppercase ${theme.text} text-base leading-none`}>{pack.name}</h4>
-                                        <p className="text-[10px] text-slate-500 mt-0.5">
-                                            {pack.workshopsPerWeek ? `${pack.workshopsPerWeek} atelier(s) / sem` : ''}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Payment Preference */}
-                                <div className="mt-3 pl-8 space-y-1.5">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-4 h-4 border border-slate-300 rounded`}></div>
-                                        <span className="text-[10px] uppercase font-bold text-slate-600">Paiement Annuel</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-4 h-4 border border-slate-300 rounded`}></div>
-                                        <span className="text-[10px] uppercase font-bold text-slate-600">Paiement Trimestriel</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    {(!program.packs || program.packs.length === 0) && (
-                        <div className="col-span-2 text-center py-4 text-slate-400 italic">No packs configured for this program</div>
-                    )}
-                </div>
-            </div>
+// This is a placeholder as I need to verify the target file first.
 
             {/* Section 4: Schedule Preference */}
             <div className={`mb-6 rounded-lg border-2 ${theme.border} overflow-hidden`}>

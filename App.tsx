@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles, Rocket } from 'lucide-react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { ThemeProvider } from './sparkquest/context/ThemeContext';
@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { ConfirmProvider, useConfirm } from './context/ConfirmContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { getEnabledModules } from './services/moduleRegistry';
+import { Lead } from './types'; // Import Lead type
 import { DashboardView } from './views/DashboardView';
 import { StudentsView } from './views/StudentsView';
 import { ClassesView } from './views/ClassesView';
@@ -35,7 +36,7 @@ import { ArcadeManagerView } from './views/learning/ArcadeManagerView';
 import { CommunicationsView } from './views/CommunicationsView';
 import { EnrollmentFormsView } from './views/EnrollmentFormsView';
 import { PublicEnrollmentView } from './views/PublicEnrollmentView';
-// ... imports
+import { CalendarView } from './views/CalendarView'; // NEW
 import { LoginView } from './views/LoginView';
 import { ParentLoginView } from './views/ParentLoginView';
 import { Modal } from './components/Modal';
@@ -171,14 +172,26 @@ const AppContent = () => {
         setNegotiatedPrice(standardTuition);
     }, [standardTuition]);
 
+    // Flag to prevent clearing form when opening with pre-filled data
+    const preserveEnrollmentFormRef = useRef(false);
+
     // Initialize Enrollment Wizard
     useEffect(() => {
         if (isEnrollmentModalOpen) {
             setEnrollmentStep(quickEnrollStudentId ? 2 : 1);
-            setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
-            setEnrollProgramForm({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '' });
+
+            // Only reset forms if NOT explicitly preserved (e.g. coming from Lead or Prospect)
+            if (!preserveEnrollmentFormRef.current) {
+                setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
+                setEnrollProgramForm({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '' });
+            }
+
+            // Always reset payments on new session
             setEnrollPayments([]);
             setCurrentEnrollPayment({ amount: '', method: 'cash', checkNumber: '', bankName: '', depositDate: '', date: new Date().toISOString().split('T')[0] });
+
+            // Reset flag for next time (after this render effect runs)
+            preserveEnrollmentFormRef.current = false;
         }
     }, [isEnrollmentModalOpen, quickEnrollStudentId]);
 
@@ -325,6 +338,7 @@ const AppContent = () => {
         // Reset student form for fresh entry
         setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
         setQuickEnrollStudentId(null);
+        preserveEnrollmentFormRef.current = true; // Preserve the program form we just set
         setIsEnrollmentModalOpen(true);
     };
 
@@ -508,6 +522,68 @@ const AppContent = () => {
         }
     };
 
+    // --- SMART ENROLLMENT FROM LEAD ---
+    const handleEnrollLead = (lead: Lead) => {
+        // 1. Pre-fill Student Details
+        setEnrollStudentForm({
+            name: lead.name,
+            parentName: lead.parentName,
+            parentPhone: lead.phone,
+            email: lead.email || '',
+            birthDate: '', // Lead might not have this, leave blank
+            school: '' // Lead might not have this
+        });
+
+        // 2. Pre-fill Program Details
+        // Try to find the program
+        // Assuming lead.programId is stored, or we match by name if needed. 
+        // The Kiosk form usually saves programId if built correctly, or we infer from 'interests' if legacy.
+        // But the user said "Kiosk form", so likely we have structured data. 
+        // Checking lead type definition might be good, but assuming standard fields for now.
+        // If the lead from Kiosk saves 'programId' and 'selectedPack' and 'selectedSlot'.
+
+        let programId = lead.programId || '';
+        let packName = lead.selectedPack || '';
+        let gradeId = '';
+        let groupId = '';
+
+        // If we have a slot string like "Wednesday 14:00", try to find it in the program's structure
+        if (programId && lead.selectedSlot) {
+            const prog = programs.find(p => p.id === programId);
+            if (prog) {
+                // Try to find a group matching the slot string
+                // Iterate all grades -> all groups
+                for (const grade of prog.grades) {
+                    const match = grade.groups.find(g =>
+                        `${g.day} ${g.time}` === lead.selectedSlot ||
+                        g.name === lead.selectedSlot
+                    );
+                    if (match) {
+                        gradeId = grade.id;
+                        groupId = match.id;
+                        break;
+                    }
+                }
+            }
+        }
+
+        setEnrollProgramForm({
+            programId,
+            packName,
+            gradeId,
+            groupId,
+            paymentPlan: 'full', // Default, or infer if lead has it
+            secondGroupId: ''
+        });
+
+        // Reset ID to ensure creating NEW student
+        setQuickEnrollStudentId(null);
+
+        // Open Modal (Preserving the data we just set)
+        preserveEnrollmentFormRef.current = true;
+        setIsEnrollmentModalOpen(true);
+    };
+
     // Permission-based Module Filtering
     const modules = getEnabledModules().filter(m => !m.requiredPermission || can(m.requiredPermission));
 
@@ -523,17 +599,18 @@ const AppContent = () => {
             case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
             case 'students': return <StudentsView onAddStudent={() => { setQuickEnrollStudentId(null); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setQuickEnrollStudentId(id || null); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
             case 'classes': return <ClassesView onEnroll={handleEnrollFromGroup} />;
-            case 'programs': return <ProgramsView />;
+            case 'programs': return <ProgramsView onEnrollLead={handleEnrollLead} />;
             case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;
             case 'expenses': return <ExpensesView />;
             case 'tools': return <ToolsView />;
             case 'settings': return <SettingsView />;
             case 'student-details': return <StudentDetailsView onEditStudent={() => { }} onQuickEnroll={(id) => { setQuickEnrollStudentId(id); setIsEnrollmentModalOpen(true); }} onRecordPayment={(id) => handleOpenPaymentModal(id)} />;
             case 'activity-details': return <ActivityDetailsView />;
-            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setIsEnrollmentModalOpen(true); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); }} />;
+            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); preserveEnrollmentFormRef.current = true; setIsEnrollmentModalOpen(true); }} />;
             case 'attendance': return <AbsenceView />;
             case 'team': return <TeamView />;
-            case 'marketing': return <MarketingView />;
+            case 'marketing': return <MarketingView onEnrollLead={handleEnrollLead} />;
+            case 'schedule': return <CalendarView />; // NEW
             case 'learning': return <LearningView />;
             case 'toolkit': return <ToolkitView />;
             case 'media': return <MediaView />;
@@ -545,7 +622,7 @@ const AppContent = () => {
             case 'test-wizard': return <TestWizardView />;
             case 'arcade-mgr': return <ArcadeManagerView />;
             case 'communications': return <CommunicationsView />;
-            case 'enrollment-forms': return <EnrollmentFormsView />;
+            case 'enrollment-forms': return <EnrollmentFormsView onEnrollLead={handleEnrollLead} />;
             default: return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
         }
     };

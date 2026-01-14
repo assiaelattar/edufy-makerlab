@@ -7,8 +7,14 @@ import { Lock, Mail, ArrowRight, Loader2, AlertCircle, CheckSquare, Square, Shie
 import { Logo } from '../components/Logo';
 import { authenticateBiometric, isBiometricEnabled } from '../utils/biometrics';
 
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../maker-pro/src/context/AuthContext';
+
 export const ParentLoginView = () => {
     const { settings } = useAppContext();
+    const navigate = useNavigate();
+    const { user, userRole, loading: authLoading } = useAuth();
+    console.log("Rendering ParentLoginView");
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
@@ -19,6 +25,20 @@ export const ParentLoginView = () => {
     useEffect(() => {
         setBiometricAvailable(isBiometricEnabled());
     }, []);
+
+    useEffect(() => {
+        if (!authLoading && user) {
+            if (userRole === 'parent') {
+                navigate('/parent-dashboard');
+            } else if (userRole === 'instructor') {
+                navigate('/instructor-dashboard');
+            } else {
+                // If a non-parent attempts to login here, they might restrict them or just let them go to their dashboard
+                // For now, redirecting them to their respective dashboards is safe
+                navigate('/');
+            }
+        }
+    }, [user, userRole, authLoading, navigate]);
 
     const handleBiometricLogin = async () => {
         setLoading(true);
@@ -108,7 +128,7 @@ export const ParentLoginView = () => {
                 </div>
 
                 {/* Right Side - Form */}
-                <div className="w-full md:w-1/2 p-8 md:p-16 flex flex-col justify-center bg-white relative">
+                <div className="w-full md:w-1/2 p-6 md:p-16 flex flex-col justify-center bg-white relative">
                     <div className="max-w-sm mx-auto w-full">
                         <div className="text-center md:text-left mb-8">
                             <div className="md:hidden w-16 h-16 bg-indigo-50 rounded-2xl mx-auto flex items-center justify-center mb-4 border border-indigo-100">
@@ -172,7 +192,7 @@ export const ParentLoginView = () => {
                                     <input
                                         type="email"
                                         required
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-800 text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-400"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-10 pr-4 text-slate-800 text-base focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-400"
                                         placeholder="Parent Email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
@@ -186,7 +206,7 @@ export const ParentLoginView = () => {
                                     <input
                                         type="password"
                                         required
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-slate-800 text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-400"
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-10 pr-4 text-slate-800 text-base focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-400"
                                         placeholder="Password"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
@@ -209,7 +229,7 @@ export const ParentLoginView = () => {
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-purple-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
                                 {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
                                     <>

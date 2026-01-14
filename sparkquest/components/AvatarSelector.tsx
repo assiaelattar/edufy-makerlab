@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { AVATAR_CATEGORIES, getAvatarUrl } from '../../utils/avatars';
+import { AVATAR_CATEGORIES, getAvatarUrl } from '../utils/avatars';
 import { Check, RefreshCw } from 'lucide-react';
 
 interface AvatarSelectorProps {
@@ -29,8 +29,8 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ currentAvatarUrl
                         key={cat.id}
                         onClick={() => setActiveCategory(cat.id)}
                         className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeCategory === cat.id
-                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 scale-105'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 scale-105'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         {cat.label}
@@ -51,8 +51,8 @@ export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ currentAvatarUrl
                             whileTap={{ scale: 0.95 }}
                             onClick={() => handleSelect(url)}
                             className={`aspect-square rounded-2xl p-2 relative transition-all ${isSelected
-                                    ? 'bg-indigo-600 ring-4 ring-indigo-400/30 shadow-xl'
-                                    : 'bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-slate-500'
+                                ? 'bg-indigo-600 ring-4 ring-indigo-400/30 shadow-xl'
+                                : 'bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-slate-500'
                                 }`}
                         >
                             <img

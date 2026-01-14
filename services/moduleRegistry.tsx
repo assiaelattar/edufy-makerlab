@@ -24,11 +24,11 @@ export const MODULES: ModuleConfig[] = [
     { id: 'programs', label: 'Programs', icon: BookOpen, enabled: true, color: 'violet', requiredPermission: 'programs.manage', category: 'academic' },
     { id: 'learning', label: 'Learning & Portfolio', icon: Brain, enabled: false, description: 'LMS, Projects & Student Portfolios', color: 'cyan', requiredPermission: 'learning.view', category: 'academic' },
 
+    { id: 'schedule', label: 'Global Schedule', icon: CalendarCheck, enabled: true, description: 'Weekly Activity View', color: 'blue', requiredPermission: 'dashboard.view', category: 'academic' },
     { id: 'finance', label: 'Finance', icon: Wallet, enabled: true, color: 'emerald', requiredPermission: 'finance.view', category: 'business' },
     { id: 'expenses', label: 'Expenses', icon: TrendingDown, enabled: true, color: 'rose', requiredPermission: 'expenses.view', category: 'business' },
     { id: 'marketing', label: 'Marketing & CRM', icon: Megaphone, enabled: true, description: 'Campaigns, Social Media, Leads', color: 'purple', requiredPermission: 'marketing.view', category: 'business' },
     { id: 'workshops', label: 'Workshops', icon: CalendarCheck, enabled: true, description: 'Event scheduling & Public Booking', color: 'pink', requiredPermission: 'workshops.manage', category: 'business' },
-    { id: 'enrollment-forms', label: 'Enrollment Forms', icon: ClipboardCheck, enabled: true, description: 'Printable Forms & Kiosk Mode', color: 'indigo', requiredPermission: 'programs.view', category: 'business' },
     { id: 'pickup', label: 'Pickup Status', icon: Car, enabled: true, description: 'Real-time Parent Arrival', color: 'emerald', requiredPermission: 'pickup.view', category: 'business' },
 
     { id: 'team', label: 'Team & Projects', icon: Briefcase, enabled: true, description: 'Tasks, Chat, Employee Management', color: 'orange', requiredPermission: 'team.view', category: 'organization' },

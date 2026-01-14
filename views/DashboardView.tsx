@@ -523,6 +523,34 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
             });
         }
 
+        // 6. Pending Enrollments (from Forms)
+        const pendingEnrollments = leads.filter(l => (l.status === 'new' || l.status === 'interested') && l.source === 'Kiosk Form');
+        if (pendingEnrollments.length > 3) {
+            alerts.push({
+                type: 'enrollment',
+                count: pendingEnrollments.length,
+                label: 'Pending Enrollments',
+                subLabel: 'New applications waiting',
+                route: 'enrollment-forms',
+                params: { filter: 'waiting' },
+                color: 'emerald',
+                icon: UserPlus
+            });
+        } else {
+            pendingEnrollments.forEach(lead => {
+                alerts.push({
+                    type: 'enrollment',
+                    count: 1,
+                    label: `Enroll ${lead.name.split(' ')[0]}`,
+                    subLabel: lead.interests?.[0] ? `For ${lead.interests[0]}` : 'New Application',
+                    route: 'enrollment-forms',
+                    params: { filter: 'waiting' },
+                    color: 'emerald',
+                    icon: UserPlus
+                });
+            });
+        }
+
         return alerts;
 
     }, [expenses, expenseTemplates, leads, students, attendanceRecords, programs, enrollments, selectedSession, bookings]);
@@ -872,8 +900,8 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                 ))}
 
                                 {/* DYNAMIC ALERTS */}
-                                {actionAlerts.map((alert, idx) => (
-                                    <div key={idx} onClick={() => navigateTo(alert.route as any)} className={`group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors bg-${alert.color}-950/10 border-${alert.color}-900/30 hover:bg-${alert.color}-900/20`}>
+                                {actionAlerts.map((alert: any, idx) => (
+                                    <div key={idx} onClick={() => navigateTo(alert.route, alert.params)} className={`group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors bg-${alert.color}-950/10 border-${alert.color}-900/30 hover:bg-${alert.color}-900/20`}>
                                         <div className="flex items-center gap-3">
                                             <div className={`p-2 rounded-lg bg-${alert.color}-500/10 text-${alert.color}-500`}><alert.icon size={16} /></div>
                                             <div>

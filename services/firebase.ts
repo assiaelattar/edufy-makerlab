@@ -2,6 +2,7 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Configuration type definition
 export interface FirebaseConfig {
@@ -25,10 +26,14 @@ const firebaseConfig: FirebaseConfig = {
   measurementId: "G-KZV1Q7T1H2"
 };
 
+import { getMessaging, Messaging } from "firebase/messaging";
+
 // State containers
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let auth: Auth | undefined;
+let storage: FirebaseStorage | undefined;
+let messaging: Messaging | undefined;
 let initializationError: Error | null = null;
 
 // Initialize Firebase
@@ -43,9 +48,17 @@ try {
   auth = getAuth(app);
   console.log('✅ Auth initialized:', auth ? 'Connected' : 'Failed');
 
+  storage = getStorage(app);
+  console.log('✅ Storage initialized');
+
+  if (typeof window !== 'undefined') {
+    messaging = getMessaging(app);
+    console.log('✅ Messaging initialized');
+  }
+
 } catch (error) {
   console.error("❌ Firebase initialization failed:", error);
   initializationError = error as Error;
 }
 
-export { app, db, auth, firebaseConfig, initializationError };
+export { app, db, auth, storage, messaging, firebaseConfig, initializationError };

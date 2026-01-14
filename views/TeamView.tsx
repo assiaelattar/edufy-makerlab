@@ -131,15 +131,18 @@ export const TeamView = () => {
         // Allow edit if admin OR assigned to me OR unassigned
         const canEdit = can('team.assign_others') || isAssignedToMe || !task.assignedTo;
 
+        // Strip HTML for preview
+        const previewText = task.description ? task.description.replace(/<[^>]+>/g, '') : '';
+
         return (
-            <div key={task.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm hover:border-slate-600 transition-all group relative flex flex-col gap-2 mb-3">
+            <div key={task.id} onClick={() => { setEditingTask(task); setTaskForm(task); setIsTaskModalOpen(true); }} className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm hover:border-slate-600 transition-all group relative flex flex-col gap-2 mb-3 cursor-pointer">
                 <div className="flex justify-between items-start">
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border uppercase font-bold tracking-wider ${task.priority === 'high' ? 'bg-red-950/30 text-red-400 border-red-900/50' : task.priority === 'medium' ? 'bg-amber-950/30 text-amber-400 border-amber-900/50' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                         {task.priority}
                     </span>
                     {canEdit && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => { e.stopPropagation(); setEditingTask(task); setTaskForm(task); setIsTaskModalOpen(true); }} className="p-1 text-slate-500 hover:text-white hover:bg-slate-800 rounded transition-colors"><Edit2 size={12} /></button>
+                            {/* Actions moved to click handler, but keeping delete for quick access */}
                             <button onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }} className="p-1 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded transition-colors"><Trash2 size={12} /></button>
                         </div>
                     )}
@@ -147,7 +150,7 @@ export const TeamView = () => {
 
                 <div>
                     <h4 className="text-sm font-bold text-white leading-tight">{task.title}</h4>
-                    {task.description && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{task.description}</p>}
+                    {previewText && <p className="text-xs text-slate-500 mt-1 line-clamp-2">{previewText}</p>}
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800 pt-3 mt-1">
@@ -178,6 +181,9 @@ export const TeamView = () => {
             </div>
         );
     };
+
+    // Filter staff members
+    const staffMembers = teamMembers.filter(u => !['student', 'parent', 'guest'].includes(u.role));
 
     return (
         <div className="space-y-6 pb-24 md:pb-8 md:h-full flex flex-col animate-in fade-in slide-in-from-right-4">
@@ -325,7 +331,7 @@ export const TeamView = () => {
                     <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
                         <h3 className="font-bold text-white flex items-center gap-2"><MessageSquare size={18} className="text-blue-400" /> Team Chat</h3>
                         <div className="flex -space-x-2">
-                            {teamMembers.slice(0, 5).map(m => (
+                            {staffMembers.slice(0, 5).map(m => (
                                 <div key={m.email} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-slate-900 flex items-center justify-center text-xs font-bold text-slate-300" title={m.name}>
                                     {m.name.charAt(0)}
                                 </div>
@@ -369,10 +375,30 @@ export const TeamView = () => {
             )}
 
             {/* Task Modal */}
-            <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? "Edit Task" : "New Task"}>
+            <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? "Task Details" : "New Task"}>
                 <form onSubmit={handleSaveTask} className="space-y-4">
-                    <div><label className="block text-xs text-slate-400 mb-1">Title</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} /></div>
-                    <div><label className="block text-xs text-slate-400 mb-1">Description</label><textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24 resize-none" value={taskForm.description} onChange={e => setTaskForm({ ...taskForm, description: e.target.value })} /></div>
+                    <div>
+                        <label className="block text-xs text-slate-400 mb-1">Title</label>
+                        <input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={taskForm.title} onChange={e => setTaskForm({ ...taskForm, title: e.target.value })} placeholder="Task Title..." />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-slate-400 mb-1">Description (Rich Text)</label>
+                        {/* Rich Text Editor Simulation using ContentEditable */}
+                        <div
+                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white min-h-[150px] max-h-[300px] overflow-y-auto outline-none focus:border-blue-500 transition-colors [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_b]:font-bold [&_strong]:font-bold"
+                            contentEditable
+                            suppressContentEditableWarning
+                            onInput={(e) => setTaskForm({ ...taskForm, description: e.currentTarget.innerHTML })}
+                            dangerouslySetInnerHTML={{ __html: taskForm.description || '' }}
+                            onBlur={(e) => setTaskForm({ ...taskForm, description: e.currentTarget.innerHTML })}
+                            style={{ whiteSpace: 'pre-wrap' }}
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1 italic">
+                            Supports bold, italics, and lists. Copy-paste from documents to preserve formatting.
+                        </p>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs text-slate-400 mb-1">Priority</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={taskForm.priority} onChange={e => setTaskForm({ ...taskForm, priority: e.target.value as any })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
                         <div><label className="block text-xs text-slate-400 mb-1">Status</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={taskForm.status} onChange={e => setTaskForm({ ...taskForm, status: e.target.value as any })}><option value="todo">To Do</option><option value="in_progress">In Progress</option><option value="done">Done</option></select></div>
@@ -382,7 +408,7 @@ export const TeamView = () => {
                         {can('team.assign_others') ? (
                             <select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={taskForm.assignedTo} onChange={e => setTaskForm({ ...taskForm, assignedTo: e.target.value })}>
                                 <option value="">-- Unassigned --</option>
-                                {teamMembers.map(u => <option key={u.uid} value={u.uid}>{u.name} ({u.role})</option>)}
+                                {staffMembers.map(u => <option key={u.uid} value={u.uid}>{u.name} ({u.role})</option>)}
                             </select>
                         ) : (
                             <div className="w-full p-3 bg-slate-900 border border-slate-800 rounded-lg text-slate-400 text-sm cursor-not-allowed">
@@ -398,7 +424,7 @@ export const TeamView = () => {
                 </form>
             </Modal>
 
-            {/* Project Modal */}
+            {/* Project Modal - REMAINING UNCHANGED */}
             <Modal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} title="New Project">
                 <form onSubmit={handleSaveProject} className="space-y-4">
                     <div><label className="block text-xs text-slate-400 mb-1">Project Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={projectForm.name} onChange={e => setProjectForm({ ...projectForm, name: e.target.value })} /></div>

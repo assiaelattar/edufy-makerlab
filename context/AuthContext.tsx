@@ -16,7 +16,12 @@ interface AuthContextType {
   can: (permission: string) => boolean;
   loginAsDemo: () => Promise<void>;
   switchRole: (role: RoleType) => Promise<void>;
+  impersonateUser: (uid: string, email: string, role: RoleType) => Promise<void>;
   createSecondaryUser: (email: string, pass: string) => Promise<string>;
+  // Missing properties used by PrivateRoute
+  isAuthorized: boolean;
+  authError: string | null;
+  userRole: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -99,6 +104,17 @@ const DEFAULT_ROLES: RoleDefinition[] = [
       'media.view',
       'pickup.view',
       'settings.view' // Needed to see profile settings
+    ]
+  },
+  {
+    id: 'parent',
+    label: 'Parent',
+    description: 'Access to child progress and payments.',
+    permissions: [
+      'dashboard.view',
+      'dashboard.view_parent',
+      'students.view_children',
+      'finance.view_payments'
     ]
   }
 ];
@@ -362,7 +378,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   };
 
-  // Create Auth User without logging out current user
+  const impersonateUser = async (uid: string, email: string, role: RoleType = 'parent') => {
+    setLoading(true);
+    isDemoMode.current = true;
+
+    // Fetch the REAL profile if it exists, otherwise create a mock one combined with real UID
+    let targetProfile: UserProfile | null = null;
+    if (db) {
+      try {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (snap.exists()) {
+          targetProfile = snap.data() as UserProfile;
+        }
+      } catch (e) {
+        console.error("Error fetching impersonated profile:", e);
+      }
+    }
+
+    if (!targetProfile) {
+      // Fallback if profile doc is missing but we have UID (shouldn't happen for valid parents)
+      targetProfile = {
+        uid,
+        email,
+        name: 'Impersonated User',
+        role,
+        status: 'active',
+        createdAt: Timestamp.now(),
+        lastLogin: Timestamp.now()
+      };
+    }
+
+    // Create synthetic User object
+    const syntheticUser = {
+      uid: targetProfile.uid,
+      email: targetProfile.email,
+      displayName: targetProfile.name,
+      emailVerified: true,
+      isAnonymous: false,
+      metadata: {},
+      providerData: [],
+      refreshToken: '',
+      tenantId: null,
+      delete: async () => { },
+      getIdToken: async () => 'impersonation-token',
+      getIdTokenResult: async () => ({
+        token: 'impersonation-token',
+        signInProvider: 'custom',
+        claims: {},
+        authTime: Date.now().toString(),
+        issuedAtTime: Date.now().toString(),
+        expirationTime: (Date.now() + 3600000).toString(),
+      }),
+      reload: async () => { },
+      toJSON: () => ({}),
+      phoneNumber: null,
+      photoURL: null
+    } as unknown as User;
+
+    setUser(syntheticUser);
+    setUserProfile(targetProfile);
+    setRoleDefinition(roles.find(r => r.id === role) || DEFAULT_ROLES.find(r => r.id === role) || null);
+    setLoading(false);
+  };
+
   const createSecondaryUser = async (email: string, pass: string): Promise<string> => {
     // Use a unique name to prevent app duplication errors if cleanup fails
     const appName = `Secondary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -400,8 +478,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
+  // Calculated Properties for PrivateRoute
+  const isAuthorized = !!userProfile && userProfile.status === 'active' && !!roleDefinition;
+  const userRole = userProfile?.role || null;
+  const authError = !userProfile ? 'Profile not found' : userProfile.status !== 'active' ? 'Account inactive' : !roleDefinition ? 'Role not defined' : null;
+
   return (
-    <AuthContext.Provider value={{ user, userProfile, roleDefinition, loading, roles, signOut, can, loginAsDemo, switchRole, createSecondaryUser }}>
+    <AuthContext.Provider value={{
+      user, userProfile, roleDefinition, loading, roles, signOut, can, loginAsDemo, switchRole, impersonateUser, createSecondaryUser,
+      isAuthorized, authError, userRole
+    }}>
       {children}
     </AuthContext.Provider>
   );

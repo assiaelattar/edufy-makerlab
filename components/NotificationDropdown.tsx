@@ -73,60 +73,73 @@ export const NotificationDropdown = () => {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                    <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
-                        <h3 className="text-sm font-bold text-white">Notifications</h3>
-                        {unreadNotificationsCount > 0 && (
-                            <button
-                                onClick={() => markAllAsRead()}
-                                className="text-[10px] text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1"
-                            >
-                                <Check size={12} /> Mark all read
-                            </button>
-                        )}
-                    </div>
+                <>
+                    {/* Mobile Backdrop / Overlay */}
+                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsOpen(false)} />
 
-                    <div className="max-h-[400px] overflow-y-auto custom-scrollbar">
-                        {notifications.length === 0 ? (
-                            <div className="p-8 text-center text-slate-500 text-sm">
-                                No notifications yet.
-                            </div>
-                        ) : (
-                            <div className="divide-y divide-slate-800/50">
-                                {notifications.map(notification => (
-                                    <div
-                                        key={notification.id}
-                                        onClick={() => handleNotificationClick(notification)}
-                                        className={`p-4 hover:bg-slate-800/50 transition-colors cursor-pointer ${!notification.read ? 'bg-slate-800/20' : ''}`}
+                    {/* Dropdown / Modal */}
+                    <div className="fixed inset-x-4 top-20 bottom-20 z-50 flex flex-col bg-slate-900 border border-slate-800 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:w-80 md:h-auto md:max-h-[600px] md:bottom-auto">
+                        <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-950/50 shrink-0">
+                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                Notifications
+                                {unreadNotificationsCount > 0 && <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded-full">{unreadNotificationsCount}</span>}
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                {unreadNotificationsCount > 0 && (
+                                    <button
+                                        onClick={() => markAllAsRead()}
+                                        className="text-[10px] text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1 bg-blue-500/10 px-2 py-1 rounded"
                                     >
-                                        <div className="flex gap-3">
-                                            <div className="mt-0.5 shrink-0">
-                                                {getIcon(notification.type)}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className={`text-sm ${!notification.read ? 'text-white font-medium' : 'text-slate-400'}`}>
-                                                    {notification.title}
-                                                </p>
-                                                <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                                                    {notification.message}
-                                                </p>
-                                                <div className="flex items-center gap-2 mt-2">
-                                                    <span className="text-[10px] text-slate-600">
-                                                        {notification.createdAt ? formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true }) : 'Just now'}
-                                                    </span>
-                                                    {notification.link && <ExternalLink size={10} className="text-slate-600" />}
-                                                </div>
-                                            </div>
-                                            {!notification.read && (
-                                                <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0"></div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                                        <Check size={12} /> Mark all
+                                    </button>
+                                )}
+                                <button className="md:hidden text-slate-400" onClick={() => setIsOpen(false)}><XCircle size={20} /></button>
                             </div>
-                        )}
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto custom-scrollbar">
+                            {notifications.length === 0 ? (
+                                <div className="p-8 text-center text-slate-500 text-sm flex flex-col items-center gap-3">
+                                    <Bell size={32} className="opacity-20" />
+                                    <p>No notifications yet.</p>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-slate-800/50">
+                                    {notifications.map(notification => (
+                                        <div
+                                            key={notification.id}
+                                            onClick={() => handleNotificationClick(notification)}
+                                            className={`p-4 hover:bg-slate-800/50 transition-colors cursor-pointer ${!notification.read ? 'bg-slate-800/20' : ''}`}
+                                        >
+                                            <div className="flex gap-3">
+                                                <div className="mt-0.5 shrink-0">
+                                                    {getIcon(notification.type)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className={`text-sm ${!notification.read ? 'text-white font-medium' : 'text-slate-400'}`}>
+                                                        {notification.title}
+                                                    </p>
+                                                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                                                        {notification.message}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-2">
+                                                        <span className="text-[10px] text-slate-600">
+                                                            {notification.createdAt ? formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true }) : 'Just now'}
+                                                        </span>
+                                                        {notification.link && <ExternalLink size={10} className="text-slate-600" />}
+                                                    </div>
+                                                </div>
+                                                {!notification.read && (
+                                                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0 animate-pulse"></div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
+                </>
             )}
         </div>
     );

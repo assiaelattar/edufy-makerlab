@@ -15,6 +15,7 @@ export interface Student {
     points?: number;
     level?: number;
     xp?: number;
+    dismissedFeedIds?: string[]; // IDs of feed items hidden by parent
 }
 
 export interface Announcement {
@@ -121,6 +122,8 @@ export interface StudentProject {
     status: 'planning' | 'building' | 'testing' | 'delivered' | 'submitted' | 'changes_requested' | 'published';
     steps: ProjectStep[];
     mediaUrls?: string[];
+    thumbnailUrl?: string;
+    presentationUrl?: string;
     embedUrl?: string;
     externalLink?: string;
     skillsAcquired: string[];
@@ -160,3 +163,45 @@ export interface ToolLink {
     createdAt: Timestamp;
 }
 
+
+
+export interface Lead {
+    id: string;
+    name: string;
+    parentName: string;
+    phone: string;
+    email?: string;
+    status: 'new' | 'contacted' | 'interested' | 'workshop_booked' | 'demo_booked' | 'converted' | 'closed';
+    source: string;
+    programId?: string;
+    selectedPack?: string;
+    selectedSlot?: string;
+    timeline?: any[];
+    interests?: string[]; // e.g., ["Robotics", "Coding"]
+    createdAt: any;
+    // Payment info from public form
+    paymentPlan?: 'full' | 'trimester' | 'month';
+}
+
+export interface MarketingPost {
+    id: string;
+    platform: 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
+    content: string;
+    status: 'planned' | 'in_progress' | 'review' | 'approved' | 'published';
+    date: string;
+    attachments?: string[];
+    feedback?: string;
+    createdAt?: any;
+}
+
+export interface Campaign {
+    id: string;
+    name: string;
+    budget: number;
+    spend: number;
+    status: 'planned' | 'active' | 'completed' | 'paused';
+    startDate: string;
+    endDate: string;
+    goals: string;
+    createdAt?: any;
+}

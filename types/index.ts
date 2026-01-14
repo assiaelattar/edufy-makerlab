@@ -20,12 +20,13 @@ export interface ProgramPack {
   priceAnnual?: number;
   priceTrimester?: number;
   price?: number;
+  promoPrice?: number; // Per-pack Discount Price
 }
 
 export interface Program {
   id: string;
   name: string;
-  type: 'Regular Program' | 'Holiday Camp' | 'Workshop';
+  type: 'Regular Program' | 'Holiday Camp' | 'Workshop' | 'Internship' | 'Camp';
   description: string;
   status: 'active' | 'archived';
   targetAudience?: 'kids' | 'adults';
@@ -35,6 +36,15 @@ export interface Program {
   resources?: ToolLink[];
   themeColor?: 'blue' | 'purple' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'slate';
   duration?: string; // e.g. "Annual", "3 Months", "2 Days"
+  paymentTerms?: string[]; // e.g., ["Advance 1000dhs", "Full Payment", "50% Deposit"]
+  // New Discount Fields
+  discountAvailable?: boolean;
+  discountPromoPrice?: number; // Fixed Promo Price (e.g. 3000)
+  discountEndDate?: string;
+  thumbnailUrl?: string; // Cover Image
+  partnerLogoUrl?: string; // Partner Organization Logo
+  partnerName?: string; // Partner Name
+  brochureUrl?: string; // Downloadable Brochure
 }
 
 export interface ProgramDashboardConfig {
@@ -310,9 +320,15 @@ export interface Lead {
   status: 'new' | 'contacted' | 'interested' | 'workshop_booked' | 'demo_booked' | 'converted' | 'closed';
   createdAt: Timestamp;
   // Enhanced Fields
+  programId?: string; // NEW
+  selectedPack?: string; // NEW
+  selectedSlot?: string; // NEW
+  paymentPlan?: 'full' | 'trimester' | 'month'; // NEW
   tags?: string[];
   interests?: string[]; // Program Names or IDs
   notes?: string[];     // Legacy simple notes
+  preferredPaymentTerm?: string; // NEW
+  paymentMethod?: 'cash' | 'check' | 'card'; // NEW
   timeline?: {
     date: string;
     type: 'workshop' | 'call' | 'note' | 'status_change' | 'conversion';
@@ -587,9 +603,10 @@ export interface AppSettings {
 }
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'enrollment-forms';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule';
 
 export interface ViewParams {
+  programId?: string; // NEW
   classId?: { pId: string, gId: string, grpId: string };
   studentId?: string;
   projectId?: string; // Add projectId here

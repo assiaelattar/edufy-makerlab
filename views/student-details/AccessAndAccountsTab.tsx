@@ -1,7 +1,8 @@
-
 import React, { useState } from 'react';
 import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle } from 'lucide-react';
 import { Student } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { useAppContext } from '../../context/AppContext';
 
 interface AccessAndAccountsTabProps {
   student: Student;
@@ -26,6 +27,8 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   settings,
   isAdult = false,
 }) => {
+  const { impersonateUser } = useAuth();
+  const { navigateTo } = useAppContext();
   const [showPassword, setShowPassword] = useState(false);
   const [showParentPassword, setShowParentPassword] = useState(false);
 
@@ -102,6 +105,25 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             >
               {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Generate
               Access
+            </button>
+          </div>
+        )}
+
+        {/* MASQUERADE BUTTON - ADMIN ONLY */}
+        {student.loginInfo?.uid && (
+          <div className="mt-4 pt-4 border-t border-indigo-900/30">
+            <button
+              onClick={async () => {
+                if (!student.loginInfo?.uid) return;
+
+                if (confirm(`You are about to log in as ${student.name} (Student). \n\nYou will see exactly what they see. \n\nTo return to Admin, you must Sign Out.`)) {
+                  await impersonateUser(student.loginInfo.uid, student.loginInfo.email, 'student');
+                  navigateTo('dashboard', {});
+                }
+              }}
+              className="w-full py-2 bg-slate-900 hover:bg-indigo-900/50 text-slate-400 hover:text-indigo-400 text-xs font-bold rounded border border-slate-800 hover:border-indigo-500/30 flex items-center justify-center gap-2 transition-all"
+            >
+              <UserPlus size={14} /> Log in as Student (Simulate)
             </button>
           </div>
         )}
@@ -187,6 +209,39 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Create Parent
                 Account
               </button>
+            </div>
+          )}
+
+          {/* MASQUERADE BUTTON - ADMIN ONLY */}
+          {student.parentLoginInfo && (
+            <div className="mt-4 pt-4 border-t border-indigo-900/30">
+              {!student.parentLoginInfo.uid ? (
+                <div className="text-center">
+                  <p className="text-xs text-amber-500 font-bold mb-1">Feature Unavailable</p>
+                  <p className="text-[10px] text-slate-500">
+                    This is a legacy account (missing UID). Please click "Regenerate / Reset Access" above to enable parent login simulation.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={async () => {
+                      if (!student.parentLoginInfo?.uid) return;
+
+                      if (confirm(`You are about to log in as ${student.parentName || 'Parent'}. \n\nYou will see exactly what they see (Real Data). \n\nTo return to Admin, you must Sign Out.`)) {
+                        await impersonateUser(student.parentLoginInfo.uid, student.parentLoginInfo.email, 'parent');
+                        navigateTo('dashboard', {}); // Parent dashboard is the default 'dashboard' view for parent role
+                      }
+                    }}
+                    className="w-full py-2 bg-slate-900 hover:bg-emerald-900/50 text-slate-400 hover:text-emerald-400 text-xs font-bold rounded border border-slate-800 hover:border-emerald-500/30 flex items-center justify-center gap-2 transition-all"
+                  >
+                    <UserPlus size={14} /> Log in as Parent (Simulate)
+                  </button>
+                  <p className="text-[10px] text-slate-500 text-center mt-2">
+                    View the portal as this parent. Use "Sign Out" to return.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>
