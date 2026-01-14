@@ -90,7 +90,8 @@ export const getUpcomingBirthdays = (students: any[], daysLookahead: number = 21
 };
 
 // --- IMAGE COMPRESSION UTILITY ---
-export const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promise<string> => {
+// --- IMAGE COMPRESSION UTILITY ---
+export const compressImage = (file: File, maxWidth = 1000, quality = 0.6): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -102,8 +103,9 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promis
         let width = img.width;
         let height = img.height;
 
+        // Calculate new dimensions while maintaining aspect ratio
         if (width > maxWidth) {
-          height = (height * maxWidth) / width;
+          height = Math.round((height * maxWidth) / width);
           width = maxWidth;
         }
 
@@ -114,9 +116,21 @@ export const compressImage = (file: File, maxWidth = 800, quality = 0.7): Promis
           reject(new Error("Canvas context not found"));
           return;
         }
+
+        // Use better interpolation if available
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, width, height);
-        // Compress to JPEG
-        resolve(canvas.toDataURL('image/jpeg', quality));
+
+        // 1. Try WebP first (Superior compression)
+        let dataUrl = canvas.toDataURL('image/webp', quality);
+
+        // 2. Fallback to JPEG if WebP is not supported (returns PNG by default if unsupported)
+        if (!dataUrl.startsWith('data:image/webp')) {
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        resolve(dataUrl);
       };
       img.onerror = (err) => reject(err);
     };
