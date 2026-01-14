@@ -14,7 +14,6 @@ import { LoginView } from './components/LoginView';
 import { ProjectSelector } from './components/ProjectSelector';
 import { SessionProvider } from './context/SessionContext';
 import { ThemeProvider } from './context/ThemeContext';
-import './cleanup-projects'; // Import cleanup script for console access
 import { config } from './utils/config';
 import { SessionOverlay } from './components/SessionOverlay';
 import { InactivityMonitor } from './components/InactivityMonitor';
