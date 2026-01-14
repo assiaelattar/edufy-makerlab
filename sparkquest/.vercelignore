@@ -1,13 +1,26 @@
-# Exclude large build artifacts from Vercel deployment
-*.zip
-SparkQuest-Portable.zip
-node_modules
-dist
-temp_build
-dist
-dist/win-unpacked
-*.exe
-*.dmg
-*.AppImage
-build_log.txt
+# Ignore build outputs
+dist/
+build/
+
+# Ignore Electron-specific files
+electron/
+*.bat
+*.ps1
 cert.pfx
+create-cert.ps1
+
+# Ignore large/unnecessary files
+SparkQuest-Portable.zip
+build_log.txt
+build_output.txt
+tsc_output.txt
+
+# Ignore seed/migration scripts
+seed-platforms.js
+setup-platforms.js
+cleanup-projects.ts
+migration-fix-stations.ts
+create-enrollment-helper.js
+
+# Ignore desktop app configs
+electron-builder.json
