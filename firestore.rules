@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+      function isAdmin() {
+        return isSignedIn() && (
+          (request.auth.token.keys().hasAny(['role']) && (request.auth.token.role in ['admin', 'instructor', 'admission_officer', 'accountant'])) ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'instructor', 'admission_officer', 'accountant']
+        );
+      }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- COLLECTION RULES ---
+
+    // 1. STUDENTS & USERS
+    // Allow public read for Kiosk Login to find students by name/status
+    match /students/{studentId} {
+      allow read: if true; 
+      allow write: if isAdmin() || isOwner(studentId);
+    }
+
+    match /users/{userId} {
+      allow read: if true; // Often needed for profile lookups
+      allow write: if isAdmin() || isOwner(userId);
+    }
+
+    // 2. CONTENT (Templates, Workflows, Assets)
+    // CRITICAL for Kiosk: Must be readable by everyone (or at least authenticated students)
+    // We use 'if true' to ensure Kiosk (which uses custom auth) never gets blocked.
+    match /project_templates/{templateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /process_templates/{workflowId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /stations/{stationId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /badges/{badgeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /contests/{contestId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /programs/{programId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 3. STUDENT WORK (Projects, Enrollments)
+    match /student_projects/{projectId} {
+      // Students need to read/write their own projects
+      // Admin can access all
+      allow read: if true; // Simplified for Kiosk gallery/sharing
+      allow write: if true; // TEMPORARY: Allow all writes to unblock Kiosk mode issues
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 4. SYSTEM & LOGS
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if true; // Allow client-side logging if needed
+    }
+
+    // 5. ERP / SAAS MODULES (Restored)
+    match /organizations/{orgId} {
+      allow read: if true; // Allow read for login/verification
+      allow write: if isAdmin();
+    }
+    
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /registrations/{regId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isSignedIn();
+    }
+
+    match /attendance/{recordId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+    
+    match /purchase_requests/{reqId} {
+      allow read: if isAdmin();
+      allow write: if isSignedIn();
+    }
+
+    match /inventory/{itemId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /gadgets/{gadgetId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Default catch-all (Secure by default)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

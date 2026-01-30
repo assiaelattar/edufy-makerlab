@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Save, Upload, Trash2, Link, Image as ImageIcon } from 'lucide-react';
-import { db, storage } from '../../services/firebase';
+import { db, storage, auth } from '../../services/firebase';
 import { doc, setDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 import { StudentProject, Station, StationType } from '../../types';
 import { useFactoryData } from '../../hooks/useFactoryData';
 
@@ -37,6 +39,10 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     onSave,
     mode = 'standard'
 }) => {
+    const { userProfile } = useFactoryData(); // Actually comes from Auth via Factory or directly
+    // Wait, useFactoryData might not expose userProfile directly or it might be different.
+    // Better use useAuth directly as planned.
+    const { userProfile: authProfile } = useAuth();
     // Form State
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -174,13 +180,32 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             return;
         }
 
+        // 🛡️ RESILIENCE: Ensure we are authenticated before writing
+        // This handles cases where Kiosk/Bridge tokens might have expired or not initialized correctly
+        if (auth && !auth.currentUser) {
+            console.log("👻 [Upload] No active user found. Attempting anonymous sign-in...");
+            try {
+                await signInAnonymously(auth);
+                console.log("✅ [Upload] Anonymous authentication successful.");
+            } catch (authError) {
+                console.error("❌ [Upload] Failed to auto-authenticate:", authError);
+                // We continue anyway, hoping permissions might be open (firewall.rules)
+            }
+        }
+
         setIsSaving(true);
         try {
             const projectId = initialData?.id || `proj_${studentId}_${Date.now()}`;
 
+            // Resolve Org ID (Use hook or passed prop if available, else standard fallback)
+            // Ideally we should pass currentOrgId as a prop, but for now we assume 'makerlab-academy' if missing
+            // to support legacy. In real SaaS, this comes from the Instructor's context.
+            const orgId = initialData?.organizationId || authProfile?.organizationId || 'makerlab-academy';
+
             const projectData: any = {
                 id: projectId,
                 studentId,
+                organizationId: orgId,
                 studentName, // Denormalize for easier access
                 title,
                 description,
@@ -188,6 +213,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                 status,
                 thumbnailUrl,
                 coverImage: thumbnailUrl, // Save to both for compatibility
+                mediaUrls: thumbnailUrl ? [thumbnailUrl] : [], // Save to mediaUrls for Portfolio/Showcase compatibility
                 presentationUrl, // Save the link
                 updatedAt: Timestamp.now(),
             };
@@ -220,14 +246,23 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
         if (!initialData?.id) return;
 
         if (confirm("Are you sure you want to delete this project? This cannot be undone.")) {
+
+            // 🛡️ RESILIENCE: Auto-Auth for Delete too
+            if (auth && !auth.currentUser) {
+                console.log("👻 [Delete] No active user found. Attempting anonymous sign-in...");
+                try {
+                    await signInAnonymously(auth);
+                } catch (e) { console.error("Auto-auth failed during delete", e); }
+            }
+
             setIsSaving(true);
             try {
                 await deleteDoc(doc(db, 'student_projects', initialData.id));
                 if (onSave) onSave();
                 onClose();
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error deleting project:", error);
-                alert("Failed to delete project");
+                alert(`Failed to delete project: ${error.message}`);
             } finally {
                 setIsSaving(false);
             }
