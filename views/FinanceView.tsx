@@ -135,7 +135,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     };
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 md:h-full flex flex-col animate-in fade-in slide-in-from-right-4">
+        <div className="space-y-6 pb-24 md:pb-8 flex flex-col animate-in fade-in slide-in-from-right-4">
 
             {/* Header & Action */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
@@ -217,7 +217,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             )}
 
             {/* Main Content: Filters & List */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden md:flex-1 md:flex md:flex-col shadow-lg shadow-black/10">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/10">
 
                 {/* Toolbar */}
                 <div className="p-4 border-b border-slate-800 bg-slate-950/30 space-y-4">
@@ -306,7 +306,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 </div>
 
                 {/* DATA TABLE */}
-                <div className="md:flex-1 md:overflow-y-auto custom-scrollbar bg-slate-900/50">
+                <div className="bg-slate-900/50">
 
                     {/* MODE: BALANCES */}
                     {viewMode === 'balances' && (
@@ -333,11 +333,11 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                 <div className="text-xs text-blue-300 mb-0.5">{enrollment.programName}</div>
                                                 <div className="text-[10px] text-slate-500">{enrollment.gradeName} • {enrollment.groupName}</div>
                                             </td>
-                                            <td className="p-4 text-right text-slate-300 font-mono">{formatCurrency(enrollment.totalAmount)}</td>
-                                            <td className="p-4 text-right text-emerald-400 font-mono">{formatCurrency(enrollment.paidAmount)}</td>
+                                            <td className="p-4 text-right text-slate-300 font-mono">{formatCurrency(enrollment.totalAmount || 0)}</td>
+                                            <td className="p-4 text-right text-emerald-400 font-mono">{formatCurrency(enrollment.paidAmount || 0)}</td>
                                             <td className="p-4 text-right">
-                                                <span className={`font-bold font-mono px-2 py-1 rounded ${enrollment.balance > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
-                                                    {formatCurrency(enrollment.balance)}
+                                                <span className={`font-bold font-mono px-2 py-1 rounded ${(enrollment.balance || 0) > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
+                                                    {formatCurrency(enrollment.balance || 0)}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-right">

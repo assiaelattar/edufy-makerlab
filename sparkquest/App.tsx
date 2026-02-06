@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { FactoryProvider } from './context/FactoryContext';
 import { useMissionData } from './hooks/useMissionData';
 import { useFactoryData } from './hooks/useFactoryData';
 import { StudentWizard } from './components/StudentWizard';
@@ -21,6 +22,7 @@ import { PickupNotification } from './components/PickupNotification';
 import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
 import { ProjectDetailsEnhanced } from './components/ProjectDetailsEnhanced';
+import ParentShowcase from './components/ParentShowcase';
 
 
 // Mock Data for Old Roadmap (Legacy View)
@@ -48,22 +50,21 @@ const INITIAL_USER: User = {
 };
 
 
-import { BootSequence } from './components/BootSequence';
+import { KioskLoginView } from './components/KioskLoginView';
+import { LoadingScreen } from './components/LoadingScreen';
 
 // Wrapper component to use Auth Context
 const SparkQuestApp: React.FC = () => {
   // 1. ALL HOOKS
-  const { user, userProfile, signInWithToken, signOut, loading: authLoading } = useAuth();
+  const { user, userProfile, signInWithToken, signOut, loading: authLoading, isKioskMode } = useAuth();
   const { fetchMission, clearMission, assignment, project, loading: missionLoading, error, isConnected } = useMissionData();
   const { projectTemplates, studentProjects } = useFactoryData();
 
-  const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY'>('HOME');
+  const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY' | 'SHOWCASE'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
 
-  const [bootComplete, setBootComplete] = useState(() => {
-    return localStorage.getItem('sparkquest_boot_complete') === 'true';
-  });
+  const [bootComplete, setBootComplete] = useState(false);
 
   // URL State Hooks (Moved Up)
   const [initialProjectId] = useState(() => {
@@ -124,6 +125,11 @@ const SparkQuestApp: React.FC = () => {
       return;
     }
 
+    if (initialViewMode === 'showcase') {
+      setView('SHOWCASE' as any);
+      return;
+    }
+
     // Role Routing
     if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
       setView('FACTORY');
@@ -165,34 +171,26 @@ const SparkQuestApp: React.FC = () => {
 
   // Boot
   if (!bootComplete) {
-    return <BootSequence onComplete={() => {
-      localStorage.setItem('sparkquest_boot_complete', 'true');
+    return <LoadingScreen mode="boot" onComplete={() => {
       setBootComplete(true);
     }} />;
   }
 
   // Loading
-  // Removed missionLoading to prevent blocking UI on navigation
   if (authLoading) {
-    return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white gap-4">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <div className="font-bold text-blue-400 tracking-widest uppercase text-sm animate-pulse">Initializing System...</div>
-      </div>
-    );
+    return <LoadingScreen mode="standard" message="Initializing System..." />;
+  }
+
+  // KIOSK MODE GUARD
+  if (isKioskMode && !user) {
+    return <KioskLoginView />;
   }
 
   // Auth Guard
   if (!user) {
     const params = new URLSearchParams(window.location.search);
     if (params.get('token')) {
-      return (
-        <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white p-8 text-center space-y-6">
-          <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-          <h1 className="text-2xl font-bold text-emerald-400">Verifying Identity...</h1>
-          <p className="text-slate-400">Please wait while we log you in.</p>
-        </div>
-      );
+      return <LoadingScreen mode="standard" message="Verifying Identity..." />;
     }
     return <LoginView />;
   }
@@ -201,6 +199,20 @@ const SparkQuestApp: React.FC = () => {
 
   if (view === 'FACTORY') {
     return <InstructorFactory />;
+  }
+
+  if (view === ('SHOWCASE' as any)) {
+    return <ParentShowcase
+      coverImage={project?.coverImage || project?.thumbnailUrl || undefined}
+      onViewProject={() => {
+        // If we have a project ID in URL, we could open details, but for now lets go to HOME
+        // which is the project selector/showcase
+        if (initialProjectId) {
+          setPreviewProjectId(initialProjectId);
+        } else {
+          setView('HOME');
+        }
+      }} />;
   }
 
   // PREVIEW / DETAILS INTERSTITIAL
@@ -351,17 +363,19 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <ThemeProvider>
-          <FocusSessionProvider>
-            <SessionProvider>
-              <SessionOverlay />
-              <InactivityMonitor />
-              <PickupNotification />
-              <SessionControls />
-              <SparkQuestApp />
-            </SessionProvider>
-          </FocusSessionProvider>
-        </ThemeProvider>
+        <FactoryProvider>
+          <ThemeProvider>
+            <FocusSessionProvider>
+              <SessionProvider>
+                <SessionOverlay />
+                <InactivityMonitor />
+                {/* <PickupNotification /> -- TEMPORARILY DISABLED: Missing Firestore indexes */}
+                <SessionControls />
+                <SparkQuestApp />
+              </SessionProvider>
+            </FocusSessionProvider>
+          </ThemeProvider>
+        </FactoryProvider>
       </AuthProvider>
     </ErrorBoundary>
   )

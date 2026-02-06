@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { FileText, Video, Image, Link as LinkIcon, Globe, File, Download } from 'lucide-react';
 import { StudentProject, Workflow, ProjectStep, TaskStatus, Assignment } from '../types';
 import { generateCoverArt, analyzeSubmission } from '../services/gemini';
 import { api } from '../services/api';
@@ -88,11 +89,36 @@ interface StepContentProps {
   assignment: Assignment;
   updateProject: (updates: Partial<StudentProject>) => void;
   closeModal: () => void;
+  onShowResources?: () => void;
 }
 
-const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, updateProject, closeModal }) => {
+const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, updateProject, closeModal, onShowResources }) => {
   const [stage, setStage] = useState<'BRIEFING' | 'CUSTOMIZE'>(project.title ? 'CUSTOMIZE' : 'BRIEFING');
-  const [generating, setGenerating] = useState(false);
+
+  // Typewriter State
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTypingComplete, setIsTypingComplete] = useState(false);
+
+  // Typewriter Effect
+  useEffect(() => {
+    if (stage === 'BRIEFING') {
+      let index = 0;
+      const text = assignment.description || "Mission Briefing Unavailable.";
+      setDisplayedText('');
+      setIsTypingComplete(false);
+
+      const intervalId = setInterval(() => {
+        setDisplayedText((prev) => prev + text.charAt(index));
+        index++;
+        if (index === text.length) {
+          clearInterval(intervalId);
+          setIsTypingComplete(true);
+        }
+      }, 30); // Typing speed
+
+      return () => clearInterval(intervalId);
+    }
+  }, [stage, assignment.description]);
 
   // Pre-fill student fields with mission context if empty
   useEffect(() => {
@@ -109,16 +135,6 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
     }
   }, [stage, project.title, project.station, project.description, assignment, updateProject]);
 
-  const handleGenerate = async () => {
-    if (!project.title || !project.description) return;
-    playSound('click');
-    setGenerating(true);
-    const art = await generateCoverArt(project.title, project.description);
-    updateProject({ coverImage: art || `https://placehold.co/600x400/indigo/white?text=${encodeURIComponent(project.title)}` });
-    setGenerating(false);
-    playSound('success');
-  };
-
   if (stage === 'BRIEFING') {
     return (
       <div className="space-y-6">
@@ -132,9 +148,13 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
               <span className="flex items-center gap-1"><span className="text-xl">🤖</span> Station: {assignment.station}</span>
               <span className="flex items-center gap-1"><span className="text-xl">📅</span> Due: Friday</span>
             </div>
-            <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-600 text-left">
-              <p className="text-lg leading-relaxed font-bold text-slate-300">
-                <span className="text-blue-400">Commander:</span> "{assignment.description}"
+
+            {/* TYPEWRITER DESCRIPTION */}
+            <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-600 text-left min-h-[120px] flex items-start">
+              <p className="text-lg leading-relaxed font-bold text-slate-300 font-mono">
+                <span className="text-blue-400 mr-2">Commander:</span>
+                {displayedText}
+                {!isTypingComplete && <span className="animate-pulse text-blue-400">|</span>}
               </p>
             </div>
 
@@ -157,9 +177,13 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
         <button
           onClick={() => { playSound('click'); setStage('CUSTOMIZE'); }}
-          className="w-full py-4 rounded-3xl bg-blue-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-blue-800 active:border-b-0 active:translate-y-2 hover:bg-blue-500 transition-colors shadow-xl"
+          disabled={!isTypingComplete}
+          className={`w-full py-4 rounded-3xl font-black text-xl uppercase tracking-wider border-b-8 transition-all shadow-xl flex items-center justify-center gap-3 ${isTypingComplete
+            ? 'bg-blue-600 text-white border-blue-800 active:border-b-0 active:translate-y-2 hover:bg-blue-500 cursor-pointer'
+            : 'bg-slate-700 text-slate-500 border-slate-900 cursor-not-allowed opacity-70'
+            }`}
         >
-          Accept Mission
+          {isTypingComplete ? 'Accept Mission' : 'Receiving Transmission...'}
         </button>
       </div>
     );
@@ -173,15 +197,75 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         </div>
 
         <div>
-          <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">Codename Your Project</label>
+          <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">
+            Codename Your Project <span className="text-red-500">*</span>
+          </label>
           <input
             value={project.title}
             onChange={e => updateProject({ title: e.target.value })}
-            className="w-full text-3xl font-black p-4 rounded-3xl border-4 border-slate-200 focus:border-blue-400 outline-none text-slate-800 text-center transition-all focus:scale-105"
+            className={`w-full text-3xl font-black p-4 rounded-3xl border-4 outline-none text-slate-800 text-center transition-all focus:scale-105 ${!project.title ? 'border-red-200 bg-red-50 focus:border-red-400 animate-pulse' : 'border-slate-200 focus:border-blue-400'
+              }`}
             placeholder="e.g. Mars Explorer X1"
             autoFocus
           />
+          {!project.title && (
+            <p className="text-red-400 text-xs font-bold mt-2 animate-bounce">⚠ You must name your project to start</p>
+          )}
         </div>
+
+        {/* Read-only Approach Section - "Locked" as per user request to force focus on naming? 
+            Or user meant lock the description from Briefing? 
+            Assuming 'Your Approach' should assume default or be editable but less emphasized.
+            Keeping editable but simplified. */}
+        <div>
+          <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">
+            Project Cover Image <span className="text-slate-500 font-normal normal-case">(Optional)</span>
+          </label>
+          <div className="flex items-start gap-4">
+            <div className="w-32 h-24 bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200 shrink-0 relative group">
+              {(project.thumbnailUrl || project.coverImage) ? (
+                <img src={project.thumbnailUrl || project.coverImage} className="w-full h-full object-cover" alt="Preview" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                  <Image size={24} />
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl font-bold transition-colors border-2 border-indigo-100">
+                <span className="text-sm">Upload Image</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 5 * 1024 * 1024) {
+                        alert('File too large (Max 5MB)');
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = (ev) => {
+                        const result = ev.target?.result as string;
+                        updateProject({
+                          thumbnailUrl: result,
+                          coverImage: result,
+                          mediaUrls: result ? [result] : []
+                        });
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+              <p className="text-xs text-slate-400 mt-2 font-medium">
+                Upload a photo of your project or a screenshot.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-2">Your Approach</label>
           <textarea
@@ -193,18 +277,23 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         </div>
       </div>
 
-      <div className="bg-slate-50 p-6 rounded-[2rem] border-4 border-dashed border-slate-200 flex flex-col items-center justify-center min-h-[200px]">
-        {project.coverImage ? (
-          <div className="relative group">
-            <img src={project.coverImage} alt="Cover" className="rounded-2xl shadow-lg max-h-64 object-cover transform rotate-2 group-hover:rotate-0 transition-transform duration-500" />
-            <button onClick={handleGenerate} className="absolute -bottom-4 -right-4 bg-white p-3 rounded-full shadow-lg border-2 border-slate-100 hover:scale-110 transition-transform">🔄</button>
-          </div>
-        ) : (
-          <button onClick={handleGenerate} disabled={generating || !project.title} className={`flex flex-col items-center gap-2 p-4 transition-all ${generating ? 'opacity-50' : 'hover:scale-105'}`}>
-            <span className="text-5xl animate-bounce">{generating ? '🔮' : '🎨'}</span>
-            <span className="font-black text-slate-400 uppercase">{generating ? 'Conjuring...' : 'Generate Mission Cover'}</span>
-          </button>
-        )}
+      <div className="bg-indigo-50 p-6 rounded-[2rem] border-4 border-dashed border-indigo-200 flex flex-col items-center justify-center min-h-[160px] animate-in zoom-in-95">
+        <div className="flex flex-col items-center gap-3">
+          <div className="bg-white p-3 rounded-full shadow-md text-3xl">🧰</div>
+          <h3 className="text-xl font-black text-indigo-900">Before you start...</h3>
+          <p className="text-sm font-bold text-slate-500 max-w-md">
+            Check the mission resources first! Watch the briefing videos and download any necessary files.
+          </p>
+          {assignment.resources && assignment.resources.length > 0 && (
+            <button
+              onClick={() => onShowResources && onShowResources()}
+              className="mt-2 px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-black rounded-xl shadow-lg transition-all hover:scale-105 flex items-center gap-2"
+            >
+              <span>Open Resources</span>
+              <span className="bg-white/20 px-2 rounded-md text-xs">{assignment.resources.length}</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-4">
@@ -217,9 +306,9 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         <button
           onClick={() => { playSound('success'); closeModal(); }}
           disabled={!project.title}
-          className="flex-1 py-4 rounded-3xl bg-green-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-400 transition-colors"
+          className="flex-1 py-4 rounded-3xl bg-green-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-400 transition-colors shadow-lg shadow-green-500/20"
         >
-          Start Journey
+          {project.title ? 'Start Journey 🚀' : 'Name Project to Start 🔒'}
         </button>
       </div>
     </div>
@@ -228,6 +317,7 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
 const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, updateProject, closeModal }) => {
   const { processTemplates } = useFactoryData();
+  const { userProfile } = useAuth();
 
   // Map ProcessTemplate -> Workflow UI format
   const displayWorkflows = processTemplates.map(pt => ({
@@ -298,7 +388,11 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
       if (targetId === 'custom-workflow') {
         console.log("✨ [StudentWizard] Initializing Free Build");
         if ((project.steps || []).length === 0) {
-          updateProject({ workflowId: targetId, steps: [] });
+          updateProject({
+            workflowId: targetId,
+            steps: [],
+            organizationId: userProfile?.organizationId || 'makerlab-academy'
+          });
         }
         closeModal();
         return;
@@ -306,8 +400,12 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
       if (targetId === 'showcase') {
         console.log("🏆 [StudentWizard] Initializing Showcase");
-        updateProject({ workflowId: targetId, steps: [] }); // No steps needed
-        closeModal();
+        updateProject({
+          workflowId: targetId,
+          steps: [],
+          organizationId: userProfile?.organizationId || 'makerlab-academy'
+        }); // No steps needed
+        // Allow view to switch to ShowcaseUploadContent automatically on re-render
         return;
       }
 
@@ -320,14 +418,25 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
           // SCENARIO 1: No steps yet -> Generate all
           if (updatedSteps.length === 0) {
-            updatedSteps = templateData.phases.map((p: any) => ({
-              id: p.id || Date.now().toString() + Math.random(),
-              title: p.name,
-              status: 'todo',
-              resources: p.resources || []
-            }));
+            updatedSteps = templateData.phases.map((p: any) => {
+              // 1. Get fundamental workflow resources
+              const workflowResources = p.resources || [];
+
+              // 2. Get mission-specific resources for this phase
+              // Assignment.stepResources is keyed by phaseId
+              const missionResources = assignment.stepResources?.[p.id] || [];
+
+              console.log(`[StudentWizard] Step ${p.name} resources:`, { workflow: workflowResources, mission: missionResources });
+
+              return {
+                id: p.id || Date.now().toString() + Math.random(),
+                title: p.name,
+                status: 'todo',
+                resources: [...workflowResources, ...missionResources]
+              };
+            });
             hasChanges = true;
-            console.log('✨ Generated new steps from workflow');
+            console.log('✨ Generated new steps from workflow with merged resources');
           }
           // SCENARIO 2: Steps exist -> MERGE Resources (Fix for existing missions)
           else {
@@ -335,8 +444,14 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
               const phase = templateData.phases[idx];
               // If titles match (or index alignment assumed), update resources
               if (phase && (phase.name === step.title || idx < templateData.phases.length)) {
+                // 1. Get fundamental workflow resources
+                const workflowResources = phase.resources || [];
+
+                // 2. Get mission-specific resources
+                const missionResources = assignment.stepResources?.[phase.id] || [];
+
                 // Force update resources
-                return { ...step, resources: phase.resources || [] };
+                return { ...step, resources: [...workflowResources, ...missionResources] };
               }
               return step;
             });
@@ -502,7 +617,14 @@ const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProje
           <div key={step.id} className="bg-slate-50 p-4 rounded-2xl border-b-4 border-slate-200 flex items-center justify-between animate-in fade-in slide-in-from-bottom-2">
             <div className="flex items-center gap-4">
               <span className="bg-slate-200 text-slate-500 font-black w-8 h-8 flex items-center justify-center rounded-full">{idx + 1}</span>
-              <span className="font-bold text-slate-700 text-lg">{step.title}</span>
+              <div>
+                <span className="font-bold text-slate-700 text-lg block">{step.title}</span>
+                {step.resources && step.resources.length > 0 && (
+                  <span className="text-xs font-bold text-indigo-500 flex items-center gap-1">
+                    <span className="text-lg">🧰</span> {step.resources.length} Tools Available
+                  </span>
+                )}
+              </div>
             </div>
             {/* Delete button removed to lock workflow */}
           </div>
@@ -579,13 +701,67 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   };
 
   const handleSubmit = async () => {
-    playSound('click');
-    setSubmitting(true);
-    let base64 = undefined;
-    if (preview) base64 = preview.split(',')[1];
+    try {
+      playSound('click');
+      setSubmitting(true);
 
-    // 1. AI Analysis (Optional Check)
-    setSubmitting(false);
+      // Prepare Evidence Data
+      let evidenceUrl = link;
+      if (preview && !link) {
+        // In a real app, upload file to storage here.
+        // For this verified environment, we generally use the base64 preview or a placeholder.
+        // Assuming base64 is acceptable for small images or we mock the upload.
+        evidenceUrl = preview;
+      }
+
+      const updatedSteps = project.steps.map(s => {
+        if (s.id === realId) {
+          return {
+            ...s,
+            status: 'PENDING_REVIEW' as TaskStatus,
+            evidence: evidenceUrl,
+            note: note,
+            submittedAt: new Date().toISOString()
+          };
+        }
+        return s;
+      });
+
+      // Optimistic Update
+      // AUTO-PROMOTE EVIDENCE TO COVER IMAGE (Fix for Showcase/Teacher View)
+      // If no cover exists (or it's a placeholder), use this evidence.
+      let autoPromoteUpdates = {};
+      if (evidenceUrl && (!project.thumbnailUrl || project.thumbnailUrl.startsWith('data:image/svg') || project.workflowId === 'showcase')) {
+        console.log("📸 [StudentWizard] Auto-promoting evidence to Project Cover");
+        autoPromoteUpdates = {
+          thumbnailUrl: evidenceUrl, // Used for List View
+          coverImage: evidenceUrl    // Used for Hero View
+        };
+      }
+
+      const updatedProject = {
+        ...project,
+        steps: updatedSteps,
+        ...autoPromoteUpdates
+      };
+
+      updateProject(updatedProject);
+
+      // Sync to API
+      await api.syncProject(updatedProject);
+
+      playSound('success');
+      alert('✅ Evidence Submitted! Great work, Cadet.');
+
+      // Close modal or refresh view handled by parent re-render on project update
+      closeModal();
+
+    } catch (error) {
+      console.error("Submission failed:", error);
+      alert("❌ Submission execution failed. Comm link unstable. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSaveProgress = async () => {
@@ -781,7 +957,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                     fetch(stored)
                       .then(res => res.blob())
                       .then(blob => {
-                        const file = new File([blob], "evidence_screenshot.png", { type: "image/png" });
+                        const file = new (window as any).File([blob], "evidence_screenshot.png", { type: "image/png" });
                         setFile(file);
                         playSound('click');
                       });
@@ -916,8 +1092,9 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
     updateProject({
       status: 'submitted',
       presentationUrl: link,
-      // If we had real file upload, we'd upload here. 
-      // For now storing base64 preview in mediaUrls if exists
+      // FIX: Also save to thumbnail/cover for Dashboard visibility
+      thumbnailUrl: preview || project.thumbnailUrl,
+      coverImage: preview || project.coverImage,
       mediaUrls: preview ? [preview] : project.mediaUrls
     });
 
@@ -995,6 +1172,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [mindset] = useState(getRandomMindset()); // Random quote for this session
   const [projectIcon, setProjectIcon] = useState('⚡');
+  const [showGlobalResources, setShowGlobalResources] = useState(false);
+  const [viewingResource, setViewingResource] = useState<any>(null);
 
   // Load Factory Data for Auto-Workflow
   const { processTemplates } = useFactoryData();
@@ -1080,12 +1259,29 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     // But to prevent instructor overwrite:
     if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') return;
 
+    const updates: Partial<StudentProject> = {};
+    let hasUpdates = false;
+
+    // Heal Name
     if (user?.displayName && (!project.studentName || project.studentName === 'Student')) {
-      // Only heal if we have a real name to give
-      console.log('✨ [StudentWizard] Healing missing student name:', user.displayName);
-      updateProject({ studentName: user.displayName });
+      updates.studentName = user.displayName;
+      hasUpdates = true;
     }
-  }, [user, project.studentName, userProfile]);
+
+    // Heal Organization ID (Critical for permissions)
+    // If we are a student, we should own the project in our organization.
+    if (userProfile?.organizationId && (!project.organizationId || project.organizationId === 'makerlab-academy')) {
+      if (project.organizationId !== userProfile.organizationId) {
+        updates.organizationId = userProfile.organizationId;
+        hasUpdates = true;
+      }
+    }
+
+    if (hasUpdates) {
+      console.log('✨ [StudentWizard] Healing project metadata:', updates);
+      updateProject(updates);
+    }
+  }, [user, project.studentName, project.organizationId, userProfile]);
 
 
 
@@ -1137,16 +1333,19 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
             // Get resources keyed by the TEMPLATE PHASE ID
             const specificResources = assignment.stepResources?.[phase.id] || [];
 
+            // 🔥 FORCE SYNC: Ensure all specific resources are present
             if (specificResources.length > 0) {
-              const currentResourceUrls = new Set(step.resources?.map(r => r.url));
-              const missingResources = specificResources.filter(r => !currentResourceUrls.has(r.url));
+              const currentResources = step.resources || [];
+              const currentUrls = new Set(currentResources.map(r => r.url));
+
+              const missingResources = specificResources.filter(r => !currentUrls.has(r.url));
 
               if (missingResources.length > 0) {
                 hasUpdates = true;
                 console.log(`⚡ [Auto-Workflow] Injecting ${missingResources.length} new resources into step '${step.title}'`);
                 return {
                   ...step,
-                  resources: [...(step.resources || []), ...missingResources]
+                  resources: [...currentResources, ...missingResources]
                 };
               }
             }
@@ -1352,7 +1551,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const { basePath, progressPath } = generatePaths();
 
   // --- SPECIAL VIEW: SHOWCASE MODE ---
-  if (project.workflowId === 'showcase') {
+  if (project.workflowId === 'showcase' || project.templateId === 'showcase-template') {
     // Re-using the content component but wrapping it in a full-screen layout
     return (
       <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
@@ -1451,6 +1650,88 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
             </div>
           </div>
 
+          {/* Global Resources Button */}
+          {assignment.resources && assignment.resources.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowGlobalResources(!showGlobalResources)}
+                className="px-6 py-3 bg-indigo-500 hover:bg-indigo-400 text-white border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1 rounded-2xl font-black transition-all text-lg flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+              >
+                🧰 Resources
+              </button>
+
+              {/* Resources Popover */}
+              {showGlobalResources && (
+                <div className="absolute top-full right-0 mt-4 w-96 bg-white rounded-3xl shadow-2xl border-4 border-indigo-100 p-6 z-50 animate-in fade-in slide-in-from-top-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-xl font-black text-slate-800">Mission Resources</h4>
+                    <button onClick={() => setShowGlobalResources(false)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200">❌</button>
+                  </div>
+                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                    {assignment.resources.map((res, idx) => {
+                      const isPdf = res.url.toLowerCase().endsWith('.pdf') || res.title.toLowerCase().includes('pdf');
+                      let Icon = LinkIcon;
+                      let colorClass = "text-slate-500 bg-slate-100";
+
+                      if (res.type === 'video') { Icon = Video; colorClass = "text-red-500 bg-red-50"; }
+                      else if (res.type === 'image') { Icon = Image; colorClass = "text-purple-500 bg-purple-50"; }
+                      else if (isPdf) { Icon = FileText; colorClass = "text-orange-500 bg-orange-50"; }
+                      else if (res.type === 'file') { Icon = File; colorClass = "text-blue-500 bg-blue-50"; }
+                      else { Icon = Globe; colorClass = "text-emerald-500 bg-emerald-50"; }
+
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            playSound('click');
+                            // Check for embeddable types
+                            const isEmbeddable =
+                              res.type === 'video' ||
+                              res.type === 'image' ||
+                              res.url.includes('youtube.com') ||
+                              res.url.includes('youtu.be');
+
+                            if (isEmbeddable) {
+                              setViewingResource(res);
+                            } else {
+                              window.open(res.url, '_blank');
+                            }
+                          }}
+                          className="flex items-center gap-4 p-4 w-full text-left bg-slate-50 border-2 border-slate-100 rounded-2xl hover:border-indigo-400 hover:-translate-y-1 transition-all group"
+                        >
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm border border-slate-100 group-hover:scale-110 transition-transform ${colorClass}`}>
+                            <Icon size={24} />
+                          </div>
+                          <div className="flex-1">
+                            <h5 className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{res.title}</h5>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-md ${colorClass} bg-opacity-50`}>
+                                {isPdf ? 'PDF' : res.type}
+                              </span>
+                              <p className="text-xs text-slate-400 truncate max-w-[150px]">{res.url}</p>
+                            </div>
+                          </div>
+                          <span className="text-slate-300 group-hover:text-indigo-400">
+                            <Download size={18} />
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Resource Viewer Modal for Global Resources */}
+          {viewingResource && (
+            <ResourceViewerModal
+              isOpen={!!viewingResource}
+              onClose={() => setViewingResource(null)}
+              resource={viewingResource}
+            />
+          )}
+
           {/* Step Counter - Enlarged */}
           <div className="px-6 py-3 bg-slate-800 text-blue-400 rounded-2xl font-black border-2 border-slate-700 shadow-inner text-lg">
             Step {activeNodeIndex !== -1 ? activeNodeIndex + 1 : nodes.length} <span className="text-slate-600">/</span> {nodes.length}
@@ -1537,7 +1818,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           onClose={() => setActiveNodeId(null)}
           color={activeNodeId.includes('step') ? 'indigo' : 'blue'}
         >
-          {activeNodeId === 'identity' && <IdentityStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
+          {activeNodeId === 'identity' && <IdentityStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} onShowResources={() => setShowGlobalResources(true)} />}
           {activeNodeId === 'strategy' && <StrategyStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId === 'blueprint' && <BlueprintStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId === 'showcase_upload' && <ShowcaseUploadContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}

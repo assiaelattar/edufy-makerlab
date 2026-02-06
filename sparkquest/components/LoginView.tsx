@@ -8,6 +8,7 @@ import { auth } from '../services/firebase';
 export const LoginView: React.FC = () => {
     // We don't need signIn from context if we use direct firebase auth
     // The onAuthStateChanged in context will pick up the change
+    const { enableKioskMode } = useAuth();
     const [email, setEmail] = useState(() => localStorage.getItem('sparkquest_remember_email') || '');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -121,6 +122,21 @@ export const LoginView: React.FC = () => {
                         )}
                     </button>
                 </form>
+
+                <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+                    <p className="text-slate-500 text-sm mb-3">Using a shared classroom device?</p>
+                    <button
+                        onClick={() => {
+                            if (confirm("Switch to Classroom Kiosk Mode?\n\nThis will simplify the login screen for students using PINs.")) {
+                                enableKioskMode();
+                                window.location.reload(); // Reload to ensure clean state for Kiosk View
+                            }
+                        }}
+                        className="text-indigo-400 hover:text-indigo-300 text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                    >
+                        Switch to Kiosk Mode
+                    </button>
+                </div>
             </div>
         </div>
     );

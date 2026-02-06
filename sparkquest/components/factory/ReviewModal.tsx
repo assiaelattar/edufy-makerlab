@@ -61,11 +61,39 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({ projectId, onClose }) 
         const firestore = db as Firestore;
 
         try {
-            await updateDoc(doc(firestore, 'student_projects', projectId), {
+            // Logic to find the first image evidence for cover
+            let coverImage = null;
+            if (status === 'published') {
+                // Try to find first image evidence
+                const imageStep = project.steps.find(s =>
+                    s.evidence && (
+                        s.evidence.startsWith('data:image') ||
+                        /\.(jpeg|jpg|gif|png|webp)$/i.test(s.evidence)
+                    )
+                );
+                if (imageStep) {
+                    coverImage = imageStep.evidence;
+                }
+            }
+
+            const updatePayload: any = {
                 status,
                 feedback: feedback || null,
                 updatedAt: serverTimestamp(),
-            });
+            };
+
+            // FIX: Save Awarded XP
+            if (status === 'published') {
+                updatePayload.xpReward = awardXp;
+            }
+
+            // Only update cover if we found one and we are publishing
+            if (status === 'published' && coverImage) {
+                updatePayload.coverImage = coverImage;
+                updatePayload.thumbnailUrl = coverImage; // Set both for compatibility
+            }
+
+            await updateDoc(doc(firestore, 'student_projects', projectId), updatePayload);
             onClose();
         } catch (e) {
             console.error("Error updating project:", e);

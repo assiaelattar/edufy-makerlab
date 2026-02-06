@@ -9,7 +9,9 @@ import { FactoryDashboard } from './factory/FactoryDashboard';
 import { FactoryToolbox } from './factory/FactoryToolbox';
 import { GradeProjectFilter } from './factory/GradeProjectFilter';
 import { ProjectSelector } from './ProjectSelector';
-import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, User, Bell, Trash2, Users, Hammer, Filter, Eye, Settings } from 'lucide-react';
+import { MissionGallery } from './factory/MissionGallery';
+import { GamificationManager } from './admin/GamificationManager';
+import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, User, Bell, Trash2, Users, Hammer, Filter, Eye, Settings, BookOpen, Trophy, MonitorPlay } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext'; // Import useAuth for user profile
 
@@ -47,8 +49,8 @@ import { ProjectDetailsEnhanced } from './ProjectDetailsEnhanced';
 export const InstructorFactory: React.FC = () => {
   // Destructure projectTemplates here
   const { projectTemplates } = useFactoryData();
-  const { userProfile, signOut } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'projects' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview'>('dashboard');
+  const { userProfile, signOut, enableKioskMode } = useAuth();
+  const [view, setView] = useState<'dashboard' | 'projects' | 'gallery' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview' | 'gamification'>('dashboard');
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
   const [filterTemplateId, setFilterTemplateId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -116,6 +118,7 @@ export const InstructorFactory: React.FC = () => {
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Missions</p>
           </div>
           <SidebarItem icon={Briefcase} label="All Missions" active={view === 'projects'} onClick={() => { setView('projects'); setIsMobileOpen(false); }} />
+          <SidebarItem icon={BookOpen} label="Gallery" active={view === 'gallery'} onClick={() => { setView('gallery'); setIsMobileOpen(false); }} />
           <SidebarItem icon={Filter} label="By Grade" active={view === 'grades'} onClick={() => { setView('grades'); setIsMobileOpen(false); }} />
           <SidebarItem icon={GitMerge} label="Workflows" active={view === 'workflows'} onClick={() => { setView('workflows'); setIsMobileOpen(false); }} />
 
@@ -124,12 +127,32 @@ export const InstructorFactory: React.FC = () => {
           </div>
           <SidebarItem icon={Hexagon} label="Stations" active={view === 'stations'} onClick={() => { setView('stations'); setIsMobileOpen(false); }} />
           <SidebarItem icon={Award} label="Badges" active={view === 'badges'} onClick={() => { setView('badges'); setIsMobileOpen(false); }} />
+          <SidebarItem icon={Trophy} label="Gamification" active={view === 'gamification'} onClick={() => { setView('gamification'); setIsMobileOpen(false); }} />
           <SidebarItem icon={Hammer} label="Toolbox" active={view === 'toolbox'} onClick={() => { setView('toolbox'); setIsMobileOpen(false); }} />
 
           <div className="pt-4 pb-1">
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Community</p>
           </div>
           <SidebarItem icon={Users} label="Students" active={view === 'makers'} onClick={() => { setView('makers'); setIsMobileOpen(false); }} />
+
+
+
+          <div className="pt-4 pb-1">
+            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Classroom Access</p>
+          </div>
+          <button
+            onClick={async () => {
+              if (confirm("Enable Classroom Kiosk Mode? \n\nThis will lock the interface to the student login screen. You can assume any student identity. You will be logged out.")) {
+                enableKioskMode();
+                await signOut();
+                window.location.reload();
+              }
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all text-emerald-400 hover:text-white hover:bg-emerald-500/10 group"
+          >
+            <MonitorPlay size={18} className="group-hover:scale-110 transition-transform" />
+            <span>Classroom Mode</span>
+          </button>
 
           <div className="pt-4 pb-1">
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Preview</p>
@@ -140,11 +163,16 @@ export const InstructorFactory: React.FC = () => {
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">System</p>
           </div>
           <button
-            onClick={() => (window as any).openAdminSettings?.() || alert("Settings panel implementation pending or accessible from Student Preview.")}
+            onClick={() => {
+              // Temporary: Open Edufy in new tab or show alert with better info
+              if (confirm("Open System Settings in Edufy Admin?\n\nTo manage Student Accounts, PINs, and System Configuration, please use the Edufy Dashboard.")) {
+                window.open((window as any).erpUrl || 'http://localhost:5173', '_blank');
+              }
+            }}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800"
           >
             <Settings size={18} />
-            Settings
+            System Admin
           </button>
           <button
             onClick={() => {
@@ -230,10 +258,16 @@ export const InstructorFactory: React.FC = () => {
             />
           )}
           {view === 'projects' && <ProjectManager onViewSubmissions={handleViewSubmissions} onPreviewProject={handlePreviewProject} />}
+          {view === 'gallery' && <MissionGallery onSelectTemplate={(t) => handleCreateMission()} />}
           {view === 'grades' && <GradeProjectFilter onCreateMission={handleCreateMission} />}
           {view === 'workflows' && <WorkflowManager />}
           {view === 'stations' && <StationManager />}
           {view === 'badges' && <BadgeManager />}
+          {view === 'gamification' && (
+            <div className="h-[80vh] bg-slate-900 rounded-3xl p-6 shadow-xl overflow-hidden border border-slate-800">
+              <GamificationManager />
+            </div>
+          )}
           {view === 'toolbox' && <FactoryToolbox />}
           {view === 'makers' && <StudentManager onReviewProject={(id) => setReviewingProjectId(id)} />}
           {view === 'preview' && (

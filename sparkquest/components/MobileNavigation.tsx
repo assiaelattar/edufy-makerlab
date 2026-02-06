@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, ShoppingBag, Gamepad2, Award, Image as ImageIcon, Key, TrendingUp, Menu, Zap } from 'lucide-react';
+import { User, ShoppingBag, Gamepad2, Award, Image as ImageIcon, Key, TrendingUp, Menu, Zap, Trophy } from 'lucide-react';
 
 interface MobileNavigationProps {
     onOpenStore: () => void;
@@ -8,6 +8,7 @@ interface MobileNavigationProps {
     onOpenGallery: () => void;
     onOpenWallet: () => void;
     onOpenProfile: () => void;
+    onOpenContests?: () => void;
 }
 
 const NavItem = ({ icon: Icon, label, onClick, active }: any) => (
@@ -26,14 +27,15 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
     onOpenPortfolio,
     onOpenGallery,
     onOpenWallet,
-    onOpenProfile
+    onOpenProfile,
+    onOpenContests
 }) => {
     return (
         <div className="md:hidden fixed bottom-6 left-6 right-6 h-20 bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl z-50 flex items-center justify-between px-6">
             <NavItem icon={Award} label="Portfolio" onClick={onOpenPortfolio} />
             <NavItem icon={Gamepad2} label="Arcade" onClick={onOpenArcade} />
 
-            {/* Center Main Action - potentially could be 'Home' or 'Profile' */}
+            {/* Center Main Action */}
             <div className="relative -top-8">
                 <button
                     onClick={onOpenProfile}
@@ -43,8 +45,8 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
                 </button>
             </div>
 
+            {onOpenContests && <NavItem icon={Trophy} label="Contests" onClick={onOpenContests} />}
             <NavItem icon={ShoppingBag} label="Store" onClick={onOpenStore} />
-            <NavItem icon={ImageIcon} label="Gallery" onClick={onOpenGallery} />
         </div>
     );
 };

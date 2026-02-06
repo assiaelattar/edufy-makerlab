@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays, Percent, Printer, Tablet } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
 import { formatCurrency } from '../utils/helpers';
 import { addDoc, collection, updateDoc, doc } from 'firebase/firestore';
@@ -23,6 +24,7 @@ interface ProgramsViewProps {
 
 export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const { programs, navigateTo, leads } = useAppContext();
+  const { currentOrganization } = useAuth();
   const [isProgramModalOpen, setProgramModalOpen] = useState(false);
   const [viewDetailProgramId, setViewDetailProgramId] = useState<string | null>(null); // NEW: For Detail Modal
   const [isEditingProgram, setIsEditingProgram] = useState(false);
@@ -143,8 +145,17 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const handleSaveProgram = async () => {
     if (!db) return;
     try {
-      if (isEditingProgram && selectedProgram) await updateDoc(doc(db, 'programs', selectedProgram.id), { ...programForm });
-      else await addDoc(collection(db, 'programs'), { ...programForm });
+      if (isEditingProgram && selectedProgram) {
+        await updateDoc(doc(db, 'programs', selectedProgram.id), { ...programForm });
+      } else {
+        // Ensure new programs are stamped with the current active organization ID
+        const newProgramData = {
+          ...programForm,
+          organizationId: currentOrganization?.id || 'makerlab-academy', // Fallback to default if null
+          createdAt: new Date().toISOString()
+        };
+        await addDoc(collection(db, 'programs'), newProgramData);
+      }
       setProgramModalOpen(false);
     } catch (err) { console.error(err); }
   };

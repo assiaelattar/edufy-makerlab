@@ -1,8 +1,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, doc, setDoc, query, orderBy, limit } from 'firebase/firestore';
-import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge } from '../types';
+import { collection, onSnapshot, doc, setDoc, query, orderBy, limit, where } from 'firebase/firestore';
+import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge } from '../types';
 import { translations } from '../utils/translations';
 import { useAuth } from './AuthContext';
 import { addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
@@ -45,6 +45,7 @@ interface AppContextType {
 
   // Toolkit, Media, Assets
   toolLinks: ToolLink[];
+  archiveLinks: ArchiveLink[];
   galleryItems: GalleryItem[];
   assets: Asset[];
   pickupQueue: PickupEntry[];
@@ -68,11 +69,11 @@ interface AppContextType {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  academyName: 'Edufy Makerlab',
-  academicYear: '2024-2025',
+  academyName: 'Edufy', // Safe default (user should configure)
+  academicYear: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
   logoUrl: '',
   language: 'en',
-  receiptContact: 'contact@edufy.com',
+  receiptContact: '',
   receiptFooter: 'Thank you for your payment. No refunds after 30 days.',
   googleReviewUrl: '',
   studentFormConfig: {
@@ -88,7 +89,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, currentOrganization } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -126,6 +127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Toolkit & Media
   const [toolLinks, setToolLinks] = useState<ToolLink[]>([]);
+  const [archiveLinks, setArchiveLinks] = useState<ArchiveLink[]>([]);
   const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [pickupQueue, setPickupQueue] = useState<PickupEntry[]>([]);
@@ -170,6 +172,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const sendNotification = async (userId: string, title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', link?: string) => {
     if (!db) return;
+    // Note: We should probably add organizationId here too, but for now we leave it as shared/user-specific
     await addDoc(collection(db, 'notifications'), {
       userId,
       title,
@@ -184,79 +187,104 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!db) { setLoading(false); return; }
 
+    // START SAAS TRANSFORMATION
+    if (!currentOrganization) {
+      // Stop loading if no organization is resolved yet
+      setLoading(false);
+      return;
+    }
+    const orgId = currentOrganization.id;
+    const firestore = db;
+    // END SAAS LOGIC
+
     // We wait for the SETTINGS to load specifically before unblocking the UI to ensure branding is correct.
-    const settingsUnsub = onSnapshot(doc(db, 'settings', 'global'), (doc) => {
+    const settingsUnsub = onSnapshot(doc(firestore, 'organizations', orgId, 'settings', 'global'), (docSnap) => {
       setLoading(false); // Unblock UI immediately
-      if (doc.exists()) {
-        // Merge with defaults to ensure all fields exist (e.g. if new fields added to schema)
-        setSettings({ ...DEFAULT_SETTINGS, ...doc.data() } as AppSettings);
+      if (docSnap.exists()) {
+        const savedData = docSnap.data() as AppSettings;
+        const mergedSettings = {
+          ...DEFAULT_SETTINGS,
+          ...savedData,
+          studentFormConfig: { ...DEFAULT_SETTINGS.studentFormConfig, ...savedData.studentFormConfig }
+        };
+        setSettings(mergedSettings);
       } else {
-        // Attempt to create default settings if they don't exist
-        setDoc(doc.ref, DEFAULT_SETTINGS).catch(err => {
-          console.error("Failed to create default settings:", err);
-          // Fallback to default settings in case of write error
-          setSettings(DEFAULT_SETTINGS);
-        });
+        // Try fallback to legacy global settings if migration hadn't moved them yet? 
+        // Or just create default for new Org.
+        setSettings(DEFAULT_SETTINGS);
       }
     }, (error) => {
-      // Handle listener errors (e.g., permissions)
-      console.error("Error fetching global settings:", error);
+      console.error("Error fetching settings:", error);
       setSettings(DEFAULT_SETTINGS);
       setLoading(false);
     });
 
     const unsubs = [
       settingsUnsub,
-      onSnapshot(collection(db, 'students'), (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)))),
-      onSnapshot(collection(db, 'programs'), (snap) => setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program)))),
-      onSnapshot(collection(db, 'enrollments'), (snap) => setEnrollments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enrollment)))),
-      onSnapshot(query(collection(db, 'payments'), orderBy('date', 'desc')), (snap) => setPayments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment)))),
-      onSnapshot(query(collection(db, 'expenses'), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)))),
-      onSnapshot(collection(db, 'expense_templates'), (snap) => setExpenseTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpenseTemplate)))),
+      onSnapshot(query(collection(firestore, 'students'), where('organizationId', '==', orgId)), (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)))),
+      onSnapshot(query(collection(firestore, 'programs'), where('organizationId', '==', orgId)), (snap) => setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program)))),
+      onSnapshot(query(collection(firestore, 'enrollments'), where('organizationId', '==', orgId)), (snap) => setEnrollments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enrollment)))),
+      onSnapshot(query(collection(firestore, 'payments'), where('organizationId', '==', orgId)), (snap) => {
+        const sortedPayments = snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setPayments(sortedPayments);
+      }),
+      onSnapshot(query(collection(firestore, 'expenses'), where('organizationId', '==', orgId), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)))),
+      onSnapshot(query(collection(firestore, 'expense_templates'), where('organizationId', '==', orgId)), (snap) => setExpenseTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpenseTemplate)))),
 
       // Workshop Listeners
-      onSnapshot(collection(db, 'workshop_templates'), (snap) => setWorkshopTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopTemplate)))),
-      onSnapshot(collection(db, 'workshop_slots'), (snap) => setWorkshopSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopSlot)))),
-      onSnapshot(query(collection(db, 'bookings'), orderBy('bookedAt', 'desc')), (snap) => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)))),
+      onSnapshot(query(collection(firestore, 'workshop_templates'), where('organizationId', '==', orgId)), (snap) => setWorkshopTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopTemplate)))),
+      onSnapshot(query(collection(firestore, 'workshop_slots'), where('organizationId', '==', orgId)), (snap) => setWorkshopSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopSlot)))),
+      onSnapshot(query(collection(firestore, 'bookings'), where('organizationId', '==', orgId), orderBy('bookedAt', 'desc')), (snap) => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)))),
 
       // Attendance
-      onSnapshot(collection(db, 'attendance'), (snap) => setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord)))),
+      onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), (snap) => setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord)))),
 
       // Team Listeners
-      onSnapshot(collection(db, 'users'), (snap) => setTeamMembers(snap.docs.map(d => ({ ...d.data(), uid: d.id } as UserProfile)))),
-      onSnapshot(collection(db, 'tasks'), (snap) => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)))),
-      onSnapshot(collection(db, 'projects'), (snap) => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as Project)))),
-      onSnapshot(query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(50)), (snap) => {
-        // Reverse for chat display
+      // Users are global but UserProfile has organizationId. We filter users by org.
+      onSnapshot(query(collection(firestore, 'users'), where('organizationId', '==', orgId)), (snap) => setTeamMembers(snap.docs.map(d => ({ ...d.data(), uid: d.id } as UserProfile)))),
+      onSnapshot(query(collection(firestore, 'tasks'), where('organizationId', '==', orgId)), (snap) => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)))),
+      onSnapshot(query(collection(firestore, 'projects'), where('organizationId', '==', orgId)), (snap) => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as Project)))),
+      onSnapshot(query(collection(firestore, 'messages'), where('organizationId', '==', orgId), orderBy('createdAt', 'desc'), limit(50)), (snap) => {
         const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage));
         setChatMessages(msgs.reverse());
       }),
 
       // Marketing Listeners
-      onSnapshot(collection(db, 'marketing_posts'), (snap) => setMarketingPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as MarketingPost)))),
-      onSnapshot(collection(db, 'campaigns'), (snap) => setCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as Campaign)))),
-      onSnapshot(collection(db, 'leads'), (snap) => setLeads(snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead)))),
+      onSnapshot(query(collection(firestore, 'marketing_posts'), where('organizationId', '==', orgId)), (snap) => setMarketingPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as MarketingPost)))),
+      onSnapshot(query(collection(firestore, 'campaigns'), where('organizationId', '==', orgId)), (snap) => setCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as Campaign)))),
+      onSnapshot(query(collection(firestore, 'leads'), where('organizationId', '==', orgId)), (snap) => setLeads(snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead)))),
 
       // Learning Listeners
-      onSnapshot(collection(db, 'project_templates'), (snap) => setProjectTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectTemplate)))),
-      onSnapshot(collection(db, 'student_projects'), (snap) => setStudentProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentProject)))),
+      // Project Templates might be SHARED (Tenant Zero) vs PRIVATE. For now, strict isolation.
+      onSnapshot(query(collection(firestore, 'project_templates'), where('organizationId', '==', orgId)), (snap) => setProjectTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectTemplate)))),
+      onSnapshot(query(collection(firestore, 'student_projects'), where('organizationId', '==', orgId)), (snap) => setStudentProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentProject)))),
 
       // Setup Factory Listeners
-      onSnapshot(collection(db, 'process_templates'), (snap) => setProcessTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProcessTemplate)))),
-      onSnapshot(collection(db, 'stations'), (snap) => setStations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Station)))),
-      onSnapshot(collection(db, 'badges'), (snap) => setBadges(snap.docs.map(d => ({ id: d.id, ...d.data() } as Badge)))),
+      onSnapshot(query(collection(firestore, 'process_templates'), where('organizationId', '==', orgId)), (snap) => setProcessTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProcessTemplate)))),
+      onSnapshot(query(collection(firestore, 'stations'), where('organizationId', '==', orgId)), (snap) => setStations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Station)))),
+      onSnapshot(query(collection(firestore, 'badges'), where('organizationId', '==', orgId)), (snap) => setBadges(snap.docs.map(d => ({ id: d.id, ...d.data() } as Badge)))),
 
       // Toolkit & Media
-      onSnapshot(collection(db, 'tool_links'), (snap) => setToolLinks(snap.docs.map(d => ({ id: d.id, ...d.data() } as ToolLink)))),
-      onSnapshot(query(collection(db, 'gallery_items'), orderBy('createdAt', 'desc')), (snap) => setGalleryItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as GalleryItem)))),
+      onSnapshot(query(collection(firestore, 'tool_links'), where('organizationId', '==', orgId)), (snap) => setToolLinks(snap.docs.map(d => ({ id: d.id, ...d.data() } as ToolLink)))),
+      onSnapshot(query(collection(firestore, 'archive_links'), where('organizationId', '==', orgId), orderBy('createdAt', 'desc')), (snap) => setArchiveLinks(snap.docs.map(d => ({ id: d.id, ...d.data() } as ArchiveLink)))),
+      onSnapshot(query(collection(firestore, 'gallery_items'), where('organizationId', '==', orgId)), (snap) => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as GalleryItem));
+        // Sort client-side to be safe
+        setGalleryItems(items.sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+          return dateB - dateA;
+        }));
+      }),
 
       // Hardware & Pickup
-      onSnapshot(collection(db, 'assets'), (snap) => setAssets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)))),
-      onSnapshot(collection(db, 'pickup_queue'), (snap) => setPickupQueue(snap.docs.map(d => ({ id: d.id, ...d.data() } as PickupEntry)))),
+      onSnapshot(query(collection(firestore, 'assets'), where('organizationId', '==', orgId)), (snap) => setAssets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)))),
+      onSnapshot(query(collection(firestore, 'pickup_queue'), where('organizationId', '==', orgId)), (snap) => setPickupQueue(snap.docs.map(d => ({ id: d.id, ...d.data() } as PickupEntry)))),
     ];
 
     return () => unsubs.forEach(u => u());
-  }, []);
+  }, [currentOrganization]);
 
   // Separate effect for Notifications based on userProfile
   useEffect(() => {
@@ -291,7 +319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       marketingPosts, campaigns, leads,
       projectTemplates, studentProjects,
       processTemplates, stations, badges,
-      toolLinks, galleryItems, assets, pickupQueue,
+      toolLinks, archiveLinks, galleryItems, assets, pickupQueue,
       notifications, unreadNotificationsCount, markAsRead, markAllAsRead, sendNotification,
       settings, loading, language: settings.language || 'en', t,
       currentView, viewParams, navigateTo

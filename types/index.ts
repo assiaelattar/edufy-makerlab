@@ -10,6 +10,7 @@ export interface Group {
 
 export interface Grade {
   id: string;
+  organizationId: string;
   name: string;
   groups: Group[];
 }
@@ -25,6 +26,7 @@ export interface ProgramPack {
 
 export interface Program {
   id: string;
+  organizationId: string;
   name: string;
   type: 'Regular Program' | 'Holiday Camp' | 'Workshop' | 'Internship' | 'Camp';
   description: string;
@@ -47,6 +49,60 @@ export interface Program {
   brochureUrl?: string; // Downloadable Brochure
 }
 
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string; // unique-url-friendly-id
+  logoUrl?: string;
+  ownerUid: string; // The "Admin" of this school
+  createdAt: Timestamp;
+  status: 'active' | 'suspended' | 'trial';
+
+  // Installed Apps from App Store
+  installedApps?: string[];
+
+  // Module Configuration
+  modules: {
+    erp: boolean;        // The core management (Students, Finance)
+    makerPro: boolean;   // The Project/LMS system
+    sparkQuest: boolean; // The Gamified App
+    [key: string]: boolean; // Allow granular flags (pickup, gallery, etc.)
+  };
+
+  // Subscription & Billing
+  subscription?: {
+    planId: string;
+    status: 'active' | 'past_due' | 'canceled' | 'trial';
+    startDate: Timestamp;
+    nextBillingDate: Timestamp;
+    customPrice?: number; // Override plan price
+    interval: 'month' | 'year';
+  };
+
+  // Limits (Optional for SaaS Tiers)
+  limits?: {
+    students: number;
+    storage: number; // GB
+  };
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string; // e.g. "Starter", "Growth", "Scale"
+  priceMonthly: number;
+  priceYearly: number;
+  currency: string; // 'MAD', 'USD', 'EUR'
+  description: string;
+  features: string[]; // List of features for UI
+  limits: {
+    students: number;
+    storage: number; // GB
+  };
+  includedModules: string[]; // List of module IDs included by default
+  isPopular?: boolean;
+  trialDays?: number; // 0 or undefined = no trial
+}
+
 export interface ProgramDashboardConfig {
   welcomeMessage?: string;
   themeColor?: 'brand' | 'blue' | 'purple' | 'green' | 'orange';
@@ -59,6 +115,7 @@ export interface ProgramDashboardConfig {
 
 export interface Student {
   id: string;
+  organizationId: string; // SaaS Tenant ID
   name: string;
   email?: string;
   parentPhone: string;
@@ -89,6 +146,7 @@ export interface Student {
 
 export interface Enrollment {
   id: string;
+  organizationId: string;
   studentId: string;
   studentName: string;
   programId: string;
@@ -139,6 +197,7 @@ export interface Announcement {
 
 export interface Payment {
   id: string;
+  organizationId: string;
   enrollmentId: string;
   studentName: string;
   amount: number;
@@ -158,6 +217,7 @@ export interface Payment {
 // --- EXPENSE TYPES ---
 export interface Expense {
   id: string;
+  organizationId: string;
   title: string;
   category: 'rent' | 'salary' | 'utilities' | 'material' | 'marketing' | 'other';
   amount: number;
@@ -185,6 +245,7 @@ export interface ExpenseTemplate {
 
 export interface AttendanceRecord {
   id: string;
+  organizationId: string;
   date: string; // YYYY-MM-DD
   studentId: string;
   enrollmentId: string;
@@ -197,6 +258,7 @@ export interface AttendanceRecord {
 
 export interface WorkshopTemplate {
   id: string;
+  organizationId: string; // SaaS Tenant ID
   title: string;
   description: string;
   duration: number; // in minutes
@@ -216,6 +278,7 @@ export interface WorkshopTemplate {
 
 export interface WorkshopSlot {
   id: string;
+  organizationId: string; // SaaS Tenant ID
   workshopTemplateId: string; // References WorkshopTemplate
   date: string; // YYYY-MM-DD
   startTime: string; // HH:mm
@@ -227,6 +290,7 @@ export interface WorkshopSlot {
 
 export interface Booking {
   id: string;
+  organizationId: string; // SaaS Tenant ID
   workshopSlotId: string;
   workshopTemplateId: string; // Denormalized for easy querying
   parentName: string;
@@ -245,6 +309,7 @@ export interface Booking {
 
 export interface Project {
   id: string;
+  organizationId: string;
   name: string;
   description?: string;
   status: 'active' | 'completed' | 'on_hold';
@@ -254,6 +319,7 @@ export interface Project {
 
 export interface Task {
   id: string;
+  organizationId: string;
   title: string;
   description?: string;
   status: 'todo' | 'in_progress' | 'done';
@@ -278,6 +344,7 @@ export interface ChatMessage {
 
 export interface MarketingPost {
   id: string;
+  organizationId: string;
   platform: 'instagram' | 'facebook' | 'linkedin' | 'tiktok';
   content: string;
   date: string; // Planned date
@@ -299,6 +366,7 @@ export interface CampaignAsset {
 
 export interface Campaign {
   id: string;
+  organizationId: string;
   name: string;
   status: 'planned' | 'active' | 'completed';
   budget: number;
@@ -312,6 +380,7 @@ export interface Campaign {
 
 export interface Lead {
   id: string;
+  organizationId: string;
   name: string;
   parentName: string;
   phone: string;
@@ -496,8 +565,19 @@ export interface ToolLink {
   createdAt: Timestamp;
 }
 
+export interface ArchiveLink {
+  id: string;
+  title: string;
+  url: string;
+  category: 'gemini_gems' | 'websites' | 'sheets' | 'documents' | 'other';
+  description?: string;
+  createdAt: Timestamp;
+  createdBy: string;
+}
+
 export interface Asset {
   id: string;
+  organizationId: string;
   name: string; // e.g., "Lego Spike Prime Set #4"
   category: 'robotics' | 'computer' | 'tools' | 'other';
   serialNumber?: string;
@@ -522,6 +602,7 @@ export interface GalleryItem {
 
 export interface PickupEntry {
   id: string;
+  organizationId: string;
   studentId: string;
   studentName: string;
   parentName: string; // The primary parent
@@ -554,6 +635,7 @@ export type RoleType = 'admin' | 'admission_officer' | 'accountant' | 'instructo
 
 export interface UserProfile {
   uid?: string; // Firebase Auth UID (optional if invitation only)
+  organizationId: string; // SaaS Tenant ID
   email: string;
   name: string;
   role: RoleType;
@@ -603,7 +685,7 @@ export interface AppSettings {
 }
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms';
 
 export interface ViewParams {
   programId?: string; // NEW
@@ -612,4 +694,5 @@ export interface ViewParams {
   projectId?: string; // Add projectId here
   activityId?: { type: 'payment' | 'enrollment' | 'booking', id: string };
   filter?: string;
+  appId?: string; // NEW for App Store
 }

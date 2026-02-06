@@ -2,6 +2,7 @@ import { Timestamp } from 'firebase/firestore';
 
 export interface Student {
     id: string;
+    organizationId: string; // SaaS Tenant ID
     name: string;
     email?: string;
     loginInfo?: {

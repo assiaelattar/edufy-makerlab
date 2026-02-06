@@ -10,7 +10,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 export const LoginView = () => {
     const { settings } = useAppContext();
-    const [viewMode, setViewMode] = useState<'selection' | 'parent' | 'admin'>('selection');
+    const [viewMode, setViewMode] = useState<'selection' | 'parent' | 'admin'>(
+        window.location.hash.includes('#admin') ? 'admin' : 'selection'
+    );
 
     // --- SUB-COMPONENTS ---
 
@@ -221,7 +223,7 @@ export const LoginView = () => {
     };
 
     const AdminLoginForm = () => {
-        const [isLogin, setIsLogin] = useState(true);
+        const [isLogin, setIsLogin] = useState(!window.location.hash.includes('#signup'));
         const [email, setEmail] = useState('');
         const [password, setPassword] = useState('');
         const [loading, setLoading] = useState(false);

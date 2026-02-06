@@ -12,7 +12,7 @@ interface StudentPortfolioProps {
 }
 
 export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject }) => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     // Force Rebuild: Navigation Fix Applied
     const [projects, setProjects] = useState<StudentProject[]>([]);
     const [badges, setBadges] = useState<Badge[]>([]);
@@ -21,19 +21,20 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
     const [level, setLevel] = useState(1);
 
     useEffect(() => {
-        if (isOpen && user) {
+        if (isOpen && user && userProfile) {
             loadPortfolioData();
         }
-    }, [isOpen, user]);
+    }, [isOpen, user, userProfile]);
 
     const loadPortfolioData = async () => {
-        if (!db || !user) return;
+        if (!db || !user || !userProfile) return;
         setLoading(true);
         try {
             // Load completed projects
             const projectsQuery = query(
                 collection(db, 'student_projects'),
                 where('studentId', '==', user.uid),
+                where('organizationId', '==', userProfile.organizationId || 'makerlab-academy'), // Ensure Org Scoping
                 where('status', 'in', ['submitted', 'published'])
             );
             const projectsSnap = await getDocs(projectsQuery);

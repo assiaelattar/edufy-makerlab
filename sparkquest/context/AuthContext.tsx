@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
 
@@ -12,6 +12,10 @@ interface AuthContextType {
     signInWithToken: (token: string) => Promise<void>;
     signOut: () => Promise<void>;
     updateCredits: (amount: number) => Promise<void>;
+    kioskLogin: (studentId: string, pin: string) => Promise<boolean>;
+    isKioskMode: boolean;
+    enableKioskMode: () => void;
+    exitKioskMode: () => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +25,10 @@ const AuthContext = createContext<AuthContextType>({
     signInWithToken: async () => { },
     signOut: async () => { },
     updateCredits: async () => { },
+    kioskLogin: async () => false,
+    isKioskMode: false,
+    enableKioskMode: () => { },
+    exitKioskMode: () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -29,6 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isKioskMode, setIsKioskMode] = useState(() => localStorage.getItem('sparkquest_kiosk_mode') === 'true');
     const isDemoMode = useRef(false);
 
     // Helper to fetch custom profile from Firestore 'users' collection
@@ -37,10 +46,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const userDoc = await getDoc(doc(db, 'users', uid));
             if (userDoc.exists()) {
-                setUserProfile(userDoc.data() as UserProfile);
+                const data = userDoc.data() as UserProfile;
+                if (!data.organizationId) {
+                    console.warn("⚠️ Legacy User detected: Defaulting to 'makerlab-academy'", data);
+                    data.organizationId = 'makerlab-academy';
+                }
+                setUserProfile(data);
             } else {
                 // Fallback if no user doc exists yet
-                setUserProfile({ uid, name: 'Student', email: '', role: 'student' });
+                setUserProfile({
+                    uid,
+                    name: 'Student',
+                    email: '',
+                    role: 'student',
+                    organizationId: 'makerlab-academy' // Default for new uninitialized users too
+                });
             }
         } catch (err) {
             console.error("Error fetching user profile:", err);
@@ -72,6 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     setUser(mockUser);
                     setUserProfile(payload);
+
+                    // 🔑 Restore Firebase Session (needed for RLS)
+                    if (auth && !auth.currentUser) {
+                        signInAnonymously(auth).catch(e => console.warn("Restoring Anon Auth failed", e));
+                    }
+
                     setLoading(false);
                     // We still listen to Firebase, but isDemoMode protects us
                 }
@@ -96,6 +122,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             if (currentUser) {
+                // GUARD: If we are in Kiosk/Demo Mode and the user is Anonymous, 
+                // it means we just signed in anonymously for Firestore access.
+                // We MUST NOT overwrite the Mock User/Student Profile with the raw anonymous user.
+                if (currentUser.isAnonymous && isDemoMode.current) {
+                    console.log("👻 Kiosk: Anonymous Auth verified. Keeping Kiosk Session active.");
+                    return;
+                }
+
                 isDemoMode.current = false;
                 setUser(currentUser);
                 await fetchUserProfile(currentUser.uid);
@@ -165,6 +199,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         // PERSIST SESSION
                         localStorage.setItem('sparkquest_bridge_user', JSON.stringify(payload));
                         isDemoMode.current = true; // Mark as local session
+
+                        // 🔑 CRITICAL: Sign in anonymously to satisfy Firestore Security Rules
+                        try {
+                            if (!auth.currentUser) {
+                                await signInAnonymously(auth);
+                                console.log("🔑 Bridge: Signed in Anonymously for Firestore Access");
+                            }
+                        } catch (err) {
+                            console.warn("Bridge Anon Auth failed", err);
+                        }
 
                         setUser(mockUser);
                         setUserProfile(payload);
@@ -259,8 +303,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const enableKioskMode = () => {
+        setIsKioskMode(true);
+        localStorage.setItem('sparkquest_kiosk_mode', 'true');
+    };
+
+    const exitKioskMode = () => {
+        setIsKioskMode(false);
+        localStorage.removeItem('sparkquest_kiosk_mode');
+    };
+
+    const kioskLogin = async (studentId: string, pin: string): Promise<boolean> => {
+        if (!db) return false;
+        try {
+            // Verify PIN against Firestore
+            const studentDoc = await getDoc(doc(db, 'students', studentId));
+            if (!studentDoc.exists()) return false;
+
+            const studentData = studentDoc.data();
+            if (studentData.pinCode !== pin) return false;
+
+            // PIN Valid -> Create Bridge Session
+            const payload = {
+                uid: studentData.loginInfo?.uid || studentData.id,
+                email: studentData.loginInfo?.email || studentData.email || `${studentData.id}@kiosk.local`,
+                role: 'student',
+                name: studentData.name,
+                photoURL: null,
+                organizationId: studentData.organizationId || 'makerlab-academy' // Ensure Org ID is captured
+            };
+
+            // PERSIST SESSION
+            localStorage.setItem('sparkquest_bridge_user', JSON.stringify(payload));
+            isDemoMode.current = true; // Mark as local session
+
+            // REAL AUTH: Sign in anonymously to satisfy Firestore Security Rules (request.auth != null)
+            // This allows us to pass 'isSignedIn()' checks in rules.
+            // The rules will then see we have no User Profile in 'users' collection (getOrgId() == null),
+            // and fallback to allowing access if we are Kiosk.
+            try {
+                await signInAnonymously(auth);
+                console.log("👻 Kiosk: Signed in Anonymously for Firestore Access");
+            } catch (authErr) {
+                console.warn("Kiosk Anon Auth failed, falling back to pure mock", authErr);
+            }
+
+            const mockUser = {
+                uid: payload.uid,
+                displayName: payload.name || 'Explorer',
+                email: payload.email,
+                emailVerified: true,
+                isAnonymous: true, // It IS anonymous now
+                getIdToken: async () => 'kiosk-token',
+                getIdTokenResult: async () => ({
+                    token: 'kiosk-token',
+                    claims: { role: 'student' },
+                }),
+                photoURL: null,
+            } as unknown as User;
+
+            setUser(mockUser);
+            setUserProfile(payload);
+            return true;
+
+
+
+        } catch (e) {
+            console.error("Kiosk Login Error", e);
+            return false;
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, signInWithToken, signOut, updateCredits }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, signInWithToken, signOut, updateCredits, kioskLogin, isKioskMode, enableKioskMode, exitKioskMode }}>
             {children}
         </AuthContext.Provider>
     );

@@ -8,60 +8,66 @@ import { updateProfile, updatePassword } from 'firebase/auth';
 
 export function Settings() {
     const { user, studentProfile } = useAuth();
-    const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications'>('profile');
-    const [isLoading, setIsLoading] = useState(false);
-    const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+    // Migration State
+    const [migrationStatus, setMigrationStatus] = useState<string>('');
+    const { isSuperAdmin } = useAuth();
+    // ... (Keep existing state)
 
-    // Profile State
-    const [name, setName] = useState(studentProfile?.name || user?.displayName || '');
-    const [photoUrl, setPhotoUrl] = useState(studentProfile?.photoUrl || user?.photoURL || '');
+    const handleMigrateData = async () => {
+        if (!db) return;
+        if (!window.confirm("This will scan for data without an organization (orphaned) and assign it to 'Makerlab Academy'. Continue?")) return;
 
-    // Password State
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-
-    const handleSaveProfile = async () => {
-        if (!user) return;
         setIsLoading(true);
-        setMessage(null);
+        setMigrationStatus('Starting migration...');
+
         try {
-            await updateProfile(user, { displayName: name, photoURL: photoUrl });
-            // Update Firestore if student profile exists
-            if (studentProfile && db) {
-                await updateDoc(doc(db, 'students', studentProfile.id), {
-                    name,
-                    photoUrl
-                });
+            const collections = [
+                'students', 'programs', 'enrollments', 'payments', 'expenses',
+                'classes', 'attendance', 'tasks', 'projects', 'marketing_posts', 'leads'
+            ];
+
+            let totalMigrated = 0;
+
+            // We process sequentially to avoid overwhelming browser/connection
+            for (const colName of collections) {
+                setMigrationStatus(`Scanning ${colName}...`);
+                // Note: We deliberately fetch ALL if possible. 
+                // Since we are Super Admin and rules allow reading orphans, this should work if we don't apply filters.
+                // However, getDocs(collection(db, colName)) might fall back to client-side filtering or fail if rules require index.
+                // Given the rules change: match /{collection}/{docId} ... allow read if SuperAdmin... 
+                // It should work.
+
+                const snap = await import('firebase/firestore').then(mod => mod.getDocs(mod.collection(db, colName)));
+
+                if (snap.empty) continue;
+
+                const batch = import('firebase/firestore').then(mod => mod.writeBatch(db));
+                let batchCount = 0;
+                let currentBatch = await batch;
+
+                for (const doc of snap.docs) {
+                    const data = doc.data();
+                    if (!data.organizationId) {
+                        // ORPHAN FOUND
+                        import('firebase/firestore').then(mod => currentBatch.update(doc.ref, { organizationId: 'makerlab-academy' }));
+                        batchCount++;
+                        totalMigrated++;
+                    }
+                }
+
+                if (batchCount > 0) {
+                    setMigrationStatus(`Migrating ${batchCount} records in ${colName}...`);
+                    await currentBatch.commit();
+                }
             }
-            setMessage({ type: 'success', text: 'Profile updated successfully!' });
-        } catch (error) {
-            console.error(error);
-            setMessage({ type: 'error', text: 'Failed to update profile.' });
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
-    const handleUpdatePassword = async () => {
-        if (!user) return;
-        if (newPassword !== confirmPassword) {
-            setMessage({ type: 'error', text: 'Passwords do not match.' });
-            return;
-        }
-        if (newPassword.length < 6) {
-            setMessage({ type: 'error', text: 'Password must be at least 6 characters.' });
-            return;
-        }
-        setIsLoading(true);
-        setMessage(null);
-        try {
-            await updatePassword(user, newPassword);
-            setMessage({ type: 'success', text: 'Password updated successfully!' });
-            setNewPassword('');
-            setConfirmPassword('');
-        } catch (error: any) {
-            console.error(error);
-            setMessage({ type: 'error', text: error.message || 'Failed to update password. You may need to re-login.' });
+            setMigrationStatus(`Migration Complete! Moved ${totalMigrated} orphaned records.`);
+            setMessage({ type: 'success', text: `Migration Complete! Restored ${totalMigrated} records.` });
+
+        } catch (e: any) {
+            console.error("Migration failed:", e);
+            setMigrationStatus(`Error: ${e.message}`);
+            setMessage({ type: 'error', text: 'Migration failed. Check console.' });
         } finally {
             setIsLoading(false);
         }
@@ -90,12 +96,14 @@ export function Settings() {
                         >
                             <Lock size={18} /> Security
                         </button>
-                        {/* <button
-                            onClick={() => setActiveTab('notifications')}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === 'notifications' ? 'bg-white shadow text-brand-600 font-bold' : 'text-slate-600 hover:bg-slate-100/50'}`}
-                        >
-                            <Bell size={18} /> Notifications
-                        </button> */}
+                        {isSuperAdmin && (
+                            <button
+                                onClick={() => setActiveTab('migration' as any)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeTab === ('migration' as any) ? 'bg-white shadow text-brand-600 font-bold' : 'text-slate-600 hover:bg-slate-100/50'}`}
+                            >
+                                <Shield size={18} /> Maintenance
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -235,6 +243,50 @@ export function Settings() {
                                                 className="px-8 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg shadow-brand-500/20"
                                             >
                                                 {isLoading ? 'Updating...' : <><Lock size={18} /> Update Password</>}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {activeTab === ('migration' as any) && (
+                            <motion.div
+                                key="migration"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                transition={{ duration: 0.2 }}
+                                className="space-y-8"
+                            >
+                                <div>
+                                    <h2 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
+                                        <Shield size={20} className="text-blue-600" />
+                                        Data Maintenance (Super Admin)
+                                    </h2>
+
+                                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-8 text-blue-800 text-sm">
+                                        <p className="font-bold mb-1">Legacy Data Recovery</p>
+                                        <p>Use this tool to recover data that was created before the Multi-Tenant Update. It will search for 'Orphaned' data and assign it to <b>Makerlab Academy</b>.</p>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl">
+                                            <h3 className="font-bold text-lg mb-2">Migrate Legacy Data</h3>
+                                            <p className="text-slate-600 mb-4 text-sm">This process will populate the 'organizationId' field for all old records.</p>
+
+                                            {migrationStatus && (
+                                                <div className="mb-4 p-3 bg-slate-800 text-green-400 font-mono text-xs rounded-lg whitespace-pre-wrap">
+                                                    {migrationStatus}
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={handleMigrateData}
+                                                disabled={isLoading}
+                                                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {isLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Processing...</> : 'Start Migration'}
                                             </button>
                                         </div>
                                     </div>

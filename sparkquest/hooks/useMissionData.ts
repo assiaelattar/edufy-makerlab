@@ -88,6 +88,37 @@ export const useMissionData = () => {
                     if (!pData.studentId) {
                         pData.studentId = studentId;
                     }
+                    // 🔥 CRITICAL FIX: Fetch Template Resources
+                    let stepResources = pData.stepResources || {};
+                    let globalResources: any[] = pData.resources || [];
+
+                    if (pData.templateId) {
+                        try {
+                            const templateSnap = await getDoc(doc(db, 'project_templates', pData.templateId));
+                            if (templateSnap.exists()) {
+                                const tData = templateSnap.data();
+                                // Merge: Template resources (base) + Project (overrides)
+                                stepResources = { ...(tData.stepResources || {}), ...stepResources };
+
+                                // Merge global resources
+                                if (tData.resources) {
+                                    globalResources = [...tData.resources, ...globalResources];
+                                    // Deduplicate by URL
+                                    const seen = new Set();
+                                    globalResources = globalResources.filter(r => {
+                                        const duplicate = seen.has(r.url);
+                                        seen.add(r.url);
+                                        return !duplicate;
+                                    });
+                                }
+
+                                console.log('[useMissionData] Merged resources from template (Deep Link):', pData.templateId);
+                            }
+                        } catch (e) {
+                            console.warn('[useMissionData] Failed to load template resources:', e);
+                        }
+                    }
+
                     // Construct minimal assignment object needed for the wizard context
                     const derivedAssignment: Assignment = {
                         id: pData.templateId || 'custom-mission',
@@ -96,7 +127,8 @@ export const useMissionData = () => {
                         station: normalizeStation(pData.station),
                         badges: [],
                         recommendedWorkflow: pData.workflowId || 'default',
-                        stepResources: pData.stepResources || {}
+                        stepResources: stepResources,
+                        resources: globalResources // Pass global resources
                     };
                     setAssignment(derivedAssignment);
                     setProject(pData);
@@ -111,21 +143,84 @@ export const useMissionData = () => {
             }
 
             // 2. Find Active Enrollment/Project for Student (Default)
-            // QUERY: Get latest active enrollment
-            const q = query(collection(db, 'enrollments'), where('studentId', '==', studentId), where('status', '==', 'active'));
-            const snap = await getDocs(q);
+            // QUERY: Get latest active enrollment by ID
+            let q = query(collection(db, 'enrollments'), where('studentId', '==', studentId), where('status', '==', 'active'));
+            let snap = await getDocs(q);
+
+            // FALLBACK: Query by Email if ID yielded nothing (Handles recreated accounts)
+            if (snap.empty && user?.email) {
+                console.log(`[useMissionData] No enrollment found for ID ${studentId}. Trying email: ${user.email}`);
+                const qEmail = query(collection(db, 'enrollments'), where('studentEmail', '==', user.email), where('status', '==', 'active'));
+                snap = await getDocs(qEmail);
+            }
 
             if (snap.empty) {
                 // Check for ANY active project (planning or building)
-                const projQ = query(collection(db, 'student_projects'), where('studentId', '==', studentId), where('status', 'in', ['planning', 'building', 'submitted', 'changes_requested', 'published']));
-                const projSnap = await getDocs(projQ);
+                // Also check by Email fallback for projects if needed, though projects usually tied to ID.
+                let projQ = query(collection(db, 'student_projects'), where('studentId', '==', studentId), where('status', 'in', ['planning', 'building', 'submitted', 'changes_requested', 'published']));
+                let projSnap = await getDocs(projQ);
+
+                if (projSnap.empty && user?.email) {
+                    // Try finding orphaned projects by email (less likely but possible if manually created)
+                    // Note: student_projects usually don't have studentEmail indexed, but let's check if the schema supports it or if we can rely on ID.
+                    // Skipping email fallback for project-direct query for now to avoid index errors, assume enrollment is the key entry point.
+                }
+
                 if (!projSnap.empty) {
                     // 🔥 CRITICAL FIX: Add document ID
                     const pData = { id: projSnap.docs[0].id, ...projSnap.docs[0].data() } as StudentProject;
+                    // Ensure studentId is current
+                    if (pData.studentId !== studentId) {
+                        console.log(`[useMissionData] adopted project from old ID ${pData.studentId} to new ${studentId}`);
+                        pData.studentId = studentId;
+                        // Optional: trigger a backend update to migrate the ID? 
+                        // For now just use it.
+                    }
+
+                    // ... (rest of logic) ...
+                    // Let's just return here to avoid touching the rest of the block in this replacement if possible, 
+                    // but the block structure requires me to match the existing indentation.
+
+                    // Since I cannot change the whole block easily without massive context, I will continue the logic path
+                    // But I need to output the REST of the logic that was inside the if(!projSnap.empty) block
+                    // The previous tool call output shows lines 155-204. I must include them.
+
+                    // 🔥 CRITICAL FIX: Add document ID
+                    // (Repeating logic from original file for safety in replacement)
                     // Ensure studentId
                     if (!pData.studentId) {
                         pData.studentId = studentId;
                     }
+                    // 🔥 CRITICAL FIX: Fetch Template Resources
+                    let stepResources = pData.stepResources || {};
+                    let globalResources: any[] = pData.resources || [];
+
+                    if (pData.templateId) {
+                        try {
+                            const templateSnap = await getDoc(doc(db, 'project_templates', pData.templateId));
+                            if (templateSnap.exists()) {
+                                const tData = templateSnap.data();
+                                // Merge: Template resources (base) + Project (overrides)
+                                stepResources = { ...(tData.stepResources || {}), ...stepResources };
+
+                                // Merge global resources
+                                if (tData.resources) {
+                                    globalResources = [...tData.resources, ...globalResources];
+                                    // Deduplicate by URL
+                                    const seen = new Set();
+                                    globalResources = globalResources.filter(r => {
+                                        const duplicate = seen.has(r.url);
+                                        seen.add(r.url);
+                                        return !duplicate;
+                                    });
+                                }
+                                console.log('[useMissionData] Merged resources from template:', pData.templateId);
+                            }
+                        } catch (e) {
+                            console.warn('[useMissionData] Failed to load template resources:', e);
+                        }
+                    }
+
                     const derivedAssignment: Assignment = {
                         id: pData.templateId || 'custom-mission',
                         title: pData.title,
@@ -133,7 +228,8 @@ export const useMissionData = () => {
                         station: normalizeStation(pData.station),
                         badges: [],
                         recommendedWorkflow: pData.workflowId || 'default',
-                        stepResources: pData.stepResources || {}
+                        stepResources: stepResources,
+                        resources: globalResources
                     };
                     setAssignment(derivedAssignment);
                     setProject(pData);

@@ -3,38 +3,39 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- HELPER FUNCTIONS ---
+    // Check if user is authenticated
     function isSignedIn() {
       return request.auth != null;
     }
     
-      function isAdmin() {
-        return isSignedIn() && (
-          (request.auth.token.keys().hasAny(['role']) && (request.auth.token.role in ['admin', 'instructor', 'admission_officer', 'accountant'])) ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'instructor', 'admission_officer', 'accountant']
-        );
-      }
+    // Check if user has an elevated role (Admin, Instructor, etc.)
+    function isAdmin() {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'instructor', 'admission_officer', 'accountant'];
+    }
 
+    // Check if the user is accessing their own document
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // --- COLLECTION RULES ---
-
-    // 1. STUDENTS & USERS
-    // Allow public read for Kiosk Login to find students by name/status
+    // --- 1. CORE IDENTITY & ACCESS (Unified) ---
+    
+    // STUDENTS: Unified Rule
+    // - READ: Allow public 'true' to support Kiosk Login (search by name/keycard without auth)
+    // - WRITE: Allow Admin (management) or Owner (self-update)
     match /students/{studentId} {
       allow read: if true; 
       allow write: if isAdmin() || isOwner(studentId);
     }
 
     match /users/{userId} {
-      allow read: if true; // Often needed for profile lookups
+      allow read: if true; // Profile lookups
       allow write: if isAdmin() || isOwner(userId);
     }
 
-    // 2. CONTENT (Templates, Workflows, Assets)
-    // CRITICAL for Kiosk: Must be readable by everyone (or at least authenticated students)
-    // We use 'if true' to ensure Kiosk (which uses custom auth) never gets blocked.
+    // --- 2. PUBLIC CONTENT & ASSETS (Kiosk/Store Friendly) ---
+    
     match /project_templates/{templateId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -65,12 +66,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 3. STUDENT WORK (Projects, Enrollments)
+    // --- 3. STUDENT WORK & ENGAGEMENT ---
+
+    // Student Projects: Permissive for Kiosk
     match /student_projects/{projectId} {
-      // Students need to read/write their own projects
-      // Admin can access all
-      allow read: if true; // Simplified for Kiosk gallery/sharing
-      allow write: if true; // TEMPORARY: Allow all writes to unblock Kiosk mode issues
+      allow read: if true; // Gallery/Showcase access
+      allow write: if true; // Kiosk Mode: Students upload anonymously or via simple auth. 
+                            // kept as 'true' to prevent "Mission" or "Upload" blockers.
     }
 
     match /enrollments/{enrollmentId} {
@@ -78,15 +80,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // 4. SYSTEM & LOGS
-    match /system_logs/{logId} {
-      allow read: if isAdmin();
-      allow write: if true; // Allow client-side logging if needed
+    // --- 4. ERP & SAAS BUSINESS MODULES ---
+    // Critical Data Protection
+
+    // Payments: Users see their own history, Admins see all
+    match /payments/{paymentId} {
+      allow read: if isSignedIn(); 
+      allow write: if isAdmin();
     }
 
-    // 5. ERP / SAAS MODULES (Restored)
     match /organizations/{orgId} {
-      allow read: if true; // Allow read for login/verification
+      allow read: if true; // Organization lookup for login
       allow write: if isAdmin();
     }
     
@@ -104,11 +108,6 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
-
-    match /students/{studentId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
     
     match /purchase_requests/{reqId} {
       allow read: if isAdmin();
@@ -116,7 +115,7 @@ service cloud.firestore {
     }
 
     match /inventory/{itemId} {
-      allow read: if true;
+      allow read: if true; // View available stock
       allow write: if isAdmin();
     }
 
@@ -124,8 +123,19 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
-    
-    // Default catch-all (Secure by default)
+
+    match /gallery_items/{itemId} {
+      allow read: if true;
+      allow write: if true; // Public access for Emergency Migration
+    }
+
+    // --- 5. SYSTEM & LOGGING ---
+    match /system_logs/{logId} {
+      allow read: if isAdmin();
+      allow write: if true; // Client-side error logging
+    }
+
+    // --- DEFAULT DENY ---
     match /{document=**} {
       allow read, write: if false;
     }

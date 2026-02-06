@@ -6,6 +6,8 @@ import { useAuth } from '../../context/AuthContext';
 import { NotificationDropdown } from '../NotificationDropdown';
 import { Logo } from '../Logo';
 import { getEnabledModules } from '../../services/moduleRegistry';
+import { getAppById } from '../../services/appRegistry';
+import { ShoppingBag, Grid } from 'lucide-react';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -13,10 +15,18 @@ interface AdminLayoutProps {
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const { currentView, navigateTo, settings, t } = useAppContext();
-    const { user, signOut, can, userProfile } = useAuth();
+    const { user, signOut, can, userProfile, currentOrganization } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    const modules = getEnabledModules().filter(m => !m.requiredPermission || can(m.requiredPermission));
+    const modules = getEnabledModules().filter(m => {
+        // Permission Check
+        if (m.requiredPermission && !can(m.requiredPermission)) return false;
+
+        // SaaS Feature Toggles
+        if (m.id === 'learning' && !currentOrganization?.modules?.makerPro) return false;
+
+        return true;
+    });
 
     return (
         <div className="flex min-h-[100dvh] bg-slate-950 text-slate-200 font-sans">
@@ -65,13 +75,65 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                                                 className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${currentView === module.id ? `bg-${module.color}-950/30 text-${module.color}-400 border border-${module.color}-900/50 shadow-lg` : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
                                             >
                                                 <module.icon className={`w-5 h-5 transition-colors ${currentView === module.id ? `text-${module.color}-400` : 'text-slate-500 group-hover:text-slate-300'}`} />
-                                                {t(`menu.${module.id}`) || module.label}
+                                                {module.label}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                             );
                         })}
+
+
+                        {/* APP STORE & INSTALLED APPS */}
+                        <div className="mb-6 last:mb-0">
+                            <div className="px-3 mb-2 text-xs font-bold text-violet-500 uppercase tracking-wider">
+                                Extensions
+                            </div>
+                            <div className="space-y-1">
+                                {/* Store Link */}
+                                <button
+                                    onClick={() => { navigateTo('app-store' as any); setIsMobileMenuOpen(false); }}
+                                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${currentView === 'app-store' ? 'bg-violet-900/30 text-violet-400 border border-violet-900/50 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                                >
+                                    <ShoppingBag className={`w-5 h-5 transition-colors ${currentView === 'app-store' ? 'text-violet-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                    App Marketplace
+                                </button>
+
+                                {/* Installed Apps */}
+                                {currentOrganization?.installedApps?.map(appId => {
+                                    const app = getAppById(appId);
+                                    if (!app) return null;
+                                    const isAppActive = currentView === 'saas-app' && (window as any).viewId === appId; // Helper check, logic will be in App.tsx to pass params
+
+                                    return (
+                                        <button
+                                            key={app.id}
+                                            onClick={() => { navigateTo('saas-app', { appId: app.id }); setIsMobileMenuOpen(false); }}
+                                            className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${isAppActive ? 'bg-slate-800 text-white border border-slate-700' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                                        >
+                                            <app.icon className={`w-5 h-5 transition-colors ${isAppActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                            {app.name}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        {userProfile?.organizationId === 'makerlab-academy' && userProfile?.role === 'admin' && (
+                            <div className="mb-6 last:mb-0">
+                                <div className="px-3 mb-2 text-xs font-bold text-purple-500 uppercase tracking-wider">
+                                    Super Admin
+                                </div>
+                                <div className="space-y-1">
+                                    <button
+                                        onClick={() => { navigateTo('saas-admin' as any); setIsMobileMenuOpen(false); }}
+                                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${currentView === 'saas-admin' ? 'bg-purple-900/30 text-purple-400 border border-purple-900/50 shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                                    >
+                                        <Box className={`w-5 h-5 transition-colors ${currentView === 'saas-admin' ? 'text-purple-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                        SaaS Tenants
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </nav>
 
                     <div className="p-4 border-t border-slate-800 bg-slate-950/30">

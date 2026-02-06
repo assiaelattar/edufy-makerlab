@@ -467,8 +467,32 @@ export const ParentDashboardView = () => {
                     </div>
 
                     {/* NEW: Pickup Action Button (Hero) */}
-                    <div className="mb-6 md:mb-8">
+                    <div className="mb-6 md:mb-8 flex flex-col md:flex-row items-center gap-4">
                         <PickupActionButton />
+
+                        {/* SparkQuest Launch Button */}
+                        <button
+                            onClick={() => {
+                                const payload = {
+                                    uid: activeChild.loginInfo?.uid || activeChild.id,
+                                    email: activeChild.loginInfo?.email,
+                                    role: 'student',
+                                    name: activeChild.name,
+                                    photoURL: null
+                                };
+                                const bridgeToken = btoa(JSON.stringify(payload));
+                                const isLocal = window.location.hostname === 'localhost';
+                                const sparkQuestUrl = isLocal
+                                    ? 'http://localhost:3000'
+                                    : 'https://sparkquest-makerlab.vercel.app';
+
+                                window.open(`${sparkQuestUrl}/?token=${bridgeToken}`, '_blank');
+                            }}
+                            className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-blue-900/40 border border-blue-400/50 flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 md:ml-auto"
+                        >
+                            <Rocket size={20} className="fill-current text-yellow-300 animate-pulse" />
+                            <span>Launch Student Portal</span>
+                        </button>
                     </div>
 
                     {/* Desktop XP Progress Bar */}

@@ -3,12 +3,14 @@ import { CalendarCheck, Link as LinkIcon, Plus, Clock, Users, Calendar as Calend
 import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
 import { WorkshopTemplate, Booking } from '../types';
 import { formatDate, getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
     const { workshopTemplates, workshopSlots, bookings, settings } = useAppContext();
+    const { currentOrganization } = useAuth();
     const [activeTab, setActiveTab] = useState<'calendar' | 'templates'>('calendar');
 
     // --- Calendar State ---
@@ -52,7 +54,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
     const handleSaveTemplate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db) return;
+        if (!db || !currentOrganization) return;
 
         try {
             if (editingTemplateId) {
@@ -64,6 +66,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 const slug = templateForm.title?.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).substr(2, 5);
                 await addDoc(collection(db, 'workshop_templates'), {
                     ...templateForm,
+                    organizationId: currentOrganization.id,
                     shareableSlug: slug,
                     createdAt: serverTimestamp()
                 });
@@ -222,26 +225,26 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
             {/* CALENDAR TAB */}
             {activeTab === 'calendar' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-[600px]">
+                <div className="flex flex-col gap-6 h-full min-h-[600px]">
 
-                    {/* Left: Calendar Grid */}
-                    <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-6">
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg">
+                    {/* Calendar Grid - Full width on mobile, left sidebar on desktop */}
+                    <div className="flex flex-col gap-6">
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 md:p-6 shadow-lg">
                             {/* Month Nav */}
-                            <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-white">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+                            <div className="flex justify-between items-center mb-4 md:mb-6">
+                                <h3 className="text-base md:text-lg font-bold text-white">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
                                 <div className="flex gap-1">
                                     <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronLeft size={20} /></button>
-                                    <button onClick={() => setViewDate(new Date())} className="px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white transition-colors">Today</button>
+                                    <button onClick={() => setViewDate(new Date())} className="px-2 md:px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white transition-colors">Today</button>
                                     <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
                                 </div>
                             </div>
 
                             {/* Grid */}
-                            <div className="grid grid-cols-7 gap-2 text-center mb-2">
-                                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d} className="text-xs font-bold text-slate-500 py-2">{d}</div>)}
+                            <div className="grid grid-cols-7 gap-1 md:gap-2 text-center mb-2">
+                                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d} className="text-[10px] md:text-xs font-bold text-slate-500 py-2">{d}</div>)}
                             </div>
-                            <div className="grid grid-cols-7 gap-2">
+                            <div className="grid grid-cols-7 gap-1 md:gap-2">
                                 {calendarGrid.map((date, i) => {
                                     if (!date) return <div key={i} className="aspect-square"></div>;
                                     const isSelected = date.toDateString() === selectedDate.toDateString();
@@ -252,14 +255,14 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                         <button
                                             key={i}
                                             onClick={() => setSelectedDate(date)}
-                                            className={`aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all duration-200 group
+                                            className={`aspect-square rounded-lg md:rounded-xl flex flex-col items-center justify-center relative transition-all duration-200 group
                                                 ${isSelected ? 'bg-pink-600 text-white shadow-lg shadow-pink-900/20 scale-105 z-10' : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border border-slate-800'}
                                                 ${isToday && !isSelected ? 'border-pink-500/50' : ''}
                                             `}
                                         >
-                                            <span className={`text-sm ${isSelected ? 'font-bold' : 'font-medium'}`}>{date.getDate()}</span>
+                                            <span className={`text-xs md:text-sm ${isSelected ? 'font-bold' : 'font-medium'}`}>{date.getDate()}</span>
                                             {status !== 'none' && (
-                                                <div className={`w-1.5 h-1.5 rounded-full mt-1 ${isSelected ? 'bg-pink-300' : status === 'busy' ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
+                                                <div className={`w-1 h-1 md:w-1.5 md:h-1.5 rounded-full mt-0.5 md:mt-1 ${isSelected ? 'bg-pink-300' : status === 'busy' ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
                                             )}
                                         </button>
                                     );
@@ -268,40 +271,44 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                         </div>
 
                         {/* Quick Stats for Month */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                                <div className="text-slate-500 text-xs uppercase font-bold mb-1">Total Events</div>
-                                <div className="text-2xl font-bold text-white">{virtualSlots.length}</div>
+                        <div className="grid grid-cols-2 gap-3 md:gap-4">
+                            <div
+                                className="bg-slate-900 border border-slate-800 rounded-xl p-3 md:p-4"
+                            >
+                                <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold mb-1">Total Events</div>
+                                <div className="text-xl md:text-2xl font-bold text-white">{virtualSlots.length}</div>
                             </div>
-                            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-                                <div className="text-slate-500 text-xs uppercase font-bold mb-1">Booked Spots</div>
-                                <div className="text-2xl font-bold text-pink-400">{virtualSlots.reduce((a, b) => a + b.bookedCount, 0)}</div>
+                            <div
+                                className="bg-slate-900 border border-slate-800 rounded-xl p-3 md:p-4"
+                            >
+                                <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold mb-1">Booked Spots</div>
+                                <div className="text-xl md:text-2xl font-bold text-pink-400">{virtualSlots.reduce((a, b) => a + b.bookedCount, 0)}</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Right: Daily Agenda */}
-                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-                        <div className="p-6 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
+                    {/* Daily Agenda - Now visible on mobile */}
+                    <div className="flex flex-col bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+                        <div className="p-4 md:p-6 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
                             <div>
-                                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                                <h3 className="font-bold text-white text-base md:text-lg flex items-center gap-2">
                                     {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                                 </h3>
-                                <p className="text-slate-500 text-sm mt-1">{selectedDaySlots.length} events scheduled</p>
+                                <p className="text-slate-500 text-xs md:text-sm mt-1">{selectedDaySlots.length} events scheduled</p>
                             </div>
-                            <button onClick={handleCreateNew} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-pink-900/20">
-                                <Plus size={16} /> Add Event
+                            <button onClick={handleCreateNew} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors shadow-lg shadow-pink-900/20">
+                                <Plus size={16} /> <span className="hidden md:inline">Add Event</span>
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-4 bg-slate-900/50">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-4 bg-slate-900/50 max-h-[500px] md:max-h-none">
                             {selectedDaySlots.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60">
-                                    <CalendarIcon size={64} className="mb-4 stroke-1" />
-                                    <p>No workshops scheduled for this day.</p>
+                                <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-60 py-12">
+                                    <CalendarIcon size={48} className="mb-4 stroke-1" />
+                                    <p className="text-sm">No workshops scheduled for this day.</p>
                                 </div>
                             ) : (
-                                <div className="relative border-l border-slate-800 ml-4 pl-8 space-y-8">
+                                <div className="relative border-l border-slate-800 ml-2 md:ml-4 pl-4 md:pl-8 space-y-6 md:space-y-8">
                                     {selectedDaySlots.map((slot, idx) => {
                                         const uniqueId = `${slot.workshopTemplateId}-${slot.dateStr}-${slot.startTime}`;
                                         const isExpanded = expandedSlotUniqueId === uniqueId;
@@ -311,26 +318,30 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                         return (
                                             <div key={idx} className="relative">
                                                 {/* Timeline Dot */}
-                                                <div className={`absolute -left-[41px] top-4 w-5 h-5 rounded-full border-4 border-slate-900 ${isExpanded ? 'bg-pink-500' : 'bg-slate-700'}`}></div>
+                                                <div className={`absolute -left-[25px] md:-left-[41px] top-4 w-4 h-4 md:w-5 md:h-5 rounded-full border-4 border-slate-900 ${isExpanded ? 'bg-pink-500' : 'bg-slate-700'}`}></div>
 
-                                                <div className={`bg-slate-950 border border-slate-800 rounded-xl overflow-hidden transition-all duration-300 ${isExpanded ? 'ring-1 ring-pink-500/50 shadow-lg shadow-pink-900/10 scale-[1.01]' : 'hover:border-slate-700'}`}>
+                                                {/* Make entire card clickable */}
+                                                <div
+                                                    onClick={() => setExpandedSlotUniqueId(isExpanded ? null : uniqueId)}
+                                                    className={`bg-slate-950 border border-slate-800 rounded-xl overflow-hidden transition-all duration-300 cursor-pointer ${isExpanded ? 'ring-1 ring-pink-500/50 shadow-lg shadow-pink-900/10 scale-[1.01]' : 'hover:border-slate-700'}`}
+                                                >
                                                     {/* Slot Header Card */}
-                                                    <div onClick={() => setExpandedSlotUniqueId(isExpanded ? null : uniqueId)} className="p-4 cursor-pointer flex flex-col sm:flex-row gap-4 sm:items-center">
+                                                    <div className="p-3 md:p-4 flex flex-col sm:flex-row gap-3 md:gap-4 sm:items-center">
                                                         <div className="flex flex-col min-w-[60px]">
-                                                            <span className="text-xl font-bold text-white">{slot.startTime}</span>
+                                                            <span className="text-lg md:text-xl font-bold text-white">{slot.startTime}</span>
                                                             <span className="text-xs text-slate-500 font-mono">{slot.endTime}</span>
                                                         </div>
 
-                                                        <div className="flex-1 border-l border-slate-800 pl-4">
-                                                            <h4 className="font-bold text-white text-lg">{slot.templateTitle}</h4>
-                                                            <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
+                                                        <div className="flex-1 sm:border-l border-slate-800 sm:pl-4">
+                                                            <h4 className="font-bold text-white text-base md:text-lg">{slot.templateTitle}</h4>
+                                                            <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-slate-500 mt-1">
                                                                 <span className="flex items-center gap-1"><Clock size={12} /> {slot.endTime && slot.startTime ? 'Runs ~' + (parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]) - (parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]))) + 'm' : ''}</span>
                                                                 <span className="flex items-center gap-1"><MapPin size={12} /> On-site</span>
                                                             </div>
                                                         </div>
 
-                                                        <div className="w-full sm:w-32 bg-slate-900/50 rounded-lg p-2">
-                                                            <div className="flex justify-between text-xs mb-1">
+                                                        <div className="w-full sm:w-28 md:w-32 bg-slate-900/50 rounded-lg p-2">
+                                                            <div className="flex justify-between text-[10px] md:text-xs mb-1">
                                                                 <span className="text-slate-400">Capacity</span>
                                                                 <span className={`${occupancy >= 100 ? 'text-red-400' : 'text-emerald-400'} font-bold`}>{slot.bookedCount} / {slot.capacity}</span>
                                                             </div>
@@ -342,7 +353,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
                                                     {/* Expanded Details */}
                                                     {isExpanded && (
-                                                        <div className="border-t border-slate-800 bg-slate-900/50 p-4 animate-in slide-in-from-top-2">
+                                                        <div className="border-t border-slate-800 bg-slate-900/50 p-3 md:p-4 animate-in slide-in-from-top-2">
                                                             <div className="flex justify-between items-center mb-4">
                                                                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendee List</h5>
                                                             </div>
@@ -353,15 +364,15 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                                 <div className="space-y-2">
                                                                     {bookingsList.map(booking => (
                                                                         <div key={booking.id} className="flex items-center justify-between bg-slate-950 p-3 rounded-lg border border-slate-800 group">
-                                                                            <div>
-                                                                                <div className="font-bold text-slate-200 text-sm">{booking.parentName} <span className="font-normal text-slate-500">for</span> {booking.kidName}</div>
-                                                                                <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                                                    <span>{booking.phoneNumber}</span>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="font-bold text-slate-200 text-sm truncate">{booking.parentName} <span className="font-normal text-slate-500">for</span> {booking.kidName}</div>
+                                                                                <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                                                                                    <span className="truncate">{booking.phoneNumber}</span>
                                                                                     {booking.kidAge && <span>• {booking.kidAge} yo</span>}
                                                                                 </div>
                                                                             </div>
 
-                                                                            <div className="flex items-center gap-3">
+                                                                            <div className="flex items-center gap-2 md:gap-3 ml-2">
                                                                                 <select
                                                                                     value={booking.status}
                                                                                     onChange={(e) => handleStatusUpdate(booking.id, e.target.value)}

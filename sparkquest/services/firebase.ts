@@ -1,6 +1,5 @@
-
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { getFirestore, Firestore, collection, getDocs, query, where, updateDoc, doc, initializeFirestore, memoryLocalCache } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
@@ -39,7 +38,25 @@ try {
     app = initializeApp(firebaseConfig);
     console.log('✅ Firebase App initialized:', app.name);
 
-    db = getFirestore(app);
+    // 🛠️ STABILITY FIX: Force Memory Cache
+    // The "Internal Assertion Failed" (ID: b815 / ca9) is caused by Corrupted IndexedDB.
+    // We use initializeFirestore with memoryLocalCache to completely bypass the corrupted local storage.
+    try {
+        db = initializeFirestore(app, {
+            localCache: memoryLocalCache()
+        });
+        console.log('✅ Firestore initialized with Memory Cache (Stability Mode)');
+    } catch (e) {
+        // Fallback if already initialized (though strictly we want to avoid mixed modes)
+        console.warn('⚠️ Firestore already initialized, using existing instance');
+        db = getFirestore(app);
+    }
+
+    // 🧹 SAFETY: Attempt to clear persistence if we suspect corruption (simple version: just log it, or try to clear if supported)
+    // Note: clearIndexedDbPersistence() can only be called before any data access. 
+    // Since we just initialized, we can try.
+    // However, if the app is crashing, we might want to FORCE clear.
+    // For now, let's keep it standard but with better initialization. 
     console.log('✅ Firestore initialized:', db ? 'Connected' : 'Failed');
 
     auth = getAuth(app);
@@ -47,6 +64,22 @@ try {
 
     storage = getStorage(app);
     console.log('✅ Storage initialized:', storage ? 'Connected' : 'Failed');
+
+    // 🔥 DEBUG EXPOSURE
+    if (typeof window !== 'undefined') {
+        (window as any)._DEBUG_DB = db;
+        (window as any)._DEBUG_AUTH = auth;
+        // Expose functions needed for repair scripts
+        (window as any)._DEBUG_FIRESTORE = {
+            collection,
+            getDocs,
+            query,
+            where,
+            updateDoc,
+            doc
+        };
+        console.log('🔧 Debug: DB, Auth & Firestore functions exposed on window._DEBUG_*');
+    }
 
 } catch (error) {
     console.error("❌ Firebase initialization failed:", error);

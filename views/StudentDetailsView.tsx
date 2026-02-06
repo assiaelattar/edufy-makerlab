@@ -26,7 +26,7 @@ export const StudentDetailsView = ({
     onRecordPayment: (id: string) => void;
 }) => {
     const { students, enrollments, programs, payments, attendanceRecords, studentProjects, navigateTo, settings, viewParams, sendNotification, badges } = useAppContext();
-    const { createSecondaryUser, userProfile } = useAuth();
+    const { createSecondaryUser, userProfile, currentOrganization } = useAuth();
 
     const { studentId } = viewParams;
     const isStudentRole = userProfile?.role === 'student';
@@ -365,7 +365,15 @@ export const StudentDetailsView = ({
 
             const username = finalEmail.split('@')[0];
 
-            await setDoc(doc(db, 'users', uid), { uid, email: finalEmail, name: student.name, role: 'student', status: 'active', createdAt: serverTimestamp() });
+            await setDoc(doc(db, 'users', uid), {
+                uid,
+                organizationId: currentOrganization?.id || student.organizationId,
+                email: finalEmail,
+                name: student.name,
+                role: 'student',
+                status: 'active',
+                createdAt: serverTimestamp()
+            });
             await updateDoc(doc(db, 'students', student.id), { loginInfo: { username, email: finalEmail, initialPassword: password, uid } });
 
             // Send Notification
@@ -447,6 +455,7 @@ export const StudentDetailsView = ({
             // 3. Ensure User Profile Exists/Is Updated
             await setDoc(doc(db, 'users', uid), {
                 uid,
+                organizationId: currentOrganization?.id || student.organizationId,
                 email: parentEmail,
                 name: parentName,
                 role: 'parent',

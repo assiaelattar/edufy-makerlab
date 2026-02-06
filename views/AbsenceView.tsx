@@ -2,12 +2,14 @@
 import React, { useState, useMemo } from 'react';
 import { ClipboardCheck, Search, Filter, Calendar, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MessageCircle, BarChart2 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
 
 export const AbsenceView = () => {
     const { enrollments, students, attendanceRecords } = useAppContext();
+    const { currentOrganization, userProfile } = useAuth();
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('All');
@@ -110,10 +112,12 @@ export const AbsenceView = () => {
                 enrollmentId,
                 status,
                 slotTime: timeSlot,
+                organizationId: currentOrganization?.id || 'makerlab-academy',
                 createdAt: serverTimestamp() // Updates timestamp on change
             });
         } catch (err) {
             console.error("Error marking attendance", err);
+            alert(`Failed to mark attendance. \nError: ${err}\n\nDebug Info:\nRole: ${userProfile?.role || 'Unknown'}\nUID: ${userProfile?.uid}\nOrg: ${currentOrganization?.id}`);
         }
     };
 
@@ -135,13 +139,19 @@ export const AbsenceView = () => {
                     enrollmentId: student.id,
                     status: 'present',
                     slotTime: student.displayTime,
+                    organizationId: currentOrganization?.id || 'makerlab-academy',
                     createdAt: serverTimestamp()
                 });
                 batch.push(promise);
             }
         });
 
-        await Promise.all(batch);
+        try {
+            await Promise.all(batch);
+        } catch (err) {
+            console.error("Error confirming attendance", err);
+            alert(`Failed to confirm attendance. \nError: ${err}\n\nDebug Info:\nRole: ${userProfile?.role || 'Unknown'}\nUID: ${userProfile?.uid}`);
+        }
     };
 
     const getStatus = (studentId: string, timeSlot: string) => {

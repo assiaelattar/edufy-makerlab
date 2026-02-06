@@ -29,8 +29,8 @@ export const PortfolioTab: React.FC<PortfolioTabProps> = ({ publishedProjects, s
               className="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden group cursor-pointer hover:border-indigo-500/50 transition-colors"
             >
               <div className="h-32 bg-slate-800 relative overflow-hidden">
-                {p.mediaUrls?.[0] ? (
-                  <img src={p.mediaUrls[0]} className="w-full h-full object-cover" />
+                {(p.mediaUrls?.[0] || p.coverImage || p.thumbnailUrl) ? (
+                  <img src={p.mediaUrls?.[0] || p.coverImage || p.thumbnailUrl} className="w-full h-full object-cover" />
                 ) : (
                   <div className="flex items-center justify-center h-full text-slate-600">
                     <ImageIcon size={24} />

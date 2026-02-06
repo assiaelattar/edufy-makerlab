@@ -19,10 +19,20 @@ export const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ isOpen
 
     const isPdf = resource.url.toLowerCase().endsWith('.pdf') || resource.type === 'file';
     const isImage = resource.type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(resource.url);
+    const isVideo = resource.type === 'video' || resource.url.includes('youtube.com') || resource.url.includes('youtu.be');
 
-    // If it's a link or video, we might still want to open it externally or show a message
-    // But for this feature, we focus on PDF/Image embedding.
-    const showEmbed = isPdf || isImage;
+    // Helper to get embed URL
+    const getEmbedUrl = (url: string) => {
+        if (url.includes('youtube.com/watch?v=')) {
+            return url.replace('watch?v=', 'embed/');
+        }
+        if (url.includes('youtu.be/')) {
+            return url.replace('youtu.be/', 'youtube.com/embed/');
+        }
+        return url;
+    };
+
+    const showEmbed = isPdf || isImage || isVideo;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
@@ -64,7 +74,7 @@ export const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ isOpen
                 <div className="flex-1 bg-slate-200 relative">
                     {showEmbed ? (
                         <iframe
-                            src={resource.url}
+                            src={getEmbedUrl(resource.url)}
                             className="w-full h-full border-none"
                             title={resource.title}
                         />

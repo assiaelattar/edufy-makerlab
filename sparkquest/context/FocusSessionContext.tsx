@@ -61,6 +61,9 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
             return;
         }
 
+        // DESACTIVATED AS REQUESTED
+        return;
+
         const interval = setInterval(() => {
             const elapsed = Math.floor((Date.now() - activeSession.startTime.getTime()) / 1000);
             setElapsedSeconds(elapsed);

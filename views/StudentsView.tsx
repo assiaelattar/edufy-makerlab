@@ -105,7 +105,7 @@ export const StudentsView = ({
     }, [students, enrollments, searchQuery, filterProgramId, filterGradeName, filterDay, showArchived]);
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 md:h-full flex flex-col animate-in fade-in slide-in-from-right-4">
+        <div className="space-y-6 pb-24 md:pb-8 flex flex-col animate-in fade-in slide-in-from-right-4">
             {/* Header with Actions */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
@@ -177,9 +177,9 @@ export const StudentsView = ({
             </div>
 
             {/* Student List */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden md:flex-1 md:flex md:flex-col shadow-lg shadow-black/20">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
                 {/* Desktop Table */}
-                <div className="hidden md:block overflow-y-auto flex-1 custom-scrollbar">
+                <div className="hidden md:block">
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-950 text-slate-400 font-semibold sticky top-0 z-10 shadow-sm">
                             <tr>

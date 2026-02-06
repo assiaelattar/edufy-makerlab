@@ -90,6 +90,7 @@ export const PublicBookingView = () => {
             // 1. If real slot doesn't exist, create it
             if (!slotId) {
                 const slotRef = await addDoc(collection(db, 'workshop_slots'), {
+                    organizationId: template.organizationId, // Inherit from template
                     workshopTemplateId: template.id,
                     date: selectedSlot.dateStr,
                     startTime: selectedSlot.startTime,
@@ -103,6 +104,7 @@ export const PublicBookingView = () => {
 
             // 2. Create Booking
             await addDoc(collection(db, 'bookings'), {
+                organizationId: template.organizationId, // Inherit from template
                 workshopSlotId: slotId,
                 workshopTemplateId: template.id,
                 parentName: bookingForm.parentName,

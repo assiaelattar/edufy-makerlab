@@ -4,12 +4,16 @@ import { auth, db, firebaseConfig } from '../services/firebase';
 import { User, onAuthStateChanged, signOut as firebaseSignOut, getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, serverTimestamp, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { UserProfile, RoleDefinition, RoleType } from '../types';
+import { UserProfile, RoleDefinition, RoleType, Organization } from '../types';
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
   roleDefinition: RoleDefinition | null;
+  // SaaS Context
+  currentOrganization: Organization | null;
+  isSuperAdmin: boolean;
+
   loading: boolean;
   roles: RoleDefinition[];
   signOut: () => Promise<void>;
@@ -122,6 +126,7 @@ const DEFAULT_ROLES: RoleDefinition[] = [
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
   const [roleDefinition, setRoleDefinition] = useState<RoleDefinition | null>(null);
   const [roles, setRoles] = useState<RoleDefinition[]>(DEFAULT_ROLES);
   const [loading, setLoading] = useState(true);
@@ -223,9 +228,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Check if this is the FIRST USER EVER.
             const allUsersSnap = await getDocs(collection(firestore, 'users'));
             if (allUsersSnap.empty) {
-              // Create First Admin
+              // Create First Admin & Default Organization
+              console.log("Creating Tenant Zero...");
+              // 1. Create Default Org
+              const orgId = 'makerlab-academy';
+              const defaultOrg: Organization = {
+                id: orgId,
+                name: 'MakerLab Academy',
+                slug: 'makerlab',
+                ownerUid: firebaseUser.uid,
+                createdAt: serverTimestamp() as any,
+                status: 'active',
+                modules: { erp: true, makerPro: true, sparkQuest: true }
+              };
+              await setDoc(doc(firestore, 'organizations', orgId), defaultOrg);
+
               profileData = {
                 uid: firebaseUser.uid,
+                organizationId: orgId,
                 email: firebaseUser.email || '',
                 name: firebaseUser.displayName || 'Administrator',
                 role: 'admin',
@@ -237,6 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               // Create default Guest profile
               profileData = {
                 uid: firebaseUser.uid,
+                organizationId: '', // PENDING ASSIGNMENT
                 email: firebaseUser.email || '',
                 name: firebaseUser.displayName || 'New User',
                 role: 'guest',
@@ -249,6 +270,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         setUserProfile(profileData);
+
+        // 3. Fetch Organization
+        if (profileData && profileData.organizationId) {
+          const orgSnap = await getDoc(doc(firestore, 'organizations', profileData.organizationId));
+          if (orgSnap.exists()) {
+            setCurrentOrganization(orgSnap.data() as Organization);
+          }
+        } else if (profileData?.role === 'admin' && !profileData.organizationId) {
+          // BACKWARDS COMPATIBILITY FOR EXISTING ADMIN
+          // Force-load 'makerlab-academy' organization for legacy admins
+          console.warn("Legacy Admin detected. Defaulting to 'makerlab-academy' for access.");
+          try {
+            // 1. Try to fetch the tenant zero org
+            const orgSnap = await getDoc(doc(firestore, 'organizations', 'makerlab-academy'));
+            if (orgSnap.exists()) {
+              setCurrentOrganization(orgSnap.data() as Organization);
+            } else {
+              // 2. Fallback: Create a virtual org object so the app loads
+              // This allows the admin to reach Settings > Migration
+              console.warn("Tenant Zero not found. Using virtual fallback.");
+              setCurrentOrganization({
+                id: 'makerlab-academy',
+                name: 'Makerlab Academy',
+                slug: 'makerlab-academy',
+                ownerEmail: profileData?.email || '',
+                modules: { activeModules: ['erp', 'makerPro'] },
+                subscription: { status: 'active', planId: 'legacy' },
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              } as any);
+            }
+          } catch (err) {
+            console.error("Failed to recover legacy session", err);
+          }
+        }
       } else {
         // Only clear if we aren't in manual demo mode
         if (!isDemoMode.current) {
@@ -314,6 +370,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Simulate Profile
     const demoProfile: UserProfile = {
       uid: 'demo-admin-id',
+      organizationId: 'makerlab-academy', // Demo org
       email: 'demo@stemflow.com',
       name: 'Demo Admin',
       role: 'admin',
@@ -337,6 +394,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Create mock profile based on role
     const mockProfile: UserProfile = {
       uid: `demo-${role}-id`,
+      organizationId: 'makerlab-academy',
       email: `demo.${role}@stemflow.com`,
       name: `Demo ${role.charAt(0).toUpperCase() + role.slice(1)}`,
       role: role,
@@ -399,6 +457,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Fallback if profile doc is missing but we have UID (shouldn't happen for valid parents)
       targetProfile = {
         uid,
+        organizationId: 'makerlab-academy', // Default for impersonation
         email,
         name: 'Impersonated User',
         role,
@@ -483,10 +542,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userRole = userProfile?.role || null;
   const authError = !userProfile ? 'Profile not found' : userProfile.status !== 'active' ? 'Account inactive' : !roleDefinition ? 'Role not defined' : null;
 
+  const isSuperAdmin = userProfile?.organizationId === 'makerlab-academy' && userProfile?.role === 'admin';
+
   return (
     <AuthContext.Provider value={{
       user, userProfile, roleDefinition, loading, roles, signOut, can, loginAsDemo, switchRole, impersonateUser, createSecondaryUser,
-      isAuthorized, authError, userRole
+      isAuthorized, authError, userRole, currentOrganization, isSuperAdmin
     }}>
       {children}
     </AuthContext.Provider>

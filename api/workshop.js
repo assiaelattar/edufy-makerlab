@@ -3,50 +3,58 @@ import { getFirestore, collection, query, where, getDocs } from "firebase/firest
 
 // Reuse the config (copied from services/firebase.ts)
 const firebaseConfig = {
-    apiKey: "AIzaSyCbSdElE-DXh83x02wszjfUcXl9z0iQj1A",
-    authDomain: "edufy-makerlab.firebaseapp.com",
-    projectId: "edufy-makerlab",
-    storageBucket: "edufy-makerlab.firebasestorage.app",
-    messagingSenderId: "273507751238",
-    appId: "1:273507751238:web:c8306f6177654befa54147",
-    measurementId: "G-KZV1Q7T1H2"
+  apiKey: "AIzaSyCbSdElE-DXh83x02wszjfUcXl9z0iQj1A",
+  authDomain: "edufy-makerlab.firebaseapp.com",
+  projectId: "edufy-makerlab",
+  storageBucket: "edufy-makerlab.firebasestorage.app",
+  messagingSenderId: "273507751238",
+  appId: "1:273507751238:web:c8306f6177654befa54147",
+  measurementId: "G-KZV1Q7T1H2"
 };
 
 // Initialize only once
-const app = initializeApp(firebaseConfig);
+const app = initializeApp(firebaseConfig, 'workshop-api');
 const db = getFirestore(app);
 
 export default async function handler(req, res) {
-    const { slug } = req.query;
+  const { slug } = req.query;
 
-    if (!slug) {
-        return res.status(404).send("Not Found");
+  if (!slug) {
+    console.error("[Workshop API] No slug provided");
+    return res.status(404).send("Not Found - No slug provided");
+  }
+
+  try {
+    console.log(`[Workshop API] Querying for slug: ${slug}`);
+
+    // Query workshop templates by shareableSlug
+    // We do NOT filter by organizationId because this is a public link
+    const q = query(
+      collection(db, "workshop_templates"),
+      where("shareableSlug", "==", slug)
+    );
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      console.log(`[Workshop API] No template found for slug: ${slug}`);
+      // Fallback or 404
+      return res.redirect(`/?mode=booking`);
     }
 
-    try {
-        const q = query(
-            collection(db, "workshop_templates"),
-            where("shareableSlug", "==", slug)
-        );
-        const snapshot = await getDocs(q);
+    const data = snapshot.docs[0].data();
+    const title = data.title || "Workshop Invitation";
+    const description = data.description || "Join us for an exciting workshop!";
+    // Use a default banner if none exists
+    const image = data.imageUrl || "https://images.unsplash.com/photo-1544161513-01962786227d?q=80&w=2936&auto=format&fit=crop";
 
-        if (snapshot.empty) {
-            // Fallback or 404
-            return res.redirect(`/?mode=booking`);
-        }
+    console.log(`[Workshop API] Found template: ${title}`);
 
-        const data = snapshot.docs[0].data();
-        const title = data.title || "Workshop Invitation";
-        const description = data.description || "Join us for an exciting workshop!";
-        // Use a default banner if none exists
-        const image = data.imageUrl || "https://images.unsplash.com/photo-1544161513-01962786227d?q=80&w=2936&auto=format&fit=crop";
+    // Construct the actual destination URL
+    // We assume the Vercel deployment URL or localhost if testing
+    const appUrl = `https://${req.headers.host}/?mode=booking&slug=${slug}`;
 
-        // Construct the actual destination URL
-        // We assume the Vercel deployment URL or localhost if testing
-        const appUrl = `https://${req.headers.host}/?mode=booking&slug=${slug}`;
-
-        // Return HTML with Meta Tags
-        const html = `
+    // Return HTML with Meta Tags
+    const html = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -77,11 +85,11 @@ export default async function handler(req, res) {
       </html>
     `;
 
-        res.setHeader('Content-Type', 'text/html');
-        return res.status(200).send(html);
+    res.setHeader('Content-Type', 'text/html');
+    return res.status(200).send(html);
 
-    } catch (error) {
-        console.error(error);
-        return res.status(500).send("Internal Server Error");
-    }
+  } catch (error) {
+    console.error("[Workshop API] Error:", error);
+    return res.status(500).send(`Internal Server Error: ${error.message}`);
+  }
 }

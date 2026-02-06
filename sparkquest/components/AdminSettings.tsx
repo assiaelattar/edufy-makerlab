@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Monitor, Maximize2, Frame, Power, Video, Gamepad2, Layers } from 'lucide-react';
+import { Settings, Monitor, Maximize2, Frame, Power, Video, Gamepad2, Layers, Trophy } from 'lucide-react';
 import { db } from '../services/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ArcadeContentManager } from './admin/ArcadeContentManager';
 import { ArcadeGameManager } from './admin/ArcadeGameManager';
+import { GamificationManager } from './admin/GamificationManager';
 
 interface AppConfig {
     kioskMode: boolean;
@@ -18,7 +19,7 @@ interface AdminSettingsProps {
 }
 
 export const AdminSettings: React.FC<AdminSettingsProps> = ({ isOpen, onClose }) => {
-    const [activeTab, setActiveTab] = useState<'SYSTEM' | 'LIBRARY' | 'ARCADE'>('SYSTEM');
+    const [activeTab, setActiveTab] = useState<'SYSTEM' | 'LIBRARY' | 'ARCADE' | 'GAMIFICATION'>('SYSTEM');
     const [config, setConfig] = useState<AppConfig>({
         kioskMode: false,
         fullscreen: false,
@@ -132,6 +133,12 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ isOpen, onClose })
                             className={`flex items-center gap-2 px-6 py-3 rounded-t-xl font-bold transition-all relative top-[1px] ${activeTab === 'ARCADE' ? 'text-white border-b-2 border-indigo-500 bg-white/5' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                         >
                             <Gamepad2 size={18} /> Arcade Games
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('GAMIFICATION')}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-t-xl font-bold transition-all relative top-[1px] ${activeTab === 'GAMIFICATION' ? 'text-white border-b-2 border-indigo-500 bg-white/5' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                        >
+                            <Trophy size={18} /> Gamification
                         </button>
                     </div>
 
@@ -250,6 +257,8 @@ export const AdminSettings: React.FC<AdminSettingsProps> = ({ isOpen, onClose })
                     {activeTab === 'LIBRARY' && <ArcadeContentManager />}
 
                     {activeTab === 'ARCADE' && <ArcadeGameManager />}
+
+                    {activeTab === 'GAMIFICATION' && <GamificationManager />}
                 </div>
             </div>
         </div>

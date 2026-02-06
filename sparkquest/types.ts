@@ -96,6 +96,8 @@ export interface StudentProject {
   id: string;
   studentId?: string;
   studentName?: string;
+  studentEmail?: string; // For account recovery/linking fallback
+  organizationId?: string; // SaaS Tenant ID
 
   // Core
   title: string;
@@ -137,6 +139,7 @@ export interface Assignment {
   badges: Badge[];
   recommendedWorkflow: string;
   stepResources?: Record<string, Resource[]>; // Map stepId/phaseId -> specific resources
+  resources?: Resource[]; // Global mission resources
 }
 
 // Legacy Roadmap Types
@@ -250,6 +253,7 @@ export interface Credential {
 
 export interface UserProfile {
   uid: string;
+  organizationId?: string; // SaaS Tenant ID (optional for backward compatibility)
   name: string;
   email: string;
   role: string;
@@ -257,6 +261,47 @@ export interface UserProfile {
   photoURL?: string;
   credentials?: Credential[];
   arcadeCredits?: number;
+}
+
+export interface Gadget {
+  id: string;
+  name: string;
+  description: string;
+  cost: number; // XP or Coins
+  image: string;
+  stock: number;
+  type: 'physical' | 'service'; // 'physical' = drone, 'service' = 3D print
+  category?: 'electronics' | 'robotics' | 'merch' | 'service';
+}
+
+export interface PurchaseRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  gadgetId: string;
+  gadgetName: string;
+  cost: number;
+  status: 'pending' | 'approved' | 'rejected' | 'fulfilled';
+  createdAt: Timestamp;
+}
+
+export interface Contest {
+  id: string;
+  title: string;
+  description: string;
+  image: string; // Banner
+  rewardId?: string; // Link to a Gadget
+  rewardText?: string; // "Win a Drone!" if direct
+
+  // Criteria
+  targetMissions?: string[]; // IDs of specific missions to complete
+  targetGrades?: string[]; // IDs of grades this contest is active for
+  targetExploreCount?: number; // "Complete 5 Exploration Missions"
+  targetXP?: number; // "Earn 1000 XP in Robotics"
+
+  startDate: Timestamp;
+  endDate: Timestamp;
+  isActive: boolean;
 }
 
 declare global {

@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, BarChart3, ClipboardCheck, Briefcase, Megaphone, TrendingDown, Brain, Camera, Hammer, Car } from 'lucide-react';
+import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, BarChart3, ClipboardCheck, Briefcase, Megaphone, TrendingDown, Brain, Camera, Hammer, Car, Archive } from 'lucide-react';
 import { ViewState } from '../types';
 
 export interface ModuleConfig {
@@ -30,10 +29,12 @@ export const MODULES: ModuleConfig[] = [
     { id: 'marketing', label: 'Marketing & CRM', icon: Megaphone, enabled: true, description: 'Campaigns, Social Media, Leads', color: 'purple', requiredPermission: 'marketing.view', category: 'business' },
     { id: 'workshops', label: 'Workshops', icon: CalendarCheck, enabled: true, description: 'Event scheduling & Public Booking', color: 'pink', requiredPermission: 'workshops.manage', category: 'business' },
     { id: 'pickup', label: 'Pickup Status', icon: Car, enabled: true, description: 'Real-time Parent Arrival', color: 'emerald', requiredPermission: 'pickup.view', category: 'business' },
+    { id: 'communications', label: 'Communications', icon: Megaphone, enabled: true, description: 'News, Holidays & WhatsApp', color: 'blue', requiredPermission: 'marketing.view', category: 'business' },
 
     { id: 'team', label: 'Team & Projects', icon: Briefcase, enabled: true, description: 'Tasks, Chat, Employee Management', color: 'orange', requiredPermission: 'team.view', category: 'organization' },
     { id: 'media', label: 'Gallery', icon: Camera, enabled: true, description: 'Photos & Media Gallery', color: 'pink', requiredPermission: 'media.view', category: 'organization' },
     { id: 'toolkit', label: 'Toolkit', icon: Hammer, enabled: false, description: 'Software, Resources & Tools', color: 'amber', requiredPermission: 'toolkit.view', category: 'organization' },
+    { id: 'archive', label: 'Archive', icon: Archive, enabled: true, description: 'Useful Links & Resources', color: 'purple', requiredPermission: 'toolkit.view', category: 'organization' },
 
     { id: 'tools', label: 'Admin Tools', icon: Wrench, enabled: true, color: 'amber', requiredPermission: 'settings.manage', category: 'system' },
     { id: 'settings', label: 'Settings', icon: Settings, enabled: true, color: 'slate', requiredPermission: 'settings.view', category: 'system' }

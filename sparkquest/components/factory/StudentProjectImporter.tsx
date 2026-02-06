@@ -5,14 +5,17 @@ import { db } from '../../services/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { StudentProject } from '../../types';
 
+import { useAuth } from '../../context/AuthContext';
+
 interface StudentProjectImporterProps {
     onClose: () => void;
     onSuccess: () => void;
     studentId: string;
     studentName: string;
+    organizationId?: string;
 }
 
-export const StudentProjectImporter: React.FC<StudentProjectImporterProps> = ({ onClose, onSuccess, studentId, studentName }) => {
+export const StudentProjectImporter: React.FC<StudentProjectImporterProps> = ({ onClose, onSuccess, studentId, studentName, organizationId }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
     const [previewData, setPreviewData] = useState<any[]>([]);
@@ -69,8 +72,11 @@ export const StudentProjectImporter: React.FC<StudentProjectImporterProps> = ({ 
         return {
             studentId,
             studentName,
+            organizationId: organizationId || 'makerlab-academy',
             title: row['Title'] || 'Untitled Project',
             thumbnailUrl: coverImage,
+            coverImage: coverImage, // Ensure this is set for Admin/Parent views
+            mediaUrls: coverImage ? [coverImage] : [], // Ensure this is set for Portfolio views
             description: row['Description'] || '',
             station: row['Station'] || 'Robotics',
             status: 'published', // SHOWCASE projects are published by default

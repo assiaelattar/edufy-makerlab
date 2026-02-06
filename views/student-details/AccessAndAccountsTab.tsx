@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle } from 'lucide-react';
+import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle, Eye, EyeOff } from 'lucide-react';
 import { Student } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useAppContext } from '../../context/AppContext';
@@ -31,6 +31,28 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const { navigateTo } = useAppContext();
   const [showPassword, setShowPassword] = useState(false);
   const [showParentPassword, setShowParentPassword] = useState(false);
+
+  // New PIN State
+  const [isUpdatingPin, setIsUpdatingPin] = useState(false);
+  const [showPin, setShowPin] = useState(false);
+
+  const handleGeneratePin = async () => {
+    try {
+      setIsUpdatingPin(true);
+      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+      const { updateDoc, doc, db } = await import('../../services/firebase');
+
+      await updateDoc(doc(db, 'students', student.id), {
+        pinCode: newPin
+      });
+      alert(`New PIN Generated: ${newPin}`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate PIN");
+    } finally {
+      setIsUpdatingPin(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -127,6 +149,39 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             </button>
           </div>
         )}
+      </div>
+
+      {/* NEW: CLASSROOM PIN (KIOSK MODE) */}
+      <div className="bg-slate-950/20 border border-slate-800 rounded-xl p-5">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <Key size={14} /> Classroom PIN (Kiosk Mode)
+          </h3>
+          {student.pinCode ? (
+            <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-500/50 font-bold">SET</span>
+          ) : (
+            <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded border border-slate-700 font-bold">NOT SET</span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-white font-mono text-xl tracking-widest min-w-[100px] text-center">
+            {student.pinCode ? (showPin ? student.pinCode : '••••') : '----'}
+          </div>
+
+          <div className="flex gap-2">
+            <button onClick={() => setShowPin(!showPin)} className="p-2 bg-slate-800 hover:text-white text-slate-400 rounded-lg transition-colors">
+              {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+            <button onClick={handleGeneratePin} disabled={isUpdatingPin} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2">
+              {isUpdatingPin ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+              {student.pinCode ? 'Regenerate PIN' : 'Generate PIN'}
+            </button>
+          </div>
+        </div>
+        <p className="text-[10px] text-slate-500 mt-2">
+          This 4-digit PIN allows the student to log in quickly from the Classroom Kiosk mode without needing their email/password.
+        </p>
       </div>
 
       {/* NEW: PARENT ACCESS SECTION */}

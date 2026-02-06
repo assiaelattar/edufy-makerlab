@@ -2,7 +2,9 @@
 import React, { useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { ProjectEditor } from './ProjectEditor';
-import { Plus, Edit2, Trash2, Search, Users, Eye } from 'lucide-react';
+import { AssignMissionModal } from './AssignMissionModal';
+import { MissionGallery } from './MissionGallery';
+import { Plus, Edit2, Trash2, Search, Users, Eye, Send, FilePlus, BookOpen, X } from 'lucide-react';
 
 interface ProjectManagerProps {
     onViewSubmissions?: (templateId: string) => void;
@@ -11,13 +13,38 @@ interface ProjectManagerProps {
 
 export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmissions, onPreviewProject }) => {
     const { projectTemplates, studentProjects, actions, availableGrades } = useFactoryData();
-    const [editingProject, setEditingProject] = useState<any | null>(null); // Using any temporarily to avoid strict type refactoring if ProjectTemplate isn't imported deeply, but logic assumes it matches.
+    const [editingProject, setEditingProject] = useState<any | null>(null);
+    const [assigningProject, setAssigningProject] = useState<any | null>(null);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [showSourceModal, setShowSourceModal] = useState(false);
+    const [showGallerySelector, setShowGallerySelector] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const handleCreate = () => {
+    const handleCreateClick = () => {
+        setShowSourceModal(true);
+    };
+
+    const handleCreateBlank = () => {
         setEditingProject(null);
         setIsEditorOpen(true);
+        setShowSourceModal(false);
+    };
+
+    const handleOpenGallery = () => {
+        setShowGallerySelector(true);
+        setShowSourceModal(false);
+    };
+
+    const handleSelectTemplate = (template: any) => {
+        const newMission = {
+            ...template,
+            id: undefined,
+            title: `Copy of ${template.title}`,
+            status: 'draft'
+        };
+        setEditingProject(newMission);
+        setIsEditorOpen(true);
+        setShowGallerySelector(false);
     };
 
     const handleEdit = (project: any) => {
@@ -49,12 +76,49 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                     <p className="text-slate-500 font-medium text-lg">Design and deployment of learning missions.</p>
                 </div>
                 <button
-                    onClick={handleCreate}
+                    onClick={handleCreateClick}
                     className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-1"
                 >
                     <Plus size={20} /> New Mission
                 </button>
             </div>
+
+            {/* SOURCE SELECTION MODAL */}
+            {showSourceModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowSourceModal(false)}>
+                    <div className="bg-white rounded-3xl p-8 max-w-2xl w-full shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-2xl font-black text-slate-800 mb-6 text-center">Create New Mission</h3>
+                        <div className="grid grid-cols-2 gap-6">
+                            <button
+                                onClick={handleCreateBlank}
+                                className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-slate-100 hover:border-indigo-500 hover:bg-indigo-50 transition-all group text-center"
+                            >
+                                <div className="w-20 h-20 rounded-full bg-slate-100 group-hover:bg-indigo-200 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 transition-colors">
+                                    <FilePlus size={40} />
+                                </div>
+                                <div>
+                                    <h4 className="text-xl font-bold text-slate-800 group-hover:text-indigo-700">Blank Mission</h4>
+                                    <p className="text-sm text-slate-500 mt-2">Start from scratch with an empty canvas.</p>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={handleOpenGallery}
+                                className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-slate-100 hover:border-purple-500 hover:bg-purple-50 transition-all group text-center"
+                            >
+                                <div className="w-20 h-20 rounded-full bg-slate-100 group-hover:bg-purple-200 flex items-center justify-center text-slate-400 group-hover:text-purple-600 transition-colors">
+                                    <BookOpen size={40} />
+                                </div>
+                                <div>
+                                    <h4 className="text-xl font-bold text-slate-800 group-hover:text-purple-700">From Gallery</h4>
+                                    <p className="text-sm text-slate-500 mt-2">Select a template from the mission library.</p>
+                                </div>
+                            </button>
+                        </div>
+                        <button onClick={() => setShowSourceModal(false)} className="w-full mt-6 py-3 text-slate-400 font-bold hover:text-slate-600">Cancel</button>
+                    </div>
+                </div>
+            )}
 
             {/* Search Bar */}
             <div className="relative">
@@ -142,37 +206,13 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                             <p className="text-sm text-slate-500 mb-6 line-clamp-3 flex-1">{project.description || 'No description provided.'}</p>
 
                             <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Station</span>
-                                    <span className="text-sm font-bold text-slate-700">{project.station || 'General'}</span>
-                                </div>
-
-                                {/* GRADE BADGES */}
-                                <div className="flex flex-col items-center">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase mb-1">Target</span>
-                                    <div className="flex flex-wrap gap-1 justify-center max-w-[120px]">
-                                        {project.targetAudience?.grades && project.targetAudience.grades.length > 0 ? (
-                                            project.targetAudience.grades.map((gradeId: any) => {
-                                                const gradeName = availableGrades.find(g => String(g.id) === String(gradeId))?.name;
-                                                return gradeName ? (
-                                                    <span key={gradeId} className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 font-bold">
-                                                        {gradeName}
-                                                    </span>
-                                                ) : null;
-                                            })
-                                        ) : (
-                                            <span className="text-[10px] text-slate-400 italic">Generic</span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Difficulty</span>
-                                    <span className={`text-sm font-bold capitalize ${project.difficulty === 'advanced' ? 'text-purple-600' :
-                                        project.difficulty === 'intermediate' ? 'text-indigo-600' :
-                                            'text-emerald-600'
-                                        }`}>{project.difficulty || 'Beginner'}</span>
-                                </div>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setAssigningProject(project); }}
+                                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-900 hover:bg-indigo-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-slate-900/10 hover:shadow-indigo-500/20 active:scale-95"
+                                >
+                                    <Send size={16} />
+                                    Assign to Group
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -182,12 +222,20 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                 {filteredProjects.length === 0 && (
                     <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl">
                         <p className="text-slate-400 font-bold text-lg">No missions found.</p>
-                        <button onClick={handleCreate} className="mt-4 text-indigo-600 font-bold hover:underline">
+                        <button onClick={handleCreateClick} className="mt-4 text-indigo-600 font-bold hover:underline">
                             Create your first mission
                         </button>
                     </div>
                 )}
             </div>
+
+            {/* ASSIGN MODAL */}
+            {assigningProject && (
+                <AssignMissionModal
+                    mission={assigningProject}
+                    onClose={() => setAssigningProject(null)}
+                />
+            )}
         </div>
     );
 };

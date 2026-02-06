@@ -8,6 +8,8 @@
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
   <style>
     body {
       font-family: 'Nunito', sans-serif;
@@ -56,6 +58,19 @@
       -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
     }
   </style>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('SW registered: ', registration);
+          })
+          .catch(registrationError => {
+            console.log('SW registration failed: ', registrationError);
+          });
+      });
+    }
+  </script>
 
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self' 'unsafe-inline' 'unsafe-eval' file: data: https://firebasestorage.googleapis.com;

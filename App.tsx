@@ -25,6 +25,7 @@ import { TeamView } from './views/TeamView';
 import { MarketingView } from './views/MarketingView';
 import { LearningView } from './views/LearningView';
 import { ToolkitView } from './views/ToolkitView';
+import { ArchiveView } from './views/ArchiveView';
 import { MediaView } from './views/MediaView';
 import { PickupView } from './views/PickupView';
 import { PortfolioView } from './views/PortfolioView';
@@ -39,6 +40,11 @@ import { PublicEnrollmentView } from './views/PublicEnrollmentView';
 import { CalendarView } from './views/CalendarView'; // NEW
 import { LoginView } from './views/LoginView';
 import { ParentLoginView } from './views/ParentLoginView';
+import { LandingView } from './views/website/LandingView';
+import { SaasAdminView } from './views/SaasAdminView';
+import { AppStoreView } from './views/AppStoreView';
+import { AppDetailsView } from './views/AppDetailsView';
+import { getAppById } from './services/appRegistry';
 import { Modal } from './components/Modal';
 import { Logo } from './components/Logo';
 import { NotificationDropdown } from './components/NotificationDropdown';
@@ -97,11 +103,29 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfil
 
 const AppContent = () => {
     const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, t } = useAppContext();
-    const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser } = useAuth();
+    const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser, currentOrganization, isSuperAdmin } = useAuth();
     const { requestPermission } = useNotifications();
     const { alert: showAlert } = useConfirm();
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+    // --- ROUTING STATE ---
+    const [locationHash, setLocationHash] = useState(window.location.hash);
+    const [locationPath, setLocationPath] = useState(window.location.pathname);
+
+    useEffect(() => {
+        const handleLocationChange = () => {
+            setLocationHash(window.location.hash);
+            setLocationPath(window.location.pathname);
+        };
+        window.addEventListener('hashchange', handleLocationChange);
+        window.addEventListener('popstate', handleLocationChange);
+        return () => {
+            window.removeEventListener('hashchange', handleLocationChange);
+            window.removeEventListener('popstate', handleLocationChange);
+        };
+    }, []);
+
 
     // --- STUDENT THEME LOGIC ---
     const isStudent = userProfile?.role === 'student';
@@ -140,6 +164,26 @@ const AppContent = () => {
     const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
     const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // --- SAAS ROUTE GUARD ---
+    // Fixes issue where logging out from Super Admin (on saas-admin view) 
+    // and logging in as Org Admin keeps the restricted view active.
+    useEffect(() => {
+        if (!authLoading && !appLoading && userProfile) {
+            // Guard SaaS Admin View
+            if (currentView === 'saas-admin' && !isSuperAdmin) {
+                console.warn("Unauthorized access to SaaS Admin. Redirecting to Dashboard.");
+                navigateTo('dashboard');
+            }
+        }
+    }, [currentView, isSuperAdmin, authLoading, appLoading, userProfile]);
+
+    // --- DYNAMIC TITLE UPDATE ---
+    useEffect(() => {
+        if (settings.academyName) {
+            document.title = settings.academyName;
+        }
+    }, [settings.academyName]);
 
     // --- ENROLLMENT FORM DATA ---
     const [enrollStudentForm, setEnrollStudentForm] = useState({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
@@ -269,7 +313,9 @@ const AppContent = () => {
                 amount: Number(paymentForm.amount),
                 date: paymentForm.date,
                 method: paymentForm.method,
+
                 status: status,
+                organizationId: enrollment.organizationId || currentOrganization?.id || 'makerlab-academy', // Safer: Inherit from Enrollment
                 // Optional fields based on method
                 checkNumber: paymentForm.method === 'check' ? paymentForm.checkNumber : null,
                 bankName: paymentForm.method === 'check' ? paymentForm.bankName : null,
@@ -367,7 +413,9 @@ const AppContent = () => {
 
                 const sRef = await addDoc(collection(db, 'students'), {
                     ...enrollStudentForm,
+                    ...enrollStudentForm,
                     status: 'active',
+                    organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
                     createdAt: serverTimestamp()
                 });
                 finalStudentId = sRef.id;
@@ -399,6 +447,7 @@ const AppContent = () => {
                     name: studentName,
                     role: 'student',
                     status: 'active',
+                    organizationId: currentOrganization?.id || null, // FIX: Ensure SaaS Access
                     createdAt: serverTimestamp()
                 });
 
@@ -428,6 +477,7 @@ const AppContent = () => {
                             name: enrollStudentForm.parentName || 'Parent',
                             role: 'parent',
                             status: 'active',
+                            organizationId: currentOrganization?.id || null, // FIX: Ensure SaaS Access
                             createdAt: serverTimestamp()
                         });
 
@@ -492,6 +542,7 @@ const AppContent = () => {
                 status: 'active',
                 startDate: new Date().toISOString(),
                 session: settings.academicYear, // Tag with Current Session
+                organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
                 createdAt: serverTimestamp()
             });
 
@@ -508,6 +559,7 @@ const AppContent = () => {
                     depositDate: p.depositDate || null,
                     status: p.method === 'cash' ? 'paid' : 'check_received',
                     session: settings.academicYear,
+                    organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
                     createdAt: serverTimestamp()
                 });
             }
@@ -588,11 +640,17 @@ const AppContent = () => {
     const modules = getEnabledModules().filter(m => !m.requiredPermission || can(m.requiredPermission));
 
     // Routing
-    if (window.location.search.includes('mode=booking')) return <PublicBookingView />;
-    if (window.location.pathname === '/enroll') return <PublicEnrollmentView />;
-    if (window.location.pathname === '/parent-portal') return <ParentLoginView />;
+    if (locationPath.includes('mode=booking') || window.location.search.includes('mode=booking')) return <PublicBookingView />;
+    if (locationPath === '/enroll') return <PublicEnrollmentView />;
+    if (locationPath === '/parent-portal' || locationHash === '#parent') return <ParentLoginView />;
+
     if (authLoading || appLoading || (user && !userProfile)) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
-    if (!user) return <LoginView />;
+
+    if (!user) {
+        if (locationHash === '#login' || locationPath === '/login') return <LoginView />;
+        if (locationHash === '#signup') return <LoginView />; // LoginView handles toggle inside, or we can pass prop if needed
+        return <LandingView />;
+    }
 
     const renderView = () => {
         switch (currentView) {
@@ -611,10 +669,13 @@ const AppContent = () => {
             case 'team': return <TeamView />;
             case 'marketing': return <MarketingView onEnrollLead={handleEnrollLead} />;
             case 'schedule': return <CalendarView />; // NEW
-            case 'learning': return <LearningView />;
+
+            // SAAS GUARDED ROUTES
+            case 'learning': return user?.role === 'student' || currentOrganization?.modules?.makerPro ? <LearningView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />; // Fallback to Dashboard if disabled
             case 'toolkit': return <ToolkitView />;
+            case 'archive': return <ArchiveView />;
             case 'media': return <MediaView />;
-            case 'portfolio': return <PortfolioView />;
+            case 'portfolio': return user?.role === 'student' || currentOrganization?.modules?.makerPro ? <PortfolioView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />;
             case 'review': return <ReviewView />;
             case 'pickup': return <PickupView />;
             case 'parent-dashboard': return <ParentDashboardView />;
@@ -623,6 +684,17 @@ const AppContent = () => {
             case 'arcade-mgr': return <ArcadeManagerView />;
             case 'communications': return <CommunicationsView />;
             case 'enrollment-forms': return <EnrollmentFormsView onEnrollLead={handleEnrollLead} />;
+            case 'saas-admin': return <SaasAdminView />;
+            case 'app-store': return <AppStoreView />;
+            case 'app-details': return <AppDetailsView />;
+            case 'saas-app': {
+                const appId = viewParams?.appId;
+                if (!appId) return <div>App ID missing</div>;
+                const app = getAppById(appId);
+                if (!app) return <div>App not found</div>;
+                const Component = app.component;
+                return <Component />;
+            }
             default: return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
         }
     };
@@ -1071,18 +1143,22 @@ const AppContent = () => {
     );
 };
 
+import { ModuleProvider } from './context/ModuleContext';
+
 const App = () => {
     return (
         <AuthProvider>
-            <ConfirmProvider>
-                <NotificationProvider>
-                    <AppProvider>
-                        <ThemeProvider>
-                            <AppContent />
-                        </ThemeProvider>
-                    </AppProvider>
-                </NotificationProvider>
-            </ConfirmProvider>
+            <ModuleProvider>
+                <ConfirmProvider>
+                    <NotificationProvider>
+                        <AppProvider>
+                            <ThemeProvider>
+                                <AppContent />
+                            </ThemeProvider>
+                        </AppProvider>
+                    </NotificationProvider>
+                </ConfirmProvider>
+            </ModuleProvider>
         </AuthProvider>
     );
 };

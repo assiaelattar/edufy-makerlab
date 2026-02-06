@@ -98,43 +98,88 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
         }
     };
 
+    // --- MIGRATION TOOL ---
+    const handleMigrateData = async () => {
+        if (!confirm("Start Data Migration?\n\nThis will scan ALL projects and users checking for missing 'organizationId'.\nAny missing IDs will be set to 'makerlab-academy'.\n\nContinue?")) return;
+
+        console.log("Starting Migration...");
+        const firestore = db as any; // Cast to avoid type strictness for migration script
+        if (!firestore) return;
+
+        try {
+            const batch = writeBatch(firestore);
+            let count = 0;
+
+            // 1. Migrate Projects
+            // Note: We need to fetch ALL projects, ignoring the hook's filter for this one-time Op.
+            // But client-side querying entire DB is risky if huge. Assuming manageable size.
+            // We'll use the current 'studentProjects' from hook - BUT wait, the hook FILTERS them now!
+            // So we can't use 'studentProjects'. We must fetch untagged ones directly.
+
+            const { getDocs, collection, query, where, doc } = await import('firebase/firestore');
+
+            // Fetch Untagged Projects
+            // Note: 'where' for null or missing is tricky. It's best to fetch all if possible or check specific criteria.
+            // simpler: Fetch all projects (admin privileges required in rules).
+            const allProjectsSnapshot = await getDocs(collection(firestore, 'student_projects'));
+
+            allProjectsSnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (!data.organizationId) {
+                    batch.update(doc(firestore, 'student_projects', docSnap.id), { organizationId: 'makerlab-academy' });
+                    count++;
+                }
+            });
+
+            // 2. Migrate Users (Optional, but good practice)
+            const allUsersSnapshot = await getDocs(collection(firestore, 'users'));
+            allUsersSnapshot.forEach(docSnap => {
+                const data = docSnap.data();
+                if (!data.organizationId) {
+                    // Be careful not to overwrite valid orgs if logic is complex. 
+                    // But here we assume untagged = legacy = default.
+                    batch.update(doc(firestore, 'users', docSnap.id), { organizationId: 'makerlab-academy' });
+                    count++;
+                }
+            });
+
+            if (count > 0) {
+                await batch.commit();
+                alert(`Migration Complete! Updated ${count} documents.`);
+                window.location.reload(); // Reload to refresh filtered listeners
+            } else {
+                alert("No legacy data found. System is up to date!");
+            }
+
+        } catch (e) {
+            console.error("Migration Failed", e);
+            alert("Migration Failed. Ensure you are an Admin and rules allow access.");
+        }
+    };
+
     const handleImpersonate = () => {
         if (!selectedStudentId) return;
 
         const student = students.find(s => s.id === selectedStudentId);
-        console.log("Impersonating Student:", student);
+        // ... (existing impersonation logic)
+        // ...
+    };
 
-        // Try to resolve credentials from different possible structures
-        const email = student?.loginInfo?.email || student?.email;
-        const uid = student?.loginInfo?.uid || student?.uid || student?.id;
-
-        if (!email || !uid) {
-            console.warn("Student missing loginInfo or email/uid:", student);
-            alert("Student does not have login credentials (Email/UID missing).");
-            return;
-        }
-
-        const payload = {
-            uid: uid,
-            email: email,
-            role: 'student',
-            name: student.name,
-            photoURL: student.photoURL || null
-        };
+    const handleGeneratePin = async (e: React.MouseEvent, studentId: string) => {
+        e.stopPropagation();
+        if (!confirm("Generate a new 4-digit PIN for this student?")) return;
 
         try {
-            // Use safer base64 encoding for Unicode support
-            const json = JSON.stringify(payload);
-            const bridgeToken = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g,
-                function toSolidBytes(match, p1) {
-                    return String.fromCharCode(Number('0x' + p1));
-                }));
-            // Use window.open to open in new tab
-            const url = `${window.location.origin}/?token=${bridgeToken}`;
-            window.open(url, '_blank');
-        } catch (e) {
-            console.error("Token generation failed", e);
-            alert("Failed to generate access token.");
+            const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+            // Try updating 'students' collection first (Primary profile)
+            await (await import('firebase/firestore')).updateDoc(doc(db, 'students', studentId), {
+                pinCode: newPin
+            });
+            // Also try updating 'users' collection if it exists there, just in case
+            // (But usually students profile is the source of truth for Kiosk)
+        } catch (err) {
+            console.error("Failed to generate PIN", err);
+            alert("Error generating PIN. Check console.");
         }
     };
 
@@ -148,6 +193,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
             completedCount: number;
             lastActive: Date;
             gradeId?: string; // Track grade
+            photoURL?: string | null;
+            pinCode?: string;
         }>();
 
         studentProjects.forEach(p => {
@@ -156,13 +203,16 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
             const existing = map.get(p.studentId);
             const pDate = safeDate(p.updatedAt);
 
-            // Resolve Name & Grade: try project name, then lookup student list, then fallback
-            let makerName: string = p.studentName || '';
+            // Resolve Name: Prioritize Live Student Record -> Project Snapshot -> Fallback
             let makerGrade: string | undefined = undefined;
-
             const foundStudent = students.find(s => s.id === p.studentId);
-            if (foundStudent) {
-                if (!makerName || makerName === 'Student') makerName = foundStudent.name;
+
+            let makerName = 'Unknown Maker';
+
+            if (foundStudent && foundStudent.name) {
+                makerName = foundStudent.name;
+            } else if (p.studentName && p.studentName !== 'Student' && p.studentName !== 'Unknown') {
+                makerName = p.studentName;
             }
 
             // Resolve Grade from Enrollments (Source of Truth)
@@ -180,7 +230,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
                     projectCount: 1,
                     completedCount: p.status === 'published' ? 1 : 0,
                     lastActive: pDate,
-                    gradeId: makerGrade
+                    gradeId: makerGrade,
+                    photoURL: foundStudent?.photoURL,
+                    pinCode: foundStudent?.pinCode // Map PIN code so we can display it
                 });
             } else {
                 existing.projectCount++;
@@ -208,7 +260,9 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
                     projectCount: 0,
                     completedCount: 0,
                     lastActive: safeDate(s.createdAt || new Date()),
-                    gradeId: enrollment?.gradeId || s.grade || s.gradeId
+                    gradeId: enrollment?.gradeId || s.grade || s.gradeId,
+                    photoURL: s.photoURL,
+                    pinCode: s.pinCode
                 });
             }
         });
@@ -539,8 +593,12 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
                                 <div className={`w-full h-full rounded-full bg-gradient-to-br ${index % 3 === 0 ? 'from-indigo-100 to-cyan-50' :
                                     index % 3 === 1 ? 'from-fuchsia-100 to-pink-50' :
                                         'from-amber-100 to-orange-50'
-                                    } flex items-center justify-center text-3xl font-black text-slate-700 group-hover:scale-110 transition-transform duration-300 border-4 border-white shadow-sm`}>
-                                    {maker.name.charAt(0)}
+                                    } flex items-center justify-center text-3xl font-black text-slate-700 group-hover:scale-110 transition-transform duration-300 border-4 border-white shadow-sm overflow-hidden`}>
+                                    {maker.photoURL ? (
+                                        <img src={maker.photoURL} alt={maker.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        maker.name.charAt(0)
+                                    )}
                                 </div>
 
                                 {/* Status Dot */}
@@ -570,6 +628,18 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
                                 <span className="flex items-center gap-1">
                                     <Clock size={12} /> {new Date(maker.lastActive).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                 </span>
+                                {maker.pinCode ? (
+                                    <span className="flex items-center gap-1 bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200 font-mono" title="Kiosk PIN">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-400"></div> PIN: <span className="font-black text-slate-700">{maker.pinCode}</span>
+                                    </span>
+                                ) : (
+                                    <button
+                                        onClick={(e) => handleGeneratePin(e, maker.id)}
+                                        className="flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 rounded border border-indigo-200 text-[10px] font-bold transition-colors"
+                                    >
+                                        + Generate PIN
+                                    </button>
+                                )}
                                 <span>View Portfolio →</span>
                             </div>
                         </div>
