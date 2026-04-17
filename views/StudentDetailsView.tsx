@@ -372,6 +372,7 @@ export const StudentDetailsView = ({
                 name: student.name,
                 role: 'student',
                 status: 'active',
+                studentId: student.id, // Link to Student Document
                 createdAt: serverTimestamp()
             });
             await updateDoc(doc(db, 'students', student.id), { loginInfo: { username, email: finalEmail, initialPassword: password, uid } });
@@ -878,15 +879,30 @@ export const StudentDetailsView = ({
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label>
-                        <input
-                            type="number"
-                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg"
-                            value={editEnrollment?.totalAmount || 0}
-                            onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, totalAmount: Number(e.target.value) }) : null)}
-                        />
-                        <p className="text-xs text-slate-500 mt-1">Changing this will automatically recalculate the remaining balance.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Payment Plan</label>
+                            <select
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
+                                value={editEnrollment?.paymentPlan || 'full'}
+                                onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, paymentPlan: e.target.value as any }) : null)}
+                            >
+                                <option value="full">Full Payment (Full)</option>
+                                <option value="monthly">Monthly (Monthly)</option>
+                                <option value="trimester">Trimester (3 Months)</option>
+                                <option value="semestre">Semester (6 Months)</option>
+                                <option value="annual">Annual (Yearly)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label>
+                            <input
+                                type="number"
+                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg"
+                                value={editEnrollment?.totalAmount || 0}
+                                onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, totalAmount: Number(e.target.value) }) : null)}
+                            />
+                        </div>
                     </div>
 
                     <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
@@ -897,9 +913,10 @@ export const StudentDetailsView = ({
             <Modal isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Edit Payment Record">
                 <form onSubmit={handleSavePayment} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input type="text" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
                         <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
                     </div>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
                     {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
                     <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2"><Save size={16} /> Save Changes</button>

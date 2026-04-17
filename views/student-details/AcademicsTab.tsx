@@ -4,6 +4,11 @@ import { BookOpen, Plus, Pencil, ArrowRightLeft, Trash2 } from 'lucide-react';
 import { Enrollment } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 
+
+import { useAppContext } from '../../context/AppContext';
+import { generateRegistrationCertificate } from '../../utils/certificateGenerator';
+import { Modal } from '../../components/Modal';
+
 interface AcademicsTabProps {
   studentEnrollments: Enrollment[];
   onQuickEnroll: (id: string) => void;
@@ -21,6 +26,34 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
   initiateDeleteEnrollment,
   studentId,
 }) => {
+  const { students, settings } = useAppContext();
+  const student = students.find(s => s.id === studentId); // Get student details
+
+  // Attestation Modal State
+  const [attestationModal, setAttestationModal] = React.useState<{ isOpen: boolean, enrollment: Enrollment | null }>({ isOpen: false, enrollment: null });
+  const [customAdmissionDate, setCustomAdmissionDate] = React.useState('');
+  const [customIssueDate, setCustomIssueDate] = React.useState(new Date().toISOString().split('T')[0]);
+
+  const handleOpenAttestationModal = (enrollment: Enrollment) => {
+    // Default Admission Date to Enrollment Start Date
+    const startDate = (enrollment.startDate as any)?.toDate ? (enrollment.startDate as any).toDate() : new Date(enrollment.startDate as any);
+    const formattedStart = !isNaN(startDate.getTime()) ? startDate.toISOString().split('T')[0] : '';
+
+    setCustomAdmissionDate(formattedStart);
+    setCustomIssueDate(new Date().toISOString().split('T')[0]);
+    setAttestationModal({ isOpen: true, enrollment });
+  };
+
+  const handleGenerateAttestation = () => {
+    if (student && attestationModal.enrollment) {
+      generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
+        admissionDate: customAdmissionDate,
+        issueDate: customIssueDate
+      });
+      setAttestationModal({ isOpen: false, enrollment: null });
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
       <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
@@ -111,6 +144,15 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       <ArrowRightLeft size={16} />
                     </button>
                     <button
+                      onClick={() => {
+                        handleOpenAttestationModal(e);
+                      }}
+                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors"
+                      title="Attestation d'inscription"
+                    >
+                      <BookOpen size={16} />
+                    </button>
+                    <button
                       onClick={(evt) => {
                         evt.stopPropagation();
                         initiateDeleteEnrollment(e.id);
@@ -128,6 +170,59 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
           </div>
         )}
       </div>
+
+      {/* ATTESTATION DATE MODAL */}
+      <Modal
+        isOpen={attestationModal.isOpen}
+        onClose={() => setAttestationModal({ isOpen: false, enrollment: null })}
+        title="Configuration de l'Attestation"
+      >
+        <div className="space-y-6">
+          <p className="text-slate-400 text-sm">
+            Vous pouvez modifier les dates qui apparaîtront sur l'attestation avant de l'imprimer.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Date d'admission / Début</label>
+              <input
+                type="date"
+                value={customAdmissionDate}
+                onChange={(e) => setCustomAdmissionDate(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <p className="text-xs text-slate-500 mt-1">Date à laquelle l'étudiant a commencé le programme.</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
+              <input
+                type="date"
+                value={customIssueDate}
+                onChange={(e) => setCustomIssueDate(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+              <p className="text-xs text-slate-500 mt-1">Date de délivrance du document.</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button
+              onClick={() => setAttestationModal({ isOpen: false, enrollment: null })}
+              className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleGenerateAttestation}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2"
+            >
+              <BookOpen size={18} />
+              Générer Attestation
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

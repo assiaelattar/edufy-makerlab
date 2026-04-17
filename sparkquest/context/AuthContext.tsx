@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
 import { UserProfile } from '../types';
 
@@ -40,30 +40,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isKioskMode, setIsKioskMode] = useState(() => localStorage.getItem('sparkquest_kiosk_mode') === 'true');
     const isDemoMode = useRef(false);
 
+    const userProfileUnsubscribe = useRef<Unsubscribe | null>(null);
+
     // Helper to fetch custom profile from Firestore 'users' collection
-    const fetchUserProfile = async (uid: string) => {
+    const subscribeToUserProfile = (uid: string) => {
         if (!db) return;
+
+        // Cleanup previous subscription if exists
+        if (userProfileUnsubscribe.current) {
+            userProfileUnsubscribe.current();
+            userProfileUnsubscribe.current = null;
+        }
+
         try {
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (userDoc.exists()) {
-                const data = userDoc.data() as UserProfile;
-                if (!data.organizationId) {
-                    console.warn("⚠️ Legacy User detected: Defaulting to 'makerlab-academy'", data);
-                    data.organizationId = 'makerlab-academy';
+            const unsubscribe = onSnapshot(doc(db, 'users', uid), async (userDoc) => {
+                if (userDoc.exists()) {
+                    const data = userDoc.data() as UserProfile;
+                    // SAAS & ID RECOVERY LOGIC
+                    if (!data.organizationId) {
+                        console.warn("⚠️ Legacy User detected: Defaulting to 'makerlab-academy'", data);
+                        data.organizationId = 'makerlab-academy';
+                    }
+
+                    // 🔄 SELF-HEALING: If studentId is missing (Legacy Users), try to find it via students collection
+                    if (!data.studentId && data.role === 'student') {
+                        try {
+                            const { collection, query, where, getDocs, updateDoc } = await import('firebase/firestore');
+                            const q = query(collection(db, 'students'), where('loginInfo.uid', '==', uid));
+                            const snap = await getDocs(q);
+                            if (!snap.empty) {
+                                const foundId = snap.docs[0].id;
+                                console.log("✨ [AuthContext] Recovered missing Student ID:", foundId);
+                                data.studentId = foundId;
+
+                                // Persist the fix
+                                await updateDoc(doc(db, 'users', uid), { studentId: foundId });
+                            }
+                        } catch (recoveryErr) {
+                            console.warn("Failed to recover student ID", recoveryErr);
+                        }
+                    }
+
+                    setUserProfile(data);
+                } else {
+                    // Fallback if no user doc exists yet
+                    setUserProfile({
+                        uid,
+                        name: 'Student',
+                        email: '',
+                        role: 'student',
+                        organizationId: 'makerlab-academy' // Default for new uninitialized users too
+                    });
                 }
-                setUserProfile(data);
-            } else {
-                // Fallback if no user doc exists yet
-                setUserProfile({
-                    uid,
-                    name: 'Student',
-                    email: '',
-                    role: 'student',
-                    organizationId: 'makerlab-academy' // Default for new uninitialized users too
-                });
-            }
+            }, (err) => {
+                console.error("Error fetching user profile:", err);
+            });
+
+            userProfileUnsubscribe.current = unsubscribe;
         } catch (err) {
-            console.error("Error fetching user profile:", err);
+            console.error("Error setting up profile listener:", err);
         }
     };
 
@@ -130,19 +165,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     return;
                 }
 
+
                 isDemoMode.current = false;
                 setUser(currentUser);
-                await fetchUserProfile(currentUser.uid);
+                subscribeToUserProfile(currentUser.uid);
             } else {
                 // Only clear if we are NOT in a bridge/demo mode
                 if (!isDemoMode.current) {
                     setUser(null);
                     setUserProfile(null);
+                    // Cleanup profile listener
+                    if (userProfileUnsubscribe.current) {
+                        userProfileUnsubscribe.current();
+                        userProfileUnsubscribe.current = null;
+                    }
                 }
             }
             setLoading(false);
         });
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            if (userProfileUnsubscribe.current) {
+                userProfileUnsubscribe.current();
+            }
+        };
     }, []);
 
     const signInWithToken = async (token: string) => {

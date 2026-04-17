@@ -59,6 +59,9 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // State for available templates
     const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
 
+    // Student Profile Data (for Group/Grade visibility fallback)
+    const [studentProfileData, setStudentProfileData] = useState<any>(null);
+
     // Avatar State
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState<string>('');
@@ -136,6 +139,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     setEffectiveStudentId(studentSnap.id); // ✅ RESOLVED ID
                     setAvatarUrl(data.avatarUrl || '');
                     setStudentName(data.name || data.firstName || 'Maker');
+                    setStudentProfileData(data); // Store full profile for visibility checks
                 }
             } catch (e) {
                 console.error("Error fetching student profile:", e);
@@ -295,6 +299,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 let gradeIds: string[] = [];
                 let groupIds: string[] = [];
+                let enrollments: any[] = [];
 
                 if (targetId) {
                     console.log(`🔍 [Enrollment] Fetching enrollments for Resolved ID: "${targetId}"`);
@@ -302,9 +307,36 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     const enrollmentSnap = await getDocs(qEnrollment);
                     console.log(`📚 [Enrollment] Found ${enrollmentSnap.docs.length} enrollments`);
 
-                    const enrollments = enrollmentSnap.docs.map(d => d.data());
+                    enrollments = enrollmentSnap.docs.map(d => d.data());
                     gradeIds = enrollments.map(e => e.gradeId).filter(Boolean);
                     groupIds = enrollments.map(e => e.groupId).filter(Boolean);
+
+                    // MERGE WITH PROFILE DATA (Fix for visibility)
+                    if (studentProfileData) {
+                        console.log("👤 [ProjectSelector] Merging Profile Data for Visibility:", {
+                            grade: studentProfileData.gradeId,
+                            group: studentProfileData.groupId
+                        });
+
+                        if (studentProfileData.gradeId) gradeIds.push(studentProfileData.gradeId);
+                        if (studentProfileData.grade) gradeIds.push(studentProfileData.grade); // Legacy
+
+                        if (studentProfileData.groupId) groupIds.push(studentProfileData.groupId);
+                        // Handle "group" object legacy
+                        if (typeof studentProfileData.group === 'object') {
+                            if (studentProfileData.group?.id) groupIds.push(studentProfileData.group.id);
+                            if (studentProfileData.group?.name) groupIds.push(studentProfileData.group.name); // 🔥 Catch Names
+                        } else if (studentProfileData.group && typeof studentProfileData.group === 'string') {
+                            groupIds.push(studentProfileData.group);
+                        }
+
+                        // Also check for "groupName" legacy field
+                        if (studentProfileData.groupName) groupIds.push(studentProfileData.groupName);
+                    }
+
+                    // Deduplicate
+                    gradeIds = [...new Set(gradeIds)];
+                    groupIds = [...new Set(groupIds)];
                 }
 
                 console.log(`✅ [Enrollment] Extracted gradeIds:`, gradeIds);
@@ -357,10 +389,24 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 // 3. Fetch Available Templates
                 const templatesSnap = await getDocs(collection(db, 'project_templates'));
+
+                // Allow explicit enrollments to bypass filters
+                const enrolledMissionIds = new Set(enrollments.map(e => e.programId));
+                console.log("📌 [ProjectSelector] Enrolled Mission IDs:", Array.from(enrolledMissionIds));
+
                 const templates = templatesSnap.docs
                     .map(d => ({ id: d.id, ...d.data() } as any))
                     .filter(t => {
                         console.log(`🔍 [Filter Debug] Checking template: "${t.title}" (ID: ${t.id})`);
+
+                        // 0. 🔥 ENROLLMENT OVERRIDE: If explictly enrolled, always show (unless draft?)
+                        if (enrolledMissionIds.has(t.id)) {
+                            // Optional: Still check status? For now, trust the enrollment.
+                            // But maybe filter out 'archived' or 'deleted' if that concept exists.
+                            if (t.status === 'archived') return false;
+                            console.log(`✅ [Filter Debug] Accepted "${t.title}": Explicit Enrollment Found`);
+                            return true;
+                        }
 
                         // Basic status check
                         if (t.status === 'draft') {
@@ -387,15 +433,17 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                         // 🚨 STRICT Group filtering (Robust String Check)
                         if (t.targetAudience?.groups && t.targetAudience.groups.length > 0) {
-                            // If we are in PREVIEW MODE, we ignore group mismatch (act as if we are in valid group)
                             if (previewGradeId) {
                                 console.log(`🎭 [Filter Debug] Instructor Preview: Bypassing group check for "${t.title}"`);
                             } else {
+                                // 🔥 ROBUST MATCHING: Case-insensitive Check
+                                const normalizedStudentGroups = effectiveGroupIds.map(g => String(g).toLowerCase().trim());
                                 const studentHasGroupAccess = t.targetAudience.groups.some((groupId: any) =>
-                                    effectiveGroupIds.map(String).includes(String(groupId))
+                                    normalizedStudentGroups.includes(String(groupId).toLowerCase().trim())
                                 );
+
                                 if (!studentHasGroupAccess) {
-                                    console.log(`❌ [Filter Debug] Rejected "${t.title}": Group mismatch. Student Groups: ${effectiveGroupIds}, Target Groups: ${t.targetAudience.groups}`);
+                                    console.log(`❌ [Filter Debug] Rejected "${t.title}": Group mismatch. Student Groups: ${JSON.stringify(normalizedStudentGroups)}, Target Groups: ${JSON.stringify(t.targetAudience.groups)}`);
                                     return false;
                                 }
                             }
@@ -460,7 +508,59 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 // --- INJECT STATIC TEMPLATES (Free Build & Showcase) ---
                 // We inject these AFTER filtering started IDs so they are always available (or available if not currently active?)
                 // Actually, "Free Build" should always be available for multiple projects.
-                setAvailableTemplates(newMissions);
+
+                // 4. 🔥 CRITICAL FIX: Fetch Program-Based Missions (from Enrollments)
+                // Many students are assigned via "Program" (e.g. StemQuest) not specific "Templates"
+                const activeProgramIds = enrollments.map(e => e.programId).filter(Boolean);
+                const programMissions: any[] = [];
+
+                if (activeProgramIds.length > 0) {
+                    console.log(`🔍 [ProjectSelector] Fetching ${activeProgramIds.length} enrolled programs...`);
+                    // Fetch programs in parallel
+                    await Promise.all(activeProgramIds.map(async (pid) => {
+                        try {
+                            const progSnap = await getDoc(doc(db, 'programs', pid));
+                            if (progSnap.exists()) {
+                                const prog = progSnap.data();
+
+                                // Check if we already have a project for this program (Dedupe)
+                                const alreadyStarted = finalProjects.some(p => p.templateId === pid);
+                                if (alreadyStarted) {
+                                    console.log(`ℹ️ [ProjectSelector] Program "${prog.name}" already started. Skipping card.`);
+                                    return;
+                                }
+
+                                const normalizeStation = (s: string) => {
+                                    const text = (s || '').toLowerCase();
+                                    if (text.includes('robot')) return 'Robotics';
+                                    if (text.includes('code') || text.includes('soft')) return 'Coding';
+                                    if (text.includes('game')) return 'Game Design';
+                                    return 'General';
+                                };
+
+                                console.log(`✅ [ProjectSelector] Added Program Mission: ${prog.name}`);
+                                programMissions.push({
+                                    id: progSnap.id, // Use Program ID as Template ID
+                                    title: prog.name,
+                                    description: prog.description || 'Training Mission',
+                                    station: normalizeStation(prog.type),
+                                    status: 'assigned',
+                                    thumbnailUrl: prog.image,
+                                    difficulty: 'beginner',
+                                    isProgram: true, // Marker
+                                    // Make sure it passes filters by defaulting to "targeted"
+                                    targetAudience: { students: [studentId] }
+                                });
+                            }
+                        } catch (e) {
+                            console.error(`Error fetching program ${pid}`, e);
+                        }
+                    }));
+                }
+
+                // MERGE: Templates + Program Missions
+                const combinedTemplates = [...newMissions, ...programMissions];
+                setAvailableTemplates(combinedTemplates);
 
             } catch (error) {
                 console.error('❌ [ProjectSelector] Error fetching projects:', error);
@@ -470,7 +570,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         };
 
         fetchData();
-    }, [studentId, effectiveStudentId, previewGradeId]); // Refetch when ID resolves or preview changes
+    }, [studentId, effectiveStudentId, previewGradeId, studentProfileData]); // Refetch when ID resolves or preview changes
 
     // Start Mission Alert State
     const [startMissionAlert, setStartMissionAlert] = useState<{
@@ -707,7 +807,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         {isAdminOrInstructor && availableGrades.length > 0 && (
                             <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-yellow-500/30">
                                 <span className="text-yellow-400 text-xs font-bold uppercase">Preview:</span>
-                                <select value={previewProjectId || ''} onChange={(e) => setPreviewGradeId(e.target.value || null)} className="bg-transparent text-yellow-100 text-xs outline-none cursor-pointer font-bold uppercase">
+                                <select value={previewGradeId || ''} onChange={(e) => setPreviewGradeId(e.target.value || null)} className="bg-transparent text-yellow-100 text-xs outline-none cursor-pointer font-bold uppercase">
                                     <option value="">🔴 Live View</option>
                                     {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                                 </select>
@@ -743,103 +843,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         </div>
                     </div>
 
-                    {/* SHOWCASE SECTION */}
-                    {projects.some(p => p.templateId === 'showcase-template') && (
-                        <div className="mb-12 animate-in slide-in-from-right duration-500">
-                            <div className="flex items-center gap-3 mb-6">
-                                <div className="p-2 bg-fuchsia-500 rounded-xl shadow-lg shadow-fuchsia-500/20">
-                                    <ImageIcon size={20} className="text-white" />
-                                </div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tight">My Showcase</h3>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {projects.filter(p => p.templateId === 'showcase-template').map(project => (
-                                    <div
-                                        key={project.id}
-                                        onClick={() => onSelectProject(project.id)}
-                                        className="group cursor-pointer relative aspect-video rounded-3xl overflow-hidden border border-white/10 hover:border-fuchsia-500/50 transition-all hover:shadow-2xl hover:shadow-fuchsia-500/10"
-                                    >
-                                        <img
-                                            src={project.thumbnailUrl || project.coverImage || "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80"}
-                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                        />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-6 flex flex-col justify-end">
-                                            <h4 className="text-white font-bold text-lg leading-tight mb-1">{project.title}</h4>
-                                            <p className="text-fuchsia-300 text-xs font-bold uppercase tracking-wider">Uploaded Project</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
-
-
-
-
-                    {/* SHOWCASE SECTION - With Integrated Upload Button */}
-                    <div className="mb-12 animate-in slide-in-from-right duration-500">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 bg-gradient-to-br from-fuchsia-500 to-purple-600 rounded-xl shadow-lg shadow-fuchsia-500/20">
-                                <ImageIcon size={20} className="text-white" />
-                            </div>
-                            <h3 className="text-2xl font-black text-white uppercase tracking-tight">My Showcase</h3>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {/* 1. UPLOAD CARD (Always First) */}
-                            <button
-                                onClick={() => handleStartMissionClick(availableTemplates.find(t => t.id === 'showcase-template') || {
-                                    id: 'showcase-template',
-                                    title: 'Showcase',
-                                    description: 'Upload completed work.',
-                                    station: 'General',
-                                    status: 'assigned',
-                                    isLocked: false,
-                                    defaultWorkflowId: 'showcase'
-                                })}
-                                className="group relative aspect-video rounded-3xl overflow-hidden border-2 border-dashed border-white/20 hover:border-fuchsia-500/50 hover:bg-white/5 transition-all duration-300 flex flex-col items-center justify-center gap-3"
-                            >
-                                <div className="p-4 bg-white/5 rounded-full group-hover:bg-fuchsia-500 group-hover:scale-110 transition-all duration-300">
-                                    <Sparkles size={24} className="text-slate-400 group-hover:text-white" />
-                                </div>
-                                <div className="text-center">
-                                    <span className="block text-white font-bold uppercase text-sm">Upload New</span>
-                                    <span className="text-slate-500 text-xs font-medium">Showcase your work</span>
-                                </div>
-                            </button>
-
-                            {/* 2. SHOWCASE PROJECTS */}
-                            {projects.filter(p => p.templateId === 'showcase-template').map(project => (
-                                <div
-                                    key={project.id}
-                                    onClick={() => onSelectProject(project.id)}
-                                    className="group cursor-pointer relative aspect-video rounded-3xl overflow-hidden border border-white/10 hover:border-fuchsia-500/50 transition-all hover:shadow-2xl hover:shadow-fuchsia-500/10"
-                                >
-                                    <img
-                                        src={project.thumbnailUrl || project.coverImage || "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80"}
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent p-6 flex flex-col justify-end">
-                                        <h4 className="text-white font-bold text-lg leading-tight mb-1 line-clamp-1">{project.title}</h4>
-                                        <p className="text-fuchsia-300 text-xs font-bold uppercase tracking-wider">Uploaded Project</p>
-                                    </div>
-
-                                    {/* DELETE ACTION */}
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeleteProject(project.id, project.title);
-                                        }}
-                                        className="absolute top-2 right-2 p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all z-20 shadow-lg"
-                                        title="Delete Project"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
 
                     {/* CONTROL BAR: Search & Filter & START BUTTON */}
                     <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-8 sticky top-0 z-40 py-4 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 -mx-8 px-8">
@@ -875,6 +879,23 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                 <span>New Project</span>
                             </button>
 
+                            {/* Showcase Project Button */}
+                            <button
+                                onClick={() => handleStartMissionClick({
+                                    id: 'showcase-template',
+                                    title: 'Showcase Project',
+                                    description: 'Create a showcase for your project.',
+                                    station: 'Showcase',
+                                    status: 'assigned',
+                                    isLocked: false,
+                                    defaultWorkflowId: 'showcase-workflow'
+                                })}
+                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-400 text-purple-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+                            >
+                                <Award size={18} fill="currentColor" />
+                                <span>Showcase Project</span>
+                            </button>
+
                             {/* Filter Tabs */}
                             <div className="flex p-1 bg-slate-900 rounded-xl border border-slate-800">
                                 <button
@@ -899,174 +920,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         </div>
                     </div>
 
-                    {/* HERO SECTION: Current Active Mission (First Filtered Result) */}
-                    {filteredProjects.length > 0 && (() => {
-                        const heroProject = filteredProjects[0];
-                        const badge = getStatusBadge(heroProject.status, heroProject.templateId);
-                        return (
-                            <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                                <button
-                                    onClick={() => onSelectProject(heroProject.id)}
-                                    className="group relative w-full h-[55vh] min-h-[400px] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl transition-all duration-500 hover:shadow-[0_0_80px_-20px_rgba(59,130,246,0.5)] hover:border-blue-500/50 text-left"
-                                >
-                                    {/* INFO BUTTON (Hero) - For Details View */}
-                                    <div
-                                        onClick={(e) => { e.stopPropagation(); onPreviewProject?.(heroProject.id); }}
-                                        className="absolute top-6 right-6 z-30 p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
-                                    >
-                                        <span className="text-xs font-bold uppercase tracking-wider">Info</span>
-                                        <Search size={20} />
-                                    </div>
-
-                                    {/* DELETE BUTTON (Hero) - Only for Custom Projects */}
-                                    {(heroProject.templateId === 'free-build-template' || heroProject.templateId === 'showcase-template') && (
-                                        <div
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(heroProject.id, heroProject.title); }}
-                                            className="absolute top-6 right-28 z-30 p-3 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-xl border border-red-500/30 transition-all opacity-0 group-hover:opacity-100"
-                                        >
-                                            <Trash2 size={20} />
-                                        </div>
-                                    )}
-                                    {/* Hero Background */}
-                                    {heroProject.thumbnailUrl ? (
-                                        <div className="absolute inset-0">
-                                            <img
-                                                src={heroProject.thumbnailUrl}
-                                                className="w-full h-full object-cover transition-transform duration-[20s] ease-linear group-hover:scale-110"
-                                            />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent"></div>
-                                            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/40 to-transparent"></div>
-                                        </div>
-                                    ) : (
-                                        <div className={`absolute inset-0 ${heroProject.station === 'Robotics' ? 'bg-gradient-to-br from-red-600 to-orange-900' :
-                                            heroProject.station === 'Coding' ? 'bg-gradient-to-br from-blue-600 to-indigo-900' :
-                                                'bg-gradient-to-br from-indigo-600 to-purple-900'
-                                            }`}>
-                                            <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
-                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
-                                        </div>
-                                    )}
-
-                                    {/* Hero Content */}
-                                    <div className="absolute bottom-0 left-0 p-12 max-w-3xl z-20 flex flex-col gap-6">
-                                        <div className="flex items-center gap-3">
-                                            <span className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/20 rounded text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
-                                                Active Mission
-                                            </span>
-                                            <span className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest shadow-lg animate-pulse ${badge.color} border ${badge.border}`}>
-                                                {badge.label}
-                                            </span>
-                                        </div>
-
-                                        <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[0.9] drop-shadow-2xl tracking-tight">
-                                            {heroProject.title}
-                                        </h1>
-
-                                        <div className="flex items-center gap-4 mt-2">
-                                            <p className="text-slate-300 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                                                {heroProject.station} Station
-                                            </p>
-                                        </div>
-
-                                        <div className="flex items-center gap-4 mt-4 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-100">
-                                            <div className="px-8 py-4 bg-white text-slate-950 rounded-xl font-black uppercase tracking-widest hover:bg-blue-50 transition-colors flex items-center gap-3 text-sm shadow-xl shadow-white/10">
-                                                <Zap className="fill-slate-950" size={18} /> Continue Mission
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Icon Overlay if no thumbnail */}
-                                    {!heroProject.thumbnailUrl && (
-                                        <div className="absolute right-12 bottom-12 opacity-20 text-[12rem] text-white rotate-12 transform group-hover:scale-110 transition-transform duration-700">
-                                            {getProjectIcon(heroProject.title)}
-                                        </div>
-                                    )}
-                                </button>
-                            </div>
-                        );
-                    })()}
-
-
-                    {/* SLIDER 1: Continue Watching (Other Active Projects) */}
-                    {filteredProjects.length > 1 && (
-                        <div className="mb-12">
-                            <h3 className="text-xl font-black text-white mb-6 px-2 flex items-center gap-3">
-                                <span>Continue Playing</span>
-                                <span className="text-sm font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{filteredProjects.length - 1} more</span>
-                            </h3>
-                            <div className="flex overflow-x-auto pb-8 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
-                                {filteredProjects.slice(1).map((project, idx) => {
-                                    const badge = getStatusBadge(project.status, project.templateId);
-                                    return (
-                                        <button
-                                            key={project.id}
-                                            onClick={() => onSelectProject(project.id)}
-                                            className="snap-start flex-none w-[320px] aspect-[4/3] group relative rounded-3xl overflow-hidden border border-white/10 bg-slate-900 shadow-lg hover:scale-105 hover:z-10 hover:shadow-2xl transition-all duration-300"
-                                        >
-                                            {/* XP CELEBRATION BADGE */}
-                                            {project.status === 'published' && (
-                                                <div className="absolute top-3 right-3 z-30 animate-bounce">
-                                                    <div className="bg-yellow-400 text-yellow-950 px-2.5 py-1 rounded-full font-black text-[10px] uppercase shadow-[0_0_15px_rgba(250,204,21,0.6)] border-2 border-yellow-200 transform rotate-3 flex items-center gap-1">
-                                                        <Sparkles size={12} />
-                                                        <span>+{project.xpReward || 50} XP</span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Fallback Gradient (Always Rendered) */}
-                                            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 group-hover:from-indigo-900 group-hover:to-slate-900 transition-colors">
-                                                <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-30 group-hover:scale-110 transition-transform">
-                                                    {getProjectIcon(project.title)}
-                                                </div>
-                                            </div>
-
-                                            {/* Image Overlay */}
-                                            {project.thumbnailUrl && (
-                                                <img
-                                                    src={project.thumbnailUrl}
-                                                    className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity z-10"
-                                                    onError={(e) => e.currentTarget.style.display = 'none'}
-                                                />
-                                            )}
-
-                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent z-20"></div>
-                                            <div className="absolute bottom-0 left-0 p-6 w-full text-left">
-                                                <div className="mb-2 flex items-center justify-between gap-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`w-1.5 h-1.5 rounded-full ${badge.color.split(' ')[0].replace('bg-', 'bg-')}`}></span>
-                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${badge.color.split(' ')[1]}`}>{badge.label}</span>
-                                                    </div>
-
-                                                    {/* INFO BUTTON (Grid) */}
-                                                    <div
-                                                        onClick={(e) => { e.stopPropagation(); onPreviewProject?.(project.id); }}
-                                                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-all opacity-0 group-hover:opacity-100 border border-slate-700 hover:border-slate-500"
-                                                    >
-                                                        <Search size={14} />
-                                                    </div>
-
-                                                    {/* DELETE BUTTON (Grid) - Only for Custom Projects */}
-                                                    {(project.templateId === 'free-build-template' || project.templateId === 'showcase-template') && (
-                                                        <div
-                                                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id, project.title); }}
-                                                            className="p-1.5 hover:bg-red-500/20 text-red-400/50 hover:text-red-400 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <h4 className="text-lg font-black text-white leading-tight line-clamp-2 group-hover:text-blue-200 transition-colors">{project.title}</h4>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-
-
-                    {/* SLIDER 2: New Adventures (Templates) */}
+                    {/* NEW ADVENTURES - Moved to Top */}
                     <div className="mb-8">
                         <h3 className="text-xl font-black text-white mb-6 px-2">New Adventures</h3>
                         <div className="flex overflow-x-auto pb-12 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
@@ -1077,7 +931,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                         key={template.id}
                                         onClick={() => handleStartMissionClick(template)}
                                         disabled={isLocked}
-                                        className={`snap-start flex-none w-[280px] lg:w-[340px] aspect-[3/4] group relative rounded-[2rem] overflow-hidden border transition-all duration-300 text-left
+                                        className={`snap-start flex-none w-[280px] lg:w-[340px] aspect-[4/3] group relative rounded-[2rem] overflow-hidden border transition-all duration-300 text-left
                                         ${isLocked
                                                 ? 'bg-slate-900/50 border-slate-800 opacity-60 grayscale'
                                                 : 'bg-slate-900/40 border-white/10 hover:border-indigo-500/50 hover:shadow-[0_0_40px_-10px_rgba(99,102,241,0.4)] hover:-translate-y-2'
@@ -1151,6 +1005,207 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         </div>
                     </div>
 
+                    {/* HERO SECTION: Last Opened Mission (or First if none opened yet) */}
+                    {filteredProjects.length > 0 && (() => {
+                        // Get last opened project ID from localStorage
+                        const lastOpenedId = localStorage.getItem('sparkquest_last_opened_mission');
+                        // Find that project in filtered list, or fall back to first
+                        const heroProject = filteredProjects.find(p => p.id === lastOpenedId) || filteredProjects[0];
+                        const badge = getStatusBadge(heroProject.status, heroProject.templateId);
+                        return (
+                            <div className="mb-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                                <button
+                                    onClick={() => {
+                                        // Store this as last opened mission
+                                        localStorage.setItem('sparkquest_last_opened_mission', heroProject.id);
+                                        onSelectProject(heroProject.id);
+                                    }}
+                                    className="group relative w-full h-[55vh] min-h-[400px] rounded-[2rem] overflow-hidden border border-white/10 shadow-2xl transition-all duration-500 hover:shadow-[0_0_80px_-20px_rgba(59,130,246,0.5)] hover:border-blue-500/50 text-left"
+                                >
+                                    {/* INFO BUTTON (Hero) - For Details View */}
+                                    <div
+                                        onClick={(e) => { e.stopPropagation(); onPreviewProject?.(heroProject.id); }}
+                                        className="absolute top-6 right-6 z-30 p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl border border-white/20 backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 flex items-center gap-2"
+                                    >
+                                        <span className="text-xs font-bold uppercase tracking-wider">Info</span>
+                                        <Search size={20} />
+                                    </div>
+
+                                    {/* DELETE BUTTON (Hero) - Only for Custom Projects */}
+                                    {(heroProject.templateId === 'free-build-template' || heroProject.templateId === 'showcase-template') && (
+                                        <div
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(heroProject.id, heroProject.title); }}
+                                            className="absolute top-6 right-28 z-30 p-3 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-xl border border-red-500/30 transition-all opacity-0 group-hover:opacity-100"
+                                        >
+                                            <Trash2 size={20} />
+                                        </div>
+                                    )}
+                                    {/* Hero Background */}
+                                    {heroProject.thumbnailUrl ? (
+                                        <div className="absolute inset-0">
+                                            <img
+                                                src={heroProject.thumbnailUrl}
+                                                className="w-full h-full object-cover transition-transform duration-[20s] ease-linear group-hover:scale-110"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent"></div>
+                                            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/40 to-transparent"></div>
+                                        </div>
+                                    ) : (
+                                        <div className={`absolute inset-0 ${heroProject.station === 'Robotics' ? 'bg-gradient-to-br from-red-600 to-orange-900' :
+                                            heroProject.station === 'Coding' ? 'bg-gradient-to-br from-blue-600 to-indigo-900' :
+                                                'bg-gradient-to-br from-indigo-600 to-purple-900'
+                                            }`}>
+                                            <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent"></div>
+                                        </div>
+                                    )}
+
+                                    {/* Hero Content */}
+                                    <div className="absolute bottom-0 left-0 p-12 max-w-3xl z-20 flex flex-col gap-6">
+                                        <div className="flex items-center gap-3">
+                                            <span className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/20 rounded text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
+                                                Active Mission
+                                            </span>
+                                            <span className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest shadow-lg animate-pulse ${badge.color} border ${badge.border}`}>
+                                                {badge.label}
+                                            </span>
+                                        </div>
+
+                                        <h1 className="text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[0.9] drop-shadow-2xl tracking-tight">
+                                            {heroProject.title}
+                                        </h1>
+
+
+                                        <div className="flex items-center gap-4 mt-2">
+                                            <p className="text-slate-300 font-bold uppercase tracking-wider text-sm flex items-center gap-2">
+                                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                                {heroProject.station} Station
+                                            </p>
+                                        </div>
+
+                                        {/* PROGRESS BAR (Hero) */}
+                                        <div className="w-full max-w-md mt-4">
+                                            <div className="flex justify-between text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
+                                                <span>Progress</span>
+                                                <span>{heroProject.steps?.filter(s => s.status === 'done').length || 0} / {heroProject.steps?.length || 0} Steps</span>
+                                            </div>
+                                            <div className="h-3 w-full bg-slate-800/50 rounded-full overflow-hidden border border-white/10 backdrop-blur-sm">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-1000 ease-out shadow-[0_0_20px_rgba(59,130,246,0.5)]"
+                                                    style={{ width: `${Math.round(((heroProject.steps?.filter(s => s.status === 'done').length || 0) / (heroProject.steps?.length || 1)) * 100)}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 mt-4 opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-100">
+                                            <div className="px-8 py-4 bg-white text-slate-950 rounded-xl font-black uppercase tracking-widest hover:bg-blue-50 transition-colors flex items-center gap-3 text-sm shadow-xl shadow-white/10">
+                                                <Zap className="fill-slate-950" size={18} /> Continue Mission
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Icon Overlay if no thumbnail */}
+                                    {!heroProject.thumbnailUrl && (
+                                        <div className="absolute right-12 bottom-12 opacity-20 text-[12rem] text-white rotate-12 transform group-hover:scale-110 transition-transform duration-700">
+                                            {getProjectIcon(heroProject.title)}
+                                        </div>
+                                    )}
+                                </button>
+                            </div>
+                        );
+                    })()}
+
+
+                    {/* SLIDER 1: Continue Watching (Other Active Projects) */}
+                    {filteredProjects.length > 1 && (
+                        <div className="mb-12">
+                            <h3 className="text-xl font-black text-white mb-6 px-2 flex items-center gap-3">
+                                <span>Continue Building</span>
+                                <span className="text-sm font-bold text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{filteredProjects.length - 1} more</span>
+                            </h3>
+                            <div className="flex overflow-x-auto pb-8 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
+                                {filteredProjects.slice(1).filter(p => p.templateId !== 'showcase-template').map((project, idx) => {
+                                    const badge = getStatusBadge(project.status, project.templateId);
+                                    return (
+                                        <button
+                                            key={project.id}
+                                            onClick={() => onSelectProject(project.id)}
+                                            className="snap-start flex-none w-[320px] aspect-[4/3] group relative rounded-3xl overflow-hidden border border-white/10 bg-slate-900 shadow-lg hover:scale-105 hover:z-10 hover:shadow-2xl transition-all duration-300"
+                                        >
+                                            {/* XP CELEBRATION BADGE */}
+                                            {project.status === 'published' && (
+                                                <div className="absolute top-3 right-3 z-30 animate-bounce">
+                                                    <div className="bg-yellow-400 text-yellow-950 px-2.5 py-1 rounded-full font-black text-[10px] uppercase shadow-[0_0_15px_rgba(250,204,21,0.6)] border-2 border-yellow-200 transform rotate-3 flex items-center gap-1">
+                                                        <Sparkles size={12} />
+                                                        <span>+{(project as any).xpReward || 50} XP</span>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* PROGRESS BAR (Card) */}
+                                            <div className="absolute top-4 left-4 z-30 w-1/2">
+                                                <div className="h-1.5 w-full bg-black/40 rounded-full overflow-hidden backdrop-blur-md border border-white/10">
+                                                    <div
+                                                        className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                                                        style={{ width: `${Math.round(((project.steps?.filter(s => s.status === 'done').length || 0) / (project.steps?.length || 1)) * 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+
+                                            {/* Fallback Gradient (Always Rendered) */}
+                                            <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900 group-hover:from-indigo-900 group-hover:to-slate-900 transition-colors">
+                                                <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-30 group-hover:scale-110 transition-transform">
+                                                    {getProjectIcon(project.title)}
+                                                </div>
+                                            </div>
+
+                                            {/* Image Overlay */}
+                                            {project.thumbnailUrl && (
+                                                <img
+                                                    src={project.thumbnailUrl}
+                                                    className="absolute inset-0 w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity z-10"
+                                                    onError={(e) => e.currentTarget.style.display = 'none'}
+                                                />
+                                            )}
+
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent z-20"></div>
+                                            <div className="absolute bottom-0 left-0 p-6 w-full text-left">
+                                                <div className="mb-2 flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`w-1.5 h-1.5 rounded-full ${badge.color.split(' ')[0].replace('bg-', 'bg-')}`}></span>
+                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${badge.color.split(' ')[1]}`}>{badge.label}</span>
+                                                    </div>
+
+                                                    {/* INFO BUTTON (Grid) */}
+                                                    <div
+                                                        onClick={(e) => { e.stopPropagation(); onPreviewProject?.(project.id); }}
+                                                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-all opacity-0 group-hover:opacity-100 border border-slate-700 hover:border-slate-500"
+                                                    >
+                                                        <Search size={14} />
+                                                    </div>
+
+                                                    {/* DELETE BUTTON (Grid) - Only for Custom Projects */}
+                                                    {(project.templateId === 'free-build-template' || project.templateId === 'showcase-template') && (
+                                                        <div
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteProject(project.id, project.title); }}
+                                                            className="p-1.5 hover:bg-red-500/20 text-red-400/50 hover:text-red-400 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <h4 className="text-lg font-black text-white leading-tight line-clamp-2 group-hover:text-blue-200 transition-colors">{project.title}</h4>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+
+
+
                     {/* Footer Quote */}
                     <div className="text-center mt-12 mb-12 opacity-20 hover:opacity-40 transition-opacity">
                         <p className="text-white font-serif italic text-lg">"The best way to predict the future is to create it."</p>
@@ -1178,7 +1233,22 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             }
 
             {/* Other Modals */}
-            <StudentPortfolio isOpen={isPortfolioOpen} onClose={() => setIsPortfolioOpen(false)} />
+            <StudentPortfolio
+                isOpen={isPortfolioOpen}
+                onClose={() => setIsPortfolioOpen(false)}
+                onStartShowcase={() => {
+                    const showcaseTemplate = availableTemplates.find(t => t.id === 'showcase-template') || {
+                        id: 'showcase-template',
+                        title: 'Showcase',
+                        description: 'Upload completed work.',
+                        station: 'General',
+                        status: 'assigned',
+                        isLocked: false,
+                        defaultWorkflowId: 'showcase'
+                    };
+                    handleStartMissionClick(showcaseTemplate);
+                }}
+            />
             <StudentGallery isOpen={isGalleryOpen} onClose={() => setIsGalleryOpen(false)} />
             <PickupSchedule isOpen={isPickupOpen} onClose={() => setIsPickupOpen(false)} />
             <CredentialWallet isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
@@ -1220,50 +1290,52 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             <ProductivityDashboard isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
 
             {/* NAMING MODAL */}
-            {namingModal.isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    {/* Backdrop */}
-                    <div
-                        className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
-                        onClick={() => setNamingModal({ ...namingModal, isOpen: false })}
-                    />
-
-                    {/* Modal Content */}
-                    <div
-                        className="relative w-full max-w-lg bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl p-8 overflow-hidden border-t-4 border-t-white/20"
-                    >
-                        <div className="absolute inset-0 z-0 bg-gradient-to-b from-blue-600/10 to-transparent pointer-events-none"></div>
-
-                        <h3 className="text-3xl font-black text-white mb-2 relative z-10">Name Your Mission</h3>
-                        <p className="text-slate-400 mb-8 relative z-10 font-bold">Give a cool name to your {namingModal.template?.title} project.</p>
-
-                        <input
-                            autoFocus
-                            value={namingModal.name}
-                            onChange={(e) => setNamingModal({ ...namingModal, name: e.target.value })}
-                            placeholder="e.g. The Moon Base Alpha..."
-                            className="w-full bg-slate-800 border-2 border-slate-700 text-white font-bold text-xl p-5 rounded-2xl mb-8 focus:border-blue-500 focus:outline-none placeholder:text-slate-600 relative z-10 shadow-inner"
-                            onKeyDown={(e) => e.key === 'Enter' && handleCreateNamedProject()}
+            {
+                namingModal.isOpen && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        {/* Backdrop */}
+                        <div
+                            className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"
+                            onClick={() => setNamingModal({ ...namingModal, isOpen: false })}
                         />
 
-                        <div className="flex gap-4 relative z-10">
-                            <button
-                                onClick={() => setNamingModal({ ...namingModal, isOpen: false })}
-                                className="flex-1 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleCreateNamedProject}
-                                disabled={!namingModal.name.trim()}
-                                className="flex-1 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-600/20 active:translate-y-1"
-                            >
-                                🚀 Launch
-                            </button>
+                        {/* Modal Content */}
+                        <div
+                            className="relative w-full max-w-lg bg-slate-900 rounded-3xl border border-slate-700 shadow-2xl p-8 overflow-hidden border-t-4 border-t-white/20"
+                        >
+                            <div className="absolute inset-0 z-0 bg-gradient-to-b from-blue-600/10 to-transparent pointer-events-none"></div>
+
+                            <h3 className="text-3xl font-black text-white mb-2 relative z-10">Name Your Mission</h3>
+                            <p className="text-slate-400 mb-8 relative z-10 font-bold">Give a cool name to your {namingModal.template?.title} project.</p>
+
+                            <input
+                                autoFocus
+                                value={namingModal.name}
+                                onChange={(e) => setNamingModal({ ...namingModal, name: e.target.value })}
+                                placeholder="e.g. The Moon Base Alpha..."
+                                className="w-full bg-slate-800 border-2 border-slate-700 text-white font-bold text-xl p-5 rounded-2xl mb-8 focus:border-blue-500 focus:outline-none placeholder:text-slate-600 relative z-10 shadow-inner"
+                                onKeyDown={(e) => e.key === 'Enter' && handleCreateNamedProject()}
+                            />
+
+                            <div className="flex gap-4 relative z-10">
+                                <button
+                                    onClick={() => setNamingModal({ ...namingModal, isOpen: false })}
+                                    className="flex-1 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateNamedProject}
+                                    disabled={!namingModal.name.trim()}
+                                    className="flex-1 py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-blue-600/20 active:translate-y-1"
+                                >
+                                    🚀 Launch
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 };

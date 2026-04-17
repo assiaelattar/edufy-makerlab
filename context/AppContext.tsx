@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, query, orderBy, limit, where } from 'firebase/firestore';
-import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge } from '../types';
+import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge, StaffAttendanceRecord } from '../types';
 import { translations } from '../utils/translations';
 import { useAuth } from './AuthContext';
 import { addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
@@ -22,6 +22,7 @@ interface AppContextType {
 
   // Attendance
   attendanceRecords: AttendanceRecord[];
+  staffAttendanceRecords: StaffAttendanceRecord[];
 
   // Team Module Data
   tasks: Task[];
@@ -83,6 +84,18 @@ const DEFAULT_SETTINGS: AppSettings = {
     school: { active: true, required: false },
     birthDate: { active: true, required: true },
     medicalInfo: { active: false, required: false }
+  },
+  documentConfig: {
+    headerName: '',
+    logoUrl: '',
+    address: '',
+    taxId: '',
+    regId: '',
+    patente: '',
+    cnss: '',
+    website: '',
+    email: '',
+    phone: ''
   }
 };
 
@@ -104,6 +117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Attendance
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [staffAttendanceRecords, setStaffAttendanceRecords] = useState<StaffAttendanceRecord[]>([]);
 
   // Team State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -239,6 +253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Attendance
       onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), (snap) => setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord)))),
+      onSnapshot(query(collection(firestore, 'staff_attendance'), where('organizationId', '==', orgId)), (snap) => setStaffAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as StaffAttendanceRecord)))),
 
       // Team Listeners
       // Users are global but UserProfile has organizationId. We filter users by org.
@@ -315,6 +330,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       students, programs, enrollments, payments, expenses, expenseTemplates,
       workshopTemplates, workshopSlots, bookings,
       attendanceRecords,
+      staffAttendanceRecords,
       tasks, projects, chatMessages, teamMembers,
       marketingPosts, campaigns, leads,
       projectTemplates, studentProjects,

@@ -66,25 +66,25 @@ export const WizardNode: React.FC<WizardNodeProps> = ({ id, type, title, status,
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center w-48 z-10 flex-shrink-0 group">
+    <div className="relative flex flex-col items-center justify-center w-32 md:w-48 z-10 flex-shrink-0 group">
 
       {/* "START" Floating Label for First Active Step */}
       {isActive && isFirst && (
-        <div className="absolute -top-24 animate-bounce z-20 pointer-events-none">
-          <div className="bg-blue-500 text-white font-black px-6 py-2 rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.5)] border-4 border-blue-400 text-lg uppercase tracking-wider transform -rotate-3">
+        <div className="absolute -top-16 md:-top-24 animate-bounce z-20 pointer-events-none">
+          <div className="bg-blue-500 text-white font-black px-4 py-1 md:px-6 md:py-2 rounded-2xl shadow-[0_0_20px_rgba(59,130,246,0.5)] border-2 md:border-4 border-blue-400 text-sm md:text-lg uppercase tracking-wider transform -rotate-3 whitespace-nowrap">
             Current Mission
           </div>
-          <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[12px] border-t-blue-400 mx-auto mt-[-4px]"></div>
+          <div className="w-0 h-0 border-l-[8px] md:border-l-[10px] border-l-transparent border-r-[8px] md:border-r-[10px] border-r-transparent border-t-[10px] md:border-t-[12px] border-t-blue-400 mx-auto mt-[-4px]"></div>
         </div>
       )}
 
       {/* "REVIEW" Floating Label */}
       {isReview && (
-        <div className="absolute -top-24 animate-pulse z-20 pointer-events-none">
-          <div className="bg-amber-500 text-white font-black px-6 py-2 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.5)] border-4 border-amber-400 text-lg uppercase tracking-wider">
+        <div className="absolute -top-16 md:-top-24 animate-pulse z-20 pointer-events-none">
+          <div className="bg-amber-500 text-white font-black px-4 py-1 md:px-6 md:py-2 rounded-2xl shadow-[0_0_20px_rgba(245,158,11,0.5)] border-2 md:border-4 border-amber-400 text-sm md:text-lg uppercase tracking-wider whitespace-nowrap">
             In Review
           </div>
-          <div className="w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[12px] border-t-amber-400 mx-auto mt-[-4px]"></div>
+          <div className="w-0 h-0 border-l-[8px] md:border-l-[10px] border-l-transparent border-r-[8px] md:border-r-[10px] border-r-transparent border-t-[10px] md:border-t-[12px] border-t-amber-400 mx-auto mt-[-4px]"></div>
         </div>
       )}
 
@@ -94,34 +94,36 @@ export const WizardNode: React.FC<WizardNodeProps> = ({ id, type, title, status,
         onMouseEnter={() => !isLocked && onHover && onHover()}
         disabled={isLocked}
         className={`
-          relative w-32 h-32 rounded-[2.5rem] flex items-center justify-center 
-          border-b-[8px] transition-all duration-200 ease-out
+          relative w-24 h-24 md:w-32 md:h-32 rounded-[2rem] md:rounded-[2.5rem] flex items-center justify-center 
+          border-b-[6px] md:border-b-[8px] transition-all duration-200 ease-out
           ${mainColor} ${borderColor} shadow-2xl
           ${isLocked ? 'cursor-not-allowed opacity-50 grayscale' : 'cursor-pointer hover:scale-110 hover:-translate-y-2 hover:brightness-110 active:border-b-0 active:translate-y-[8px] active:shadow-none'}
         `}
       >
         {isCompleted && (
           <div className="absolute inset-0 flex items-center justify-center opacity-30 text-emerald-900">
-            <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
+            <svg className="w-14 h-14 md:w-20 md:h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
           </div>
         )}
 
         <div className={`transform transition-transform duration-300 ${isLocked ? 'scale-90' : 'scale-100'}`}>
-          {getIcon()}
+          <div className="scale-75 md:scale-100 transition-transform">
+             {getIcon()}
+          </div>
         </div>
 
         {/* Shine effect */}
-        <div className="absolute top-4 left-4 w-6 h-3 bg-white opacity-20 rounded-full rotate-45 pointer-events-none"></div>
+        <div className="absolute top-4 left-4 w-4 h-2 md:w-6 md:h-3 bg-white opacity-20 rounded-full rotate-45 pointer-events-none"></div>
 
         {/* Glow for active */}
         {isActive && (
-          <div className="absolute inset-0 rounded-[2.5rem] shadow-[0_0_30px_rgba(59,130,246,0.6)] animate-pulse pointer-events-none"></div>
+          <div className="absolute inset-0 rounded-[2rem] md:rounded-[2.5rem] shadow-[0_0_30px_rgba(59,130,246,0.6)] animate-pulse pointer-events-none"></div>
         )}
       </button>
 
       {/* Title */}
-      <div className={`mt-6 px-4 py-2 rounded-xl ${titleBg} backdrop-blur-sm border border-white/5 transition-colors duration-300 max-w-[200px]`}>
-        <div className={`text-center font-black text-lg uppercase tracking-wider leading-tight ${titleColor}`}>
+      <div className={`mt-4 md:mt-6 px-3 py-1.5 md:px-4 md:py-2 rounded-xl ${titleBg} backdrop-blur-sm border border-white/5 transition-colors duration-300 max-w-[140px] md:max-w-[200px]`}>
+        <div className={`text-center font-black text-xs md:text-lg uppercase tracking-wider leading-tight ${titleColor}`}>
           {title}
         </div>
       </div>

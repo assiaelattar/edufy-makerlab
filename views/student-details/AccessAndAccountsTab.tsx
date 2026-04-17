@@ -16,6 +16,9 @@ interface AccessAndAccountsTabProps {
   isAdult?: boolean;
 }
 
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+
 export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   student,
   handleGenerateAccess,
@@ -39,8 +42,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const handleGeneratePin = async () => {
     try {
       setIsUpdatingPin(true);
+      if (!db) {
+        throw new Error("Database not initialized");
+      }
       const newPin = Math.floor(1000 + Math.random() * 9000).toString();
-      const { updateDoc, doc, db } = await import('../../services/firebase');
 
       await updateDoc(doc(db, 'students', student.id), {
         pinCode: newPin

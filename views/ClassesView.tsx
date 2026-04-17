@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { School, Clock, Users, ArrowLeft, Mail, Printer, Eye, Phone, Search, ChevronRight, Calendar, Sparkles, Filter, Plus } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { calculateAge, formatCurrency, generateRosterPrint } from '../utils/helpers';
 import { Student, Enrollment } from '../types';
 
 export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, gradeId: string, groupId: string) => void }) => {
    const { programs, enrollments, students, viewParams, navigateTo, settings } = useAppContext();
+   const { can } = useAuth();
    const { classId } = viewParams;
 
    // State for main view
@@ -72,9 +74,11 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                      <button onClick={() => generateRosterPrint(program.name, grade.name, group.name, `${group.day} ${group.time}`, enrolledStudents, settings.academyName)} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all shadow-lg shadow-blue-900/30 text-sm font-medium hover:translate-y-[-1px]">
                         <Printer size={18} /> Print Roster
                      </button>
-                     <button onClick={() => onEnroll && onEnroll(program.id, grade.id, group.id)} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg shadow-emerald-900/30 text-sm font-medium hover:translate-y-[-1px]">
-                        <Plus size={18} /> Add Student
-                     </button>
+                     {can('students.enroll') && (
+                        <button onClick={() => onEnroll && onEnroll(program.id, grade.id, group.id)} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-lg shadow-emerald-900/30 text-sm font-medium hover:translate-y-[-1px]">
+                           <Plus size={18} /> Add Student
+                        </button>
+                     )}
                   </div>
                </div>
             </div>
@@ -196,9 +200,9 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       grades: prog.grades.map(gr => ({
          ...gr,
          groups: gr.groups.filter(gp =>
-            gp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            gr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            gp.day.toLowerCase().includes(searchQuery.toLowerCase())
+            (gp.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (gr.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (gp.day || '').toLowerCase().includes(searchQuery.toLowerCase())
          )
       })).filter(gr => gr.groups.length > 0)
    })).filter(prog => prog.grades.length > 0);

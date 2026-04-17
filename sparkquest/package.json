@@ -56,7 +56,8 @@
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "electron-updater": "^6.6.2",
-    "firebase-admin": "^13.6.0"
+    "firebase-admin": "^13.6.0",
+    "vercel": "^50.17.1"
   },
   "overrides": {
     "node-gyp": "11.1.0"

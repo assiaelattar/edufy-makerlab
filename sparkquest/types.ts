@@ -261,6 +261,7 @@ export interface UserProfile {
   photoURL?: string;
   credentials?: Credential[];
   arcadeCredits?: number;
+  studentId?: string; // Link to actual Student Document ID (different from Auth UID)
 }
 
 export interface Gadget {

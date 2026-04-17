@@ -23,6 +23,7 @@ import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
 import { ProjectDetailsEnhanced } from './components/ProjectDetailsEnhanced';
 import ParentShowcase from './components/ParentShowcase';
+import { ToastProvider } from './context/ToastContext';
 
 
 // Mock Data for Old Roadmap (Legacy View)
@@ -145,7 +146,9 @@ const SparkQuestApp: React.FC = () => {
       if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') return;
       const pId = selectedProjectId || initialProjectId;
       console.log("🚀 [SparkQuest] Loading Mission:", pId);
-      fetchMission(user.uid, pId || undefined);
+      // 🔥 CRITICAL FIX: Use studentId from Profile (Firestore) if available, otherwise fallback to Auth UID (Legacy/Demo)
+      const targetStudentId = userProfile?.studentId || user.uid;
+      fetchMission(targetStudentId, pId || undefined);
     }
   }, [selectedProjectId, initialProjectId, user, userProfile]);
 
@@ -364,17 +367,19 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <AuthProvider>
         <FactoryProvider>
-          <ThemeProvider>
-            <FocusSessionProvider>
-              <SessionProvider>
-                <SessionOverlay />
-                <InactivityMonitor />
-                {/* <PickupNotification /> -- TEMPORARILY DISABLED: Missing Firestore indexes */}
-                <SessionControls />
-                <SparkQuestApp />
-              </SessionProvider>
-            </FocusSessionProvider>
-          </ThemeProvider>
+          <ToastProvider>
+            <ThemeProvider>
+              <FocusSessionProvider>
+                <SessionProvider>
+                  <SessionOverlay />
+                  <InactivityMonitor />
+                  {/* <PickupNotification /> -- TEMPORARILY DISABLED: Missing Firestore indexes */}
+                  <SessionControls />
+                  <SparkQuestApp />
+                </SessionProvider>
+              </FocusSessionProvider>
+            </ThemeProvider>
+          </ToastProvider>
         </FactoryProvider>
       </AuthProvider>
     </ErrorBoundary>

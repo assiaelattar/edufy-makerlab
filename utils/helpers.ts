@@ -546,7 +546,7 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
         <div class="info-grid">
           <div class="info-group">
             <div class="label">${t('receipt.bill_to')}</div>
-            <div class="value">${payment.studentName}</div>
+            <div class="value">${student?.name || payment.studentName}</div>
             ${student?.parentName ? `<div class="sub-value">Parent: ${student.parentName}</div>` : ''}
             ${student?.address ? `<div class="sub-value">${student.address}</div>` : ''}
           </div>

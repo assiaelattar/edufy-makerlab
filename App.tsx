@@ -39,6 +39,7 @@ import { EnrollmentFormsView } from './views/EnrollmentFormsView';
 import { PublicEnrollmentView } from './views/PublicEnrollmentView';
 import { CalendarView } from './views/CalendarView'; // NEW
 import { LoginView } from './views/LoginView';
+import { StaffAbsenceView } from './views/StaffAbsenceView';
 import { ParentLoginView } from './views/ParentLoginView';
 import { LandingView } from './views/website/LandingView';
 import { SaasAdminView } from './views/SaasAdminView';
@@ -667,6 +668,7 @@ const AppContent = () => {
             case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); preserveEnrollmentFormRef.current = true; setIsEnrollmentModalOpen(true); }} />;
             case 'attendance': return <AbsenceView />;
             case 'team': return <TeamView />;
+            case 'staff-attendance': return <StaffAbsenceView />;
             case 'marketing': return <MarketingView onEnrollLead={handleEnrollLead} />;
             case 'schedule': return <CalendarView />; // NEW
 
@@ -1030,6 +1032,29 @@ const AppContent = () => {
                         {enrollmentStep === 3 && (
                             <div className="space-y-4">
                                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-4 space-y-3">
+                                    {/* Payment Plan Selection */}
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 font-bold uppercase mb-2 block">Payment Format / Plan</label>
+                                        <div className="grid grid-cols-5 gap-2 mb-4">
+                                            {[
+                                                { id: 'full', label: 'Full' },
+                                                { id: 'monthly', label: 'Month' },
+                                                { id: 'trimester', label: 'Tri' },
+                                                { id: 'semestre', label: 'Sem' },
+                                                { id: 'annual', label: 'Year' }
+                                            ].map(plan => (
+                                                <button
+                                                    key={plan.id}
+                                                    type="button"
+                                                    onClick={() => setEnrollProgramForm({ ...enrollProgramForm, paymentPlan: plan.id as any })}
+                                                    className={`py-2 rounded-lg text-[10px] font-bold uppercase border transition-all ${enrollProgramForm.paymentPlan === plan.id ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-900/20' : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-700'}`}
+                                                >
+                                                    {plan.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
                                     {/* Price Negotiation Field */}
                                     <div>
                                         <div className="flex justify-between items-center mb-1">

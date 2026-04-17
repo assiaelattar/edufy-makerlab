@@ -122,11 +122,12 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
 
                         await addDoc(collection(db, 'enrollments'), {
                             studentId: student.id, // This is the ID from the student doc (could be Auth UID or Profile AutoID)
-                            studentEmail: student.email || '',
+                            studentEmail: student.loginInfo?.email || student.email || '',
                             studentName: nameToUse,
                             programId: mission.id,
                             programTitle: mission.title,
                             gradeId: selectedGradeId,
+                            groupId: student.groupId || (typeof student.group === 'object' ? student.group?.id : student.group) || null,
                             status: 'active',
                             assignedAt: Timestamp.now(),
                             progress: 0

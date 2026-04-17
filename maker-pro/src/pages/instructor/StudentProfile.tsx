@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../../services/firebase';
 import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { Student, StudentProject } from '../../types';
+import { Student, StudentProject } from '../../../../types';
+import { useAppContext } from '../../../../context/AppContext';
 import { ArrowLeft, Mail, ExternalLink, Image as ImageIcon, X, Zap } from 'lucide-react';
 import { UniversalEmbed } from '../../components/UniversalEmbed';
 

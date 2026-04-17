@@ -92,6 +92,21 @@ service cloud.firestore {
     match /organizations/{orgId} {
       allow read: if true; // Organization lookup for login
       allow write: if isAdmin();
+      
+      // Subcollections for organization-specific settings
+      match /{allSubcollections=**} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    match /subscriptionPlans/{planId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
     
     match /courses/{courseId} {
@@ -106,6 +121,21 @@ service cloud.firestore {
 
     match /attendance/{recordId} {
       allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /staff_attendance/{recordId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    match /expense_templates/{templateId} {
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
     
@@ -124,6 +154,86 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /assets/{assetId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /workshop_templates/{templateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /workshop_slots/{slotId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isSignedIn();
+      allow write: if true; // Public/User bookings
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /projects/{projectId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /marketing_posts/{postId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /campaigns/{campaignId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /leads/{leadId} {
+      allow read: if isAdmin();
+      allow create: if true; // Public enrollment forms
+      allow update, delete: if isAdmin();
+    }
+
+    match /tool_links/{linkId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /archive_links/{linkId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /pickup_queue/{entryId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isSignedIn();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isSignedIn(); // Filtered by userId in app
+      allow write: if true; // System-wide notifications
+    }
+
+    match /_connection_test/{testId} {
+      allow write: if isSignedIn();
+    }
+
     match /gallery_items/{itemId} {
       allow read: if true;
       allow write: if true; // Public access for Emergency Migration
@@ -133,6 +243,12 @@ service cloud.firestore {
     match /system_logs/{logId} {
       allow read: if isAdmin();
       allow write: if true; // Client-side error logging
+    }
+
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // --- DEFAULT DENY ---

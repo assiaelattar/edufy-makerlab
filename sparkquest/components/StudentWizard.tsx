@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Video, Image, Link as LinkIcon, Globe, File, Download } from 'lucide-react';
+import { FileText, Video, Image, Link as LinkIcon, Globe, File, Download, GripVertical, Pencil, Check, X as XIcon, Trash2 } from 'lucide-react';
+import { Reorder } from 'framer-motion';
 import { StudentProject, Workflow, ProjectStep, TaskStatus, Assignment } from '../types';
 import { generateCoverArt, analyzeSubmission } from '../services/gemini';
 import { api } from '../services/api';
@@ -15,6 +16,8 @@ import { TypingChallenge } from './TypingChallenge';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useFocusSession } from '../context/FocusSessionContext';
 import { ResourceViewerModal } from './ResourceViewerModal';
+import { useToast } from '../context/ToastContext';
+
 
 // --- Sound Utility (Synthesizer) ---
 const playSound = (type: 'hover' | 'click' | 'success' | 'open') => {
@@ -87,7 +90,7 @@ const playSound = (type: 'hover' | 'click' | 'success' | 'open') => {
 interface StepContentProps {
   project: StudentProject;
   assignment: Assignment;
-  updateProject: (updates: Partial<StudentProject>) => void;
+  updateProject: (updates: Partial<StudentProject>) => Promise<void> | void;
   closeModal: () => void;
   onShowResources?: () => void;
 }
@@ -137,21 +140,21 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
   if (stage === 'BRIEFING') {
     return (
-      <div className="space-y-6">
-        <div className="bg-slate-900 text-white p-6 rounded-3xl border-4 border-slate-700 shadow-2xl relative overflow-hidden group">
+      <div className="space-y-4 md:space-y-6">
+        <div className="bg-slate-900 text-white p-4 md:p-6 rounded-3xl border-4 border-slate-700 shadow-2xl relative overflow-hidden group">
           {/* Holographic Effect */}
           <div className="absolute inset-0 bg-blue-500/10 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-50"></div>
           <div className="relative z-10 text-center space-y-4">
-            <div className="inline-block bg-blue-600 px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest animate-pulse border border-blue-400">Incoming Mission</div>
-            <h2 className="text-4xl font-black uppercase tracking-tight text-blue-300 drop-shadow-lg">{assignment.title}</h2>
-            <div className="flex justify-center gap-4 text-slate-400 font-bold uppercase text-xs">
-              <span className="flex items-center gap-1"><span className="text-xl">🤖</span> Station: {assignment.station}</span>
-              <span className="flex items-center gap-1"><span className="text-xl">📅</span> Due: Friday</span>
+            <div className="inline-block bg-blue-600 px-3 py-1 md:px-4 md:py-1 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest animate-pulse border border-blue-400">Incoming Mission</div>
+            <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tight text-blue-300 drop-shadow-lg">{assignment.title}</h2>
+            <div className="flex flex-col md:flex-row justify-center gap-2 md:gap-4 text-slate-400 font-bold uppercase text-xs">
+              <span className="flex items-center gap-1 justify-center"><span className="text-xl">🤖</span> Station: {assignment.station}</span>
+              <span className="flex items-center gap-1 justify-center"><span className="text-xl">📅</span> Due: Friday</span>
             </div>
 
             {/* TYPEWRITER DESCRIPTION */}
-            <div className="bg-slate-800/80 p-6 rounded-2xl border border-slate-600 text-left min-h-[120px] flex items-start">
-              <p className="text-lg leading-relaxed font-bold text-slate-300 font-mono">
+            <div className="bg-slate-800/80 p-4 md:p-6 rounded-2xl border border-slate-600 text-left min-h-[100px] md:min-h-[120px] flex items-start">
+              <p className="text-sm md:text-lg leading-relaxed font-bold text-slate-300 font-mono">
                 <span className="text-blue-400 mr-2">Commander:</span>
                 {displayedText}
                 {!isTypingComplete && <span className="animate-pulse text-blue-400">|</span>}
@@ -159,15 +162,15 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
             </div>
 
             {/* Rewards Section */}
-            <div className="pt-4">
+            <div className="pt-2 md:pt-4">
               <p className="text-xs font-black uppercase text-slate-500 mb-3 tracking-widest">Mission Badges Available</p>
-              <div className="flex justify-center gap-6">
+              <div className="flex justify-center gap-4 md:gap-6 flex-wrap">
                 {assignment.badges.map(b => (
                   <div key={b.id} className="flex flex-col items-center group/badge">
-                    <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-3xl border-2 border-slate-600 group-hover/badge:border-yellow-400 group-hover/badge:scale-110 transition-all shadow-lg">
+                    <div className="w-12 h-12 md:w-16 md:h-16 bg-slate-800 rounded-full flex items-center justify-center text-2xl md:text-3xl border-2 border-slate-600 group-hover/badge:border-yellow-400 group-hover/badge:scale-110 transition-all shadow-lg">
                       {b.icon}
                     </div>
-                    <span className="text-xs font-bold text-slate-500 mt-2 group-hover/badge:text-yellow-400">{b.name}</span>
+                    <span className="text-[10px] md:text-xs font-bold text-slate-500 mt-2 group-hover/badge:text-yellow-400">{b.name}</span>
                   </div>
                 ))}
               </div>
@@ -178,7 +181,7 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         <button
           onClick={() => { playSound('click'); setStage('CUSTOMIZE'); }}
           disabled={!isTypingComplete}
-          className={`w-full py-4 rounded-3xl font-black text-xl uppercase tracking-wider border-b-8 transition-all shadow-xl flex items-center justify-center gap-3 ${isTypingComplete
+          className={`w-full py-4 rounded-3xl font-black text-lg md:text-xl uppercase tracking-wider border-b-8 transition-all shadow-xl flex items-center justify-center gap-3 ${isTypingComplete
             ? 'bg-blue-600 text-white border-blue-800 active:border-b-0 active:translate-y-2 hover:bg-blue-500 cursor-pointer'
             : 'bg-slate-700 text-slate-500 border-slate-900 cursor-not-allowed opacity-70'
             }`}
@@ -203,7 +206,7 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
           <input
             value={project.title}
             onChange={e => updateProject({ title: e.target.value })}
-            className={`w-full text-3xl font-black p-4 rounded-3xl border-4 outline-none text-slate-800 text-center transition-all focus:scale-105 ${!project.title ? 'border-red-200 bg-red-50 focus:border-red-400 animate-pulse' : 'border-slate-200 focus:border-blue-400'
+            className={`w-full text-xl md:text-3xl font-black p-3 md:p-4 rounded-3xl border-4 outline-none text-slate-800 text-center transition-all focus:scale-105 ${!project.title ? 'border-red-200 bg-red-50 focus:border-red-400 animate-pulse' : 'border-slate-200 focus:border-blue-400'
               }`}
             placeholder="e.g. Mars Explorer X1"
             autoFocus
@@ -238,23 +241,40 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
                   type="file"
                   className="hidden"
                   accept="image/*"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (file) {
                       if (file.size > 5 * 1024 * 1024) {
                         alert('File too large (Max 5MB)');
                         return;
                       }
-                      const reader = new FileReader();
-                      reader.onload = (ev) => {
-                        const result = ev.target?.result as string;
+
+                      try {
+                        // 1. Show optimistic preview (optional, or just wait)
+                        // For now, let's just upload. Consider adding a Loading UI if needed.
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          // Optional: Show preview immediately while uploading?
+                          // Can't set project.coverImage to base64 or it defeats the purpose if save happens before upload finishes.
+                          // But we can trigger upload now.
+                        };
+                        // reader.readAsDataURL(file);
+
+                        // 2. Upload
+                        const path = `projects/${project.studentId || 'unknown'}/${Date.now()}_${file.name}`;
+                        const url = await api.uploadFile(file, path);
+
+                        // 3. Update Project
                         updateProject({
-                          thumbnailUrl: result,
-                          coverImage: result,
-                          mediaUrls: result ? [result] : []
+                          thumbnailUrl: url,
+                          coverImage: url,
+                          mediaUrls: [url]
                         });
-                      };
-                      reader.readAsDataURL(file);
+
+                      } catch (error) {
+                        console.error("Upload failed", error);
+                        alert("Failed to upload image. Please try again.");
+                      }
                     }
                   }}
                 />
@@ -277,11 +297,11 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         </div>
       </div>
 
-      <div className="bg-indigo-50 p-6 rounded-[2rem] border-4 border-dashed border-indigo-200 flex flex-col items-center justify-center min-h-[160px] animate-in zoom-in-95">
+      <div className="bg-indigo-50 p-4 md:p-6 rounded-[2rem] border-4 border-dashed border-indigo-200 flex flex-col items-center justify-center min-h-[140px] md:min-h-[160px] animate-in zoom-in-95">
         <div className="flex flex-col items-center gap-3">
-          <div className="bg-white p-3 rounded-full shadow-md text-3xl">🧰</div>
-          <h3 className="text-xl font-black text-indigo-900">Before you start...</h3>
-          <p className="text-sm font-bold text-slate-500 max-w-md">
+          <div className="bg-white p-3 rounded-full shadow-md text-2xl md:text-3xl">🧰</div>
+          <h3 className="text-lg md:text-xl font-black text-indigo-900">Before you start...</h3>
+          <p className="text-xs md:text-sm font-bold text-slate-500 max-w-md">
             Check the mission resources first! Watch the briefing videos and download any necessary files.
           </p>
           {assignment.resources && assignment.resources.length > 0 && (
@@ -296,17 +316,17 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         </div>
       </div>
 
-      <div className="flex gap-4">
+      <div className="flex gap-2 md:gap-4">
         <button
           onClick={() => setStage('BRIEFING')}
-          className="px-6 py-4 rounded-3xl bg-slate-200 text-slate-500 font-black text-xl border-b-8 border-slate-300 active:border-b-0 active:translate-y-2 hover:bg-slate-300 transition-colors"
+          className="px-4 py-3 md:px-6 md:py-4 rounded-3xl bg-slate-200 text-slate-500 font-black text-lg md:text-xl border-b-4 md:border-b-8 border-slate-300 active:border-b-0 active:translate-y-2 hover:bg-slate-300 transition-colors"
         >
           Back
         </button>
         <button
           onClick={() => { playSound('success'); closeModal(); }}
           disabled={!project.title}
-          className="flex-1 py-4 rounded-3xl bg-green-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-400 transition-colors shadow-lg shadow-green-500/20"
+          className="flex-1 py-3 md:py-4 rounded-3xl bg-green-500 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-400 transition-colors shadow-lg shadow-green-500/20"
         >
           {project.title ? 'Start Journey 🚀' : 'Name Project to Start 🔒'}
         </button>
@@ -581,57 +601,138 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
 const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
   const [newStep, setNewStep] = useState('');
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   const addStep = () => {
     if (!newStep.trim()) return;
     playSound('click');
     const step: ProjectStep = { id: Date.now().toString(), title: newStep, status: 'todo' };
-    updateProject({ steps: [...project.steps, step] });
+    updateProject({ steps: [...(project.steps || []), step] });
     setNewStep('');
   };
+
   const removeStep = (id: string) => {
+    if (!confirm('Are you sure you want to delete this step?')) return;
     playSound('click');
     updateProject({ steps: project.steps.filter(s => s.id !== id) });
   };
 
-  const isLocked = project.status === 'building' || project.status === 'submitted' || project.status === 'published';
+  const startEditing = (step: ProjectStep) => {
+    setEditingStepId(step.id);
+    setEditValue(step.title);
+  };
+
+  const saveEdit = () => {
+    if (!editingStepId || !editValue.trim()) return;
+    const updatedSteps = project.steps.map(s =>
+      s.id === editingStepId ? { ...s, title: editValue } : s
+    );
+    updateProject({ steps: updatedSteps });
+    setEditingStepId(null);
+    setEditValue('');
+    playSound('success');
+  };
+
+  const cancelEdit = () => {
+    setEditingStepId(null);
+    setEditValue('');
+  };
+
+  const handleReorder = (newOrder: ProjectStep[]) => {
+    // Only update if order actually changed to avoid infinite loops if strict mode
+    updateProject({ steps: newOrder });
+  };
+
+  const isBuilding = project.status === 'building' || project.status === 'submitted' || project.status === 'published';
 
   return (
     <div className="space-y-8">
-      {!isLocked && (
-        <div className="flex gap-2">
-          <input
-            value={newStep}
-            onChange={e => setNewStep(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addStep()}
-            className="flex-1 text-lg font-bold p-4 rounded-2xl border-2 border-slate-200 focus:border-blue-400 outline-none"
-            placeholder="Add a mission step..."
-          />
-          <button onClick={addStep} className="bg-blue-500 text-white p-4 rounded-2xl font-black text-xl border-b-4 border-blue-700 active:border-b-0 active:translate-y-1 hover:bg-blue-400 transition-colors">➕</button>
-        </div>
-      )}
+      {/* ALWAYS ACTIVE INPUT */}
+      <div className="flex gap-2">
+        <input
+          value={newStep}
+          onChange={e => setNewStep(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addStep()}
+          className="flex-1 text-base md:text-lg font-bold p-3 md:p-4 rounded-2xl border-2 border-slate-200 focus:border-blue-400 outline-none"
+          placeholder={isBuilding ? "Add another step..." : "Add a mission step..."}
+        />
+        <button onClick={addStep} className="bg-blue-500 text-white p-3 md:p-4 rounded-2xl font-black text-lg md:text-xl border-b-4 border-blue-700 active:border-b-0 active:translate-y-1 hover:bg-blue-400 transition-colors">➕</button>
+      </div>
 
       <div className="space-y-3">
         {project.steps.length === 0 && <div className="text-center text-slate-400 font-bold italic py-8">No steps yet.</div>}
-        {project.steps.map((step, idx) => (
-          <div key={step.id} className="bg-slate-50 p-4 rounded-2xl border-b-4 border-slate-200 flex items-center justify-between animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex items-center gap-4">
-              <span className="bg-slate-200 text-slate-500 font-black w-8 h-8 flex items-center justify-center rounded-full">{idx + 1}</span>
-              <div>
-                <span className="font-bold text-slate-700 text-lg block">{step.title}</span>
-                {step.resources && step.resources.length > 0 && (
-                  <span className="text-xs font-bold text-indigo-500 flex items-center gap-1">
-                    <span className="text-lg">🧰</span> {step.resources.length} Tools Available
+
+        <Reorder.Group axis="y" values={project.steps || []} onReorder={handleReorder} className="space-y-3">
+          {project.steps.map((step, idx) => (
+            <Reorder.Item key={step.id} value={step} className="focus:outline-none">
+              <div className={`bg-slate-50 p-4 rounded-2xl border-b-4 border-slate-200 flex items-center justify-between group ${editingStepId === step.id ? 'ring-2 ring-blue-400 border-blue-200 bg-white' : ''}`}>
+
+                <div className="flex items-center gap-3 md:gap-4 flex-1">
+                  {/* Drag Handle */}
+                  <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 p-1">
+                    <GripVertical size={20} />
+                  </div>
+
+                  <span className="bg-slate-200 text-slate-500 font-black w-6 h-6 md:w-8 md:h-8 text-sm md:text-base flex items-center justify-center rounded-full shrink-0">
+                    {idx + 1}
                   </span>
-                )}
+
+                  <div className="flex-1">
+                    {editingStepId === step.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          className="flex-1 font-bold text-slate-700 text-base md:text-lg bg-slate-100 px-2 py-1 rounded outline-none focus:bg-white border focus:border-blue-300"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveEdit();
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-bold text-slate-700 text-base md:text-lg block cursor-pointer hover:text-blue-600 transition-colors" onClick={() => startEditing(step)}>
+                          {step.title}
+                        </span>
+                        {step.resources && step.resources.length > 0 && (
+                          <span className="text-[10px] md:text-xs font-bold text-indigo-500 flex items-center gap-1">
+                            <span className="text-sm md:text-lg">🧰</span> {step.resources.length} Tools Available
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 ml-4">
+                  {editingStepId === step.id ? (
+                    <>
+                      <button onClick={saveEdit} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200"><Check size={16} /></button>
+                      <button onClick={cancelEdit} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"><XIcon size={16} /></button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => startEditing(step)} className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                        <Pencil size={16} />
+                      </button>
+                      <button onClick={() => removeStep(step.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
+
               </div>
-            </div>
-            {/* Delete button removed to lock workflow */}
-          </div>
-        ))}
+            </Reorder.Item>
+          ))}
+        </Reorder.Group>
       </div>
 
-      {!isLocked ? (
+      {!isBuilding ? (
         <button
           onClick={() => { playSound('success'); updateProject({ status: 'building' }); closeModal(); }}
           disabled={project.steps.length === 0}
@@ -640,9 +741,12 @@ const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProje
           Launch Mission (Start Building) 🚀
         </button>
       ) : (
-        <div className="text-center p-4 bg-green-100 rounded-2xl text-green-700 font-bold">
-          Mission in progress! Steps are locked.
-        </div>
+        <button
+          onClick={() => { playSound('success'); closeModal(); }}
+          className="w-full py-4 rounded-3xl bg-blue-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-blue-700 active:border-b-0 active:translate-y-2 hover:bg-blue-400 transition-colors"
+        >
+          Save & Return to Builder 💾
+        </button>
       )}
     </div>
   );
@@ -653,19 +757,25 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const realId = taskId.replace('step-', '');
   const step = project.steps.find(s => s.id === realId);
 
-  // STAGE MANAGEMENT: 'INSTRUCTION' | 'EVIDENCE'
-  const [submissionStage, setSubmissionStage] = useState<'INSTRUCTION' | 'EVIDENCE'>('INSTRUCTION');
+  // WIZARD STEPS: 1=Instructions, 2=Evidence, 3=Notes, 4=Review
+  const [wizardStep, setWizardStep] = useState(1);
+  const TOTAL_WIZARD_STEPS = 4;
 
   const [note, setNote] = useState('');
   const [link, setLink] = useState(''); // NEW: Evidence Link
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploading, setUploading] = useState(false); // Upload progress state
+  const [uploadProgress, setUploadProgress] = useState(0); // Progress percentage
   const [isEditing, setIsEditing] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
   const [showCommitInput, setShowCommitInput] = useState(false);
   const [isProMode, setIsProMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Toast notifications
+  const { showToast } = useToast();
 
   // Theme Hook
   const { activeTheme } = useTheme();
@@ -690,13 +800,58 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
   if (!step) return <div>Error: Step not found</div>;
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) {
+  // INITIALIZE PREVIEW FROM EXISTING EVIDENCE (only on mount or when step changes)
+  React.useEffect(() => {
+    if (step.evidence && !preview && !link) {
+      // Check if it's a URL or Base64
+      if (step.evidence.startsWith('http')) {
+        setLink(step.evidence);
+      } else if (step.evidence.startsWith('data:image')) {
+        setPreview(step.evidence);
+      }
+    }
+  }, [step.id, step.evidence]); // Only run when step changes
+
+  // WIZARD NAVIGATION
+  const canGoNext = () => {
+    switch (wizardStep) {
+      case 1: return true; // Instructions - always can proceed
+      case 2: return !!(preview || link); // Evidence - must have file or link
+      case 3: return true; // Notes - optional, always can proceed
+      default: return false;
+    }
+  };
+
+  const handleWizardNext = () => {
+    if (canGoNext()) {
+      setWizardStep(prev => Math.min(TOTAL_WIZARD_STEPS, prev + 1));
       playSound('click');
-      setFile(e.target.files[0]);
+    }
+  };
+
+  const handleWizardBack = () => {
+    setWizardStep(prev => Math.max(1, prev - 1));
+    playSound('click');
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      const selectedFile = e.target.files[0];
+
+      // Validation: Max 5MB
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        alert("File too large. Maximum size is 5MB.");
+        e.target.value = ''; // Reset input
+        return;
+      }
+
+      playSound('click');
+      setFile(selectedFile);
+
+      // Show local preview immediately
       const reader = new FileReader();
       reader.onloadend = () => setPreview(reader.result as string);
-      reader.readAsDataURL(e.target.files[0]);
+      reader.readAsDataURL(selectedFile);
     }
   };
 
@@ -707,10 +862,44 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
       // Prepare Evidence Data
       let evidenceUrl = link;
-      if (preview && !link) {
-        // In a real app, upload file to storage here.
-        // For this verified environment, we generally use the base64 preview or a placeholder.
-        // Assuming base64 is acceptable for small images or we mock the upload.
+
+      // Convert file to Base64 with progress (matching gallery/profile pattern)
+      if (file) {
+        try {
+          setUploading(true);
+          setUploadProgress(0);
+          console.log("🚀 [Evidence] Converting to Base64...");
+          console.log("📄 [Evidence] File:", file.name, "Size:", file.size);
+
+          const toBase64 = (file: File): Promise<string> => {
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.readAsDataURL(file);
+              reader.onprogress = (event) => {
+                if (event.lengthComputable) {
+                  setUploadProgress(Math.round((event.loaded / event.total) * 100));
+                }
+              };
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = error => reject(error);
+            });
+          };
+
+          evidenceUrl = await toBase64(file);
+          setUploadProgress(100);
+          console.log("✅ [Evidence] Base64 conversion complete!");
+          setUploading(false);
+
+        } catch (e) {
+          console.error("❌ [Evidence] Base64 conversion failed:", e);
+          setUploading(false);
+          setUploadProgress(0);
+          showToast(`Failed to process image: ${(e as any).message || "Unknown error"}`, 'error');
+          setSubmitting(false);
+          return;
+        }
+      } else if (preview && !link) {
+        // Fallback or legacy base64
         evidenceUrl = preview;
       }
 
@@ -794,11 +983,11 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
   if (step.status === 'done') {
     return (
-      <div className="text-center py-8">
-        <div className="text-6xl mb-4 animate-bounce">🏆</div>
-        <h3 className="text-2xl font-black text-slate-800">Step Completed!</h3>
-        <p className="text-green-600 font-bold">Commander Approved</p>
-        {step.evidence && <img src={step.evidence} className="mt-6 rounded-2xl shadow-lg mx-auto max-h-60 border-4 border-white transform -rotate-1" alt="Evidence" />}
+      <div className="text-center py-4 md:py-8">
+        <div className="text-4xl md:text-6xl mb-2 md:mb-4 animate-bounce">🏆</div>
+        <h3 className="text-xl md:text-2xl font-black text-slate-800">Step Completed!</h3>
+        <p className="text-green-600 font-bold text-sm md:text-base">Commander Approved</p>
+        {step.evidence && <img src={step.evidence} className="mt-4 md:mt-6 rounded-2xl shadow-lg mx-auto max-h-40 md:max-h-60 border-4 border-white transform -rotate-1" alt="Evidence" />}
       </div>
     );
   }
@@ -849,6 +1038,33 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             <h3 className="text-lg font-black text-amber-600 uppercase tracking-wide">Under Review</h3>
             <p className="text-amber-800/70 font-bold text-sm">Mission Control is analyzing your data...</p>
           </div>
+
+          {/* SUBMITTED EVIDENCE PREVIEW */}
+          {step.evidence && (
+            <div className="w-full bg-white p-4 rounded-2xl border-2 border-amber-200 space-y-3">
+              <p className="text-xs font-black uppercase text-amber-600 text-left">Your Submitted Evidence</p>
+              <div className="relative">
+                <img
+                  src={step.evidence}
+                  alt="Submitted Evidence"
+                  className="w-full max-h-48 object-cover rounded-xl shadow-md"
+                />
+                <button
+                  onClick={() => {
+                    setIsEditing(true);
+                    playSound('click');
+                    // Delay click to ensure file input is rendered
+                    setTimeout(() => fileInputRef.current?.click(), 100);
+                  }}
+                  className="absolute top-2 right-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg text-sm font-black flex items-center gap-2 border-2 border-white"
+                >
+                  <Pencil className="w-4 h-4" />
+                  <span>Replace</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="w-full bg-white/50 p-4 rounded-xl border border-amber-200/50 text-left">
             <p className="text-xs font-black uppercase text-amber-400 mb-1">Your Note</p>
             <p className="text-slate-600 text-sm italic">"{step.note || 'No notes'}"</p>
@@ -856,8 +1072,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         </div>
       )}
 
-      {/* STAGE 1: INSTRUCTION & RESOURCES */}
-      {(submissionStage === 'INSTRUCTION' && step.status !== 'PENDING_REVIEW') && (
+
+      {/* WIZARD STEP 1: INSTRUCTIONS & RESOURCES */}
+      {(wizardStep === 1 && step.status !== 'PENDING_REVIEW') && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 text-center">
             <p className="text-slate-500 font-bold text-lg mb-4">
@@ -865,9 +1082,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             </p>
 
             {/* Resources */}
-            <div className="flex flex-wrap justify-center gap-4 mb-6">
+            <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4 md:mb-6">
               {(!step.resources || step.resources.length === 0) && (
-                <div className="text-sm text-slate-400 italic">No specific tools required for this step.</div>
+                <div className="text-xs md:text-sm text-slate-400 italic">No specific tools required for this step.</div>
               )}
               {step.resources && step.resources.map((res, idx) => (
                 <button
@@ -889,19 +1106,19 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                       }
                     }
                   }}
-                  className="flex items-center gap-3 px-6 py-4 bg-white border-b-4 border-slate-200 rounded-2xl font-black text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:-translate-y-1 transition-all shadow-sm text-lg"
+                  className="flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4 bg-white border-b-4 border-slate-200 rounded-2xl font-black text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:-translate-y-1 transition-all shadow-sm text-sm md:text-lg"
                 >
                   <span>{res.title}</span>
-                  <span className="text-xs opacity-50 bg-slate-100 px-2 py-1 rounded-md">↗</span>
+                  <span className="text-[10px] md:text-xs opacity-50 bg-slate-100 px-2 py-1 rounded-md">↗</span>
                 </button>
               ))}
             </div>
 
-            <div className="h-px bg-slate-200 w-full my-6"></div>
+            <div className="h-px bg-slate-200 w-full my-4 md:my-6"></div>
 
             <button
-              onClick={() => { playSound('click'); setSubmissionStage('EVIDENCE'); }}
-              className="w-full py-5 rounded-3xl bg-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-3"
+              onClick={() => { playSound('click'); handleWizardNext(); }}
+              className="w-full py-4 md:py-5 rounded-3xl bg-indigo-600 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-3"
             >
               <span>✅ I Have Finished This Step</span>
             </button>
@@ -909,11 +1126,11 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         </div>
       )}
 
-      {/* STAGE 2: EVIDENCE UPLOAD */}
-      {(submissionStage === 'EVIDENCE' || (step.status === 'PENDING_REVIEW' && isEditing)) && (
+      {/* WIZARD STEP 2: EVIDENCE UPLOAD - Show when on step 2 OR editing submitted evidence */}
+      {((wizardStep === 2 && step.status !== 'PENDING_REVIEW') || (step.status === 'PENDING_REVIEW' && isEditing)) && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <button
-            onClick={() => setSubmissionStage('INSTRUCTION')}
+            onClick={() => handleWizardBack()}
             className="text-slate-400 font-bold hover:text-slate-600 flex items-center gap-2 mb-2"
           >
             <span>← Back to Instructions</span>
@@ -923,18 +1140,36 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Evidence</label>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
+              className="border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
             >
               {preview ? (
-                <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
+                <div className="relative z-10">
+                  <img src={preview} alt="Preview" className="h-32 md:h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform" />
+                </div>
               ) : (
                 <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
-                  <span className="text-lg font-bold text-slate-400">Upload Photo / Screenshot</span>
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm text-2xl md:text-4xl">📷</div>
+                  <span className="text-base md:text-lg font-bold text-slate-400 text-center">Upload Photo / Screenshot</span>
                 </div>
               )}
               <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
             </div>
+
+            {/* UPLOAD PROGRESS BAR */}
+            {uploading && (
+              <div className="mt-4 space-y-2 animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex justify-between text-sm font-bold">
+                  <span className="text-blue-600">Processing image...</span>
+                  <span className="text-blue-600">{uploadProgress}%</span>
+                </div>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300 ease-out"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* NEW: Evidence Link Input */}
             <div className="mt-4">
@@ -1068,6 +1303,7 @@ const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject
 const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
   const [link, setLink] = useState(project.presentationUrl || '');
   const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [preview, setPreview] = useState<string | null>(project.mediaUrls?.[0] || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1087,18 +1323,47 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
 
   const handleSubmit = async () => {
     playSound('success');
+    setSubmitting(true);
 
-    // Simplistic save: update project status and media/link
-    updateProject({
-      status: 'submitted',
-      presentationUrl: link,
-      // FIX: Also save to thumbnail/cover for Dashboard visibility
-      thumbnailUrl: preview || project.thumbnailUrl,
-      coverImage: preview || project.coverImage,
-      mediaUrls: preview ? [preview] : project.mediaUrls
-    });
+    try {
+      let finalUrl = preview; // Default to existing preview if no new file
 
-    closeModal();
+      if (file) {
+        // Convert to Base64 (Bypassing Storage Permission Issues)
+        const toBase64 = (file: File): Promise<string> => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+          });
+        };
+
+        finalUrl = await toBase64(file);
+        console.log("✅ [Showcase] Converted to Base64");
+      }
+
+      // update project status and media/link
+      const result = await updateProject({
+        status: 'PENDING_REVIEW', // Changed from 'submitted' to indicate approval needed
+        presentationUrl: link,
+        thumbnailUrl: finalUrl || project.thumbnailUrl,
+        coverImage: finalUrl || project.coverImage,
+        mediaUrls: finalUrl ? [finalUrl] : project.mediaUrls
+      });
+
+      if (!result?.success) {
+        throw new Error(result?.error || "Save failed");
+      }
+
+      console.log('✅ [Showcase] Upload complete & Project synced.');
+      closeModal();
+    } catch (e: any) {
+      console.error("Showcase upload failed", e);
+      alert(`Failed to upload showcase: ${e.message || "Unknown error"}. Please check your connection and try again.`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -1108,18 +1373,18 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
         <p className="text-slate-500 font-bold">Upload a photo or paste a link to your completed project.</p>
       </div>
 
-      <div className="flex flex-col gap-6 max-w-xl mx-auto">
+      <div className="flex flex-col gap-4 md:gap-6 max-w-xl mx-auto">
         {/* File Upload */}
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="border-4 border-dashed border-slate-300 rounded-3xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors bg-slate-50 min-h-[200px] group relative overflow-hidden"
+          className="border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
         >
           {preview ? (
-            <img src={preview} alt="Preview" className="h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
+            <img src={preview} alt="Preview" className="h-32 md:h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
           ) : (
             <div className="relative z-10 flex flex-col items-center">
-              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform shadow-sm">📷</div>
-              <span className="text-lg font-bold text-slate-400">Upload Photo</span>
+              <div className="w-12 h-12 md:w-16 md:h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform shadow-sm text-2xl md:text-3xl">📷</div>
+              <span className="text-base md:text-lg font-bold text-slate-400">Upload Photo</span>
             </div>
           )}
           <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
@@ -1132,16 +1397,16 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
             value={link}
             onChange={(e) => setLink(e.target.value)}
             placeholder="https://youtube.com/..."
-            className="w-full p-4 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 focus:border-indigo-400 outline-none"
+            className="w-full p-3 md:p-4 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 focus:border-indigo-400 outline-none text-sm md:text-base"
           />
         </div>
 
         <button
           onClick={handleSubmit}
           disabled={!preview && !link}
-          className="w-full py-5 rounded-3xl bg-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30"
+          className="w-full py-4 md:py-5 rounded-3xl bg-indigo-600 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30"
         >
-          🚀 Publish to Gallery
+          {submitting ? 'Uploading...' : '🚀 Publish to Gallery'}
         </button>
       </div>
     </div>
@@ -1174,6 +1439,26 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const [projectIcon, setProjectIcon] = useState('⚡');
   const [showGlobalResources, setShowGlobalResources] = useState(false);
   const [viewingResource, setViewingResource] = useState<any>(null);
+
+  // Responsive Item Width
+  const [itemWidth, setItemWidth] = useState(300);
+
+  // Drag Scroll State
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setItemWidth(window.innerWidth < 768 ? 200 : 300);
+    };
+
+    // Initial check
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Load Factory Data for Auto-Workflow
   const { processTemplates } = useFactoryData();
@@ -1244,6 +1529,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     } else {
       console.log('✅ [StudentWizard] Save successful');
     }
+    return result;
   };
 
   // SELF-HEALING: Ensure studentName is set on the project if missing
@@ -1482,11 +1768,11 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   // Auto-scroll
   useEffect(() => {
     if (scrollContainerRef.current && activeNodeIndex !== -1) {
-      const itemWidth = 300;
-      const scrollPos = (activeNodeIndex * itemWidth) + 150 - (window.innerWidth / 2) + (itemWidth / 2);
+      // Use state itemWidth
+      const scrollPos = (activeNodeIndex * itemWidth) + (itemWidth / 2) - (window.innerWidth / 2) + (itemWidth / 2); // Center alignment fix
       scrollContainerRef.current.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
     }
-  }, [activeNodeIndex, project.steps.length, project.status]);
+  }, [activeNodeIndex, project.steps.length, project.status, itemWidth]);
 
 
   // --- Logic to Generate Two Paths (Base + Progress) ---
@@ -1494,7 +1780,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     const nodeCount = nodes.length;
     if (nodeCount < 2) return { basePath: '', progressPath: '' };
 
-    const itemWidth = 300;
+    // Use state itemWidth
     const startY = 200; // Adjusted for padding
 
     let d = `M 150 ${startY}`;
@@ -1546,7 +1832,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     }
 
     return { basePath: d, progressPath: progressLimit > 0 ? pD : '' };
-  }, [nodes, activeNodeIndex, project.status]);
+  }, [nodes, activeNodeIndex, project.status, itemWidth]);
 
   const { basePath, progressPath } = generatePaths();
 
@@ -1591,8 +1877,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   return (
     <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
 
-      {/* Connection Status Indicator - HIDDEN as per user request */}
-      {/* <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} /> */}
+      {/* Connection Status Indicator */}
+      <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} />
 
       {/* --- COSMIC BACKGROUND --- */}
       {/* Grid */}
@@ -1610,33 +1896,34 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       </div>
 
       {/* Header */}
-      <div className="relative z-20 px-8 py-6 bg-slate-900/80 backdrop-blur-md border-b border-slate-700 flex justify-between items-center shadow-lg">
-        <div className="flex items-center gap-6">
-          {/* Student Avatar & XP (Mock for now, replacing previous simple header) */}
-          <div className="flex items-center gap-3 pr-6 border-r border-slate-700">
+      {/* Header - Compact for Laptop */}
+      <div className="relative z-20 px-3 py-2 md:px-6 md:py-3 bg-slate-900/90 backdrop-blur-md border-b border-slate-700 flex justify-between items-center shadow-lg shrink-0">
+        <div className="flex items-center gap-3 md:gap-6 overflow-hidden">
+          {/* Student Avatar & XP */}
+          <div className="flex items-center gap-2 pr-4 border-r border-slate-700 shrink-0">
             <div className="relative">
-              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${project.studentId || 'You'}`} className="w-12 h-12 rounded-full border-2 border-slate-500 bg-slate-800" />
-              <div className="absolute -bottom-1 -right-1 bg-amber-500 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-amber-400">
-                LVL 3
+              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${project.studentId || 'You'}`} className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-slate-500 bg-slate-800" />
+              <div className="absolute -bottom-1 -right-1 bg-amber-500 text-amber-900 text-[9px] font-black px-1 py-0.5 rounded-md border border-amber-400">
+                L3
               </div>
             </div>
-            <div>
-              <h4 className="text-white font-bold text-sm leading-tight">Cadet Builder</h4>
-              <div className="w-20 h-1.5 bg-slate-700 rounded-full mt-1 overflow-hidden">
+            <div className="hidden lg:block">
+              <h4 className="text-white font-bold text-xs leading-tight">Cadet</h4>
+              <div className="w-16 h-1 bg-slate-700 rounded-full mt-1 overflow-hidden">
                 <div className="h-full bg-blue-500 w-[60%] animate-pulse"></div>
               </div>
-              <p className="text-[10px] text-blue-400 font-bold mt-0.5">850 / 1000 XP</p>
             </div>
           </div>
 
-          <div>
-            <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight flex items-center gap-4 filter drop-shadow-lg">
-              <span className="text-5xl animate-bounce">{projectIcon}</span> {project.title || assignment.title}
+          <div className="min-w-0 overflow-hidden">
+            <h1 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight flex items-center gap-2 md:gap-3 filter drop-shadow-lg truncate">
+              <span className="text-2xl md:text-3xl animate-bounce shrink-0">{projectIcon}</span>
+              <span className="truncate">{project.title || assignment.title}</span>
             </h1>
-            <p className="text-slate-400 font-bold text-sm uppercase tracking-wider pl-16 flex items-center gap-2">
-              <span className="text-blue-400">{assignment.station}</span>
-              <span className="text-slate-600">•</span>
-              <span>SparkQuest Mission</span>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider pl-10 md:pl-12 flex items-center gap-2 truncate">
+              <span className="text-blue-400 shrink-0">{assignment.station}</span>
+              <span className="text-slate-600 hidden md:inline">•</span>
+              <span className="hidden md:inline shrink-0">Mission</span>
             </p>
           </div>
         </div>
@@ -1748,11 +2035,40 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       </div>
 
       {/* Roadmap Container */}
+      {/* Roadmap Container */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-x-auto overflow-y-hidden relative no-scrollbar flex items-center"
+        className={`flex-1 overflow-x-auto overflow-y-hidden relative no-scrollbar flex items-center ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onWheel={(e) => {
+          if (scrollContainerRef.current) {
+            if (e.deltaY !== 0) {
+              scrollContainerRef.current.scrollLeft += e.deltaY;
+            }
+          }
+        }}
+        onMouseDown={(e) => {
+          setIsDragging(true);
+          setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
+          setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
+        }}
+        onMouseLeave={() => {
+          setIsDragging(false);
+        }}
+        onMouseUp={() => {
+          setIsDragging(false);
+        }}
+        onMouseMove={(e) => {
+          if (!isDragging) return;
+          e.preventDefault();
+          const x = e.pageX - (scrollContainerRef.current?.offsetLeft || 0);
+          const walk = (x - startX) * 2; // Scroll-fast
+          if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+          }
+        }}
       >
-        <div className="relative h-[500px] flex items-center px-[calc(50vw-150px)] min-w-max">
+        {/* Dynamic height container for better scaling on small screens */}
+        <div className="relative h-[50vh] min-h-[350px] flex items-center px-[calc(50vw-75px)] md:px-[calc(50vw-150px)] min-w-max">
 
           {/* SVG Path Layer */}
           <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-visible">
@@ -1771,7 +2087,14 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           </svg>
 
           {/* Nodes */}
-          <div className="flex gap-[108px] z-10 pl-[50px]">
+          <div className="flex z-10 pl-[50px]" style={{ gap: `${itemWidth - 140}px` }}> {/* 300 width - ~120 node width? dynamic gap calculation */}
+            {/* Note: In original it was fixed gap-[108px] for 300px item width.
+                 Node centers were 300px apart.
+                 Node width approx 192px (w-48).
+                 Gap was 108px.
+                 If ItemWidth 200: Node w-32 (128px). Gap should be 72px.
+                 Let's just use style gap.
+             */}
             {nodes.map((node, i) => (
               <div key={node.id} className={`transform transition-all duration-500 ${i % 2 === 0 ? '-translate-y-0' : 'translate-y-10'} relative group`}>
                 {/* Peer Avatars on Node - ALWAYS VISIBLE & LARGER */}

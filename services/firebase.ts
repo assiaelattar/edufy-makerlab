@@ -48,12 +48,20 @@ try {
   auth = getAuth(app);
   console.log('✅ Auth initialized:', auth ? 'Connected' : 'Failed');
 
-  storage = getStorage(app);
-  console.log('✅ Storage initialized');
+  try {
+    storage = getStorage(app);
+    console.log('✅ Storage initialized');
+  } catch (e) {
+    console.warn('⚠️ Firebase Storage could not be initialized:', e);
+  }
 
   if (typeof window !== 'undefined') {
-    messaging = getMessaging(app);
-    console.log('✅ Messaging initialized');
+    try {
+      messaging = getMessaging(app);
+      console.log('✅ Messaging initialized');
+    } catch (e) {
+      console.warn('⚠️ Firebase Messaging could not be initialized:', e);
+    }
   }
 
 } catch (error) {

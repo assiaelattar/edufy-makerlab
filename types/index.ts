@@ -141,6 +141,7 @@ export interface Student {
   badges?: string[]; // Array of Badge IDs
   avatarUrl?: string; // Creative Avatar URL
   lastScheduleSharedAt?: Timestamp; // Track when schedule was shared
+  pinCode?: string; // Kiosk Mode PIN
 }
 
 
@@ -160,7 +161,7 @@ export interface Enrollment {
   secondGroupId?: string;
   secondGroupName?: string;
   secondGroupTime?: string;
-  paymentPlan: 'annual' | 'trimester' | 'full';
+  paymentPlan: 'annual' | 'semestre' | 'trimester' | 'monthly' | 'full';
   totalAmount: number;
   paidAmount: number;
   balance: number;
@@ -634,7 +635,7 @@ export interface AppNotification {
 export type RoleType = 'admin' | 'admission_officer' | 'accountant' | 'instructor' | 'content_manager' | 'parent' | 'student' | 'guest';
 
 export interface UserProfile {
-  uid?: string; // Firebase Auth UID (optional if invitation only)
+  uid?: string; // Firebase Auth UID
   organizationId: string; // SaaS Tenant ID
   email: string;
   name: string;
@@ -643,6 +644,7 @@ export interface UserProfile {
   createdAt: Timestamp;
   lastLogin?: Timestamp;
   avatarUrl?: string;
+  workHours?: { start: string; end: string }; // Optional override
 }
 
 export interface RoleDefinition {
@@ -668,12 +670,12 @@ export interface ApiConfig {
 export interface AppSettings {
   academyName: string;
   academicYear: string;
-  logoUrl: string;
+  logoUrl?: string;
   language: 'en' | 'fr';
-  receiptContact: string;
-  receiptFooter: string;
+  receiptContact?: string;
+  receiptFooter?: string;
   googleReviewUrl?: string;
-  apiConfig?: ApiConfig;
+  defaultWorkHours?: { start: string; end: string }; // Global default
   studentFormConfig: {
     parentName: FormFieldConfig;
     email: FormFieldConfig;
@@ -682,10 +684,40 @@ export interface AppSettings {
     birthDate: FormFieldConfig;
     medicalInfo: FormFieldConfig;
   };
+  documentConfig?: {
+    headerName?: string; // Formal name for documents
+    logoUrl?: string; // Formal logo for documents
+    address?: string;
+    taxId?: string; // ICE
+    regId?: string; // RC
+    patente?: string;
+    cnss?: string;
+    website?: string;
+    email?: string;
+    phone?: string;
+  };
+  apiConfig?: ApiConfig;
 }
 
+export interface StaffAttendanceRecord {
+  id: string;
+  organizationId: string;
+  date: string; // YYYY-MM-DD
+  staffId: string; // User UID
+  staffName: string;
+  status: 'present' | 'absent' | 'late' | 'leave' | 'excused';
+  arrivalTime?: string; // HH:mm
+  departureTime?: string; // HH:mm
+  totalMinutes?: number;
+  overtimeMinutes?: number;
+  notes?: string;
+  markedBy?: string;
+  createdAt: Timestamp;
+}
+
+
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms' | 'staff-attendance';
 
 export interface ViewParams {
   programId?: string; // NEW

@@ -9,9 +9,10 @@ interface StudentPortfolioProps {
     isOpen: boolean;
     onClose: () => void;
     onSelectProject?: (projectId: string) => void;
+    onStartShowcase?: () => void;
 }
 
-export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject }) => {
+export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject, onStartShowcase }) => {
     const { user, userProfile } = useAuth();
     // Force Rebuild: Navigation Fix Applied
     const [projects, setProjects] = useState<StudentProject[]>([]);
@@ -35,7 +36,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                 collection(db, 'student_projects'),
                 where('studentId', '==', user.uid),
                 where('organizationId', '==', userProfile.organizationId || 'makerlab-academy'), // Ensure Org Scoping
-                where('status', 'in', ['submitted', 'published'])
+                where('status', 'in', ['submitted', 'published', 'PENDING_REVIEW', 'APPROVED', 'DONE', 'COMPLETED'])
             );
             const projectsSnap = await getDocs(projectsQuery);
             const projectsData = projectsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProject));
@@ -141,95 +142,131 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
 
                             {/* Projects Grid */}
                             <div>
-                                <h3 className="text-lg font-black text-white mb-4">Completed Projects</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {projects.map(project => (
-                                        <div
-                                            key={project.id}
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-lg font-black text-white">Completed Projects & Showcase</h3>
+                                    {onStartShowcase && (
+                                        <button
                                             onClick={() => {
-                                                console.log('🖱️ [Portfolio] Project Clicked:', project.id);
-                                                console.log('🖱️ [Portfolio] onSelectProject exists?', !!onSelectProject);
-                                                if (onSelectProject) {
-                                                    console.log('🖱️ [Portfolio] Invoking onSelectProject...');
-                                                    onSelectProject(project.id);
-                                                    onClose();
-                                                } else {
-                                                    console.warn('⚠️ [Portfolio] onSelectProject prop IS MISSING');
-                                                }
+                                                onStartShowcase();
+                                                onClose();
                                             }}
-                                            className="group bg-slate-800/50 rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all overflow-hidden hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)] cursor-pointer"
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg shadow-indigo-500/20"
                                         >
-                                            {/* Project Thumbnail */}
-                                            <div className="aspect-video bg-gradient-to-br from-emerald-900/20 to-slate-900 flex items-center justify-center border-b border-slate-700 relative group">
-                                                {(project.thumbnailUrl || project.coverImage) ? (
-                                                    <img src={project.thumbnailUrl || project.coverImage} alt={project.title} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div className="text-6xl">{project.station === 'robotics' ? '🤖' : project.station === 'coding' ? '💻' : '🎨'}</div>
-                                                )}
+                                            <Award size={16} />
+                                            Upload External Work
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {projects.map(project => {
+                                        // Helper for Status Badge
+                                        const getStatusConfig = (status: string) => {
+                                            switch (status) {
+                                                case 'APPROVED':
+                                                case 'published':
+                                                    return { label: 'Approved', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+                                                case 'PENDING_REVIEW':
+                                                    return { label: 'Waiting Approval', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' };
+                                                case 'submitted':
+                                                    return { label: 'Submitted', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+                                                case 'DONE':
+                                                case 'COMPLETED':
+                                                    return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+                                                default:
+                                                    return { label: status, color: 'bg-slate-700/50 text-slate-400 border-slate-600' };
+                                            }
+                                        };
+                                        const statusConfig = getStatusConfig(project.status);
 
-                                                {/* Overlay Link */}
-                                                {project.presentationUrl && (
-                                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
-                                                        <a
-                                                            href={project.presentationUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-lg"
-                                                            onClick={e => e.stopPropagation()}
-                                                        >
-                                                            <ExternalLink size={16} />
-                                                            View Project
-                                                        </a>
+                                        return (
+                                            <div
+                                                key={project.id}
+                                                onClick={() => {
+                                                    console.log('🖱️ [Portfolio] Project Clicked:', project.id);
+                                                    console.log('🖱️ [Portfolio] onSelectProject exists?', !!onSelectProject);
+                                                    if (onSelectProject) {
+                                                        console.log('🖱️ [Portfolio] Invoking onSelectProject...');
+                                                        onSelectProject(project.id);
+                                                        onClose();
+                                                    } else {
+                                                        console.warn('⚠️ [Portfolio] onSelectProject prop IS MISSING');
+                                                    }
+                                                }}
+                                                className="group bg-slate-800/50 rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all overflow-hidden hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)] cursor-pointer"
+                                            >
+                                                {/* Project Thumbnail */}
+                                                <div className="aspect-video bg-gradient-to-br from-emerald-900/20 to-slate-900 flex items-center justify-center border-b border-slate-700 relative group">
+                                                    {(project.thumbnailUrl || project.coverImage) ? (
+                                                        <img src={project.thumbnailUrl || project.coverImage} alt={project.title} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="text-6xl">{project.station === 'robotics' ? '🤖' : project.station === 'coding' ? '💻' : '🎨'}</div>
+                                                    )}
+
+                                                    {/* Overlay Link */}
+                                                    {project.presentationUrl && (
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                                                            <a
+                                                                href={project.presentationUrl}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-lg"
+                                                                onClick={e => e.stopPropagation()}
+                                                            >
+                                                                <ExternalLink size={16} />
+                                                                View Project
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* Project Info */}
+                                                <div className="p-4">
+                                                    <h3 className="font-bold text-white mb-2 line-clamp-1">{project.title}</h3>
+                                                    <p className="text-xs text-slate-400 line-clamp-3 mb-3 whitespace-pre-wrap">{project.description}</p>
+
+                                                    {/* Stats */}
+                                                    <div className="flex items-center justify-between text-xs mb-3">
+                                                        <span className="text-slate-500">
+                                                            {project.steps?.filter(s => s.status === 'done').length || 0}/{project.steps?.length || 0} steps
+                                                        </span>
+                                                        <span className="text-emerald-400 font-bold">
+                                                            {project.commits?.length || 0} commits
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </div>
 
-                                            {/* Project Info */}
-                                            <div className="p-4">
-                                                <h3 className="font-bold text-white mb-2 line-clamp-1">{project.title}</h3>
-                                                <p className="text-xs text-slate-400 line-clamp-3 mb-3 whitespace-pre-wrap">{project.description}</p>
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span className={`px-3 py-1 text-xs font-bold rounded-full border ${statusConfig.color}`}>
+                                                            {statusConfig.label}
+                                                        </span>
 
-                                                {/* Stats */}
-                                                <div className="flex items-center justify-between text-xs mb-3">
-                                                    <span className="text-slate-500">
-                                                        {project.steps?.filter(s => s.status === 'done').length || 0}/{project.steps?.length || 0} steps
-                                                    </span>
-                                                    <span className="text-emerald-400 font-bold">
-                                                        {project.commits?.length || 0} commits
-                                                    </span>
-                                                </div>
+                                                        {/* Explicit View Button */}
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                // DEBUG: Alert to confirm click and ID
+                                                                // window.alert(`Navigating to: ${project.id}`);
 
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded-full border border-emerald-500/20">
-                                                        {project.status}
-                                                    </span>
-
-                                                    {/* Explicit View Button */}
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            // DEBUG: Alert to confirm click and ID
-                                                            // window.alert(`Navigating to: ${project.id}`);
-
-                                                            if (onSelectProject) {
-                                                                onSelectProject(project.id);
-                                                                onClose();
-                                                            }
-                                                        }}
-                                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shadow-lg flex items-center gap-1"
-                                                    >
-                                                        View Details
-                                                    </button>
+                                                                if (onSelectProject) {
+                                                                    onSelectProject(project.id);
+                                                                    onClose();
+                                                                }
+                                                            }}
+                                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shadow-lg flex items-center gap-1"
+                                                        >
+                                                            View Details
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };

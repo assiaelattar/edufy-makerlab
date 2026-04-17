@@ -129,13 +129,13 @@ export const ToolkitView = () => {
 
     const filteredTools = toolLinks.filter(t => {
         const matchesCategory = categoryFilter === 'All' || t.category === categoryFilter;
-        const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) || (t.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = (t.title || '').toLowerCase().includes(searchQuery.toLowerCase()) || (t.description || '').toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
 
     const filteredAssets = assets.filter(a => {
         const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter;
-        const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) || (a.serialNumber || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = (a.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (a.serialNumber || '').toLowerCase().includes(searchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
 
@@ -200,20 +200,20 @@ export const ToolkitView = () => {
 
                             <div className="flex items-start gap-4 mb-4">
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${tool.category === 'robotics' ? 'bg-cyan-50 text-cyan-600 border-2 border-cyan-100' :
-                                        tool.category === 'coding' ? 'bg-pink-50 text-pink-600 border-2 border-pink-100' :
-                                            tool.category === 'design' ? 'bg-orange-50 text-orange-600 border-2 border-orange-100' :
-                                                tool.category === 'engineering' ? 'bg-yellow-50 text-yellow-600 border-2 border-yellow-100' :
-                                                    'bg-slate-50 text-slate-500 border-2 border-slate-100'
+                                    tool.category === 'coding' ? 'bg-pink-50 text-pink-600 border-2 border-pink-100' :
+                                        tool.category === 'design' ? 'bg-orange-50 text-orange-600 border-2 border-orange-100' :
+                                            tool.category === 'engineering' ? 'bg-yellow-50 text-yellow-600 border-2 border-yellow-100' :
+                                                'bg-slate-50 text-slate-500 border-2 border-slate-100'
                                     }`}>
                                     <span className="text-lg font-black">{tool.title.charAt(0).toUpperCase()}</span>
                                 </div>
                                 <div>
                                     <h3 className="font-bold text-[#2D2B6B] text-base line-clamp-1">{tool.title}</h3>
                                     <span className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded-full border ${tool.category === 'robotics' ? 'bg-cyan-50 text-cyan-600 border-cyan-200' :
-                                            tool.category === 'coding' ? 'bg-pink-50 text-pink-600 border-pink-200' :
-                                                tool.category === 'design' ? 'bg-orange-50 text-orange-600 border-orange-200' :
-                                                    tool.category === 'engineering' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
-                                                        'bg-slate-50 text-slate-400 border-slate-100'
+                                        tool.category === 'coding' ? 'bg-pink-50 text-pink-600 border-pink-200' :
+                                            tool.category === 'design' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                                                tool.category === 'engineering' ? 'bg-yellow-50 text-yellow-600 border-yellow-200' :
+                                                    'bg-slate-50 text-slate-400 border-slate-100'
                                         }`}>{tool.category}</span>
                                 </div>
                             </div>

@@ -77,8 +77,9 @@
     img-src 'self' data: https: blob:;
     media-src 'self' data: https: blob:;
     frame-src 'self' https://www.youtube.com https://youtube.com;
-    connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com wss://*.firebaseio.com;
+    connect-src 'self' https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://www.googleapis.com https://firebasestorage.googleapis.com wss://*.firebaseio.com blob:;
   ">
+  <script>console.log("✅ CSP PATCH LOADED v2 - If you see this, the new policy is active.");</script>
 </head>
 
 <body

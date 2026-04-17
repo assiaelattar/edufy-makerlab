@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Plus, Trash2, Mail, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, X, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap } from 'lucide-react';
+import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Plus, Trash2, Mail, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, X, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { setDoc, doc, addDoc, collection, serverTimestamp, onSnapshot, deleteDoc, updateDoc, writeBatch, getDocs, getDocsFromServer, query, where } from 'firebase/firestore';
@@ -17,7 +17,7 @@ export const SettingsView = () => {
     const { can, roles: authRoles, createSecondaryUser: createAuthUser, userProfile, user, currentOrganization, isSuperAdmin } = useAuth();
     const [settings, setSettings] = useState<AppSettings>(globalSettings);
     const [isDirty, setIsDirty] = useState(false);
-    const [activeTab, setActiveTab] = useState<'general' | 'forms' | 'data' | 'team' | 'api' | 'maintenance'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'forms' | 'documents' | 'data' | 'team' | 'api' | 'maintenance'>('general');
     const [isImporting, setIsImporting] = useState(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(globalSettings.logoUrl || null);
 
@@ -64,7 +64,7 @@ export const SettingsView = () => {
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [isEditingUser, setIsEditingUser] = useState(false);
     const [isProcessingTeam, setIsProcessingTeam] = useState(false);
-    const [newUser, setNewUser] = useState({ uid: '', email: '', name: '', role: 'admission_officer', password: '' });
+    const [newUser, setNewUser] = useState({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
 
     // Result Modal
     const [showCredentials, setShowCredentials] = useState<{ email: string, password: string } | null>(null);
@@ -137,7 +137,7 @@ export const SettingsView = () => {
         if (!file || !currentOrganization?.id) return;
 
         try {
-            const compressed = await compressImage(file, 200, 0.7); // Smaller for logo
+            const compressed = await compressImage(file, 500, 0.85); // Improved for High DPI
             setLogoPreview(compressed);
 
             const newSettings = { ...settings, logoUrl: compressed };
@@ -150,6 +150,27 @@ export const SettingsView = () => {
             }
         } catch (err: any) {
 
+            console.error(err);
+            alert(`Failed to process or save logo image: ${err.message}`);
+        }
+    };
+
+    const handleDocumentLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !currentOrganization?.id) return;
+
+        try {
+            const compressed = await compressImage(file, 1500, 0.95); // High Res for Print
+
+            const newSettings = { ...settings, documentConfig: { ...settings.documentConfig, logoUrl: compressed } };
+            setSettings(newSettings);
+
+            // Auto-save to DB
+            if (db) {
+                // FIXED: Using tenant-specific path
+                await setDoc(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), { documentConfig: newSettings.documentConfig }, { merge: true });
+            }
+        } catch (err: any) {
             console.error(err);
             alert(`Failed to process or save logo image: ${err.message}`);
         }
@@ -179,7 +200,9 @@ export const SettingsView = () => {
                     email: newUser.email,
                     name: newUser.name,
                     role: newUser.role,
+                    role: newUser.role,
                     status: 'active',
+                    workHours: (newUser.workHours?.start && newUser.workHours?.end) ? newUser.workHours : null,
                     createdAt: serverTimestamp()
                 });
 
@@ -187,7 +210,7 @@ export const SettingsView = () => {
                 setShowCredentials({ email: newUser.email, password: tempPassword });
             }
             setIsUserModalOpen(false);
-            setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '' });
+            setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
         } catch (err: any) {
             console.error(err);
             alert(`Error: ${err.message}`);
@@ -681,6 +704,9 @@ export const SettingsView = () => {
                     <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'general' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
                         <Settings size={16} /> General
                     </button>
+                    <button onClick={() => setActiveTab('documents')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'documents' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <Printer size={16} /> Documents
+                    </button>
                     <button onClick={() => setActiveTab('forms')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'forms' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
                         <FileText size={16} /> Forms
                     </button>
@@ -822,12 +848,118 @@ export const SettingsView = () => {
                                 </div>
                             </div>
                             <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-2 flex items-center gap-2">
+                                    <Clock size={14} className="text-red-400" /> Standard Work Hours
+                                </label>
+                                <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                                    <div className="flex-1">
+                                        <label className="block text-[10px] text-slate-500 uppercase font-black mb-1">Start Time</label>
+                                        <input 
+                                            type="time" 
+                                            className="w-full bg-transparent text-white font-bold outline-none"
+                                            value={settings.defaultWorkHours?.start || '09:00'}
+                                            onChange={e => updateSettings({ ...settings, defaultWorkHours: { ...settings.defaultWorkHours, start: e.target.value, end: settings.defaultWorkHours?.end || '18:00' } })}
+                                        />
+                                    </div>
+                                    <div className="w-px h-8 bg-slate-800"></div>
+                                    <div className="flex-1">
+                                        <label className="block text-[10px] text-slate-500 uppercase font-black mb-1">End Time</label>
+                                        <input 
+                                            type="time" 
+                                            className="w-full bg-transparent text-white font-bold outline-none"
+                                            value={settings.defaultWorkHours?.end || '18:00'}
+                                            onChange={e => updateSettings({ ...settings, defaultWorkHours: { ...settings.defaultWorkHours, start: settings.defaultWorkHours?.start || '09:00', end: e.target.value } })}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-2">Default schedule for all team members unless overridden individually.</p>
+                            </div>
+
+                            <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Receipt Contact Info</label>
                                 <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.receiptContact} onChange={e => updateSettings({ ...settings, receiptContact: e.target.value })} />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Receipt Footer</label>
                                 <textarea className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white h-20 focus:border-blue-500 outline-none" value={settings.receiptFooter} onChange={e => updateSettings({ ...settings, receiptFooter: e.target.value })} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* DOCUMENTS TAB */}
+                {activeTab === 'documents' && (
+                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                        <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Document Settings</h3></div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-500 mb-4">Configure the details that appear on formal documents (Invoices, Certificates).</p>
+
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Legal Organization Name</label>
+                                <input
+                                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none"
+                                    value={settings.documentConfig?.headerName || ''}
+                                    onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, headerName: e.target.value } })}
+                                    placeholder={settings.academyName}
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Leave empty to use Academy Name.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Document Logo</label>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-16 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig.logoUrl} alt="Doc Logo" className="w-full h-full object-contain" /> : <Printer className="text-slate-700" />}
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm border border-slate-700 transition-colors w-fit">
+                                            <Upload size={16} /> Upload Document Logo
+                                            <input type="file" accept="image/*" onChange={handleDocumentLogoUpload} className="hidden" />
+                                        </label>
+                                        <p className="text-[10px] text-slate-500 mt-2">Specific logo for invoices/certificates (e.g. higher resolution or black & white).</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Address</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.address || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, address: e.target.value } })} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Website</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.website || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, website: e.target.value } })} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Email</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.email || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, email: e.target.value } })} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Phone</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.phone || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, phone: e.target.value } })} />
+                                </div>
+                            </div>
+
+                            <div className="h-px bg-slate-800 my-4"></div>
+                            <h4 className="text-sm font-bold text-white mb-2">Legal Identifiers (For Invoices)</h4>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">ICE (Tax ID)</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.taxId || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, taxId: e.target.value } })} placeholder="e.g. 002798577000063" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">RC (Reg ID)</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.regId || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, regId: e.target.value } })} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">Patente</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.patente || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, patente: e.target.value } })} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-400 mb-1">CNSS</label>
+                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.cnss || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, cnss: e.target.value } })} />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1062,6 +1194,33 @@ export const SettingsView = () => {
                         <select className="w-full p-3 bg-slate-950 border border-slate-800 rounded text-white" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
                             {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                         </select>
+                    </div>
+
+                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <label className="block text-xs font-bold text-slate-400 flex items-center gap-2">
+                             <Clock size={14} /> Custom Work Hours (Optional)
+                        </label>
+                        <div className="flex gap-4">
+                            <div className="flex-1">
+                                <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Start</label>
+                                <input 
+                                    type="time" 
+                                    className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" 
+                                    value={newUser.workHours?.start || ''} 
+                                    onChange={e => setNewUser({ ...newUser, workHours: { ...newUser.workHours, start: e.target.value, end: newUser.workHours?.end || '' } })} 
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">End</label>
+                                <input 
+                                    type="time" 
+                                    className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" 
+                                    value={newUser.workHours?.end || ''} 
+                                    onChange={e => setNewUser({ ...newUser, workHours: { ...newUser.workHours, start: newUser.workHours?.start || '', end: e.target.value } })} 
+                                />
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-slate-600">Overrides global defaults for this user.</p>
                     </div>
 
                     <button type="submit" disabled={isProcessingTeam} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold mt-2 flex items-center justify-center gap-2">

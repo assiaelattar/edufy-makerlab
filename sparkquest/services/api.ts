@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db, storage } from './firebase';
 import { doc, setDoc, updateDoc, collection, addDoc, Firestore } from 'firebase/firestore';
 import { StudentProject, User, Assignment } from '../types';
 
@@ -95,14 +95,88 @@ export const api = {
         link: '/review',
         userId: 'all' // Ensure all instructors see this
       });
-
-      // Also update the step status in the project document is handled by syncProject usually,
-      // but if we want to be explicit or if syncProject didn't catch specific fields:
-      // We rely on the Frontend calling updateProject() -> syncProject() immediately after this.
-      // So this function purely handles "Side Effects" like notifications.
     } catch (e) {
       console.error("Failed to send notification", e);
     }
     return true;
+  },
+
+  /**
+   * Upload File to Firebase Storage
+   * Use this instead of base64 for large images
+   */
+  async uploadFile(file: File, path: string): Promise<string> {
+    console.log(`[SparkQuest] Starting uploadFile... Path: ${path}, File: ${file.name} (${file.size} bytes)`);
+
+    // 1. Storage Availability Check
+    let storageInstance = storage;
+    if (!storageInstance) {
+      console.warn("[SparkQuest] Storage not found in import, attempting lazy load...");
+      try {
+        const firebaseModule = await import('./firebase');
+        storageInstance = firebaseModule.storage;
+        if (!storageInstance) {
+          console.error("❌ [SparkQuest] Lazy load failed: Storage is null.");
+          throw new Error("Firebase Storage could not be initialized.");
+        }
+        console.log("✅ [SparkQuest] Lazy loaded storage successfully.");
+      } catch (e) {
+        console.error("❌ [SparkQuest] Critical: Storage import failed.", e);
+        throw e;
+      }
+    }
+
+    try {
+      // Dynamic import 
+      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const storageRef = ref(storageInstance, path);
+
+      console.log("[SparkQuest] Storage Ref created. Starting uploadBytes...");
+
+      // 2. Upload with Timeout Race
+      const uploadPromise = uploadBytes(storageRef, file);
+
+      const timeoutPromise = new Promise<{ ref: any }>((_, reject) =>
+        setTimeout(() => reject(new Error("Upload timed out after 180s. Check connection.")), 180000)
+      );
+
+      const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
+
+      console.log("[SparkQuest] Upload complete. Fetching Download URL...");
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      console.log(`✅ [SparkQuest] File uploaded successfully:`, downloadURL);
+      return downloadURL;
+    } catch (error: any) {
+      console.error("❌ [SparkQuest] Binary Upload failed:", error);
+
+      // FALLBACK: Base64 Upload (More robust for some network/CORS issues)
+      try {
+        console.log("⚠️ [SparkQuest] Attempting Base64 Fallback...");
+        const { uploadString, getDownloadURL } = await import('firebase/storage');
+
+        // Convert File to Base64
+        const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
+        });
+
+        const dataUrl = await toBase64(file);
+        const storageRef = ref(storageInstance, path); // Re-use ref
+
+        await uploadString(storageRef, dataUrl, 'data_url');
+        console.log("✅ [SparkQuest] Base64 Fallback Upload success!");
+
+        const downloadURL = await getDownloadURL(storageRef);
+        return downloadURL;
+
+      } catch (fallbackError) {
+        console.error("❌ [SparkQuest] Component-level Fallback also failed:", fallbackError);
+        // Re-throw original error to show the root cause, or the fallback error
+        throw error;
+      }
+    }
   }
 };

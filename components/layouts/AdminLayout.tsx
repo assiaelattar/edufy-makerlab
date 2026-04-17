@@ -140,7 +140,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         <div className="flex justify-end mb-2 px-2"><NotificationDropdown /></div>
                         <div className="flex items-center gap-3 mb-3 cursor-pointer hover:bg-slate-900/50 p-2 rounded-lg transition-colors">
                             <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-slate-300">
-                                {userProfile?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+                                {userProfile?.name?.charAt(0) || (user?.email?.charAt(0) || 'U').toUpperCase()}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="text-sm font-bold text-white truncate">{userProfile?.name || 'User'}</div>

@@ -37,4 +37,8 @@ try {
     console.error("[MakerPro] Firebase initialization failed:", error);
 }
 
-export { app, db, auth };
+const storage = undefined;
+const messaging = undefined;
+const initializationError = null;
+
+export { app, db, auth, storage, messaging, firebaseConfig, initializationError };

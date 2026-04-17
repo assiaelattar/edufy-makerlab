@@ -2,24 +2,116 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Mail, MessageCircle, Plus, Search, Trash2, Send, Save, FileText, CheckCircle2, Users, AlertCircle, Clock, Filter, Phone, Calendar, X, Play, SkipForward, CheckSquare } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { db } from '../services/firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, setDoc, updateDoc, deleteDoc, doc, getDoc, serverTimestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { Modal } from '../components/Modal';
 import { CommunicationTemplate, Announcement } from '../types';
 import { formatDate } from '../utils/helpers';
 
 // --- SEED DATA ---
 const MOCK_TEMPLATES = [
-    { title: "Marche Verte", category: 'holiday', tags: ['novembre', 'national'], content: "Bonjour chers parents,\n\nÀ l’occasion de la glorieuse Marche Verte, MakerLab Academy souhaite à vous et à vos enfants une excellente fête. C'est l'occasion de célébrer notre histoire et nos valeurs.\n\n⚠️ Rappel : L'académie sera fermée le [Date]. Reprise des cours le [Date].\n\nBonne fête à tous ! 🇲🇦" },
-    { title: "Fête de l'Indépendance", category: 'holiday', tags: ['novembre', 'national'], content: "Chers parents, nous célébrons aujourd'hui la Fête de l'Indépendance du Maroc. Nous souhaitons une journée pleine de fierté à toutes nos familles.\n\nNote : Pas de cours ce [Jour]. À très vite pour de nouvelles découvertes ! 🇲🇦" },
-    { title: "Manifeste de l'Indépendance", category: 'holiday', tags: ['janvier', 'national'], content: "Bonjour à tous,\n\nEn commémoration de la présentation du Manifeste de l'Indépendance, l'académie sera fermée ce 11 janvier. Profitez de ce jour férié en famille ! 🚀" },
-    { title: "Nouvel An", category: 'holiday', tags: ['janvier', 'new_year'], content: "Bonne année ! 🎉 Toute l'équipe de MakerLab vous souhaite santé, bonheur et réussite. Que cette année soit placée sous le signe de l'innovation et de la créativité pour nos petits génies ! 🤖" },
-    { title: "Aïd Moubarak", category: 'holiday', tags: ['religieux'], content: "Chers parents, toute l'équipe pédagogique vous présente ses meilleurs vœux à l'occasion de l'Aïd. Que cette fête vous apporte joie et sérénité. ✨\n\n📅 Info Pratique : L'académie sera en pause du [Date début] au [Date fin]. Reprise des activités le [Date de reprise]." },
-    { title: "Ramadan - Horaires", category: 'news', tags: ['ramadan', 'horaires'], content: "Ramadan Moubarak à toutes nos familles ! 🌙\n\nPour s'adapter au rythme de ce mois sacré, voici nos horaires aménagés :\n🕒 Mercredi 15h-17h / Samedi 10h-13h\n\nMerci de votre confiance !" },
-    { title: "Vacances d'Hiver", category: 'news', tags: ['decembre', 'vacances'], content: "C'est l'heure de la pause hivernale ! ❄️\n\nBravo à tous nos élèves pour leurs progrès en Coding/Robotique ce trimestre. L'académie sera fermée pour les vacances du [Date] au [Date].\n\n💡 Défi Vacances : Demandez à votre enfant de vous expliquer comment fonctionne les boucles en programmation !\n\nBonnes fêtes de fin d'année ! ☃️" },
-    { title: "Rentrée Scolaire", category: 'news', tags: ['septembre', 'rentrée'], content: "C'est la rentrée chez MakerLab Academy ! 🚀\n\nNous sommes impatients de retrouver nos futurs ingénieurs ce [Jour de la semaine].\nAu programme cette année : Robotique, IA, et Coding créatif.\n\nN'oubliez pas le cahier et la clé USB. À très vite !" },
-    { title: "Invitation Demo Day", category: 'event', tags: ['event', 'invitation'], content: "Sujet : 🤖 Venez voir les créations de vos enfants !\n\nChers parents, vous êtes invités à notre Demo Day le [Date] à [Heure].\nVos enfants présenteront leurs projets finaux (robots, jeux vidéo, apps). C'est un moment fort pour valoriser leur travail. Votre présence est leur plus belle récompense !\n\nHâte de vous y voir." },
-    { title: "Annulation Cours (Urgent)", category: 'urgent', tags: ['urgent', 'meteo'], content: "⚠️ Important : En raison de [la météo / travaux / raison urgente], les cours de ce [Jour] sont annulés/reportés.\n\nUne séance de rattrapage sera organisée le [Date]. Merci de votre compréhension." },
-    { title: "Rappel Paiement", category: 'reminder', tags: ['admin', 'paiement'], content: "Bonjour ! La fin du trimestre approche. 📅\n\nPour garantir la place de {{student_name}} pour le prochain module, les réinscriptions sont ouvertes jusqu'au [Date].\nMerci de passer à l'administration ou de procéder par virement.\n\nMerci pour votre soutien à l'éducation STEM !" },
+    // --- ADMINISTRATION & VACANCES ---
+    { 
+        title: "Marche Verte (Férié)", 
+        category: 'holiday', 
+        tags: ['novembre', 'national'], 
+        content: "Bonjour chers parents,\n\nÀ l’occasion de la commémoration de la glorieuse Marche Verte, l'académie sera fermée le [Date]. Les cours reprendront normalement le [Date].\n\nBelle fête à tous ! 🇲🇦" 
+    },
+    { 
+        title: "Manifeste de l'Indépendance", 
+        category: 'holiday', 
+        tags: ['janvier', 'national'], 
+        content: "Chers parents,\n\nNous vous informons que l'académie sera fermée le 11 janvier en commémoration de la présentation du Manifeste de l'Indépendance. 🕊️\n\nReprise des cours : le [Date]. Profitez bien de ce jour férié en famille." 
+    },
+    { 
+        title: "Aïd El Fitr", 
+        category: 'holiday', 
+        tags: ['religieux'], 
+        content: "Aïd Moubarak Saïd à toute la famille ! ✨\n\nMakerLab Academy vous présente ses meilleurs vœux de santé et de joie. À l'occasion de l'Aïd, nous serons en vacances du [Date début] au [Date fin].\n\nÀ très vite pour de nouvelles aventures technologiques !" 
+    },
+    { 
+        title: "Aïd El Adha", 
+        category: 'holiday', 
+        tags: ['religieux'], 
+        content: "Toute l'équipe de MakerLab Academy vous souhaite un excellent Aïd El Adha. 🐑✨\n\nNous vous informons que l'académie sera fermée pour les vacances de l'Aïd du [Date début] au [Date fin]. Les cours reprendront le [Date].\n\nProfitez bien de ces moments en famille !" 
+    },
+    { 
+        title: "Vacances de Fin de Trimestre", 
+        category: 'holiday', 
+        tags: ['scolaire'], 
+        content: "C'est l'heure des vacances ! ❄️☀️\n\nBravo à {{student_name}} pour son incroyable travail ce trimestre. L'académie sera fermée pour les vacances scolaires du [Date] au [Date].\n\nProfitez-en pour recharger les batteries ! 🔋" 
+    },
+
+    // --- FINANCES & PAIEMENTS ---
+    { 
+        title: "Rappel de Mensualité", 
+        category: 'reminder', 
+        tags: ['admin', 'paiement'], 
+        content: "Bonjour {{parent_name}},\n\nNous vous informons que la mensualité pour le mois de [Mois] concernant {{student_name}} est maintenant due. 📅\n\nVous pouvez régler à l'accueil ou par virement bancaire. Merci de votre confiance et de votre soutien continu à notre mission éducative !" 
+    },
+    { 
+        title: "Relance Paiement (Courtois)", 
+        category: 'reminder', 
+        tags: ['admin', 'urgent'], 
+        content: "Cher parent,\n\nSauf erreur de notre part, nous n'avons pas encore reçu le règlement de la mensualité de {{student_name}} pour le mois de [Mois].\n\nNous vous remercions de bien vouloir régulariser la situation à votre convenance. Si le paiement a déjà été effectué, merci de ne pas tenir compte de ce message. 🙏" 
+    },
+    { 
+        title: "Notification de Reçu", 
+        category: 'news', 
+        tags: ['admin', 'finance'], 
+        content: "Bonjour {{parent_name}},\n\nNous vous confirmons avoir bien reçu le paiement pour {{student_name}}. Le reçu est disponible à l'accueil de l'académie.\n\nMerci de votre confiance ! 🚀" 
+    },
+
+    // --- VIE ÉTUDIANTE & PÉDAGOGIE ---
+    { 
+        title: "Joyeux Anniversaire !", 
+        category: 'event', 
+        tags: ['anniversaire'], 
+        content: "Joyeux Anniversaire à notre futur ingénieur, {{student_name}} ! 🎉🎂\n\nToute l'équipe de MakerLab Academy te souhaite une journée remplie de créativité, de découvertes et de robots !\n\nÀ samedi pour fêter ça ! 🤖✨" 
+    },
+    { 
+        title: "Objet Oublié à l'Académie", 
+        category: 'urgent', 
+        tags: ['logistique'], 
+        content: "Bonjour {{parent_name}},\n\nIl semble que {{student_name}} ait oublié son/sa [Objet] aujourd'hui à l'académie. 🎒\n\nL'objet est en sécurité à l'accueil. Vous pourrez le récupérer lors de votre prochain passage.\n\nÀ très vite !" 
+    },
+    { 
+        title: "Absence Non Signalée", 
+        category: 'urgent', 
+        tags: ['pedagogie'], 
+        content: "Cher parent,\n\nNous avons remarqué l'absence de {{student_name}} au cours de ce jour. 🧐\n\nNous espérons que tout va bien. N'hésitez pas à nous informer si vous avez un empêchement afin que nous puissions prévoir un rattrapage si possible.\n\nBien à vous." 
+    },
+    { 
+        title: "Succès du Projet !", 
+        category: 'news', 
+        tags: ['motivation'], 
+        content: "Bonjour {{parent_name}} ! \n\nNous tenions à vous dire que {{student_name}} a fait un excellent travail aujourd'hui ! Il/Elle a réussi à finaliser son projet de [Projet] avec brio. 🌟\n\nN'hésitez pas à lui demander de vous montrer sa création à la maison !\n\nL'équipe MakerLab." 
+    },
+    { 
+        title: "Invitation au Demo Day", 
+        category: 'event', 
+        tags: ['event', 'invitation'], 
+        content: "📢 INVITATION : Demo Day chez MakerLab !\n\nCher parent, vous êtes invité à assister aux présentations des projets finaux le [Date] à [Heure].\nVenez voir les robots et les jeux vidéos créés par {{student_name}} et ses camarades ! 🤖🎮\n\nVotre présence est le meilleur encouragement pour nos jeunes makers !" 
+    },
+
+    // --- MARKETING & SUIVI ---
+    { 
+        title: "Suivi Atelier Découverte", 
+        category: 'news', 
+        tags: ['suivi'], 
+        content: "Bonjour {{parent_name}},\n\nMerci d'avoir fait participer {{student_name}} à notre atelier découverte ! Nous espérons qu'il/elle a apprécié l'expérience. 😊\n\nAvez-vous des questions sur nos programmes annuels ? Nous serions ravis d'échanger avec vous sur les futurs projets de votre enfant.\n\nÀ bientôt !" 
+    },
+    { 
+        title: "Relance Inscription (Places Limitées)", 
+        category: 'urgent', 
+        tags: ['marketing'], 
+        content: "Dernière chance ! 🚀\n\nLes inscriptions pour le programme de [Mois/Trimestre] arrivent à leur terme. Il ne reste que quelques places disponibles pour le groupe de {{student_name}}.\n\nRéservez dès maintenant pour ne pas manquer la reprise ! ⏳" 
+    },
+    { 
+        title: "Changement d'Horaire Ponctuel", 
+        category: 'urgent', 
+        tags: ['logistique'], 
+        content: "⚠️ INFORMATION IMPORTANTE :\n\nBonjour {{parent_name}}, exceptionnellement le cours de {{student_name}} de ce [Jour] est décalé à [Heure].\n\nNous nous excusons pour ce changement de dernière minute et vous remercions de votre compréhension. 🙏" 
+    },
 ];
 
 const MONTHS = [
@@ -63,10 +155,14 @@ export const CommunicationsView = () => {
         if (!db) return;
         setLoading(true);
         try {
-            // Fetch Templates
-            const tempSnap = await getDocs(collection(db, 'communication_templates'));
-            const tempData = tempSnap.docs.map(d => ({ id: d.id, ...d.data() } as CommunicationTemplate));
-            setTemplates(tempData);
+            // Fetch Templates from Org Settings
+            const orgId = currentOrganization.id;
+            const commsDoc = await getDoc(doc(db, 'organizations', orgId, 'settings', 'communications'));
+            if (commsDoc.exists()) {
+                setTemplates(commsDoc.data().templates || []);
+            } else {
+                setTemplates([]);
+            }
 
             // Fetch Announcements History
             const annSnap = await getDocs(query(collection(db, 'announcements'), orderBy('createdAt', 'desc')));
@@ -106,15 +202,18 @@ export const CommunicationsView = () => {
         if (!name) return;
 
         try {
+            const orgId = currentOrganization.id;
             const newTemp: any = {
+                id: Math.random().toString(36).substring(7),
                 title: name,
                 content: messageForm.content,
                 category: 'news',
                 tags: [],
-                createdAt: serverTimestamp()
+                createdAt: new Date().toISOString()
             };
-            const ref = await addDoc(collection(db, 'communication_templates'), newTemp);
-            setTemplates([...templates, { ...newTemp, id: ref.id }]);
+            const updatedTemplates = [...templates, newTemp];
+            await setDoc(doc(db, 'organizations', orgId, 'settings', 'communications'), { templates: updatedTemplates }, { merge: true });
+            setTemplates(updatedTemplates);
             alert("Template saved!");
         } catch (err) {
             console.error(err);
@@ -128,27 +227,33 @@ export const CommunicationsView = () => {
 
     const handleDeleteTemplate = async (id: string) => {
         if (!confirm("Delete this template?")) return;
-        if (!db) return;
-        await deleteDoc(doc(db, 'communication_templates', id));
-        setTemplates(templates.filter(t => t.id !== id));
+        if (!db || !currentOrganization?.id) return;
+        const orgId = currentOrganization.id;
+        const updatedTemplates = templates.filter(t => t.id !== id);
+        await setDoc(doc(db, 'organizations', orgId, 'settings', 'communications'), { templates: updatedTemplates }, { merge: true });
+        setTemplates(updatedTemplates);
     };
 
     const handleSeedTemplates = async () => {
-        if (!db) return;
+        if (!db || !currentOrganization?.id) return;
         if (!confirm("Add default STEM templates?")) return;
 
+        const orgId = currentOrganization.id;
         let count = 0;
-        for (const t of MOCK_TEMPLATES) {
-            // Check duplicates
-            if (templates.some(ex => ex.title === t.title)) continue;
+        let currentList = [...templates];
 
-            await addDoc(collection(db, 'communication_templates'), {
+        for (const t of MOCK_TEMPLATES) {
+            if (currentList.some(ex => ex.title === t.title)) continue;
+            currentList.push({
                 ...t,
-                createdAt: serverTimestamp()
+                id: Math.random().toString(36).substring(7),
+                createdAt: new Date().toISOString()
             });
             count++;
         }
-        fetchData(); // Refresh
+
+        await setDoc(doc(db, 'organizations', orgId, 'settings', 'communications'), { templates: currentList }, { merge: true });
+        setTemplates(currentList);
         alert(`Added ${count} new templates.`);
     };
 

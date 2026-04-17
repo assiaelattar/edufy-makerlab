@@ -4,16 +4,18 @@ import { Wallet, CreditCard, Eye, Pencil, Trash2, Printer, Share2, CheckCircle2 
 import { Payment, Enrollment, Student } from '../../types';
 import { formatCurrency, formatDate, generateReceipt } from '../../utils/helpers';
 
+import { InvoiceModal } from '../../components/finance/InvoiceModal';
+
 interface FinanceTabProps {
   studentPayments: Payment[];
   studentEnrollments: Enrollment[];
   student: Student;
-  onRecordPayment: (id: string) => void;
+  onRecordPayment: (id: string, enrollmentId?: string) => void;
   navigateTo: (view: string, params: any) => void;
   setEditPayment: (payment: Payment) => void;
   initiateDeletePayment: (payment: Payment) => void;
   settings: any;
-  onShareReceipt: (paymentId: string) => void;
+  onShareReceipt: (id: string) => void;
 }
 
 export const FinanceTab: React.FC<FinanceTabProps> = ({
@@ -27,6 +29,8 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
   settings,
   onShareReceipt
 }) => {
+  const [invoiceModal, setInvoiceModal] = React.useState<{ isOpen: boolean, payment: Payment | null }>({ isOpen: false, payment: null });
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
       <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
@@ -113,13 +117,22 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
                     </button>
                     <button
                       onClick={() => {
+                        setInvoiceModal({ isOpen: true, payment: p });
+                      }}
+                      className="p-2 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-indigo-400 transition-colors"
+                      title="Generate Invoice (Facture)"
+                    >
+                      <Printer size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
                         const enrollment = studentEnrollments.find((e) => e.id === p.enrollmentId);
                         generateReceipt(p, enrollment, student, settings);
                       }}
                       className="p-2 hover:bg-slate-700/50 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors"
                       title="Print Receipt"
                     >
-                      <Printer size={16} />
+                      <CheckCircle2 size={16} />
                     </button>
                     <button
                       onClick={() => initiateDeletePayment(p)}
@@ -220,12 +233,21 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  setInvoiceModal({ isOpen: true, payment: p });
+                }}
+                className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-indigo-400 rounded-lg border border-slate-800 transition-colors"
+              >
+                <Printer size={16} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
                   const enrollment = studentEnrollments.find((e) => e.id === p.enrollmentId);
                   generateReceipt(p, enrollment, student, settings);
                 }}
                 className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-emerald-400 rounded-lg border border-slate-800 transition-colors"
               >
-                <Printer size={16} />
+                <CheckCircle2 size={16} />
               </button>
               <button
                 onClick={(e) => {
@@ -240,6 +262,16 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
           </div>
         ))}
       </div>
+      {invoiceModal.isOpen && (
+        <InvoiceModal
+          isOpen={invoiceModal.isOpen}
+          onClose={() => setInvoiceModal({ isOpen: false, payment: null })}
+          payment={invoiceModal.payment}
+          enrollment={studentEnrollments.find(e => e.id === invoiceModal.payment?.enrollmentId)}
+          student={student}
+          settings={settings}
+        />
+      )}
     </div>
   );
 };

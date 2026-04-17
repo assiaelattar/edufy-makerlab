@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, MoreHorizontal, FileDown } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 
@@ -19,6 +20,7 @@ export const StudentsView = ({
     onViewProfile: (id: string) => void
 }) => {
     const { students, enrollments, programs, navigateTo } = useAppContext();
+    const { can } = useAuth();
     const { confirm } = useConfirm();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterProgramId, setFilterProgramId] = useState('');
@@ -66,7 +68,7 @@ export const StudentsView = ({
             if (!showArchived && student.status === 'inactive') return false;
             if (showArchived && student.status !== 'inactive') return false; // When toggle ON, show ONLY archived
 
-            if (searchQuery && !student.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            if (searchQuery && !(student.name || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
 
             const studentEnrollments = enrollments.filter(e => e.studentId === student.id && e.status === 'active');
 
@@ -113,12 +115,16 @@ export const StudentsView = ({
                     <p className="text-slate-400 text-sm">Manage student profiles and enrollment status</p>
                 </div>
                 <div className="flex gap-3 w-full md:w-auto">
-                    <button onClick={() => onQuickEnroll()} className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-all active:scale-95">
-                        <Zap size={16} className="text-amber-400" /> <span>Quick Enroll</span>
-                    </button>
-                    <button onClick={onAddStudent} className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg shadow-blue-900/20 transition-all active:scale-95">
-                        <Plus size={18} /> <span>Add Student</span>
-                    </button>
+                    {can('students.enroll') && (
+                        <button onClick={() => onQuickEnroll()} className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-all active:scale-95">
+                            <Zap size={16} className="text-amber-400" /> <span>Quick Enroll</span>
+                        </button>
+                    )}
+                    {can('students.edit') && (
+                        <button onClick={onAddStudent} className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg shadow-blue-900/20 transition-all active:scale-95">
+                            <Plus size={18} /> <span>Add Student</span>
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -139,10 +145,12 @@ export const StudentsView = ({
                     <div className="text-2xl font-bold text-slate-400">{stats.inactive}</div>
                     <UserX className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden group cursor-pointer hover:border-blue-500/50 transition-colors" onClick={() => navigateTo('tools')}>
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Actions</div>
-                    <div className="text-sm font-medium text-blue-400 mt-1 flex items-center gap-1">Bulk Import <FileDown size={14} /></div>
-                </div>
+                {can('settings.manage') && (
+                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden group cursor-pointer hover:border-blue-500/50 transition-colors" onClick={() => navigateTo('tools')}>
+                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Actions</div>
+                        <div className="text-sm font-medium text-blue-400 mt-1 flex items-center gap-1">Bulk Import <FileDown size={14} /></div>
+                    </div>
+                )}
             </div>
 
             {/* Filters & Search */}
@@ -235,11 +243,13 @@ export const StudentsView = ({
                                         </td>
                                         <td className="p-4 text-right">
                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {!isInactive && <button onClick={(e) => { e.stopPropagation(); onQuickEnroll(student.id); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Quick Enroll"><Zap size={16} /></button>}
-                                                <button onClick={(e) => { e.stopPropagation(); onEditStudent(student); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors" title="Edit Profile"><Pencil size={16} /></button>
-                                                <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className={`p-2 hover:bg-slate-700 rounded-lg transition-colors ${isInactive ? 'text-emerald-500 hover:text-emerald-400' : 'text-slate-500 hover:text-red-400'}`} title={isInactive ? "Reactivate" : "Deactivate"}>
-                                                    {isInactive ? <RefreshCw size={16} /> : <Archive size={16} />}
-                                                </button>
+                                                {!isInactive && can('students.enroll') && <button onClick={(e) => { e.stopPropagation(); onQuickEnroll(student.id); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Quick Enroll"><Zap size={16} /></button>}
+                                                {can('students.edit') && <button onClick={(e) => { e.stopPropagation(); onEditStudent(student); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors" title="Edit Profile"><Pencil size={16} /></button>}
+                                                {can('students.delete') && (
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className={`p-2 hover:bg-slate-700 rounded-lg transition-colors ${isInactive ? 'text-emerald-500 hover:text-emerald-400' : 'text-slate-500 hover:text-red-400'}`} title={isInactive ? "Reactivate" : "Deactivate"}>
+                                                        {isInactive ? <RefreshCw size={16} /> : <Archive size={16} />}
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

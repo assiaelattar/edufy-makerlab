@@ -5,10 +5,10 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowRight, UserPlus, Users, Rocket, ShieldCheck, Mail, Lock, CheckSquare, Square, AlertCircle, Baby, Fingerprint, ChevronLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext } from '../../../context/AppContext';
 import { doc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { authenticateBiometric, isBiometricEnabled } from '../../utils/biometrics'; // Adjusted import path
-import { Logo } from '../components/Logo'; // Adjusted import path
+import { authenticateBiometric, isBiometricEnabled } from '../../../utils/biometrics';
+import { Logo } from '../../../components/Logo';
 
 export function Login() {
     const navigate = useNavigate();

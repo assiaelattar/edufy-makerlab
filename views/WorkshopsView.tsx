@@ -10,7 +10,7 @@ import { formatDate, getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
     const { workshopTemplates, workshopSlots, bookings, settings } = useAppContext();
-    const { currentOrganization } = useAuth();
+    const { currentOrganization, can } = useAuth();
     const [activeTab, setActiveTab] = useState<'calendar' | 'templates'>('calendar');
 
     // --- Calendar State ---
@@ -296,9 +296,11 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                 </h3>
                                 <p className="text-slate-500 text-xs md:text-sm mt-1">{selectedDaySlots.length} events scheduled</p>
                             </div>
-                            <button onClick={handleCreateNew} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors shadow-lg shadow-pink-900/20">
-                                <Plus size={16} /> <span className="hidden md:inline">Add Event</span>
-                            </button>
+                            {can('workshops.manage') && (
+                                <button onClick={handleCreateNew} className="flex items-center gap-2 bg-pink-600 hover:bg-pink-500 text-white px-3 py-1.5 rounded-lg text-xs md:text-sm font-medium transition-colors shadow-lg shadow-pink-900/20">
+                                    <Plus size={16} /> <span className="hidden md:inline">Add Event</span>
+                                </button>
+                            )}
                         </div>
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 space-y-4 bg-slate-900/50 max-h-[500px] md:max-h-none">
@@ -416,11 +418,13 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             {/* TEMPLATES TAB */}
             {activeTab === 'templates' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in">
-                    <button onClick={handleCreateNew} className="border-2 border-dashed border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-pink-500 hover:text-pink-400 transition-colors min-h-[200px] group bg-slate-900/30 hover:bg-slate-900">
-                        <div className="w-14 h-14 rounded-full bg-slate-900 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg"><Plus size={28} /></div>
-                        <span className="font-bold text-lg">Create New Workshop</span>
-                        <span className="text-sm mt-1">Define event details & recurrence</span>
-                    </button>
+                    {can('workshops.manage') && (
+                        <button onClick={handleCreateNew} className="border-2 border-dashed border-slate-800 rounded-xl p-8 flex flex-col items-center justify-center text-slate-500 hover:border-pink-500 hover:text-pink-400 transition-colors min-h-[200px] group bg-slate-900/30 hover:bg-slate-900">
+                            <div className="w-14 h-14 rounded-full bg-slate-900 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg"><Plus size={28} /></div>
+                            <span className="font-bold text-lg">Create New Workshop</span>
+                            <span className="text-sm mt-1">Define event details & recurrence</span>
+                        </button>
+                    )}
 
                     {workshopTemplates.map(template => (
                         <div key={template.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col relative group hover:border-pink-500/30 hover:shadow-lg hover:shadow-pink-900/10 transition-all">
@@ -433,8 +437,12 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                 </div>
                                 <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => copyLink(template.shareableSlug)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-white border border-slate-800 hover:border-slate-700" title="Copy Booking Link"><LinkIcon size={14} /></button>
-                                    <button onClick={() => handleEditTemplate(template)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-blue-400 border border-slate-800 hover:border-blue-900/50" title="Edit Template"><MoreHorizontal size={14} /></button>
-                                    <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-red-400 border border-slate-800 hover:border-red-900/50" title="Delete"><Trash2 size={14} /></button>
+                                    {can('workshops.manage') && (
+                                        <>
+                                            <button onClick={() => handleEditTemplate(template)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-blue-400 border border-slate-800 hover:border-blue-900/50" title="Edit Template"><MoreHorizontal size={14} /></button>
+                                            <button onClick={() => handleDeleteTemplate(template.id)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-red-400 border border-slate-800 hover:border-red-900/50" title="Delete"><Trash2 size={14} /></button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 

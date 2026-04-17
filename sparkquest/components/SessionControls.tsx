@@ -28,15 +28,7 @@ export const SessionControls: React.FC = () => {
     }
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-4">
-            {/* Timer Display */}
-            <div className="flex items-center gap-2 px-5 py-3 bg-slate-900/90 border border-green-500/30 rounded-xl backdrop-blur-sm">
-                <Clock className="w-5 h-5 text-green-400 animate-pulse" />
-                <span className="text-white font-mono text-xl font-bold tabular-nums">
-                    {formatTime(elapsedSeconds)}
-                </span>
-            </div>
-
+        <div className="fixed bottom-6 right-6 z-50">
             {/* End Button */}
             <button
                 onClick={endSession}

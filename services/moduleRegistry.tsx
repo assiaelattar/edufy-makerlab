@@ -32,6 +32,7 @@ export const MODULES: ModuleConfig[] = [
     { id: 'communications', label: 'Communications', icon: Megaphone, enabled: true, description: 'News, Holidays & WhatsApp', color: 'blue', requiredPermission: 'marketing.view', category: 'business' },
 
     { id: 'team', label: 'Team & Projects', icon: Briefcase, enabled: true, description: 'Tasks, Chat, Employee Management', color: 'orange', requiredPermission: 'team.view', category: 'organization' },
+    { id: 'staff-attendance', label: 'Staff Attendance', icon: ClipboardCheck, enabled: true, description: 'Manage Team Presence & Absences', color: 'red', requiredPermission: 'team.view', category: 'organization' },
     { id: 'media', label: 'Gallery', icon: Camera, enabled: true, description: 'Photos & Media Gallery', color: 'pink', requiredPermission: 'media.view', category: 'organization' },
     { id: 'toolkit', label: 'Toolkit', icon: Hammer, enabled: false, description: 'Software, Resources & Tools', color: 'amber', requiredPermission: 'toolkit.view', category: 'organization' },
     { id: 'archive', label: 'Archive', icon: Archive, enabled: true, description: 'Useful Links & Resources', color: 'purple', requiredPermission: 'toolkit.view', category: 'organization' },
