@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Plus, Trash2, Mail, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, X, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer, Clock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,8 @@ export const SettingsView = () => {
     const [isDirty, setIsDirty] = useState(false);
     const [activeTab, setActiveTab] = useState<'general' | 'forms' | 'documents' | 'data' | 'team' | 'api' | 'maintenance'>('general');
     const [isImporting, setIsImporting] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const justSaved = useRef(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(globalSettings.logoUrl || null);
 
     // Biometric State
@@ -49,6 +51,12 @@ export const SettingsView = () => {
     // Sync state when global settings change (Fixes persistence issue)
     useEffect(() => {
         if (!isDirty) {
+            if (justSaved.current) {
+                // If we just saved, the global settings might still be stale.
+                // We trust our local state for now and reset the flag.
+                justSaved.current = false;
+                return;
+            }
             setSettings(globalSettings);
             setLogoPreview(globalSettings.logoUrl);
         }
@@ -119,16 +127,27 @@ export const SettingsView = () => {
 
     const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || !currentOrganization?.id) return;
+        if (!db || !currentOrganization?.id || isSaving) return;
+        
+        setIsSaving(true);
         try {
             // Explicitly save the current local state to the global doc, merging to avoid data loss
-            // FIXED: Using tenant-specific path
             await setDoc(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), settings, { merge: true });
+            
+            // Mark that we just saved so the sync effect doesn't overwrite with stale data
+            justSaved.current = true;
             setIsDirty(false);
+            
+            // Artificial delay to allow Firestore state to settle (optional but helpful for UX)
+            setTimeout(() => {
+                setIsSaving(false);
+            }, 1000);
+
             alert('Settings saved successfully!');
         } catch (err: any) {
             console.error(err);
             alert(`Failed to save settings: ${err.message}`);
+            setIsSaving(false);
         }
     };
 
@@ -693,8 +712,13 @@ export const SettingsView = () => {
                         <h2 className="text-xl font-bold text-white">System Settings</h2>
                         <p className="text-slate-500 text-sm">Configure academy parameters and access control.</p>
                     </div>
-                    <button onClick={handleSaveSettings} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition-colors font-medium shadow-lg shadow-emerald-900/20">
-                        <Save size={18} /> <span>Save Global Changes</span>
+                    <button 
+                        onClick={handleSaveSettings} 
+                        disabled={isSaving}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium shadow-lg shadow-emerald-900/20 ${isSaving ? 'bg-emerald-900/50 text-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
+                    >
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} 
+                        <span>{isSaving ? 'Saving...' : 'Save Global Changes'}</span>
                     </button>
                 </div>
 
