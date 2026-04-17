@@ -11,6 +11,7 @@ service cloud.firestore {
     // Check if user has an elevated role (Admin, Instructor, etc.)
     function isAdmin() {
       return isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'instructor', 'admission_officer', 'accountant'];
     }
 
@@ -93,7 +94,13 @@ service cloud.firestore {
       allow read: if true; // Organization lookup for login
       allow write: if isAdmin();
       
-      // Subcollections for organization-specific settings
+      // Explicitly allow settings as before
+      match /settings/{settingId} {
+        allow read: if true;
+        allow write: if isAdmin();
+      }
+
+      // Other subcollections
       match /{allSubcollections=**} {
         allow read, write: if isAdmin();
       }

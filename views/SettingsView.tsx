@@ -200,7 +200,6 @@ export const SettingsView = () => {
                     email: newUser.email,
                     name: newUser.name,
                     role: newUser.role,
-                    role: newUser.role,
                     status: 'active',
                     workHours: (newUser.workHours?.start && newUser.workHours?.end) ? newUser.workHours : null,
                     createdAt: serverTimestamp()
