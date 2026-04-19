@@ -8,9 +8,10 @@
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Edufy" />
+  <meta name="apple-mobile-web-app-title" content="Makerlab" />
+  <meta name="description" content="Makerlab Academy — ERP &amp; Learning Management Platform" />
 
-  <title>Edufy SaaS</title>
+  <title>Makerlab Academy</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" type="image/svg+xml" href="./icon.svg" />
   <link rel="apple-touch-icon" href="./icon.svg" />
@@ -58,27 +59,276 @@
     "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
   }
 }
-</script>
+  </script>
   <link rel="stylesheet" href="/index.css">
+
+  <style>
+    /* ── Splash Screen ── */
+    #splash {
+      position: fixed;
+      inset: 0;
+      background: #0f172a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.6s ease, visibility 0.6s ease;
+    }
+    #splash.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    /* Icon container */
+    .splash-icon {
+      width: 96px;
+      height: 96px;
+      position: relative;
+      margin-bottom: 32px;
+    }
+
+    /* Rotating orbit rings */
+    .orbit-ring {
+      position: absolute;
+      inset: -16px;
+      border-radius: 50%;
+      border: 1.5px solid transparent;
+      border-top-color: #ea223f;
+      border-right-color: rgba(234,34,63,0.3);
+      animation: orbit-spin 1.8s linear infinite;
+    }
+    .orbit-ring-2 {
+      position: absolute;
+      inset: -28px;
+      border-radius: 50%;
+      border: 1px solid transparent;
+      border-top-color: rgba(96,165,250,0.5);
+      border-left-color: rgba(96,165,250,0.2);
+      animation: orbit-spin 3s linear infinite reverse;
+    }
+    @keyframes orbit-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* Pulsing icon */
+    .splash-icon svg {
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+      animation: icon-breathe 2s ease-in-out infinite;
+    }
+    @keyframes icon-breathe {
+      0%, 100% { filter: drop-shadow(0 0 20px rgba(234,34,63,0.4));  transform: scale(1); }
+      50%       { filter: drop-shadow(0 0 40px rgba(234,34,63,0.65)); transform: scale(1.05); }
+    }
+
+    /* Brand name */
+    .splash-brand {
+      font-family: 'Inter', sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #f1f5f9;
+      margin-bottom: 6px;
+      animation: fade-up 0.7s ease both;
+      animation-delay: 0.2s;
+    }
+    .splash-brand span { color: #ea223f; }
+
+    .splash-tagline {
+      font-family: 'Inter', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #334155;
+      animation: fade-up 0.7s ease both;
+      animation-delay: 0.35s;
+      margin-bottom: 52px;
+    }
+
+    @keyframes fade-up {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Progress bar */
+    .splash-bar-track {
+      width: 180px;
+      height: 2px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      animation: fade-up 0.5s ease both;
+      animation-delay: 0.45s;
+    }
+    .splash-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #ea223f, #ff6b87, #ea223f);
+      background-size: 200% 100%;
+      border-radius: 999px;
+      animation: bar-fill 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards,
+                 bar-shimmer 1.5s linear infinite;
+      animation-delay: 0.3s, 0.8s;
+    }
+    @keyframes bar-fill {
+      0%   { width: 0%;   }
+      60%  { width: 75%;  }
+      85%  { width: 92%;  }
+      100% { width: 100%; }
+    }
+    @keyframes bar-shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Floating particles */
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      animation: float-particle linear infinite;
+      opacity: 0;
+    }
+    @keyframes float-particle {
+      0%   { transform: translateY(0)     scale(0);   opacity: 0;   }
+      8%   {                                           opacity: 0.7; }
+      92%  {                                           opacity: 0.1; }
+      100% { transform: translateY(-110px) scale(0.2); opacity: 0;  }
+    }
+
+    /* Bottom version label */
+    .splash-version {
+      position: absolute;
+      bottom: 28px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: #1e293b;
+      letter-spacing: 0.1em;
+    }
+  </style>
 </head>
 
 <body class="bg-slate-950 text-slate-200 antialiased selection:bg-blue-500 selection:text-white overscroll-none">
+
+  <!-- ── Animated Splash Screen ── -->
+  <div id="splash">
+
+    <!-- Floating particles -->
+    <div class="particle" style="width:4px;height:4px;background:#ea223f;left:28%;bottom:28%;animation-duration:3.5s;animation-delay:0.2s;"></div>
+    <div class="particle" style="width:3px;height:3px;background:#60a5fa;left:66%;bottom:24%;animation-duration:4.2s;animation-delay:0.9s;"></div>
+    <div class="particle" style="width:5px;height:5px;background:#ea223f;left:45%;bottom:38%;animation-duration:3.1s;animation-delay:1.5s;"></div>
+    <div class="particle" style="width:3px;height:3px;background:#60a5fa;left:76%;bottom:33%;animation-duration:4.9s;animation-delay:0.4s;"></div>
+    <div class="particle" style="width:4px;height:4px;background:#f472b6;left:22%;bottom:43%;animation-duration:3.8s;animation-delay:1.2s;"></div>
+    <div class="particle" style="width:2px;height:2px;background:#ea223f;left:54%;bottom:19%;animation-duration:5.2s;animation-delay:0.6s;"></div>
+    <div class="particle" style="width:3px;height:3px;background:#a78bfa;left:38%;bottom:55%;animation-duration:4.0s;animation-delay:2.0s;"></div>
+
+    <!-- Icon with two counter-rotating orbit rings -->
+    <div class="splash-icon">
+      <div class="orbit-ring-2"></div>
+      <div class="orbit-ring"></div>
+
+      <!-- Inline SVG icon (same as icon.svg) -->
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+        <defs>
+          <linearGradient id="ibg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#0f172a"/>
+            <stop offset="100%" style="stop-color:#1e1b4b"/>
+          </linearGradient>
+          <linearGradient id="ired" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#ff3a5c"/>
+            <stop offset="100%" style="stop-color:#ea223f"/>
+          </linearGradient>
+          <filter id="iglow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="9" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <!-- Background -->
+        <rect width="512" height="512" rx="114" ry="114" fill="url(#ibg)"/>
+
+        <!-- Subtle dot grid -->
+        <g opacity="0.09" fill="#60a5fa">
+          <circle cx="80"  cy="80"  r="3"/><circle cx="160" cy="80"  r="3"/>
+          <circle cx="240" cy="80"  r="3"/><circle cx="320" cy="80"  r="3"/><circle cx="400" cy="80"  r="3"/>
+          <circle cx="80"  cy="432" r="3"/><circle cx="160" cy="432" r="3"/>
+          <circle cx="240" cy="432" r="3"/><circle cx="320" cy="432" r="3"/><circle cx="400" cy="432" r="3"/>
+        </g>
+
+        <!-- Orbit ring decoration -->
+        <ellipse cx="256" cy="256" rx="198" ry="198" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+        <circle cx="256" cy="58"  r="7" fill="#60a5fa" opacity="0.55" filter="url(#iglow)"/>
+        <circle cx="454" cy="256" r="7" fill="#60a5fa" opacity="0.55" filter="url(#iglow)"/>
+        <circle cx="58"  cy="256" r="7" fill="#60a5fa" opacity="0.55" filter="url(#iglow)"/>
+        <circle cx="256" cy="454" r="7" fill="#ea223f" opacity="0.65" filter="url(#iglow)"/>
+
+        <!-- M shape -->
+        <rect    x="96"  y="152" width="52"  height="210" rx="10" fill="url(#ired)" filter="url(#iglow)"/>
+        <rect    x="364" y="152" width="52"  height="210" rx="10" fill="url(#ired)" filter="url(#iglow)"/>
+        <polygon points="96,152 148,152 256,296 256,364 204,364" fill="url(#ired)" filter="url(#iglow)"/>
+        <polygon points="416,152 364,152 256,296 256,364 308,364" fill="url(#ired)" filter="url(#iglow)"/>
+
+        <!-- Centre glow -->
+        <circle cx="256" cy="330" r="22" fill="#ff3a5c" opacity="0.28" filter="url(#iglow)"/>
+
+        <!-- Accent bars at bottom -->
+        <rect x="96"  y="394" width="84" height="5" rx="2.5" fill="#60a5fa" opacity="0.45"/>
+        <rect x="332" y="394" width="84" height="5" rx="2.5" fill="#60a5fa" opacity="0.45"/>
+      </svg>
+    </div>
+
+    <!-- Brand -->
+    <div class="splash-brand">Maker<span>lab</span> Academy</div>
+    <div class="splash-tagline">Academy ERP &nbsp;&middot;&nbsp; Learning Platform</div>
+
+    <!-- Animated loading bar -->
+    <div class="splash-bar-track">
+      <div class="splash-bar-fill"></div>
+    </div>
+
+    <!-- Version watermark -->
+    <div class="splash-version">v2.0 &nbsp;&middot;&nbsp; 2025–2026</div>
+  </div>
+
+  <!-- ── React Root ── -->
   <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
+
   <script>
+    // Watch for React to mount and fade out the splash
+    const splashRoot = document.getElementById('root');
+    const splash     = document.getElementById('splash');
+
+    const hideSplash = () => {
+      if (!splash) return;
+      splash.classList.add('hidden');
+      setTimeout(() => splash && splash.remove(), 700);
+    };
+
+    const observer = new MutationObserver(() => {
+      if (splashRoot && splashRoot.children.length > 0) {
+        observer.disconnect();
+        setTimeout(hideSplash, 380);
+      }
+    });
+    if (splashRoot) observer.observe(splashRoot, { childList: true });
+
+    // Hard fallback: remove after 5 s
+    setTimeout(hideSplash, 5000);
+
+    // Service Worker registration
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-          .then(registration => {
-            console.log('SW registered: ', registration);
-          })
-          .catch(registrationError => {
-            console.log('SW registration failed: ', registrationError);
-          });
+          .then(r  => console.log('[SW] registered:', r.scope))
+          .catch(e => console.warn('[SW] registration failed:', e));
       });
     }
   </script>
-  <script type="module" src="/index.tsx"></script>
 </body>
 
 </html>
