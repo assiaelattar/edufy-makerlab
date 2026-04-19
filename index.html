@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -9,7 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Makerlab" />
-  <meta name="description" content="Makerlab Academy — ERP &amp; Learning Management Platform" />
+  <meta name="description" content="Makerlab Academy â€” ERP &amp; Learning Management Platform" />
 
   <title>Makerlab Academy</title>
   <link rel="manifest" href="./manifest.json" />
@@ -63,7 +63,7 @@
   <link rel="stylesheet" href="/index.css">
 
   <style>
-    /* ── Splash Screen ── */
+    /* â”€â”€ Splash Screen â”€â”€ */
     #splash {
       position: fixed;
       inset: 0;
@@ -203,18 +203,43 @@
     /* Bottom version label */
     .splash-version {
       position: absolute;
-      bottom: 28px;
+      bottom: max(28px, env(safe-area-inset-bottom, 28px));
       font-family: 'JetBrains Mono', monospace;
       font-size: 10px;
       color: #1e293b;
       letter-spacing: 0.1em;
+    }
+
+    /* Mobile polish */
+    body { overscroll-behavior: none; }
+    #splash {
+      padding-top:    env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+      touch-action: none;
+    }
+    @media (max-height: 580px) {
+      .splash-icon { width: 64px; height: 64px; margin-bottom: 16px; }
+      .splash-icon svg { width: 64px; height: 64px; }
+      .orbit-ring   { inset: -12px; }
+      .orbit-ring-2 { inset: -22px; }
+      .splash-brand    { font-size: 17px; }
+      .splash-tagline  { font-size: 10px; margin-bottom: 24px; }
+      .splash-version  { bottom: 8px; }
+    }
+    @media (max-width: 360px) {
+      .splash-brand    { font-size: 18px; }
+      .splash-tagline  { font-size: 10px; letter-spacing: 0.08em; }
+      .splash-bar-track { width: 140px; }
     }
   </style>
 </head>
 
 <body class="bg-slate-950 text-slate-200 antialiased selection:bg-blue-500 selection:text-white overscroll-none">
 
-  <!-- ── Animated Splash Screen ── -->
+  <!-- â”€â”€ Animated Splash Screen â”€â”€ -->
   <div id="splash">
 
     <!-- Floating particles -->
@@ -291,10 +316,10 @@
     </div>
 
     <!-- Version watermark -->
-    <div class="splash-version">v2.0 &nbsp;&middot;&nbsp; 2025–2026</div>
+    <div class="splash-version">v2.0 &nbsp;&middot;&nbsp; 2025â€“2026</div>
   </div>
 
-  <!-- ── React Root ── -->
+  <!-- â”€â”€ React Root â”€â”€ -->
   <div id="root"></div>
   <script type="module" src="./index.tsx"></script>
 
