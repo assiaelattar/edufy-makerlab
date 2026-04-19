@@ -306,6 +306,41 @@ export interface Booking {
   programInterest?: string;
 }
 
+export interface WorkshopEvaluation {
+  id: string;
+  organizationId: string;
+  workshopTitle: string;
+  instructorId: string;
+  instructorName: string;
+  date: string; // YYYY-MM-DD
+  
+  // Instructor Inputs
+  responses: {
+    hardestPart: string;
+    instructorWords: string;
+    projectFailures: string;
+    safetyMaterialIssues: string;
+  };
+  
+  // AI Metrics
+  metrics: {
+    handsOffIndex: number; // 0-25
+    discoveryStruggle: number; // 0-25
+    materialAuthenticity: number; // 0-25
+    processOverProduct: number; // 0-25
+  };
+  
+  totalScore: number; // 0-100
+  breakdown: {
+    handsOff: string;
+    discovery: string;
+    material: string;
+    process: string;
+  };
+  actionableFeedback: string;
+  createdAt: Timestamp;
+}
+
 // --- TEAM & TASK MANAGEMENT TYPES ---
 
 export interface Project {
@@ -717,7 +752,7 @@ export interface StaffAttendanceRecord {
 
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms' | 'staff-attendance';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms' | 'staff-attendance' | 'workshop-quality';
 
 export interface ViewParams {
   programId?: string; // NEW

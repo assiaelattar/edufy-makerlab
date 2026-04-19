@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, BarChart3, ClipboardCheck, Briefcase, Megaphone, TrendingDown, Brain, Camera, Hammer, Car, Archive } from 'lucide-react';
+import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, BarChart3, ClipboardCheck, Briefcase, Megaphone, TrendingDown, Brain, Camera, Hammer, Car, Archive, Activity } from 'lucide-react';
 import { ViewState } from '../types';
 
 export interface ModuleConfig {
@@ -22,6 +22,7 @@ export const MODULES: ModuleConfig[] = [
     { id: 'attendance', label: 'Attendance', icon: ClipboardCheck, enabled: true, color: 'red', requiredPermission: 'attendance.manage', category: 'academic' },
     { id: 'programs', label: 'Programs', icon: BookOpen, enabled: true, color: 'violet', requiredPermission: 'programs.manage', category: 'academic' },
     { id: 'learning', label: 'Learning & Portfolio', icon: Brain, enabled: false, description: 'LMS, Projects & Student Portfolios', color: 'cyan', requiredPermission: 'learning.view', category: 'academic' },
+    { id: 'workshop-quality', label: 'Workshop Quality', icon: Activity, enabled: true, description: 'AI Pedagogical Assessment', color: 'indigo', requiredPermission: 'workshops.manage', category: 'academic' },
 
     { id: 'schedule', label: 'Global Schedule', icon: CalendarCheck, enabled: true, description: 'Weekly Activity View', color: 'blue', requiredPermission: 'dashboard.view', category: 'academic' },
     { id: 'finance', label: 'Finance', icon: Wallet, enabled: true, color: 'emerald', requiredPermission: 'finance.view', category: 'business' },

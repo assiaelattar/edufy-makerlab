@@ -42,6 +42,7 @@ import { LoginView } from './views/LoginView';
 import { StaffAbsenceView } from './views/StaffAbsenceView';
 import { ParentLoginView } from './views/ParentLoginView';
 import { LandingView } from './views/website/LandingView';
+import { WorkshopQualityView } from './views/WorkshopQualityView';
 import { SaasAdminView } from './views/SaasAdminView';
 import { AppStoreView } from './views/AppStoreView';
 import { AppDetailsView } from './views/AppDetailsView';
@@ -689,6 +690,7 @@ const AppContent = () => {
             case 'saas-admin': return <SaasAdminView />;
             case 'app-store': return <AppStoreView />;
             case 'app-details': return <AppDetailsView />;
+            case 'workshop-quality': return <WorkshopQualityView />;
             case 'saas-app': {
                 const appId = viewParams?.appId;
                 if (!appId) return <div>App ID missing</div>;

@@ -181,6 +181,11 @@ service cloud.firestore {
       allow write: if true; // Public/User bookings
     }
 
+    match /workshop_evaluations/{evalId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor');
+    }
+
     match /tasks/{taskId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();

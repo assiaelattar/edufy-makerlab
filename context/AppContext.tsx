@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, query, orderBy, limit, where } from 'firebase/firestore';
-import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge, StaffAttendanceRecord } from '../types';
+import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge, StaffAttendanceRecord, WorkshopEvaluation } from '../types';
 import { translations } from '../utils/translations';
 import { useAuth } from './AuthContext';
 import { addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
@@ -19,6 +19,7 @@ interface AppContextType {
   workshopTemplates: WorkshopTemplate[];
   workshopSlots: WorkshopSlot[];
   bookings: Booking[];
+  workshopEvaluations: WorkshopEvaluation[];
 
   // Attendance
   attendanceRecords: AttendanceRecord[];
@@ -114,6 +115,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [workshopTemplates, setWorkshopTemplates] = useState<WorkshopTemplate[]>([]);
   const [workshopSlots, setWorkshopSlots] = useState<WorkshopSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [workshopEvaluations, setWorkshopEvaluations] = useState<WorkshopEvaluation[]>([]);
 
   // Attendance
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -250,6 +252,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       onSnapshot(query(collection(firestore, 'workshop_templates'), where('organizationId', '==', orgId)), (snap) => setWorkshopTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopTemplate)))),
       onSnapshot(query(collection(firestore, 'workshop_slots'), where('organizationId', '==', orgId)), (snap) => setWorkshopSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopSlot)))),
       onSnapshot(query(collection(firestore, 'bookings'), where('organizationId', '==', orgId), orderBy('bookedAt', 'desc')), (snap) => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)))),
+      onSnapshot(query(collection(firestore, 'workshop_evaluations'), where('organizationId', '==', orgId), orderBy('createdAt', 'desc')), (snap) => setWorkshopEvaluations(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopEvaluation)))),
 
       // Attendance
       onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), (snap) => setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord)))),
@@ -328,7 +331,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       students, programs, enrollments, payments, expenses, expenseTemplates,
-      workshopTemplates, workshopSlots, bookings,
+      workshopTemplates, workshopSlots, bookings, workshopEvaluations,
       attendanceRecords,
       staffAttendanceRecords,
       tasks, projects, chatMessages, teamMembers,

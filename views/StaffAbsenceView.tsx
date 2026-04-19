@@ -95,14 +95,14 @@ export const StaffAbsenceView = () => {
                 departureTime: departure || null
             };
 
-            await setDoc(doc(db, 'attendance', recordId), recordData, { merge: true });
+            await setDoc(doc(db, 'staff_attendance', recordId), recordData, { merge: true });
 
             // Auto-update status to 'late' if arrival is after scheduled start
             if (status === 'present' && arrival) {
                 const staff = teamMembers.find(u => u.uid === staffId);
                 const workStart = staff?.workHours?.start || settings.defaultWorkHours?.start || '09:00';
                 if (timeToMinutes(arrival) > timeToMinutes(workStart) + 5) { // 5 min grace period
-                    await setDoc(doc(db, 'attendance', recordId), { status: 'late' }, { merge: true });
+                    await setDoc(doc(db, 'staff_attendance', recordId), { status: 'late' }, { merge: true });
                 }
             }
 

@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
 import { WorkshopTemplate, Booking } from '../types';
 import { formatDate, getGeneratedSlots, VirtualSlot } from '../utils/helpers';
+import { WorkshopReportModal } from '../components/WorkshopReportModal';
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
     const { workshopTemplates, workshopSlots, bookings, settings } = useAppContext();
@@ -28,6 +29,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         recurrencePattern: { days: [], time: '10:00', date: '' },
         capacityPerSlot: 10, isActive: true, targetAudience: 'Child'
     });
+
+    const [isEvaluationModalOpen, setIsEvaluationModalOpen] = useState(false);
+    const [evaluatingWorkshopTitle, setEvaluatingWorkshopTitle] = useState('');
 
     // --- Helpers ---
     const copyLink = (slug: string) => {
@@ -358,6 +362,16 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                         <div className="border-t border-slate-800 bg-slate-900/50 p-3 md:p-4 animate-in slide-in-from-top-2">
                                                             <div className="flex justify-between items-center mb-4">
                                                                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendee List</h5>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEvaluatingWorkshopTitle(slot.templateTitle);
+                                                                        setIsEvaluationModalOpen(true);
+                                                                    }}
+                                                                    className="flex items-center gap-1.5 px-3 py-1 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-lg text-[10px] font-black hover:bg-indigo-600/40 transition-all uppercase tracking-tighter"
+                                                                >
+                                                                    <Star size={12} fill="currentColor" /> Analyze Quality
+                                                                </button>
                                                             </div>
 
                                                             {bookingsList.length === 0 ? (
@@ -564,6 +578,12 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                     )}
                 </div>
             </Modal>
+
+            <WorkshopReportModal
+                isOpen={isEvaluationModalOpen}
+                onClose={() => setIsEvaluationModalOpen(false)}
+                workshopTitle={evaluatingWorkshopTitle}
+            />
         </div>
     );
 };

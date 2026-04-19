@@ -6,6 +6,7 @@ import { collection, addDoc, setDoc, updateDoc, deleteDoc, doc, getDoc, serverTi
 import { Modal } from '../components/Modal';
 import { CommunicationTemplate, Announcement } from '../types';
 import { formatDate } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 
 // --- SEED DATA ---
 const MOCK_TEMPLATES = [
@@ -121,6 +122,7 @@ const MONTHS = [
 
 export const CommunicationsView = () => {
     const { students, enrollments, programs } = useAppContext();
+    const { currentOrganization } = useAuth();
     const [activeTab, setActiveTab] = useState<'overview' | 'compose' | 'templates' | 'history'>('overview');
 
     // Data State
@@ -149,10 +151,10 @@ export const CommunicationsView = () => {
     // Fetch Templates & History
     useEffect(() => {
         fetchData();
-    }, []);
+    }, [currentOrganization?.id]);
 
     const fetchData = async () => {
-        if (!db) return;
+        if (!db || !currentOrganization?.id) return;
         setLoading(true);
         try {
             // Fetch Templates from Org Settings
@@ -196,7 +198,7 @@ export const CommunicationsView = () => {
     // --- TEMPLATE HANDLERS ---
     const handleSaveTemplate = async () => {
         if (!messageForm.title || !messageForm.content) return alert("Title and Content required");
-        if (!db) return;
+        if (!db || !currentOrganization?.id) return;
 
         const name = prompt("Enter template name:", messageForm.title);
         if (!name) return;

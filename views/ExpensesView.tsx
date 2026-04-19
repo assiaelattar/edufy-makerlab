@@ -11,7 +11,16 @@ import { Expense, ExpenseTemplate } from '../types';
 
 export const ExpensesView = () => {
     const { expenses, expenseTemplates, payments, settings } = useAppContext();
-    const { can } = useAuth();
+    const { can, currentOrganization } = useAuth();
+    const orgId = currentOrganization?.id || '';
+
+    // Dynamic session list derived from real data
+    const availableSessions = useMemo(() => {
+        const set = new Set<string>();
+        if (settings.academicYear) set.add(settings.academicYear);
+        expenses.forEach(e => { if (e.session) set.add(e.session); });
+        return Array.from(set).sort().reverse();
+    }, [expenses, settings.academicYear]);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
@@ -139,7 +148,8 @@ export const ExpensesView = () => {
                 receiptUrl: paymentProof,
                 templateId: payingTemplate.id,
                 session: selectedSession,
-                status: 'paid', // Immediate payment
+                organizationId: orgId,
+                status: 'paid',
                 createdAt: serverTimestamp()
             });
             setIsPayTemplateModalOpen(false);
@@ -156,9 +166,9 @@ export const ExpensesView = () => {
         try {
             await addDoc(collection(db, 'expense_templates'), {
                 ...templateForm,
+                organizationId: orgId,
                 createdAt: serverTimestamp()
             });
-            // Reset form but keep modal open for more
             setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 });
         } catch (err) { console.error(err); }
     };
@@ -173,6 +183,7 @@ export const ExpensesView = () => {
                 await addDoc(collection(db, 'expenses'), {
                     ...expenseForm,
                     session: selectedSession,
+                    organizationId: orgId,
                     createdAt: serverTimestamp()
                 });
             }
@@ -217,8 +228,7 @@ export const ExpensesView = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
                      <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} className="bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-3 py-2 focus:border-rose-500 outline-none">
-                        <option value={settings.academicYear}>{settings.academicYear}</option>
-                        <option value="2023-2024">2023-2024</option>
+                        {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                     <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-3 py-2 focus:border-rose-500 outline-none"/>
                     
