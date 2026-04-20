@@ -12,7 +12,7 @@ import { DashboardView } from './views/DashboardView';
 import { StudentsView } from './views/StudentsView';
 import { ClassesView } from './views/ClassesView';
 import { ProgramsView } from './views/ProgramsView';
-import { FinanceView } from './views/FinanceView';
+import { FinanceView, computeAcademicYear } from './views/FinanceView';
 import { ExpensesView } from './views/ExpensesView';
 import { ToolsView } from './views/ToolsView';
 import { SettingsView } from './views/SettingsView';
@@ -324,7 +324,8 @@ const AppContent = () => {
                 depositDate: paymentForm.method === 'check' ? paymentForm.depositDate : null,
                 proofUrl: paymentForm.method === 'virement' ? paymentForm.proofUrl : null,
 
-                session: settings.academicYear, // Tag with Current Session
+                // Use the date of the payment to determine the correct academic session
+                session: computeAcademicYear(new Date(paymentForm.date)),
                 createdAt: serverTimestamp()
             });
 
@@ -543,7 +544,8 @@ const AppContent = () => {
                 balance: negotiatedPrice - initialCleared,
                 status: 'active',
                 startDate: new Date().toISOString(),
-                session: settings.academicYear, // Tag with Current Session
+                // Auto-detect session from enrollment date (Sept-June rule)
+                session: computeAcademicYear(new Date()),
                 organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
                 createdAt: serverTimestamp()
             });
@@ -560,7 +562,8 @@ const AppContent = () => {
                     bankName: p.bankName || null,
                     depositDate: p.depositDate || null,
                     status: p.method === 'cash' ? 'paid' : 'check_received',
-                    session: settings.academicYear,
+                    // Use payment date to determine session, not the admin's current setting
+                    session: computeAcademicYear(new Date(p.date || new Date().toISOString())),
                     organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
                     createdAt: serverTimestamp()
                 });

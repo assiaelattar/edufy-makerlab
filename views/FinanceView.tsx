@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, generateReceipt } from '../utils/helpers';
 import { Enrollment, Payment } from '../types';
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Upcoming Payment Helper Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
     enrollment: Enrollment,
     paymentsForEnrollment: Payment[]
@@ -51,15 +51,22 @@ function computeNextPaymentDate(
     return { dueDate: nextDue, urgency };
 }
 
-// Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ Main Component Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+// --- Main Component ---
+// Determines the correct academic session for a given date.
+// Academic year: Sept 1 of year Y -> June 30 of year Y+1 = 'Y-(Y+1)'
+export const computeAcademicYear = (d: Date = new Date()): string => {
+    const m = d.getMonth() + 1; // 1-12
+    const y = d.getFullYear();
+    return m >= 9 ? ${y}- : ${y - 1}-;
+};
+
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const { payments, enrollments, students, programs, navigateTo, settings, viewParams } = useAppContext();
-    const { can } = useAuth();
-
-    // Ã¢â€â‚¬ State Ã¢â€â‚¬
+    const { can } = useAuth();    // --- State ---
     const [viewMode, setViewMode] = useState<'transactions' | 'balances' | 'upcoming'>('balances');
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedSession, setSelectedSession] = useState(settings.academicYear || '2024-2025');
+    // Default to the academically correct year (Sept 1 - June 30 rule)
+    const [selectedSession, setSelectedSession] = useState(() => computeAcademicYear());
     const [selectedMonth, setSelectedMonth] = useState(''); // YYYY-MM, empty = all months
     const [selectedProgram, setSelectedProgram] = useState('All');
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -76,7 +83,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         }
     }, [viewParams]);
 
-    // Ã¢â€â‚¬ Derived: Available Sessions Ã¢â€â‚¬
+ //  Derived: Available Sessions 
     const availableSessions = useMemo(() => {
         const sessions = new Set<string>();
         if (settings.academicYear) sessions.add(settings.academicYear);
@@ -85,14 +92,14 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         return Array.from(sessions).sort().reverse();
     }, [payments, enrollments, settings.academicYear]);
 
-    // Ã¢â€â‚¬ Derived: Audience matcher Ã¢â€â‚¬
+ //  Derived: Audience matcher 
     const audienceMatchesProg = (progId: string) => {
         if (filterAudience === 'all') return true;
         const prog = programs.find(p => p.id === progId);
         return filterAudience === 'kids' ? prog?.targetAudience !== 'adults' : prog?.targetAudience === 'adults';
     };
 
-    // Ã¢â€â‚¬ Derived: Filtered Data Ã¢â€â‚¬
+ //  Derived: Filtered Data 
     // --- Derived: Filtered Data ---
     const { filteredPayments, filteredEnrollments } = useMemo(() => {
         const matchesSearch = (text: string) => !searchQuery || text.toLowerCase().includes(searchQuery.toLowerCase());
@@ -132,7 +139,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     }, [payments, enrollments, searchQuery, selectedSession, selectedMonth, selectedProgram, dateRange,
         balanceFilter, transactionStatusFilter, settings.academicYear, filterAudience]);
 
-    // Ã¢â€â‚¬ Derived: KPI Stats Ã¢â‚¬â€ always based on filteredPayments for date accuracy Ã¢â€â‚¬
+ //  Derived: KPI Stats  always based on filteredPayments for date accuracy 
     const stats = useMemo(() => {
         // Base enrollments for student counts (session-scoped, ignore search/balance filter)
         const baseEnrollments = enrollments.filter(e => {
@@ -150,7 +157,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         const totalStudents = baseEnrollments.length;
         const collectionRate = totalExpected > 0 ? (totalPaid / totalExpected) * 100 : 0;
 
-        // Ã¢Å“â€¦ FIX: Realized Revenue now uses filteredPayments (respects date range)
+ //  FIX: Realized Revenue now uses filteredPayments (respects date range)
         const realizedRevenue = filteredPayments
             .filter(p => ['paid', 'verified'].includes(p.status))
             .reduce((sum, p) => sum + p.amount, 0);
@@ -158,7 +165,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         return { totalExpected, totalPaid, totalOutstanding, paidCount, unpaidCount, totalStudents, collectionRate, realizedRevenue };
     }, [enrollments, filteredPayments, selectedSession, selectedProgram, settings.academicYear, filterAudience]);
 
-    // Ã¢â€â‚¬ Derived: Monthly Revenue Chart Data Ã¢â€â‚¬
+ //  Derived: Monthly Revenue Chart Data 
     // Counts ALL non-bounced payments (cleared + pending/in-transit) to show real activity
     const monthlyChartData = useMemo(() => {
         const sessionPayments = payments.filter(p => {
@@ -210,7 +217,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         }));
     }, [payments, enrollments, selectedSession, selectedProgram, filterAudience, settings.academicYear, selectedMonth]);
 
-    // Ã¢â€â‚¬ Derived: Upcoming Payments Ã¢â€â‚¬
+ //  Derived: Upcoming Payments 
     const upcomingPayments = useMemo(() => {
         const sessionEnrollments = enrollments.filter(e => {
             const ms = e.session ? e.session === selectedSession : selectedSession === settings.academicYear;
@@ -232,7 +239,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     // --- Derived: Monthly Collection Report ---
     // SOURCE: starts from PAYMENTS (same as KPI) so paid totals always match.
     // NOT-PAID SPLIT: separates installment-plan students (who owe this period)
-    // from full/annual-plan students (one-time fee â€” no monthly obligation).
+    // from full/annual-plan students (one-time fee &middot; no monthly obligation).
     const monthlyReport = useMemo(() => {
         const empty = { installmentUnpaidRows: [] as any[], annualUnpaidRows: [] as any[], fullyPaidRows: [] as any[], paidRows: [] as any[] };
         if (!selectedMonth) return empty;
@@ -291,7 +298,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             return e.status === 'active' && ms && mp && ma && matchSearch && !paidIds.has(e.id);
         });
 
-        // Installment plans: monthly/trimester/semestre â€” these students SHOULD pay periodically
+        // Installment plans: monthly/trimester/semestre &middot; these students SHOULD pay periodically
         const installmentPlans = ['monthly', 'trimester', 'semestre'];
         const isInstallment = (e: Enrollment) => installmentPlans.includes(e.paymentPlan);
 
@@ -319,9 +326,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             .sort((a, b) => (a.enrollment.studentName || '').localeCompare(b.enrollment.studentName || ''));
 
         return { installmentUnpaidRows, annualUnpaidRows, fullyPaidRows, paidRows };
-    }, [selectedMonth, enrollments, payments, selectedSession, selectedProgram, searchQuery, settings.academicYear, filterAudience]);
-
-    // Ã¢â€â‚¬ Handlers Ã¢â€â‚¬
+    }, [selectedMonth, enrollments, payments, selectedSession, selectedProgram, searchQuery, settings.academicYear, filterAudience]);    // --- Handlers ---
     const handleCardClick = (filterType: 'paid' | 'unpaid') => {
         setViewMode('balances');
         setBalanceFilter(filterType);
@@ -344,7 +349,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         handleWhatsApp(item.enrollment, msg);
     };
 
-    // Ã¢â€â‚¬ Excel Export Ã¢â€â‚¬
+ //  Excel Export 
     const handleExportExcel = () => {
         const rows = filteredPayments.map(p => {
             const enrollment = enrollments.find(e => e.id === p.enrollmentId);
@@ -386,13 +391,13 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
         const unpaidTableRow = (r: any, i: number) =>
             `<tr><td style="color:#94a3b8">${i + 1}</td><td><strong>${r.enrollment.studentName || '-'}</strong></td>` +
-            `<td>${r.enrollment.programName || '-'}</td><td style="color:#64748b">${r.enrollment.gradeName || ''} Ã‚Â· ${r.enrollment.groupName || ''}</td>` +
+            `<td>${r.enrollment.programName || '-'}</td><td style="color:#64748b">${r.enrollment.gradeName || ''} &middot; ${r.enrollment.groupName || ''}</td>` +
             `<td><span class="badge badge-red">${r.enrollment.paymentPlan}</span></td>` +
             `<td style="text-align:right;font-family:monospace;font-weight:600;color:#dc2626">${formatCurrency(r.enrollment.balance || 0)}</td></tr>`;
 
         const paidTableRow = (r: any, i: number) =>
             `<tr><td style="color:#94a3b8">${i + 1}</td><td><strong>${r.enrollment.studentName || '-'}</strong></td>` +
-            `<td>${r.enrollment.programName || '-'} Ã‚Â· ${r.enrollment.gradeName || ''}</td>` +
+            `<td>${r.enrollment.programName || '-'} &middot; ${r.enrollment.gradeName || ''}</td>` +
             `<td>${[...r.clearedPayments, ...r.pendingPayments].map(paymentBadge).join('')}</td>` +
             `<td style="text-align:right;font-family:monospace;font-weight:600;color:#16a34a">${formatCurrency(r.clearedAmount)}${r.pendingAmount > 0 ? ' <span style="color:#d97706;font-size:10px">+' + formatCurrency(r.pendingAmount) + ' pend.</span>' : ''}</td>` +
             `<td style="text-align:right;font-family:monospace;font-weight:600;color:${(r.enrollment.balance || 0) > 0 ? '#d97706' : '#16a34a'}">${(r.enrollment.balance || 0) > 0 ? formatCurrency(r.enrollment.balance) : '&#10003; Fully paid'}</td></tr>`;
@@ -404,7 +409,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
         const html = [
             `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><title>Rapport - ${monthLabel}</title><style>${css}</style></head><body>`,
-            `<div class="header"><div><h1>Monthly Collection Report</h1><div class="meta">${orgName} &nbsp;Ã‚Â·&nbsp; ${monthLabel} &nbsp;Ã‚Â·&nbsp; Session ${selectedSession}</div></div>`,
+            `<div class="header"><div><h1>Monthly Collection Report</h1><div class="meta">${orgName} &nbsp; &middot; &nbsp; ${monthLabel} &nbsp; &middot; &nbsp; Session ${selectedSession}</div></div>`,
             `<div style="text-align:right;font-size:11px;color:#64748b">Generated: ${new Date().toLocaleDateString()}</div></div>`,
             `<div class="kpi-row">`,
             `<div class="kpi green"><div class="label">Cleared this month</div><div class="value">${formatCurrency(cleared)}</div></div>`,
@@ -413,15 +418,15 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             `<div class="kpi amber"><div class="label">Installments due</div><div class="value">${installmentUnpaidRows.length}</div></div>`,
             `</div>`,
             installmentUnpaidRows.length > 0
-                ? `<div class="sec sec-red"><span>Installment payments due Ã¢â‚¬â€ ${installmentUnpaidRows.length} students</span><span>${formatCurrency(installmentUnpaidRows.reduce((s: number, r: any) => s + (r.enrollment.balance || 0), 0))} outstanding</span></div>` +
+                ? `<div class="sec sec-red"><span>Installment payments due  &middot;  &middot;  ${installmentUnpaidRows.length} students</span><span>${formatCurrency(installmentUnpaidRows.reduce((s: number, r: any) => s + (r.enrollment.balance || 0), 0))} outstanding</span></div>` +
                   `<table>${unpaidTheadHtml}<tbody>${installmentUnpaidRows.map(unpaidTableRow).join('')}</tbody></table>` : '',
             annualUnpaidRows.length > 0
-                ? `<div class="sec sec-amber"><span>Annual fee outstanding Ã¢â‚¬â€ ${annualUnpaidRows.length} students</span><span>${formatCurrency(annualUnpaidRows.reduce((s: number, r: any) => s + (r.enrollment.balance || 0), 0))} owed</span></div>` +
+                ? `<div class="sec sec-amber"><span>Annual fee outstanding  &middot;  &middot;  ${annualUnpaidRows.length} students</span><span>${formatCurrency(annualUnpaidRows.reduce((s: number, r: any) => s + (r.enrollment.balance || 0), 0))} owed</span></div>` +
                   `<table>${unpaidTheadHtml}<tbody>${annualUnpaidRows.map(unpaidTableRow).join('')}</tbody></table>` : '',
             paidRows.length > 0
-                ? `<div class="sec sec-green"><span>Paid this month Ã¢â‚¬â€ ${paidRows.length} students</span><span>${formatCurrency(cleared)} cleared</span></div>` +
+                ? `<div class="sec sec-green"><span>Paid this month  &middot;  &middot;  ${paidRows.length} students</span><span>${formatCurrency(cleared)} cleared</span></div>` +
                   `<table>${paidTheadHtml}<tbody>${paidRows.map(paidTableRow).join('')}</tbody></table>` : '',
-            `<div class="footer">${orgName} &nbsp;Ã‚Â·&nbsp; ${monthLabel} &nbsp;Ã‚Â·&nbsp; Collected: ${formatCurrency(cleared)} &nbsp;Ã‚Â·&nbsp; Outstanding: ${formatCurrency(outstanding)}</div>`,
+            `<div class="footer">${orgName} &nbsp; &middot; &nbsp; ${monthLabel} &nbsp; &middot; &nbsp; Collected: ${formatCurrency(cleared)} &nbsp; &middot; &nbsp; Outstanding: ${formatCurrency(outstanding)}</div>`,
             `<script>window.onload=()=>window.print();</script></body></html>`,
         ].join('\n');
 
@@ -429,7 +434,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         if (win) { win.document.write(html); win.document.close(); }
     };
 
-    // Ã¢â€â‚¬ Urgency Styling Ã¢â€â‚¬
+ //  Urgency Styling 
     const urgencyStyle = (urgency: string) => {
         if (urgency === 'overdue') return { badge: 'bg-red-500/10 text-red-400 border-red-500/20', dot: 'bg-red-500', label: 'Overdue' };
         if (urgency === 'this_week') return { badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20', dot: 'bg-amber-500', label: 'Due this week' };
@@ -439,7 +444,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     return (
         <div className="space-y-6 pb-24 md:pb-8 flex flex-col animate-in fade-in slide-in-from-right-4">
 
-            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Header Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  Header  */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
                 <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">
@@ -482,7 +487,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 className="text-xs text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-2 rounded-lg transition-colors border border-slate-700"
                                 title="Clear month filter"
                             >
-                                Ã¢Å“â€¢
+                                &times;
                             </button>
                         )}
                     </div>
@@ -498,10 +503,10 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 </div>
             </div>
 
-            {/* Ã¢â€â‚¬Ã¢â€â‚¬ KPI Cards Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  KPI Cards  */}
             {can('finance.view_totals') && (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {/* Realized Revenue Ã¢â‚¬â€ respects date range + month filter */}
+ {/* Realized Revenue  respects date range + month filter */}
                     <div className={`bg-slate-900 border p-4 rounded-xl hover:border-emerald-500/50 transition-colors ${selectedMonth ? 'border-emerald-700/50' : 'border-emerald-900/30'}`}>
                         <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
                             <TrendingUp size={12} /> Realized Revenue
@@ -510,7 +515,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
                             {selectedMonth ? (
                                 <><span className="text-emerald-600 font-bold">{new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}</span> only</>
-                            ) : 'Cleared payments Ã‚Â· full session'}
+                            ) : 'Cleared payments &middot; full session'}
                         </div>
                     </div>
 
@@ -569,7 +574,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 </div>
             )}
 
-            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Monthly Revenue Chart Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  Monthly Revenue Chart  */}
             {can('finance.view_totals') && monthlyChartData.length > 0 && (
                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <button
@@ -578,9 +583,9 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     >
                         <div className="flex items-center gap-2 text-sm font-bold text-white">
                             <BarChart2 size={16} className="text-emerald-400" />
-                            Monthly Activity Ã¢â‚¬â€ {selectedSession}
+                            Monthly Activity &mdash; {selectedSession}
                             <span className="text-slate-500 font-normal text-xs ml-1">
-                                ({monthlyChartData.length} months Ã‚Â·{' '}
+                                ({monthlyChartData.length} months &middot;{' '}
                                 {formatCurrency(monthlyChartData.reduce((s, m) => s + m.total, 0))} total)
                             </span>
                         </div>
@@ -618,7 +623,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     }`}>
                                         {m.label}
                                         {m.isCurrent && !m.isSelected && <span className="block text-[9px] text-blue-600 font-medium">NOW</span>}
-                                        {m.isSelected && <span className="block text-[9px] text-emerald-600 font-medium">Ã¢â€“Â¶ ACTIVE</span>}
+                                        {m.isSelected && <span className="block text-[9px] text-emerald-600 font-medium">&bull; ACTIVE</span>}
                                     </div>
 
                                     {/* Stacked bar: cleared (green) + pending (amber) */}
@@ -664,7 +669,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 </div>
             )}
 
-            {/* Ã¢â€â‚¬Ã¢â€â‚¬ Main Table Panel Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  Main Table Panel  */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/10">
 
                 {/* Toolbar */}
@@ -728,7 +733,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                             </div>
-                            {/* Excel Export Ã¢â‚¬â€ transactions only */}
+ {/* Excel Export  transactions only */}
                             {viewMode === 'transactions' && can('finance.view_totals') && (
                                 <button
                                     onClick={handleExportExcel}
@@ -738,7 +743,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     <Download size={14} /> Export
                                 </button>
                             )}
-                            {/* Print Monthly Report Ã¢â‚¬â€ balances + month selected */}
+ {/* Print Monthly Report  balances + month selected */}
                             {viewMode === 'balances' && selectedMonth && can('finance.view_totals') && (
                                 <button
                                     onClick={handlePrintMonthlyReport}
@@ -768,19 +773,19 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             <div className="flex items-center gap-2">
                                 <span className="text-xs font-bold text-slate-500 uppercase">Date:</span>
                                 <input type="date" className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} />
-                                <span className="text-slate-600 text-xs">Ã¢â€ â€™</span>
+                                <span className="text-slate-600 text-xs"> &middot;  &middot; </span>
                                 <input type="date" className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} />
                                 {(dateRange.start || dateRange.end || transactionStatusFilter !== 'all') && (
                                     <button onClick={() => { setDateRange({ start: '', end: '' }); setTransactionStatusFilter('all'); }} className="text-xs text-red-400 hover:underline">Clear</button>
                                 )}
                             </div>
                             <div className="ml-auto text-xs text-slate-500">
-                                {filteredPayments.length} transactions Ã‚Â· {formatCurrency(filteredPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((s, p) => s + p.amount, 0))} cleared
+                                {filteredPayments.length} transactions &middot; {formatCurrency(filteredPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((s, p) => s + p.amount, 0))} cleared
                             </div>
                         </div>
                     )}
 
-                    {/* Balance secondary filters Ã¢â‚¬â€ hide in monthly report mode */}
+ {/* Balance secondary filters  hide in monthly report mode */}
                     {viewMode === 'balances' && !selectedMonth && (
                         <div className="flex gap-2 items-center pt-2 border-t border-slate-800/50 animate-in slide-in-from-top-2">
                             <span className="text-xs font-bold text-slate-500 uppercase">Status:</span>
@@ -818,7 +823,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     return (
                     <div className="divide-y divide-slate-800">
 
-                        {/* SECTION 1: Installment due Ã¢â‚¬â€ these students have recurring plans and missed this month */}
+ {/* SECTION 1: Installment due  these students have recurring plans and missed this month */}
                         {installmentUnpaidRows.length > 0 && (
                             <>
                                 <div className="px-4 py-2 bg-red-950/20 border-b border-red-900/30 flex items-center gap-2">
@@ -854,7 +859,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             </>
                         )}
 
-                        {/* SECTION 2: Annual fee outstanding Ã¢â‚¬â€ one-time payment, not a monthly obligation */}
+ {/* SECTION 2: Annual fee outstanding  one-time payment, not a monthly obligation */}
                         {annualUnpaidRows.length > 0 && (
                             <>
                                 <div className="px-4 py-2 bg-amber-950/20 border-b border-amber-900/30 flex items-center gap-2">
@@ -973,7 +978,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 })()}
 
 
-                {/* Ã¢â€â‚¬Ã¢â€â‚¬ DATA: BALANCES (normal mode, no month selected) Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  DATA: BALANCES (normal mode, no month selected)  */}
                 {viewMode === 'balances' && !selectedMonth && (
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-900 text-slate-400 sticky top-0 z-10 text-xs uppercase tracking-wider">
@@ -994,7 +999,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     <tr key={enrollment.id} className="hover:bg-slate-800/50 transition-colors group">
                                         <td className="p-4">
                                             <div className="font-bold text-white">{enrollment.studentName}</div>
-                                            <div className="text-[10px] text-slate-500 uppercase">{enrollment.gradeName} Ã‚Â· {enrollment.groupName}</div>
+                                            <div className="text-[10px] text-slate-500 uppercase">{enrollment.gradeName} &middot; {enrollment.groupName}</div>
                                         </td>
                                         <td className="p-4">
                                             <div className="text-xs text-blue-300">{enrollment.programName}</div>
@@ -1034,7 +1039,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     </table>
                 )}
 
-                {/* Ã¢â€â‚¬Ã¢â€â‚¬ DATA: TRANSACTIONS Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  DATA: TRANSACTIONS  */}
                 {viewMode === 'transactions' && (
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-900 text-slate-400 sticky top-0 z-10 text-xs uppercase tracking-wider">
@@ -1058,7 +1063,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                         <tr key={payment.id} className="hover:bg-slate-800/50 transition-colors group">
                                             <td className="p-4 text-slate-400 font-mono text-xs">{formatDate(payment.date)}</td>
                                             <td className="p-4 font-medium text-white">{payment.studentName}</td>
-                                            <td className="p-4 text-xs text-blue-300">{enrollment?.programName || 'Ã¢â‚¬â€'}</td>
+                                            <td className="p-4 text-xs text-blue-300">{enrollment?.programName || ' &middot;  &middot; '}</td>
                                             <td className="p-4 font-bold text-white font-mono">
                                                 {can('finance.view_totals') ? formatCurrency(payment.amount) : '***'}
                                             </td>
@@ -1094,7 +1099,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     </table>
                 )}
 
-                {/* Ã¢â€â‚¬Ã¢â€â‚¬ DATA: UPCOMING PAYMENTS Ã¢â€â‚¬Ã¢â€â‚¬ */}
+ {/*  DATA: UPCOMING PAYMENTS  */}
                 {viewMode === 'upcoming' && (
                     <div className="divide-y divide-slate-800">
                         {upcomingPayments.length === 0 ? (
@@ -1141,14 +1146,14 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                     </span>
                                                 </div>
                                                 <div className="text-xs text-slate-400">
-                                                    {enrollment.programName} Ã‚Â· {enrollment.gradeName}
+                                                    {enrollment.programName} &middot; {enrollment.gradeName}
                                                 </div>
                                             </div>
 
                                             {/* Due date */}
                                             <div className="text-right shrink-0">
                                                 <div className="text-xs text-slate-400">
-                                                    {dueDate ? dueDate.toLocaleDateString('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Ã¢â‚¬â€'}
+                                                    {dueDate ? dueDate.toLocaleDateString('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
                                                 </div>
                                                 {daysUntil !== null && (
                                                     <div className={`text-[11px] font-bold ${urgency === 'overdue' ? 'text-red-400' : urgency === 'this_week' ? 'text-amber-400' : 'text-blue-400'}`}>
