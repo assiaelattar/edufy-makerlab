@@ -59,7 +59,7 @@ function computeNextPaymentDate(
 export const computeAcademicYear = (d: Date = new Date()): string => {
     const m = d.getMonth() + 1; // 1-12
     const y = d.getFullYear();
-    return m >= 9 ? ${y}- : ${y - 1}-;
+    return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
 };
 
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
