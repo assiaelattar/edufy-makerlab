@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, MoreHorizontal, FileDown } from 'lucide-react';
+import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, MoreHorizontal, FileDown, AlertTriangle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { updateDoc, doc } from 'firebase/firestore';
@@ -209,8 +209,21 @@ export const StudentsView = ({
                                 const created = student.createdAt as any;
                                 const joinDate = created && created.toDate ? created.toDate() : new Date(created);
 
-                                return (
-                                    <tr key={student.id} onClick={() => onViewProfile(student.id)} className={`group hover:bg-slate-800/40 transition-colors cursor-pointer ${isInactive ? 'opacity-60' : ''}`}>
+                                return (() => {
+                                    // Compute quality issues for this student
+                                    const now = new Date();
+                                    const ageDays = Math.floor((now.getTime() - (joinDate?.getTime?.() || 0)) / 86400000);
+                                    const qIssues: string[] = [];
+                                    if (!student.parentPhone) qIssues.push('No phone');
+                                    if (ageDays >= 7 && activeEnrollments.length === 0) qIssues.push('No enrollment');
+                                    const anyNoPayment = activeEnrollments.some(e => {
+                                        const eAge = Math.floor((now.getTime() - (e.createdAt?.toDate?.()?.getTime?.() || new Date(e.createdAt || 0).getTime())) / 86400000);
+                                        return eAge >= 7 && (e.paidAmount || 0) === 0 && (e.totalAmount || 0) > 0;
+                                    });
+                                    if (anyNoPayment) qIssues.push('No payment');
+
+                                    return (
+                                    <tr key={student.id} onClick={() => onViewProfile(student.id)} className={`group hover:bg-slate-800/40 transition-colors cursor-pointer ${isInactive ? 'opacity-60' : ''} ${qIssues.length > 0 && !isInactive ? 'border-l-2 border-amber-600/50' : ''}`}>
                                         <td className="p-4 text-center">
                                             <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-500 transition-colors">
                                                 {initials}
@@ -220,6 +233,11 @@ export const StudentsView = ({
                                             <div className="font-bold text-white flex items-center gap-2 group-hover:text-blue-400 transition-colors">
                                                 {student.name}
                                                 {isInactive && <span className="text-[10px] uppercase bg-red-950/50 text-red-400 border border-red-900/50 px-1.5 py-0.5 rounded">Inactive</span>}
+                                                {qIssues.length > 0 && !isInactive && (
+                                                    <span title={qIssues.join(' · ')} className="flex items-center gap-1 text-[10px] bg-amber-900/30 text-amber-400 border border-amber-800/40 px-1.5 py-0.5 rounded font-medium">
+                                                        <AlertTriangle size={10} /> {qIssues.length} issue{qIssues.length > 1 ? 's' : ''}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="text-xs text-slate-500">{student.email || 'No email provided'}</div>
                                         </td>
@@ -253,7 +271,8 @@ export const StudentsView = ({
                                             </div>
                                         </td>
                                     </tr>
-                                )
+                                    );
+                                })()
                             })}
                         </tbody>
                     </table>
@@ -273,7 +292,7 @@ export const StudentsView = ({
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-bold text-white text-base truncate">{student.name}</h3>
-                                        <p className="text-xs text-slate-500 truncate">{student.parentPhone} • {student.parentName}</p>
+                                        <p className="text-xs text-slate-500 truncate">{student.parentPhone || <span className="text-amber-500">No phone ⚠</span>} • {student.parentName}</p>
                                     </div>
                                     {isInactive && <span className="text-[10px] uppercase bg-red-950 text-red-400 px-2 py-1 rounded border border-red-900">Inactive</span>}
                                 </div>

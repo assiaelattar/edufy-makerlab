@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { LayoutDashboard, Calendar, DollarSign, Briefcase, Users, UserPlus, Zap, BookOpen, CreditCard, Activity, CheckCircle2, ChevronRight, Hourglass, Building, ClipboardCheck, CalendarCheck, BarChart3, Filter, Phone, MessageCircle, ArrowUpRight, CheckSquare, PieChart, Megaphone, Clock, AlertTriangle, TrendingUp, ArrowRight, Trophy, Rocket, Star, Target, Award } from 'lucide-react';
+import { LayoutDashboard, Calendar, DollarSign, Briefcase, Users, UserPlus, Zap, BookOpen, CreditCard, Activity, CheckCircle2, ChevronRight, Hourglass, Building, ClipboardCheck, CalendarCheck, BarChart3, Filter, Phone, MessageCircle, ArrowUpRight, CheckSquare, PieChart, Megaphone, Clock, AlertTriangle, TrendingUp, ArrowRight, Trophy, Rocket, Star, Target, Award, ShieldAlert, ShieldCheck, Info } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, getDaysDifference, formatDate, getUpcomingBirthdays } from '../utils/helpers';
@@ -555,8 +555,80 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
 
     }, [expenses, expenseTemplates, leads, students, attendanceRecords, programs, enrollments, selectedSession, bookings]);
 
-    const totalActiveAlerts = actionAlerts.reduce((sum, a) => sum + a.count, 0) + totalPendingActions;
+    // --- DATA QUALITY GUARD ---
+    // Flags students who are registered but have incomplete setup after 7 days.
+    // Rules:
+    //  1. Student has NO active enrollment (registered but never enrolled)
+    //  2. Student has enrollment but ZERO payments after 7 days (paidAmount = 0)
+    //  3. Student missing critical contact info (no parentPhone)
+    //  4. Enrollment missing group assignment (no groupId)
+    const incompleteStudents = useMemo(() => {
+        const now = new Date();
+        const GRACE_DAYS = 7; // days before we start alerting
+
+        return students
+            .filter(s => s.status === 'active')
+            .map(student => {
+                const issues: string[] = [];
+                const createdDate = getDate(student.createdAt);
+                const ageDays = getDaysDifference(createdDate, now);
+                const isOldEnough = ageDays >= GRACE_DAYS;
+
+                const activeEnrollments = enrollments.filter(
+                    e => e.studentId === student.id && e.status === 'active'
+                );
+
+                // Issue 1: No enrollment at all (after grace period)
+                if (isOldEnough && activeEnrollments.length === 0) {
+                    issues.push('No enrollment');
+                }
+
+                // Issue 2: Missing parent phone (always critical)
+                if (!student.parentPhone) {
+                    issues.push('No contact phone');
+                }
+
+                // Per-enrollment checks
+                activeEnrollments.forEach(enroll => {
+                    const enrollAge = getDaysDifference(getDate(enroll.createdAt), now);
+
+                    // Issue 3: Zero payments after grace period
+                    if (enrollAge >= GRACE_DAYS && (enroll.paidAmount || 0) === 0 && (enroll.totalAmount || 0) > 0) {
+                        if (!issues.includes('No payment recorded')) {
+                            issues.push('No payment recorded');
+                        }
+                    }
+
+                    // Issue 4: Enrollment has no group assigned
+                    if (!enroll.groupId || !enroll.groupName) {
+                        if (!issues.includes('No group assigned')) {
+                            issues.push('No group assigned');
+                        }
+                    }
+
+                    // Issue 5: No payment plan set
+                    if (!enroll.paymentPlan) {
+                        if (!issues.includes('No payment plan')) {
+                            issues.push('No payment plan');
+                        }
+                    }
+                });
+
+                return { student, issues, ageDays };
+            })
+            .filter(item => item.issues.length > 0)
+            .sort((a, b) => b.issues.length - a.issues.length); // most broken first
+    }, [students, enrollments]);
+
+    const dataQualityScore = useMemo(() => {
+        const total = students.filter(s => s.status === 'active').length;
+        if (total === 0) return 100;
+        return Math.max(0, Math.round(((total - incompleteStudents.length) / total) * 100));
+    }, [students, incompleteStudents]);
+
+    const totalActiveAlerts = actionAlerts.reduce((sum, a) => sum + a.count, 0) + totalPendingActions + incompleteStudents.length;
     const alertHealth = Math.max(0, 100 - (totalActiveAlerts * 5));
+
 
     return (
         <div className="space-y-6 pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
@@ -924,7 +996,116 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                         </div>
                     </div>
 
-                    {/* Lead Trends (Sparkline) */}
+                    {/* DATA QUALITY PANEL */}
+                    {incompleteStudents.length > 0 && (
+                        <div className={`rounded-2xl overflow-hidden border-2 ${
+                            dataQualityScore < 70
+                                ? 'border-red-500/30 bg-red-950/10'
+                                : 'border-amber-500/30 bg-amber-950/10'
+                        }`}>
+                            {/* Header */}
+                            <div className={`p-4 border-b flex justify-between items-center ${
+                                dataQualityScore < 70 ? 'border-red-900/30 bg-red-950/20' : 'border-amber-900/30 bg-amber-950/20'
+                            }`}>
+                                <h3 className={`font-bold text-sm flex items-center gap-2 ${
+                                    dataQualityScore < 70 ? 'text-red-400' : 'text-amber-400'
+                                }`}>
+                                    <ShieldAlert size={16} />
+                                    Data Quality Guard
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                        dataQualityScore < 70
+                                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                    }`}>
+                                        {incompleteStudents.length} students
+                                    </span>
+                                </h3>
+                                {/* Score donut */}
+                                <div className="relative w-10 h-10 flex items-center justify-center">
+                                    <svg className="w-full h-full -rotate-90">
+                                        <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
+                                        <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="4" fill="transparent"
+                                            strokeDasharray={16 * 2 * Math.PI}
+                                            strokeDashoffset={16 * 2 * Math.PI - (dataQualityScore / 100) * (16 * 2 * Math.PI)}
+                                            className={dataQualityScore >= 80 ? 'text-emerald-500' : dataQualityScore >= 60 ? 'text-amber-500' : 'text-red-500'}
+                                            strokeLinecap="round" />
+                                    </svg>
+                                    <span className="absolute text-[9px] font-bold text-white">{dataQualityScore}%</span>
+                                </div>
+                            </div>
+
+                            <div className="p-4 space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
+                                {incompleteStudents.slice(0, 8).map(({ student, issues, ageDays }) => (
+                                    <div
+                                        key={student.id}
+                                        className="group flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-amber-700/40 cursor-pointer transition-all"
+                                        onClick={() => navigateTo('student-details', { studentId: student.id })}
+                                    >
+                                        {/* Avatar */}
+                                        <div className="w-9 h-9 rounded-full bg-slate-800 border-2 border-amber-700/40 flex items-center justify-center text-amber-400 font-bold text-sm shrink-0">
+                                            {student.name.charAt(0)}
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <p className="text-sm font-bold text-white truncate">{student.name}</p>
+                                                <span className="text-[9px] text-slate-500 whitespace-nowrap shrink-0">{ageDays}d ago</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {issues.map((issue, i) => (
+                                                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-800/40 font-medium">
+                                                        {issue}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Arrow */}
+                                        <div className="text-slate-600 group-hover:text-amber-400 transition-colors mt-1">
+                                            <ChevronRight size={14} />
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {incompleteStudents.length > 8 && (
+                                    <button
+                                        onClick={() => navigateTo('students')}
+                                        className="w-full py-2 text-xs text-amber-400 font-bold hover:bg-amber-900/20 rounded-lg transition-colors border border-amber-900/30"
+                                    >
+                                        + {incompleteStudents.length - 8} more incomplete records
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Footer with shortcut */}
+                            <div className={`px-4 py-2.5 border-t flex items-center justify-between ${
+                                dataQualityScore < 70 ? 'border-red-900/30' : 'border-amber-900/30'
+                            }`}>
+                                <p className="text-[10px] text-slate-500 flex items-center gap-1">
+                                    <Info size={10} /> Registered &gt; 7 days with missing data
+                                </p>
+                                <button
+                                    onClick={() => navigateTo('students')}
+                                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
+                                >
+                                    Fix all <ArrowRight size={10} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {incompleteStudents.length === 0 && (
+                        <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-950/20 border border-emerald-800/30">
+                            <ShieldCheck size={20} className="text-emerald-500 shrink-0" />
+                            <div>
+                                <p className="text-sm font-bold text-emerald-400">Data Quality: 100%</p>
+                                <p className="text-[10px] text-slate-500">All student records are complete.</p>
+                            </div>
+                        </div>
+                    )}
+
+
                     <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
                         <div className={`p-4 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
                             <h3 className={`font-bold text-sm ${theme.text}`}>New Leads</h3>
