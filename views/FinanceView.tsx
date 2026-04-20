@@ -1,15 +1,17 @@
-﻿
+
 import React, { useState, useMemo, useEffect } from 'react';
 import {
     CreditCard, Search, Eye, Printer, Filter, TrendingUp, Clock, DollarSign,
     FileText, Building, Calendar, PieChart, AlertCircle, CheckCircle2, Users,
-    ArrowRight, Phone, BarChart2, Download, MessageCircle, ChevronDown, ChevronUp
+    ArrowRight, Phone, BarChart2, Download, MessageCircle, ChevronDown, ChevronUp, Wrench, ShieldCheck
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatDate, generateReceipt } from '../utils/helpers';
 import { Enrollment, Payment } from '../types';
+import { db } from '../services/firebase';
+import { doc, writeBatch } from 'firebase/firestore';
 
 // --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
@@ -74,6 +76,70 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     const [transactionStatusFilter, setTransactionStatusFilter] = useState<string>('all');
     const [filterAudience, setFilterAudience] = useState<'all' | 'kids' | 'adults'>('all');
     const [showMonthlyChart, setShowMonthlyChart] = useState(true);
+    const [isFixingSession, setIsFixingSession] = useState(false);
+    const [fixDone, setFixDone] = useState(false);
+
+    // --- Session Mismatch Detection ---
+    // Finds records tagged 2026-2027 but created/dated before Sept 1, 2026
+    // (i.e., they should be 2025-2026 — created while admin had wrong year in settings)
+    const SESSION_CUTOFF = new Date('2026-09-01T00:00:00Z');
+    const sessionMismatch = useMemo(() => {
+        if (fixDone) return { enrollments: [], payments: [], total: 0 };
+
+        const getDateSafe = (d: any): Date => {
+            if (!d) return new Date();
+            if (typeof d === 'object' && typeof d.toDate === 'function') return d.toDate();
+            return new Date(d);
+        };
+
+        const badEnrollments = enrollments.filter(e => {
+            if (e.session !== '2026-2027') return false;
+            const created = getDateSafe(e.createdAt);
+            return created < SESSION_CUTOFF;
+        });
+
+        const badPayments = payments.filter(p => {
+            if (p.session !== '2026-2027') return false;
+            // Use payment date as the authoritative source
+            const pDate = new Date(p.date || 0);
+            return pDate < SESSION_CUTOFF;
+        });
+
+        return {
+            enrollments: badEnrollments,
+            payments: badPayments,
+            total: badEnrollments.length + badPayments.length
+        };
+    }, [enrollments, payments, fixDone]);
+
+    const fixSessionData = async () => {
+        if (!db || sessionMismatch.total === 0) return;
+        setIsFixingSession(true);
+        try {
+            // Firestore writeBatch allows up to 500 ops per batch
+            const BATCH_SIZE = 490;
+            const allOps = [
+                ...sessionMismatch.enrollments.map(e => ({ col: 'enrollments', id: e.id })),
+                ...sessionMismatch.payments.map(p => ({ col: 'payments', id: p.id }))
+            ];
+
+            for (let i = 0; i < allOps.length; i += BATCH_SIZE) {
+                const batch = writeBatch(db);
+                const chunk = allOps.slice(i, i + BATCH_SIZE);
+                chunk.forEach(({ col, id }) => {
+                    batch.update(doc(db as any, col, id), { session: '2025-2026' });
+                });
+                await batch.commit();
+            }
+
+            setFixDone(true);
+            setSelectedSession('2025-2026');
+        } catch (err) {
+            console.error('Session fix failed:', err);
+        } finally {
+            setIsFixingSession(false);
+        }
+    };
 
     // Initialize from dashboard deep-link params
     useEffect(() => {
@@ -504,6 +570,48 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             </div>
 
  {/*  KPI Cards  */}
+            {/* ── Session Data Fix Banner (admin only, auto-detected) ── */}
+            {can('settings.manage') && sessionMismatch.total > 0 && !fixDone && (
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-amber-950/20 border border-amber-700/40 rounded-xl animate-in slide-in-from-top-2">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="p-2 bg-amber-500/10 rounded-lg text-amber-400 shrink-0">
+                            <Wrench size={18} />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-sm font-bold text-amber-300">Session Data Correction Needed</p>
+                            <p className="text-xs text-amber-400/70 mt-0.5">
+                                Found <strong>{sessionMismatch.enrollments.length} enrollment{sessionMismatch.enrollments.length !== 1 ? 's' : ''}</strong> and{' '}
+                                <strong>{sessionMismatch.payments.length} payment{sessionMismatch.payments.length !== 1 ? 's' : ''}</strong> tagged as{' '}
+                                <code className="bg-amber-900/30 px-1 rounded">2026-2027</code> but recorded before Sept 2026 — they should be{' '}
+                                <code className="bg-emerald-900/30 px-1 rounded text-emerald-400">2025-2026</code>.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={fixSessionData}
+                        disabled={isFixingSession}
+                        className="shrink-0 flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg transition-colors shadow-lg shadow-amber-900/30"
+                    >
+                        {isFixingSession ? (
+                            <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Fixing...</>
+                        ) : (
+                            <><Wrench size={14} /> Fix {sessionMismatch.total} Records</>
+                        )}
+                    </button>
+                </div>
+            )}
+
+            {/* Success message after fix */}
+            {fixDone && (
+                <div className="flex items-center gap-3 p-4 bg-emerald-950/20 border border-emerald-700/40 rounded-xl">
+                    <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
+                    <div>
+                        <p className="text-sm font-bold text-emerald-300">Session data corrected!</p>
+                        <p className="text-xs text-emerald-400/70">All records updated to <code className="bg-emerald-900/30 px-1 rounded">2025-2026</code>. The view has been switched to show the corrected data.</p>
+                    </div>
+                </div>
+            )}
+
             {can('finance.view_totals') && (
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
  {/* Realized Revenue  respects date range + month filter */}
