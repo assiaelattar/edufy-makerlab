@@ -117,15 +117,13 @@ export const ActivityDetailsView = () => {
             action: async () => {
                 if (!db) return;
                 try {
-                    // If payment was cleared/paid, we need to revert the balance
-                    if (['paid', 'verified'].includes(payment.status)) {
-                        const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
-                        if (enrollment) {
-                            await updateDoc(doc(db, 'enrollments', enrollment.id), {
-                                paidAmount: increment(-payment.amount),
-                                balance: increment(payment.amount)
-                            });
-                        }
+                    // Recalculate balance for the enrollment based on all remaining payments
+                    const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
+                    if (enrollment) {
+                        const otherPayments = payments.filter(p => p.enrollmentId === payment.enrollmentId && p.id !== payment.id);
+                        const newPaid = otherPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+                        const newBalance = (enrollment.totalAmount || 0) - newPaid;
+                        await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
                     }
                     await deleteDoc(doc(db, 'payments', payment.id));
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
@@ -146,13 +144,37 @@ export const ActivityDetailsView = () => {
         if(!originalPayment) return;
 
         try {
-            await updateDoc(doc(db, 'payments', activityId.id), editForm);
+            let newStatus = originalPayment.status;
+            const updatedPayment = { ...editForm };
+            if (editForm.method && editForm.method !== originalPayment.method) {
+                if (editForm.method === 'cash') newStatus = 'paid';
+                else if (editForm.method === 'virement') newStatus = 'pending_verification';
+                else if (editForm.method === 'check') newStatus = 'check_received';
+                
+                updatedPayment.status = newStatus;
+                
+                // Clean up fields
+                if (editForm.method !== 'check') {
+                    updatedPayment.checkNumber = null as any;
+                    updatedPayment.bankName = null as any;
+                    updatedPayment.depositDate = null as any;
+                }
+                if (editForm.method !== 'virement') {
+                    updatedPayment.proofUrl = null as any;
+                }
+            }
+
+            await updateDoc(doc(db, 'payments', activityId.id), updatedPayment);
             
-            // If amount changed and it was a paid transaction, update enrollment balance
-            if (editForm.amount && editForm.amount !== originalPayment.amount && ['paid', 'verified'].includes(originalPayment.status)) {
-                const diff = editForm.amount - originalPayment.amount;
+            const wasCleared = ['paid', 'verified'].includes(originalPayment.status);
+            const isCleared = ['paid', 'verified'].includes(newStatus);
+            const originalAmount = Number(originalPayment.amount) || 0;
+            const newAmount = Number(editForm.amount !== undefined ? editForm.amount : originalPayment.amount) || 0;
+            
+            const diff = (isCleared ? newAmount : 0) - (wasCleared ? originalAmount : 0);
+            if (diff !== 0) {
                 const enrollment = enrollments.find(e => e.id === originalPayment.enrollmentId);
-                if(enrollment) {
+                if (enrollment) {
                     await updateDoc(doc(db, 'enrollments', enrollment.id), {
                         paidAmount: increment(diff),
                         balance: increment(-diff)
@@ -161,7 +183,10 @@ export const ActivityDetailsView = () => {
             }
             
             setIsEditModalOpen(false);
-        } catch(err) { console.error(err); }
+        } catch(err) {
+            console.error(err);
+            alert("Failed to update payment.");
+        }
     };
 
     // Helper to render check lifecycle stepper

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Wallet, CreditCard, Eye, Pencil, Trash2, Printer, Share2, CheckCircle2 } from 'lucide-react';
+import { Wallet, CreditCard, Eye, Pencil, Trash2, Printer, Share2, CheckCircle2, Calendar, FileText } from 'lucide-react';
 import { Payment, Enrollment, Student } from '../../types';
 import { formatCurrency, formatDate, generateReceipt } from '../../utils/helpers';
 
@@ -31,7 +31,64 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 }) => {
   const [invoiceModal, setInvoiceModal] = React.useState<{ isOpen: boolean, payment: Payment | null }>({ isOpen: false, payment: null });
 
+  const shareContract = (enrollment: Enrollment) => {
+    if (!enrollment.paymentPromises || enrollment.paymentPromises.length === 0) return;
+    const promisesList = enrollment.paymentPromises.map(p => `- ${p.month}: ${formatCurrency(p.amount)}`).join('\n');
+    const msg = `🧾 Payment Contract - MakerLab Academy\n\nStudent: ${student.name}\nProgram: ${enrollment.programName}\nTotal Due: ${formatCurrency(enrollment.totalAmount)}\nRemaining Balance: ${formatCurrency(enrollment.balance)}\n\n*Scheduled Payments:*\n${promisesList}\n\nThank you for your commitment!`;
+    let phone = student.parentPhone.replace(/[^0-9]/g, '');
+    if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   return (
+    <div className="space-y-6">
+      {/* Payment Contract (Promises) Section */}
+      {studentEnrollments.filter(e => e.paymentPromises && e.paymentPromises.length > 0).map(enrollment => {
+        // Calculate status of the contract based on how much is paid vs total
+        const totalPromised = enrollment.paymentPromises!.reduce((sum, p) => sum + p.amount, 0);
+        return (
+          <div key={`contract-${enrollment.id}`} className="bg-indigo-950/20 border border-indigo-900/50 rounded-xl overflow-hidden">
+            <div className="p-4 border-b border-indigo-900/30 flex justify-between items-center bg-indigo-950/30">
+              <h3 className="font-bold text-indigo-400 flex items-center gap-2">
+                <FileText className="w-4 h-4" /> Payment Contract: {enrollment.programName}
+              </h3>
+              <button
+                onClick={() => shareContract(enrollment)}
+                className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg font-medium flex items-center gap-1 transition-colors shadow-lg shadow-indigo-900/20"
+              >
+                <Share2 size={14} /> Send Contract
+              </button>
+            </div>
+            <div className="p-4">
+              <div className="flex gap-6 mb-4">
+                <div className="text-sm">
+                  <span className="text-slate-500 font-bold block mb-1">Total Expected</span>
+                  <span className="text-white font-mono">{formatCurrency(totalPromised)}</span>
+                </div>
+                <div className="text-sm">
+                  <span className="text-slate-500 font-bold block mb-1">Current Balance</span>
+                  <span className={`${enrollment.balance > 0 ? 'text-amber-400' : 'text-emerald-400'} font-mono font-bold`}>{formatCurrency(enrollment.balance)}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {enrollment.paymentPromises!.map((promise, idx) => {
+                  return (
+                    <div key={idx} className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex justify-between items-center">
+                      <div>
+                        <div className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <Calendar size={12} /> {promise.month}
+                        </div>
+                        <div className="text-white font-mono font-bold">{formatCurrency(promise.amount)}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
       <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
         <h3 className="font-bold text-white flex items-center gap-2">
@@ -272,6 +329,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
           settings={settings}
         />
       )}
+    </div>
     </div>
   );
 };

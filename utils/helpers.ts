@@ -466,9 +466,8 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
   const t = (key: string) => (translations[lang] as any)[key] || key;
 
   const isRejected = payment.status === 'check_bounced';
-  const logoHtml = settings.logoUrl
-    ? `<div class="logo-container"><img src="${settings.logoUrl}" alt="Logo" /></div>`
-    : `<div class="logo-placeholder">${settings.academyName.charAt(0)}</div>`;
+  const defaultLogo = `${window.location.origin}/images/logo.png`;
+  const logoHtml = `<div class="logo-container"><img src="${settings.logoUrl || defaultLogo}" alt="Logo" /></div>`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -994,4 +993,272 @@ export const generateCredentialsPrint = (name: string, email: string, pass: stri
     `;
   win.document.write(html);
   win.document.close();
+};
+
+export const normalizePhone = (phone: string | undefined | null): string => {
+  if (!phone) return '';
+  // Remove all non-digit characters
+  let digits = phone.replace(/\D/g, '');
+  // If it starts with 212, replace with 0
+  if (digits.startsWith('212')) {
+    digits = '0' + digits.substring(3);
+  }
+  return digits;
+};
+
+export const generateParentStatementPrint = (parentData: any, settings: AppSettings) => {
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert("Please allow popups to print.");
+    return;
+  }
+
+  const defaultLogo = `${window.location.origin}/images/logo.png`;
+  const logoHtml = `<img src="${settings.logoUrl || defaultLogo}" alt="Logo" class="logo" />`;
+
+  let childrenHtml = '';
+  parentData.children.forEach((childInfo: any) => {
+    const student = childInfo.student;
+    const enrollments = childInfo.enrollments || [];
+    
+    let enrollmentsHtml = '';
+    enrollments.forEach((e: any) => {
+      const balance = (e.totalAmount || 0) - (e.paidAmount || 0);
+      enrollmentsHtml += `
+        <tr>
+          <td class="col-prog">${e.programName}</td>
+          <td class="col-num">${e.totalAmount || 0}</td>
+          <td class="col-num">${e.paidAmount || 0}</td>
+          <td class="col-num font-bold ${balance > 0 ? 'text-red' : 'text-green'}">${balance}</td>
+        </tr>
+      `;
+    });
+
+    if (enrollments.length === 0) {
+      enrollmentsHtml = `<tr><td colspan="4" class="text-center text-gray">No active enrollments</td></tr>`;
+    }
+
+    childrenHtml += `
+      <div class="student-section">
+        <h3 class="student-name">${student.name}</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-prog">Program</th>
+              <th class="col-num">Expected</th>
+              <th class="col-num">Paid</th>
+              <th class="col-num">Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${enrollmentsHtml}
+          </tbody>
+        </table>
+      </div>
+    `;
+  });
+
+  const now = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Parent Statement - ${parentData.parentName}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; margin: 0; padding: 40px; color: #1e293b; background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #e2e8f0; }
+        .logo { max-height: 60px; object-fit: contain; }
+        .logo-placeholder { width: 50px; height: 50px; background: #2563eb; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 8px; font-size: 20px; }
+        .org-info { text-align: right; }
+        .org-name { font-size: 20px; font-weight: 800; color: #0f172a; margin: 0 0 5px 0; }
+        .org-detail { font-size: 12px; color: #64748b; margin: 2px 0; }
+        
+        .statement-title { font-size: 24px; font-weight: 800; color: #0f172a; margin: 0 0 20px 0; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .parent-info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; }
+        .info-group { margin-bottom: 10px; }
+        .info-group:last-child { margin-bottom: 0; }
+        .info-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .info-value { font-size: 16px; font-weight: 600; color: #0f172a; margin-top: 4px; }
+        
+        .summary-box { text-align: right; border-left: 2px solid #e2e8f0; padding-left: 20px; }
+        .solde-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .solde-value { font-size: 32px; font-weight: 800; color: ${parentData.totalBalance > 0 ? '#dc2626' : '#16a34a'}; margin-top: 5px; }
+        
+        .student-section { margin-bottom: 30px; }
+        .student-name { font-size: 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 12px; }
+        
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table th { text-align: left; padding: 10px; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+        .data-table td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; }
+        .col-prog { width: 50%; }
+        .col-num { width: 16.6%; text-align: right; }
+        
+        .font-bold { font-weight: 700; }
+        .text-red { color: #dc2626; }
+        .text-green { color: #16a34a; }
+        .text-gray { color: #94a3b8; }
+        .text-center { text-align: center; }
+        
+        .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 20px; }
+        
+        @media print {
+          body { padding: 0; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          ${logoHtml}
+          <div class="org-info">
+            <h1 class="org-name">${settings.academyName || 'MakerLab'}</h1>
+            <p class="org-detail">Generated on ${now}</p>
+          </div>
+        </div>
+        
+        <h2 class="statement-title">Financial Statement</h2>
+        
+        <div class="parent-info-card">
+          <div>
+            <div class="info-group">
+              <div class="info-label">Parent / Guardian</div>
+              <div class="info-value">${parentData.parentName}</div>
+            </div>
+            <div class="info-group">
+              <div class="info-label">Contact Phone</div>
+              <div class="info-value">${parentData.phone || 'N/A'}</div>
+            </div>
+          </div>
+          <div class="summary-box">
+            <div class="solde-label">Total Balance Due</div>
+            <div class="solde-value">${parentData.totalBalance}</div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Total Expected: ${parentData.totalExpected}</div>
+            <div style="font-size: 11px; color: #64748b;">Total Paid: ${parentData.totalPaid}</div>
+          </div>
+        </div>
+        
+        ${childrenHtml}
+        
+        <div class="footer">
+          Thank you for being part of ${settings.academyName || 'our community'}.<br/>
+          If you have any questions regarding this statement, please contact us.
+        </div>
+      </div>
+      <script>
+        window.onload = function() {
+          setTimeout(function() { window.print(); }, 800);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+  win.document.write(html);
+  win.document.close();
+};
+
+export const generateAttendanceReportPrint = (student: Student, attendance: AttendanceRecord[], absenceCount: number, lateCount: number, settings: AppSettings) => {
+    const win = window.open('', '_blank');
+    if (!win) {
+        alert('Please allow popups to print reports');
+        return;
+    }
+
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Attendance Report - ${student.name}</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+                body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; max-width: 800px; margin: 0 auto; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; }
+                .header h1 { margin: 0 0 10px 0; font-size: 24px; color: #0f172a; }
+                .header p { margin: 0; color: #64748b; font-size: 14px; }
+                
+                .summary { display: flex; gap: 20px; margin-bottom: 30px; }
+                .stat-box { flex: 1; padding: 20px; border-radius: 12px; background: #f8fafc; text-align: center; border: 1px solid #e2e8f0; }
+                .stat-box .label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; color: #64748b; margin-bottom: 8px; }
+                .stat-box .value { font-size: 28px; font-weight: 800; color: #0f172a; }
+                .stat-box.absent .value { color: #ef4444; }
+                .stat-box.late .value { color: #f59e0b; }
+                
+                table { w-full; width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+                th { background: #f8fafc; font-weight: 600; color: #475569; text-transform: uppercase; font-size: 12px; }
+                
+                .status { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+                .status-present { background: #dcfce7; color: #166534; }
+                .status-absent { background: #fee2e2; color: #991b1b; }
+                .status-late { background: #fef3c7; color: #92400e; }
+                
+                .footer { margin-top: 50px; text-align: center; font-size: 12px; color: #94a3b8; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>Attendance Report</h1>
+                <p>Student: <strong>${student.name}</strong> • Parent: ${student.parentName || 'N/A'}</p>
+                <p>Generated: ${new Date().toLocaleDateString('fr-MA')}</p>
+            </div>
+            
+            <div class="summary">
+                <div class="stat-box">
+                    <span class="label">Total Sessions</span>
+                    <span class="value">${attendance.length}</span>
+                </div>
+                <div class="stat-box absent">
+                    <span class="label">Total Absences</span>
+                    <span class="value">${absenceCount}</span>
+                </div>
+                <div class="stat-box late">
+                    <span class="label">Total Lates</span>
+                    <span class="value">${lateCount}</span>
+                </div>
+            </div>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Program / Class</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${attendance.length === 0 ? '<tr><td colspan="3" style="text-align:center;color:#64748b;">No attendance records</td></tr>' : 
+                    attendance.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(record => `
+                        <tr>
+                            <td>${formatDate(record.date)}</td>
+                            <td>
+                                <div style="font-weight:600;color:#0f172a;">${record.programName || '-'}</div>
+                                <div style="font-size:12px;color:#64748b;">${record.className || '-'}</div>
+                            </td>
+                            <td>
+                                <span class="status status-${record.status}">
+                                    ${record.status}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div class="footer">
+                ${settings.academyName} • ${settings.academicYear}
+            </div>
+            <script>
+                window.onload = function() {
+                  setTimeout(function() { window.print(); }, 800);
+                }
+            </script>
+        </body>
+        </html>
+    `;
+    
+    win.document.write(html);
+    win.document.close();
 };

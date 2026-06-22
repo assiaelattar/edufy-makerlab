@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { TrendingDown, Plus, Filter, Search, DollarSign, PieChart, Trash2, Receipt, CheckCircle2, XCircle, Upload, Image as ImageIcon, Clock, Save, ArrowRight, Settings, CalendarCheck, Repeat, AlertTriangle, CheckSquare } from 'lucide-react';
+import { TrendingDown, Plus, Filter, Search, DollarSign, PieChart, Trash2, Receipt, CheckCircle2, XCircle, Upload, Image as ImageIcon, Clock, Save, ArrowRight, Settings, CalendarCheck, Repeat, AlertTriangle, CheckSquare, Edit } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
@@ -47,6 +47,7 @@ export const ExpensesView = () => {
     const [templateForm, setTemplateForm] = useState<Partial<ExpenseTemplate>>({ 
         title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 
     });
+    const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
 
     // Payment Flow State
     const [payingTemplate, setPayingTemplate] = useState<ExpenseTemplate | null>(null);
@@ -87,18 +88,19 @@ export const ExpensesView = () => {
 
     // 3. Financial Stats
     const stats = useMemo(() => {
+        // 1. Period constraints (for Card 1)
         const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
         
-        // Income (From Payments)
-        const relevantPayments = payments.filter(p => 
-            (p.session === selectedSession) && 
-            ['paid', 'verified'].includes(p.status) &&
-            (!selectedMonth || p.date.startsWith(selectedMonth))
-        );
-        const totalIncome = relevantPayments.reduce((sum, p) => sum + p.amount, 0);
-        const netProfit = totalIncome - totalExpenses;
+        // 2. Session constraints (for the Global View)
+        const sessionExpensesList = expenses.filter(e => e.session === selectedSession);
+        const sessionTotalExpenses = sessionExpensesList.reduce((sum, e) => sum + e.amount, 0);
+
+        const sessionPayments = payments.filter(p => p.session === selectedSession && ['paid', 'verified'].includes(p.status));
+        const sessionTotalIncome = sessionPayments.reduce((sum, p) => sum + p.amount, 0);
+
+        const sessionNetProfit = sessionTotalIncome - sessionTotalExpenses;
         
-        // Breakdown
+        // Breakdown (remains based on filtered view)
         const breakdown: Record<string, number> = {};
         filteredExpenses.forEach(e => {
             breakdown[e.category] = (breakdown[e.category] || 0) + e.amount;
@@ -110,8 +112,8 @@ export const ExpensesView = () => {
             if(val > maxVal) { maxVal = val; topCategory = cat; }
         });
 
-        return { totalExpenses, netProfit, totalIncome, breakdown, topCategory };
-    }, [filteredExpenses, payments, selectedSession, selectedMonth]);
+        return { totalExpenses, sessionTotalExpenses, sessionTotalIncome, sessionNetProfit, breakdown, topCategory };
+    }, [filteredExpenses, payments, expenses, selectedSession]);
 
     // Helper for month display
     const displayMonthName = useMemo(() => {
@@ -125,14 +127,14 @@ export const ExpensesView = () => {
     const handlePayTemplateOpen = (template: ExpenseTemplate) => {
         setPayingTemplate(template);
         setExpenseForm({
-            title: template.title,
-            category: template.category,
-            amount: template.amount,
-            beneficiary: template.beneficiary,
+            title: template.title || '',
+            category: template.category || 'other',
+            amount: template.amount || 0,
+            beneficiary: template.beneficiary || '',
             date: new Date().toISOString().split('T')[0],
             method: 'cash',
             status: 'paid',
-            notes: `Monthly payment for ${template.title}`
+            notes: `Monthly payment for ${template.title || ''}`
         });
         setPaymentProof('');
         setIsPayTemplateModalOpen(true);
@@ -143,15 +145,23 @@ export const ExpensesView = () => {
         if (!db || !payingTemplate) return;
 
         try {
-            await addDoc(collection(db, 'expenses'), {
-                ...expenseForm,
-                receiptUrl: paymentProof,
+            const payload: any = {
+                title: expenseForm.title || '',
+                category: expenseForm.category || 'other',
+                amount: expenseForm.amount || 0,
+                beneficiary: expenseForm.beneficiary || '',
+                date: expenseForm.date || new Date().toISOString().split('T')[0],
+                method: expenseForm.method || 'cash',
+                status: 'paid',
+                notes: expenseForm.notes || '',
                 templateId: payingTemplate.id,
                 session: selectedSession,
                 organizationId: orgId,
-                status: 'paid',
                 createdAt: serverTimestamp()
-            });
+            };
+            if (paymentProof) payload.receiptUrl = paymentProof;
+
+            await addDoc(collection(db, 'expenses'), payload);
             setIsPayTemplateModalOpen(false);
             setPayingTemplate(null);
         } catch (err) {
@@ -164,11 +174,21 @@ export const ExpensesView = () => {
         e.preventDefault();
         if (!db) return;
         try {
-            await addDoc(collection(db, 'expense_templates'), {
-                ...templateForm,
-                organizationId: orgId,
-                createdAt: serverTimestamp()
-            });
+            const templateData = {
+                title: templateForm.title || '',
+                category: templateForm.category || 'other',
+                amount: templateForm.amount || 0,
+                beneficiary: templateForm.beneficiary || '',
+                recurring: templateForm.recurring ?? true,
+                frequency: templateForm.frequency || 'monthly',
+                dayDue: templateForm.dayDue || 1
+            };
+            if (editingTemplateId) {
+                await updateDoc(doc(db, 'expense_templates', editingTemplateId), templateData);
+                setEditingTemplateId(null);
+            } else {
+                await addDoc(collection(db, 'expense_templates'), { ...templateData, organizationId: orgId, createdAt: serverTimestamp() });
+            }
             setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 });
         } catch (err) { console.error(err); }
     };
@@ -177,15 +197,25 @@ export const ExpensesView = () => {
         e.preventDefault();
         if (!db) return;
         try {
+            const payload: any = {
+                title: expenseForm.title || '',
+                category: expenseForm.category || 'other',
+                amount: expenseForm.amount || 0,
+                beneficiary: expenseForm.beneficiary || '',
+                date: expenseForm.date || new Date().toISOString().split('T')[0],
+                method: expenseForm.method || 'cash',
+                status: expenseForm.status || 'paid',
+                notes: expenseForm.notes || '',
+                session: selectedSession,
+            };
+            if (expenseForm.receiptUrl) payload.receiptUrl = expenseForm.receiptUrl;
+
             if (isEditing && editingId) {
-                await updateDoc(doc(db, 'expenses', editingId), expenseForm);
+                await updateDoc(doc(db, 'expenses', editingId), payload);
             } else {
-                await addDoc(collection(db, 'expenses'), {
-                    ...expenseForm,
-                    session: selectedSession,
-                    organizationId: orgId,
-                    createdAt: serverTimestamp()
-                });
+                payload.organizationId = orgId;
+                payload.createdAt = serverTimestamp();
+                await addDoc(collection(db, 'expenses'), payload);
             }
             setIsModalOpen(false);
             setIsEditing(false);
@@ -297,16 +327,17 @@ export const ExpensesView = () => {
             {/* KPI Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><TrendingDown size={14}/> Total Expenses</div>
+                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><TrendingDown size={14}/> Period Expenses</div>
                     <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalExpenses)}</div>
+                    <div className="text-xs text-slate-500 mt-2 font-medium">For {displayMonthName}</div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><DollarSign size={14}/> Net Profit</div>
-                    <div className={`text-3xl font-bold ${stats.netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(stats.netProfit)}</div>
+                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><DollarSign size={14}/> Session Net Profit</div>
+                    <div className={`text-3xl font-bold ${stats.sessionNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(stats.sessionNetProfit)}</div>
                     <div className="text-xs flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/50 font-medium">
-                        <span className="text-emerald-500" title="Income">{formatCurrency(stats.totalIncome)}</span>
+                        <span className="text-emerald-500" title="Total Session Income">{formatCurrency(stats.sessionTotalIncome)}</span>
                         <span className="text-slate-500">-</span>
-                        <span className="text-red-400" title="Expenses">{formatCurrency(stats.totalExpenses)}</span>
+                        <span className="text-red-400" title="Total Session Expenses">{formatCurrency(stats.sessionTotalExpenses)}</span>
                     </div>
                 </div>
                 <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-5">
@@ -356,7 +387,12 @@ export const ExpensesView = () => {
                                             <div className="text-xs text-slate-500">{expense.notes || '-'}</div>
                                             <div className="flex gap-2">
                                                 {expense.receiptUrl && <button onClick={() => setShowProof(expense.receiptUrl!)} className="p-1.5 hover:bg-slate-800 rounded text-blue-400"><ImageIcon size={14}/></button>}
-                                                {can('expenses.manage') && <button onClick={() => handleDeleteExpense(expense.id)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400"><Trash2 size={14}/></button>}
+                                                {can('expenses.manage') && (
+                                                    <>
+                                                        <button onClick={() => { setExpenseForm(expense); setEditingId(expense.id); setIsEditing(true); setIsModalOpen(true); }} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-blue-400" title="Edit Expense"><Edit size={14}/></button>
+                                                        <button onClick={() => handleDeleteExpense(expense.id)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400"><Trash2 size={14}/></button>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -389,7 +425,6 @@ export const ExpensesView = () => {
 
             {/* 1. Ad-Hoc Expense Modal */}
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? "Edit Expense" : "Record Ad-Hoc Expense"}>
-                {/* ... form content ... */}
                 <form onSubmit={handleSaveAdHocExpense} className="space-y-4">
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Title</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.title} onChange={e => setExpenseForm({...expenseForm, title: e.target.value})} placeholder="e.g. Plumbing Repair"/></div>
                     <div className="grid grid-cols-2 gap-4">
@@ -414,7 +449,6 @@ export const ExpensesView = () => {
 
             {/* 2. Pay Recurring Template Modal (The "Pay Now" Flow) */}
             <Modal isOpen={isPayTemplateModalOpen} onClose={() => setIsPayTemplateModalOpen(false)} title={`Pay ${payingTemplate?.title}`}>
-                {/* ... form content ... */}
                 <form onSubmit={handleConfirmPayment} className="space-y-5">
                     <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center mb-2">
                         <span className="text-xs text-slate-400 uppercase">Default Amount</span>
@@ -454,11 +488,10 @@ export const ExpensesView = () => {
 
             {/* 3. Template Manager Modal */}
             <Modal isOpen={isTemplateManagerOpen} onClose={() => setIsTemplateManagerOpen(false)} title="Manage Recurring Charges">
-                {/* ... manager content ... */}
                 <div className="space-y-6">
                     {/* Create New Template */}
                     <form onSubmit={handleSaveTemplate} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <h4 className="text-sm font-bold text-white mb-2">Define New Recurring Charge</h4>
+                        <h4 className="text-sm font-bold text-white mb-2">{editingTemplateId ? 'Edit Recurring Charge' : 'Define New Recurring Charge'}</h4>
                         <div className="grid grid-cols-2 gap-3">
                             <input required placeholder="Title (e.g. Office Rent)" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.title} onChange={e => setTemplateForm({...templateForm, title: e.target.value})}/>
                             <select className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm capitalize" value={templateForm.category} onChange={e => setTemplateForm({...templateForm, category: e.target.value as any})}>{['rent', 'salary', 'utilities', 'material', 'marketing', 'other'].map(c => <option key={c} value={c}>{c}</option>)}</select>
@@ -472,21 +505,37 @@ export const ExpensesView = () => {
                                 <option value="monthly">Monthly</option>
                                 <option value="weekly">Weekly</option>
                             </select>
-                            <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white rounded font-bold text-sm transition-colors">Add Template</button>
+                        </div>
+                        <div className="flex gap-2">
+                            {editingTemplateId && (
+                                <button type="button" onClick={() => { setEditingTemplateId(null); setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 }); }} className="flex-1 py-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg text-sm transition-colors font-bold">Cancel Edit</button>
+                            )}
+                            <button type="submit" className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                                <Plus size={16} /> {editingTemplateId ? 'Update Template' : 'Add Template'}
+                            </button>
                         </div>
                     </form>
 
-                    {/* List Existing */}
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Active Templates</h4>
-                        {expenseTemplates.length === 0 ? <p className="text-slate-500 text-sm italic">No templates defined.</p> : 
-                        expenseTemplates.map(t => (
-                            <div key={t.id} className="flex justify-between items-center bg-slate-950 p-3 rounded-lg border border-slate-800">
+                    {/* List Templates */}
+                    <div className="mt-6 space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Active Templates</h4>
+                        {expenseTemplates.filter(t => t.recurring).map(template => (
+                            <div key={template.id} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg hover:border-slate-700 transition-colors">
                                 <div>
-                                    <div className="font-bold text-white text-sm">{t.title}</div>
-                                    <div className="text-xs text-slate-500">{t.frequency} • {formatCurrency(t.amount)}</div>
+                                    <div className="font-bold text-white text-sm">{template.title}</div>
+                                    <div className="text-xs text-slate-400">{formatCurrency(template.amount)} • {template.frequency}</div>
                                 </div>
-                                <button onClick={() => handleDeleteTemplate(t.id)} className="text-slate-500 hover:text-red-400 p-2 hover:bg-slate-900 rounded transition-colors"><Trash2 size={14}/></button>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => {
+                                        setEditingTemplateId(template.id);
+                                        setTemplateForm(template);
+                                    }} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors" title="Edit Template">
+                                        <Edit size={14} />
+                                    </button>
+                                    <button onClick={() => handleDeleteTemplate(template.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors" title="Delete Template">
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>

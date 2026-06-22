@@ -383,6 +383,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(demoUser);
     setUserProfile(demoProfile);
     setRoleDefinition(roles.find(r => r.id === 'admin') || DEFAULT_ROLES[0]);
+    setCurrentOrganization({
+        id: 'makerlab-academy',
+        name: 'MakerLab Demo',
+        slug: 'makerlab-demo',
+        ownerUid: demoUser.uid,
+        status: 'active',
+        modules: { erp: true, makerPro: true, sparkQuest: true },
+        createdAt: Timestamp.now() as any
+    });
 
     setLoading(false);
   };
@@ -433,6 +442,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(mockUser);
     setUserProfile(mockProfile);
     setRoleDefinition(roles.find(r => r.id === role) || DEFAULT_ROLES.find(r => r.id === role) || null);
+    setCurrentOrganization({
+        id: 'makerlab-academy',
+        name: 'MakerLab Demo',
+        slug: 'makerlab-demo',
+        ownerUid: mockUser.uid,
+        status: 'active',
+        modules: { erp: true, makerPro: true, sparkQuest: true },
+        createdAt: Timestamp.now() as any
+    });
     setLoading(false);
   };
 
@@ -497,6 +515,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(syntheticUser);
     setUserProfile(targetProfile);
     setRoleDefinition(roles.find(r => r.id === role) || DEFAULT_ROLES.find(r => r.id === role) || null);
+    setCurrentOrganization({
+        id: targetProfile.organizationId || 'makerlab-academy',
+        name: 'Impersonated Org',
+        slug: 'impersonated-org',
+        ownerUid: 'admin',
+        status: 'active',
+        modules: { erp: true, makerPro: true, sparkQuest: true },
+        createdAt: Timestamp.now() as any
+    });
     setLoading(false);
   };
 

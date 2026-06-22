@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Plus, Trash2, Mail, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, X, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer, Clock } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { setDoc, doc, addDoc, collection, serverTimestamp, onSnapshot, deleteDoc, updateDoc, writeBatch, getDocs, getDocsFromServer, query, where } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, sendPasswordResetEmail, updatePassword } from 'firebase/auth';
@@ -15,6 +16,7 @@ import { isBiometricAvailable, registerBiometric, isBiometricEnabled, clearBiome
 export const SettingsView = () => {
     const { settings: globalSettings, teamMembers } = useAppContext();
     const { can, roles: authRoles, createSecondaryUser: createAuthUser, userProfile, user, currentOrganization, isSuperAdmin } = useAuth();
+    const { confirm, alert: showAlert } = useConfirm();
     const [settings, setSettings] = useState<AppSettings>(globalSettings);
     const [isDirty, setIsDirty] = useState(false);
     const [activeTab, setActiveTab] = useState<'general' | 'forms' | 'documents' | 'data' | 'team' | 'api' | 'maintenance'>('general');
@@ -33,8 +35,9 @@ export const SettingsView = () => {
     }, []);
 
     const handleToggleBiometric = async () => {
-        if (biometricActive) {
-            if (confirm("Disable FaceID/TouchID login?")) {
+        if (isBiometricEnabled()) {
+            const isConfirmed = await confirm("Disable FaceID/TouchID login?");
+            if (isConfirmed) {
                 clearBiometric();
                 setBiometricActive(false);
             }
@@ -43,7 +46,7 @@ export const SettingsView = () => {
             const success = await registerBiometric(userProfile.email);
             if (success) {
                 setBiometricActive(true);
-                alert("FaceID/TouchID Enabled! You can now use it to login.");
+                showAlert("Success", "FaceID/TouchID Enabled! You can now use it to login.", "success");
             }
         }
     };
@@ -143,10 +146,10 @@ export const SettingsView = () => {
                 setIsSaving(false);
             }, 1000);
 
-            alert('Settings saved successfully!');
+            showAlert('Success', 'Settings saved successfully!', 'success');
         } catch (err: any) {
             console.error(err);
-            alert(`Failed to save settings: ${err.message}`);
+            showAlert('Error', `Failed to save settings: ${err.message}`, 'danger');
             setIsSaving(false);
         }
     };
@@ -170,7 +173,7 @@ export const SettingsView = () => {
         } catch (err: any) {
 
             console.error(err);
-            alert(`Failed to process or save logo image: ${err.message}`);
+            showAlert('Error', `Failed to process or save logo image: ${err.message}`, 'danger');
         }
     };
 
@@ -191,7 +194,7 @@ export const SettingsView = () => {
             }
         } catch (err: any) {
             console.error(err);
-            alert(`Failed to process or save logo image: ${err.message}`);
+            showAlert('Error', `Failed to process or save logo image: ${err.message}`, 'danger');
         }
     };
 
@@ -208,7 +211,7 @@ export const SettingsView = () => {
                     role: newUser.role,
                     // Note: Changing email in Firestore doesn't change Auth email automatically in this simple implementation
                 });
-                alert("User profile updated successfully.");
+                showAlert("Success", "User profile updated successfully.", "success");
             } else {
                 // CREATE NEW
                 const tempPassword = newUser.password || Math.random().toString(36).slice(-8);
@@ -231,35 +234,37 @@ export const SettingsView = () => {
             setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
         } catch (err: any) {
             console.error(err);
-            alert(`Error: ${err.message}`);
+            showAlert("Error", `Error: ${err.message}`, "danger");
         } finally {
             setIsProcessingTeam(false);
         }
     };
 
     const handleDeleteUser = async (uid: string, email: string) => {
-        if (!confirm(`Are you sure you want to delete ${email}? \n\nNote: This deletes their profile data immediately. The login account requires manual deletion in Firebase Console.`)) return;
+        const isConfirmed = await confirm(`Are you sure you want to delete ${email}? \n\nNote: This deletes their profile data immediately. The login account requires manual deletion in Firebase Console.`);
+        if (!isConfirmed) return;
         if (!db) return;
         try {
             await deleteDoc(doc(db, 'users', uid));
-            alert("User profile deleted.");
+            showAlert("Success", "User profile deleted.", "success");
         } catch (err) {
             console.error(err);
-            alert("Failed to delete user profile.");
+            showAlert("Error", "Failed to delete user profile.", "danger");
         }
     };
 
     const handleResetPassword = async (email: string) => {
-        if (!confirm(`Send a password reset email to ${email}?`)) return;
-        // Use a unique app for reset too to be safe
+        const isConfirmed = await confirm(`Send a password reset email to ${email}?`);
+        if (!isConfirmed) return;
+        
         const appName = `SecondaryReset_${Date.now()}`;
         const secondaryApp = initializeApp(firebaseConfig, appName);
         const secondaryAuth = getAuth(secondaryApp);
         try {
             await sendPasswordResetEmail(secondaryAuth, email);
-            alert(`Password reset email sent to ${email}.`);
+            showAlert("Success", `Password reset email sent to ${email}.`, "success");
         } catch (err: any) {
-            alert(`Error: ${err.message}`);
+            showAlert("Error", `Error: ${err.message}`, "danger");
         } finally {
             await deleteApp(secondaryApp).catch(console.error);
         }
@@ -298,7 +303,8 @@ export const SettingsView = () => {
 
     const handleSeedTeam = async () => {
         if (!db) return;
-        if (!confirm("This will create 3 demo users (Instructor, Accountant, Admission Officer) with password 'stemflow123'. \n\nContinue?")) return;
+        const isConfirmed = await confirm("This will create 3 demo users (Instructor, Accountant, Admission Officer) with password 'stemflow123'. \n\nContinue?");
+        if (!isConfirmed) return;
 
         setIsProcessingTeam(true);
         const demoUsers = [
@@ -336,7 +342,7 @@ export const SettingsView = () => {
         }
 
         setIsProcessingTeam(false);
-        alert(results);
+        showAlert("Demo Users Created", results, "success");
     };
 
     const togglePermission = async (roleId: string, permission: string) => {
@@ -388,13 +394,13 @@ export const SettingsView = () => {
                 if (!name || !parentPhone) { errorCount++; continue; }
                 try {
                     await addDoc(collection(db, 'students'), {
-                        name, parentPhone, email: email || '', parentName: parentName || '', address: address || '', school: school || '', birthDate: birthDate || '', medicalInfo: medicalInfo || '', status: 'active', createdAt: serverTimestamp()
+                        name, parentPhone, email: email || '', parentName: parentName || '', address: address || '', school: school || '', birthDate: birthDate || '', medicalInfo: medicalInfo || '', status: 'active', organizationId: currentOrganization?.id || 'makerlab-academy', createdAt: serverTimestamp()
                     });
                     successCount++;
                 } catch (err) { errorCount++; }
             }
             setIsImporting(false);
-            alert(`Import Complete!\nSuccess: ${successCount}\nFailed/Skipped: ${errorCount}`);
+            showAlert("Import Complete", `Success: ${successCount}\nFailed/Skipped: ${errorCount}`, "info");
             e.target.value = '';
         };
         reader.readAsText(file);
@@ -409,15 +415,16 @@ export const SettingsView = () => {
                 user: user?.uid || 'anonymous',
                 org: currentOrganization?.id || 'none'
             });
-            alert(`Write Connection Successful!\nCreated doc: _connection_test/${testId}`);
+            showAlert("Success", `Write Connection Successful!\nCreated doc: _connection_test/${testId}`, "success");
         } catch (err: any) {
-            alert(`Connection Test Failed: ${err.message}`);
+            showAlert("Error", `Connection Test Failed: ${err.message}`, "danger");
         }
     };
 
     const handleRecreateOrg = async () => {
         if (!db || !user) return;
-        if (!confirm("Recreate the default 'Makerlab Academy' organization document?\n\nOnly do this if the 'Organization ID' in Debug Info says N/A.")) return;
+        const isConfirmed = await confirm("Recreate the default 'Makerlab Academy' organization document?\n\nOnly do this if the 'Organization ID' in Debug Info says N/A.");
+        if (!isConfirmed) return;
 
         try {
             await setDoc(doc(db, 'organizations', 'makerlab-academy'), {
@@ -429,9 +436,54 @@ export const SettingsView = () => {
                 status: 'active',
                 modules: { erp: true, makerPro: true, sparkQuest: true }
             });
-            alert("Organization Recreated! Please refresh the page to see the correct Organization ID.");
+            showAlert("Success", "Organization Recreated! Please refresh the page to see the correct Organization ID.", "success");
         } catch (e: any) {
-            alert("Error: " + e.message);
+            showAlert("Error", "Error: " + e.message, "danger");
+        }
+    };
+
+    const handleMigrateAcademicYear = async () => {
+        if (!db) return;
+        if (!confirm("Are you sure you want to migrate all 2024-2025 records to 2025-2026? This cannot be undone.")) return;
+
+        setIsMigrating(true);
+        setMigrationResult('Starting Academic Year Migration...');
+
+        try {
+            const collectionsToScan = ['enrollments', 'payments', 'expenses', 'classes', 'attendance', 'tasks'];
+            let updatedCount = 0;
+
+            for (const colName of collectionsToScan) {
+                const q = collection(db, colName);
+                const snapshot = await getDocsFromServer(q);
+
+                const batch = writeBatch(db);
+                let batchCount = 0;
+
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    if (data.session === '2024-2025') {
+                        batch.update(docSnap.ref, { session: '2025-2026' });
+                        batchCount++;
+                        updatedCount++;
+                    }
+                });
+
+                if (batchCount > 0) {
+                    await batch.commit();
+                }
+            }
+
+            await setDoc(doc(db, 'settings', 'global'), { academicYear: '2025-2026' }, { merge: true });
+            updateSettings({ ...settings, academicYear: '2025-2026' });
+
+            setMigrationResult(`Success! Migrated ${updatedCount} records to 2025-2026.`);
+            showAlert("Success", `Migrated ${updatedCount} records to 2025-2026.`, "success");
+        } catch (e: any) {
+            setMigrationResult(`Error: ${e.message}`);
+            showAlert("Error", "Migration failed: " + e.message, "danger");
+        } finally {
+            setIsMigrating(false);
         }
     };
 
@@ -477,7 +529,7 @@ export const SettingsView = () => {
             });
 
             console.log(report);
-            const userWantsToMigrate = confirm(`${report}\n\nDo you want to FORCE MIGRATE everything to 'makerlab-academy'?\nWARNING: This will steal data from all listed organizations.`);
+            const userWantsToMigrate = await confirm(`${report}\n\nDo you want to FORCE MIGRATE everything to 'makerlab-academy'?\nWARNING: This will steal data from all listed organizations.`);
 
             if (!userWantsToMigrate) {
                 setMigrationResult('Migration Cancelled by User.');
@@ -532,7 +584,8 @@ export const SettingsView = () => {
 
     const handleRepairFinancials = async () => {
         if (!db) return;
-        if (!confirm("Recalculate all enrollment financial totals based on Program Pricing and Payments?\n\nThis will fix 'NaN' errors.")) return;
+        const isConfirmed = await confirm("Recalculate all enrollment financial totals based on Program Pricing and Payments?\n\nThis will fix 'NaN' errors.");
+        if (!isConfirmed) return;
 
         setIsRepairing(true);
         setMigrationResult('Fetching Data...');
@@ -1168,6 +1221,10 @@ export const SettingsView = () => {
                                     <button onClick={handleRepairFinancials} disabled={isRepairing} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-lg shadow-emerald-900/20">
                                         {isRepairing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
                                         {isRepairing ? 'Fixing...' : 'Recalculate Financials'}
+                                    </button>
+
+                                    <button onClick={handleMigrateAcademicYear} disabled={isMigrating} className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-lg shadow-purple-900/20">
+                                        <Calendar size={16} /> Shift to 25/26
                                     </button>
 
 

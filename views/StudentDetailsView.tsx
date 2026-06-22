@@ -3,6 +3,7 @@ import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRi
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday } from '../utils/helpers';
 import { updateDoc, doc, deleteDoc, increment, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -27,6 +28,7 @@ export const StudentDetailsView = ({
 }) => {
     const { students, enrollments, programs, payments, attendanceRecords, studentProjects, navigateTo, settings, viewParams, sendNotification, badges } = useAppContext();
     const { createSecondaryUser, userProfile, currentOrganization } = useAuth();
+    const { confirm } = useConfirm();
 
     const { studentId } = viewParams;
     const isStudentRole = userProfile?.role === 'student';
@@ -326,16 +328,19 @@ export const StudentDetailsView = ({
     const handleGenerateAccess = async () => {
         if (!db || !student) return;
         const isRegenerating = !!student.loginInfo;
-        if (isRegenerating) { if (!confirm("Are you sure you want to regenerate access? This will create a NEW account and password. The previous login will stop working.")) return; }
+        if (isRegenerating) { 
+            const isConfirmed = await confirm("Are you sure you want to regenerate access? This will create a NEW account and password. The previous login will stop working.");
+            if (!isConfirmed) return;
+        }
         setIsGeneratingAccess(true);
         try {
             const names = (student.name || '').trim().split(' ').map((n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, ''));
             const firstName = names[0];
             const lastName = names.length > 1 ? names[names.length - 1] : names[0];
 
-            // Format: firstname.lastname@makerlab.academy (e.g. walid.fakir@makerlab.academy)
+            // Format: firstname.lastname@domain.edu
             const baseUsername = `${firstName}.${lastName}`;
-            const domain = 'makerlab.academy';
+            const domain = currentOrganization?.slug ? `${currentOrganization.slug}.edu` : 'makerlab.academy';
 
             const password = Math.random().toString(36).slice(-8);
             let uid = '';
@@ -392,9 +397,13 @@ export const StudentDetailsView = ({
         } finally { setIsGeneratingAccess(false); }
     };
 
-    // NEW: Create Parent Access
-    const handleCreateParentAccess = async () => {
+    // NEW: Create Parent Access (Accepts real email)
+    const handleCreateParentAccess = async (parentEmail: string) => {
         if (!db || !student) return;
+        if (!parentEmail || !parentEmail.includes('@')) {
+            alert("Invalid email provided.");
+            return;
+        }
 
         // Check if regenerating
         if (student.parentLoginInfo) {
@@ -403,9 +412,6 @@ export const StudentDetailsView = ({
 
         setIsGeneratingAccess(true);
         try {
-            const names = (student.name || '').trim().split(' ');
-            const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
-            const parentEmail = `p.${lastName}@makerlab.academy`;
             const parentName = student.parentName || "Parent";
             const password = Math.random().toString(36).slice(-8);
 
@@ -489,7 +495,17 @@ export const StudentDetailsView = ({
     };
 
     const initiateDeletePayment = (payment: Payment) => {
-        setConfirmModal({ isOpen: true, title: "Delete Payment Record", message: `Are you sure you want to delete this payment of ${formatCurrency(payment.amount)}? \n\nIf this payment was 'Paid' or 'Verified', the student's debt will increase.`, type: 'danger', isLoading: false, action: async () => { if (!db) return; if (['paid', 'verified'].includes(payment.status)) { const enrollment = enrollments.find(e => e.id === payment.enrollmentId); if (enrollment) { await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: increment(-payment.amount), balance: increment(payment.amount) }); } } await deleteDoc(doc(db, 'payments', payment.id)); } });
+        setConfirmModal({ isOpen: true, title: "Delete Payment Record", message: `Are you sure you want to delete this payment of ${formatCurrency(payment.amount)}? \n\nThis will recalculate the student's debt automatically.`, type: 'danger', isLoading: false, action: async () => { 
+            if (!db) return; 
+            const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
+            if (enrollment) {
+                const otherPayments = payments.filter(p => p.enrollmentId === payment.enrollmentId && p.id !== payment.id);
+                const newPaid = otherPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+                const newBalance = (enrollment.totalAmount || 0) - newPaid;
+                await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
+            }
+            await deleteDoc(doc(db, 'payments', payment.id)); 
+        } });
     };
 
     const handleExecuteConfirm = async () => {
@@ -508,7 +524,51 @@ export const StudentDetailsView = ({
         if (!db || !editPayment || !editPayment.id) return;
         const originalPayment = payments.find(p => p.id === editPayment.id);
         if (!originalPayment) return;
-        try { await updateDoc(doc(db, 'payments', editPayment.id), editPayment); if (editPayment.amount && editPayment.amount !== originalPayment.amount && ['paid', 'verified'].includes(originalPayment.status)) { const diff = Number(editPayment.amount) - originalPayment.amount; const enrollment = enrollments.find(e => e.id === originalPayment.enrollmentId); if (enrollment) { await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: increment(diff), balance: increment(-diff) }); } } setEditPayment(null); alert("Payment updated."); } catch (err) { console.error(err); }
+        try {
+            let newStatus = originalPayment.status;
+            const updatedPayment = { ...editPayment };
+            if (editPayment.method !== originalPayment.method) {
+                if (editPayment.method === 'cash') newStatus = 'paid';
+                else if (editPayment.method === 'virement') newStatus = 'pending_verification';
+                else if (editPayment.method === 'check') newStatus = 'check_received';
+                
+                updatedPayment.status = newStatus;
+                
+                // Clean up fields
+                if (editPayment.method !== 'check') {
+                    updatedPayment.checkNumber = null as any;
+                    updatedPayment.bankName = null as any;
+                    updatedPayment.depositDate = null as any;
+                }
+                if (editPayment.method !== 'virement') {
+                    updatedPayment.proofUrl = null as any;
+                }
+            }
+
+            await updateDoc(doc(db, 'payments', editPayment.id), updatedPayment);
+
+            const wasCleared = ['paid', 'verified'].includes(originalPayment.status);
+            const isCleared = ['paid', 'verified'].includes(newStatus);
+            const originalAmount = Number(originalPayment.amount) || 0;
+            const newAmount = Number(editPayment.amount) || 0;
+
+            const diff = (isCleared ? newAmount : 0) - (wasCleared ? originalAmount : 0);
+            if (diff !== 0) {
+                const enrollment = enrollments.find(e => e.id === originalPayment.enrollmentId);
+                if (enrollment) {
+                    await updateDoc(doc(db, 'enrollments', enrollment.id), {
+                        paidAmount: increment(diff),
+                        balance: increment(-diff)
+                    });
+                }
+            }
+
+            setEditPayment(null);
+            alert("Payment updated.");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to update payment.");
+        }
     };
 
     const handleShareReceipt = async (paymentId: string) => {
@@ -579,6 +639,14 @@ export const StudentDetailsView = ({
         window.open(`${sparkQuestUrl}/?token=${bridgeToken}`, '_blank');
     };
 
+    const stemQuestEnrollment = studentEnrollments.find(e => e.programName.toLowerCase().includes('stem'));
+    let membershipEndStr = null;
+    if (stemQuestEnrollment && stemQuestEnrollment.createdAt) {
+        const start = new Date(stemQuestEnrollment.createdAt);
+        start.setFullYear(start.getFullYear() + 1);
+        membershipEndStr = start.toLocaleDateString('fr-MA', { month: 'long', year: 'numeric' });
+    }
+
     return (
         <div className="space-y-6 flex flex-col animate-in fade-in slide-in-from-right-4">
             <div className="relative rounded-3xl overflow-hidden border border-slate-800 shadow-2xl mb-8">
@@ -598,6 +666,11 @@ export const StudentDetailsView = ({
                                 {student.status === 'inactive' && (
                                     <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide">
                                         Inactive
+                                    </span>
+                                )}
+                                {membershipEndStr && (
+                                    <span className="bg-indigo-900/50 text-indigo-300 border border-indigo-700/50 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide" title="StemQuest Membership Expiration">
+                                        Ends {membershipEndStr}
                                     </span>
                                 )}
                             </div>
@@ -726,6 +799,8 @@ export const StudentDetailsView = ({
                             studentAttendance={studentAttendance}
                             absenceCount={absenceCount}
                             lateCount={lateCount}
+                            student={student}
+                            settings={settings}
                         />
 
                     </Tabs>

@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { db } from '../services/firebase';
 import { collection, onSnapshot, doc, setDoc, query, orderBy, limit, where } from 'firebase/firestore';
-import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge, StaffAttendanceRecord, WorkshopEvaluation } from '../types';
+import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSettings, ViewState, ViewParams, WorkshopTemplate, WorkshopSlot, Booking, AttendanceRecord, Task, Project, ChatMessage, UserProfile, MarketingPost, Campaign, Lead, ProjectTemplate, StudentProject, ToolLink, ArchiveLink, GalleryItem, Asset, PickupEntry, Notification, ProcessTemplate, Station, Badge, StaffAttendanceRecord, WorkshopEvaluation, ClassSession } from '../types';
 import { translations } from '../utils/translations';
 import { useAuth } from './AuthContext';
 import { addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
@@ -20,6 +20,7 @@ interface AppContextType {
   workshopSlots: WorkshopSlot[];
   bookings: Booking[];
   workshopEvaluations: WorkshopEvaluation[];
+  classSessions: ClassSession[];
 
   // Attendance
   attendanceRecords: AttendanceRecord[];
@@ -70,9 +71,18 @@ interface AppContextType {
   navigateTo: (view: ViewState, params?: ViewParams) => void;
 }
 
+const getCurrentAcademicYear = () => {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  if (now.getMonth() < 7) { 
+    return `${currentYear - 1}-${currentYear}`;
+  }
+  return `${currentYear}-${currentYear + 1}`;
+};
+
 const DEFAULT_SETTINGS: AppSettings = {
-  academyName: 'Edufy', // Safe default (user should configure)
-  academicYear: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
+  academyName: 'MakerLab Academy', // Safe default (user should configure)
+  academicYear: getCurrentAcademicYear(),
   logoUrl: '',
   language: 'en',
   receiptContact: '',
@@ -116,6 +126,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [workshopSlots, setWorkshopSlots] = useState<WorkshopSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [workshopEvaluations, setWorkshopEvaluations] = useState<WorkshopEvaluation[]>([]);
+  const [classSessions, setClassSessions] = useState<ClassSession[]>([]);
 
   // Attendance
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -214,8 +225,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // END SAAS LOGIC
 
     // We wait for the SETTINGS to load specifically before unblocking the UI to ensure branding is correct.
+    let isSettingsLoaded = false;
+    let pendingCores = 5; // students, programs, enrollments, payments, expenses
+    const fallbackTimeout = setTimeout(() => {
+        setLoading(false);
+    }, 2500); // Failsafe unblock after 2.5s maximum
+
+    const checkLoadingGate = () => {
+        if (isSettingsLoaded && pendingCores <= 0) {
+            clearTimeout(fallbackTimeout);
+            setLoading(false);
+        }
+    };
+
     const settingsUnsub = onSnapshot(doc(firestore, 'organizations', orgId, 'settings', 'global'), (docSnap) => {
-      setLoading(false); // Unblock UI immediately
+      isSettingsLoaded = true;
       if (docSnap.exists()) {
         const savedData = docSnap.data() as AppSettings;
         const mergedSettings = {
@@ -225,27 +249,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         setSettings(mergedSettings);
       } else {
-        // Try fallback to legacy global settings if migration hadn't moved them yet? 
-        // Or just create default for new Org.
         setSettings(DEFAULT_SETTINGS);
       }
+      checkLoadingGate();
     }, (error) => {
       console.error("Error fetching settings:", error);
       setSettings(DEFAULT_SETTINGS);
-      setLoading(false);
+      isSettingsLoaded = true;
+      checkLoadingGate();
     });
 
     const unsubs = [
       settingsUnsub,
-      onSnapshot(query(collection(firestore, 'students'), where('organizationId', '==', orgId)), (snap) => setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)))),
-      onSnapshot(query(collection(firestore, 'programs'), where('organizationId', '==', orgId)), (snap) => setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program)))),
-      onSnapshot(query(collection(firestore, 'enrollments'), where('organizationId', '==', orgId)), (snap) => setEnrollments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enrollment)))),
+      onSnapshot(query(collection(firestore, 'class_sessions'), where('organizationId', '==', orgId)), (q) => setClassSessions(q.docs.map(d => ({ id: d.id, ...d.data() } as ClassSession)))),
+      onSnapshot(query(collection(firestore, 'students'), where('organizationId', '==', orgId)), (snap) => {
+          setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
+          pendingCores--; checkLoadingGate();
+      }),
+      onSnapshot(query(collection(firestore, 'programs'), where('organizationId', '==', orgId)), (snap) => { 
+          setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program)));
+          pendingCores--; checkLoadingGate();
+      }),
+      onSnapshot(query(collection(firestore, 'enrollments'), where('organizationId', '==', orgId)), (snap) => {
+          setEnrollments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enrollment)));
+          pendingCores--; checkLoadingGate();
+      }),
       onSnapshot(query(collection(firestore, 'payments'), where('organizationId', '==', orgId)), (snap) => {
         const sortedPayments = snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setPayments(sortedPayments);
+        pendingCores--; checkLoadingGate();
       }),
-      onSnapshot(query(collection(firestore, 'expenses'), where('organizationId', '==', orgId), orderBy('date', 'desc')), (snap) => setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense)))),
+      onSnapshot(query(collection(firestore, 'expenses'), where('organizationId', '==', orgId)), (snap) => {
+        const sortedExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense))
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setExpenses(sortedExpenses);
+        pendingCores--; checkLoadingGate();
+      }),
       onSnapshot(query(collection(firestore, 'expense_templates'), where('organizationId', '==', orgId)), (snap) => setExpenseTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpenseTemplate)))),
 
       // Workshop Listeners
@@ -331,7 +371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       students, programs, enrollments, payments, expenses, expenseTemplates,
-      workshopTemplates, workshopSlots, bookings, workshopEvaluations,
+      workshopTemplates, workshopSlots, bookings, workshopEvaluations, classSessions,
       attendanceRecords,
       staffAttendanceRecords,
       tasks, projects, chatMessages, teamMembers,

@@ -1,20 +1,31 @@
 
 import React from 'react';
-import { Calendar, XCircle, AlertCircle } from 'lucide-react';
-import { AttendanceRecord } from '../../types';
-import { formatDate } from '../../utils/helpers';
+import { Calendar, XCircle, AlertCircle, Printer, MessageCircle } from 'lucide-react';
+import { AttendanceRecord, Student, AppSettings } from '../../types';
+import { formatDate, generateAttendanceReportPrint } from '../../utils/helpers';
 
 interface AttendanceTabProps {
   studentAttendance: AttendanceRecord[];
   absenceCount: number;
   lateCount: number;
+  student: Student;
+  settings: AppSettings;
 }
 
 export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   studentAttendance,
   absenceCount,
   lateCount,
+  student,
+  settings
 }) => {
+  const handleWhatsApp = () => {
+    if (!student.parentPhone) return alert("No parent phone number found.");
+    let phone = student.parentPhone.replace(/[^0-9]/g, '');
+    if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+    const msg = `Hello ${student.parentName || 'Parent'}, here is an attendance summary for ${student.name}. Total Absences: ${absenceCount}. Total Lates: ${lateCount}. If you'd like a full report, please let us know. Thank you!`;
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
       <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex justify-between items-center">
@@ -32,6 +43,12 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
               {lateCount} Late
             </span>
           )}
+          <button onClick={() => generateAttendanceReportPrint(student, studentAttendance, absenceCount, lateCount, settings)} className="ml-2 p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded transition-colors" title="Print Report">
+            <Printer size={14} />
+          </button>
+          <button onClick={handleWhatsApp} className="p-1 text-slate-400 hover:text-emerald-400 bg-slate-800 hover:bg-slate-700 rounded transition-colors" title="Share via WhatsApp">
+            <MessageCircle size={14} />
+          </button>
         </div>
       </div>
       <div className="">

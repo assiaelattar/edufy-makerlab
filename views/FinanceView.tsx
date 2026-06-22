@@ -3,15 +3,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import {
     CreditCard, Search, Eye, Printer, Filter, TrendingUp, Clock, DollarSign,
     FileText, Building, Calendar, PieChart, AlertCircle, CheckCircle2, Users,
-    ArrowRight, Phone, BarChart2, Download, MessageCircle, ChevronDown, ChevronUp, Wrench, ShieldCheck
+    ArrowRight, Phone, BarChart2, Download, MessageCircle, ChevronDown, ChevronUp, Wrench, ShieldCheck,
+    Upload, Image as ImageIcon, RefreshCw
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, formatDate, generateReceipt } from '../utils/helpers';
+import { useConfirm } from '../context/ConfirmContext';
+import { formatCurrency, formatDate, generateReceipt, normalizePhone, compressImage } from '../utils/helpers';
 import { Enrollment, Payment } from '../types';
 import { db } from '../services/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch, collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { Modal } from '../components/Modal';
 
 // --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
@@ -63,8 +66,33 @@ export const computeAcademicYear = (d: Date = new Date()): string => {
 };
 
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
-    const { payments, enrollments, students, programs, navigateTo, settings, viewParams } = useAppContext();
-    const { can } = useAuth();    // --- State ---
+    const { payments, enrollments, students, programs, navigateTo, settings, viewParams, fetchDashboardData } = useAppContext();
+    const { can, currentOrganization } = useAuth();
+    const { confirm, alert: showAlert } = useConfirm();
+
+    // --- Parent Payments ---
+    const [balanceGrouping, setBalanceGrouping] = useState<'student' | 'parent'>('student');
+    const [isParentPaymentModalOpen, setIsParentPaymentModalOpen] = useState(false);
+    const [parentPaymentAccount, setParentPaymentAccount] = useState<any>(null);
+    const [parentPaymentForm, setParentPaymentForm] = useState({
+        amount: '',
+        method: 'cash' as 'cash' | 'check' | 'virement',
+        date: new Date().toISOString().split('T')[0],
+        checkNumber: '',
+        bankName: '',
+        depositDate: '',
+        proofUrl: ''
+    });
+    const [isSubmittingParentPayment, setIsSubmittingParentPayment] = useState(false);
+    const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+    const [statementAccount, setStatementAccount] = useState<any>(null);
+
+    // --- Transaction Edit Modal State ---
+    const [editingTransaction, setEditingTransaction] = useState<Payment | null>(null);
+    const [editTransactionForm, setEditTransactionForm] = useState<Partial<Payment>>({});
+    const [isSubmittingTransactionEdit, setIsSubmittingTransactionEdit] = useState(false);
+
+    // --- State ---
     const [viewMode, setViewMode] = useState<'transactions' | 'balances' | 'upcoming'>('balances');
     const [searchQuery, setSearchQuery] = useState('');
     // Default to the academically correct year (Sept 1 - June 30 rule)
@@ -168,7 +196,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
  //  Derived: Filtered Data 
     // --- Derived: Filtered Data ---
     const { filteredPayments, filteredEnrollments } = useMemo(() => {
-        const matchesSearch = (text: string) => !searchQuery || text.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = (text?: string) => !searchQuery || (text || '').toLowerCase().includes(searchQuery.toLowerCase());
         // Smart session matching: for payments, fall back to the enrollment's session if payment.session is missing.
         // This handles payments recorded before the session field was standardized.
         const matchesSession = (itemSession?: string, fallbackSession?: string) => {
@@ -204,6 +232,161 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         return { filteredPayments: pFiltered, filteredEnrollments: eFiltered };
     }, [payments, enrollments, searchQuery, selectedSession, selectedMonth, selectedProgram, dateRange,
         balanceFilter, transactionStatusFilter, settings.academicYear, filterAudience]);
+
+    const parentAccounts = useMemo(() => {
+        const map = new Map<string, {
+            phone: string;
+            parentName: string;
+            children: { student: any; enrollment: Enrollment }[];
+            totalBalance: number;
+            totalPaid: number;
+            totalExpected: number;
+        }>();
+
+        filteredEnrollments.forEach(e => {
+            const student = students.find(s => s.id === e.studentId);
+            if (!student) return;
+            const phoneStr = normalizePhone(student.parentPhone || '');
+            // If no phone, treat as standalone with enrollment ID as key
+            const key = phoneStr || `solo-${e.id}`;
+
+            if (!map.has(key)) {
+                map.set(key, {
+                    phone: phoneStr,
+                    parentName: student.parentName || 'Unknown Parent',
+                    children: [],
+                    totalBalance: 0,
+                    totalPaid: 0,
+                    totalExpected: 0
+                });
+            }
+
+            const entry = map.get(key)!;
+            entry.children.push({ student, enrollment: e });
+            entry.totalBalance += (e.balance || 0);
+            entry.totalPaid += (e.paidAmount || 0);
+            entry.totalExpected += (e.totalAmount || 0);
+        });
+
+        return Array.from(map.values()).sort((a, b) => b.totalBalance - a.totalBalance);
+    }, [filteredEnrollments, students]);
+
+    const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const compressed = await compressImage(file);
+            setParentPaymentForm(prev => ({ ...prev, proofUrl: compressed }));
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleSaveTransactionEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!db || !editingTransaction) return;
+        setIsSubmittingTransactionEdit(true);
+        try {
+            await updateDoc(doc(db, 'payments', editingTransaction.id), {
+                ...editTransactionForm,
+                amount: Number(editTransactionForm.amount)
+            });
+            showAlert("Success", "Transaction updated successfully", "success");
+            setEditingTransaction(null);
+            fetchDashboardData();
+        } catch (err: any) {
+            showAlert("Error", `Failed to update transaction: ${err.message}`, "danger");
+        } finally {
+            setIsSubmittingTransactionEdit(false);
+        }
+    };
+
+    const handleSubmitParentPayment = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!parentPaymentAccount || !db) return;
+        setIsSubmittingParentPayment(true);
+        try {
+            const amountPaid = Number(parentPaymentForm.amount);
+            let remainingToDistribute = amountPaid;
+            
+            let status = 'paid';
+            if (parentPaymentForm.method === 'check') status = 'check_received';
+            if (parentPaymentForm.method === 'virement') status = 'pending_verification';
+
+            const childrenWithBalance = [...parentPaymentAccount.children]
+                .filter((c: any) => (c.enrollment.balance || 0) > 0)
+                .sort((a, b) => new Date(a.enrollment.createdAt || 0).getTime() - new Date(b.enrollment.createdAt || 0).getTime());
+
+            for (const child of childrenWithBalance) {
+                if (remainingToDistribute <= 0) break;
+                const owed = child.enrollment.balance || 0;
+                const applied = Math.min(owed, remainingToDistribute);
+                
+                await addDoc(collection(db, 'payments'), {
+                    enrollmentId: child.enrollment.id,
+                    studentName: child.enrollment.studentName,
+                    amount: applied,
+                    date: parentPaymentForm.date,
+                    method: parentPaymentForm.method,
+                    status: status,
+                    organizationId: child.enrollment.organizationId || currentOrganization?.id || 'makerlab-academy',
+                    checkNumber: parentPaymentForm.method === 'check' ? parentPaymentForm.checkNumber : null,
+                    bankName: parentPaymentForm.method === 'check' ? parentPaymentForm.bankName : null,
+                    depositDate: parentPaymentForm.method === 'check' ? parentPaymentForm.depositDate : null,
+                    proofUrl: parentPaymentForm.method === 'virement' ? parentPaymentForm.proofUrl : null,
+                    session: computeAcademicYear(new Date(parentPaymentForm.date)),
+                    createdAt: serverTimestamp()
+                });
+
+                if (status === 'paid') {
+                    const newPaid = (child.enrollment.paidAmount || 0) + applied;
+                    const newBalance = (child.enrollment.totalAmount || 0) - newPaid;
+                    await updateDoc(doc(db, 'enrollments', child.enrollment.id), {
+                        paidAmount: newPaid,
+                        balance: newBalance
+                    });
+                }
+                remainingToDistribute -= applied;
+            }
+
+            // Apply remaining to first child if overpaid
+            if (remainingToDistribute > 0 && parentPaymentAccount.children.length > 0) {
+                const child = parentPaymentAccount.children[0];
+                 await addDoc(collection(db, 'payments'), {
+                    enrollmentId: child.enrollment.id,
+                    studentName: child.enrollment.studentName,
+                    amount: remainingToDistribute,
+                    date: parentPaymentForm.date,
+                    method: parentPaymentForm.method,
+                    status: status,
+                    organizationId: child.enrollment.organizationId || currentOrganization?.id || 'makerlab-academy',
+                    checkNumber: parentPaymentForm.method === 'check' ? parentPaymentForm.checkNumber : null,
+                    bankName: parentPaymentForm.method === 'check' ? parentPaymentForm.bankName : null,
+                    depositDate: parentPaymentForm.method === 'check' ? parentPaymentForm.depositDate : null,
+                    proofUrl: parentPaymentForm.method === 'virement' ? parentPaymentForm.proofUrl : null,
+                    session: computeAcademicYear(new Date(parentPaymentForm.date)),
+                    createdAt: serverTimestamp()
+                });
+
+                if (status === 'paid') {
+                    const newPaid = (child.enrollment.paidAmount || 0) + remainingToDistribute;
+                    const newBalance = (child.enrollment.totalAmount || 0) - newPaid;
+                    await updateDoc(doc(db, 'enrollments', child.enrollment.id), {
+                        paidAmount: newPaid,
+                        balance: newBalance
+                    });
+                }
+            }
+
+            setIsParentPaymentModalOpen(false);
+            setParentPaymentAccount(null);
+            setParentPaymentForm(prev => ({ ...prev, amount: '' }));
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSubmittingParentPayment(false);
+        }
+    };
 
  //  Derived: KPI Stats  always based on filteredPayments for date accuracy 
     const stats = useMemo(() => {
@@ -392,7 +575,31 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             .sort((a, b) => (a.enrollment.studentName || '').localeCompare(b.enrollment.studentName || ''));
 
         return { installmentUnpaidRows, annualUnpaidRows, fullyPaidRows, paidRows };
-    }, [selectedMonth, enrollments, payments, selectedSession, selectedProgram, searchQuery, settings.academicYear, filterAudience]);    // --- Handlers ---
+    }, [selectedMonth, enrollments, payments, selectedSession, selectedProgram, searchQuery, settings.academicYear, filterAudience]);
+
+    // --- Handlers ---
+    const handleRecalculateBalances = async () => {
+        if (!confirm("This will recalculate the paid amount and balance for all enrollments based on their recorded payments. Proceed?")) return;
+        setIsFixingSession(true); // Re-using this loading state for simplicity
+        try {
+            let repairedCount = 0;
+            for (const e of enrollments) {
+                const actualPaid = payments.filter(p => p.enrollmentId === e.id && ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+                if ((e.paidAmount || 0) !== actualPaid) {
+                    const newBalance = (e.totalAmount || 0) - actualPaid;
+                    await updateDoc(doc(db as any, 'enrollments', e.id), { paidAmount: actualPaid, balance: newBalance });
+                    repairedCount++;
+                }
+            }
+            showAlert("Success", `Recalculated balances. Fixed ${repairedCount} enrollments out of sync.`, "success");
+        } catch (err) {
+            console.error('Recalculation failed:', err);
+            showAlert("Error", "Failed to recalculate balances.", "danger");
+        } finally {
+            setIsFixingSession(false);
+        }
+    };
+
     const handleCardClick = (filterType: 'paid' | 'unpaid') => {
         setViewMode('balances');
         setBalanceFilter(filterType);
@@ -400,7 +607,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
     const handleWhatsApp = (enrollment: any, customMsg?: string) => {
         const student = students.find(s => s.id === enrollment.studentId);
-        if (!student || !student.parentPhone) return alert("No parent phone number found.");
+        if (!student || !student.parentPhone) return showAlert("Validation Error", "No parent phone number found.", "warning");
         let phone = student.parentPhone.replace(/[^0-9]/g, '');
         if (phone.startsWith('0')) phone = '212' + phone.substring(1);
         const msg = customMsg || `Hello ${student.parentName || 'Parent'}, kindly reminder regarding the outstanding balance of ${formatCurrency(enrollment.balance)} for ${student.name}'s enrollment in ${enrollment.programName}. Thank you.`;
@@ -409,10 +616,179 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
     const handleWhatsAppUpcoming = (item: { enrollment: Enrollment; dueDate: Date | null; urgency: string }) => {
         const student = students.find(s => s.id === item.enrollment.studentId);
-        if (!student || !student.parentPhone) return alert("No parent phone number found.");
-        const dueStr = item.dueDate ? item.dueDate.toLocaleDateString('fr-MA', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
         const msg = `Hello ${student.parentName || 'Parent'}, this is a reminder that the next instalment of ${formatCurrency(item.enrollment.balance)} for ${student.name}'s enrollment in ${item.enrollment.programName} is due on ${dueStr}. Thank you!`;
         handleWhatsApp(item.enrollment, msg);
+    };
+
+    const handlePrintParentStatement = (account: any, parentPayments: Payment[]) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showAlert("Warning", "Please allow popups to print statements", "warning");
+            return;
+        }
+
+        const defaultLogo = `${window.location.origin}/images/logo.png`;
+        const logoHtml = `<div class="logo-container"><img src="${settings?.logoUrl || defaultLogo}" alt="Logo" /></div>`;
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Statement of Account - ${account.parentName || 'Parent'}</title>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+                <style>
+                    @media print {
+                        @page { margin: 20mm; size: A4; }
+                        body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .no-print { display: none; }
+                        .container { border: none !important; box-shadow: none !important; padding: 0 !important; }
+                    }
+                    body { font-family: 'Inter', sans-serif; color: #0f172a; background: #f8fafc; padding: 40px 0; margin: 0; }
+                    .container { max-width: 800px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+                    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 24px; }
+                    .logo-container img { height: 60px; width: auto; object-fit: contain; }
+                    .logo-placeholder { width: 50px; height: 50px; background: #2563eb; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 24px; }
+                    .company-details { margin-top: 10px; }
+                    .company-name { font-size: 18px; font-weight: 700; }
+                    .company-meta { font-size: 12px; color: #64748b; }
+                    .title-area { text-align: right; }
+                    .title { font-size: 24px; font-weight: 800; text-transform: uppercase; margin: 0 0 5px 0; color: #1e3a8a; }
+                    .subtitle { font-size: 12px; color: #64748b; font-family: 'JetBrains Mono', monospace; }
+                    .info-group { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 30px; }
+                    .info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
+                    .info-val { font-size: 15px; font-weight: 600; }
+                    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-top: 30px; margin-bottom: 15px; letter-spacing: 0.5px; }
+                    .data-table { width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 20px; }
+                    .data-table th { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; }
+                    .data-table td { font-size: 13px; padding: 12px; border-bottom: 1px solid #e2e8f0; color: #334155; }
+                    .data-table font-mono { font-family: 'JetBrains Mono', monospace; }
+                    .text-right { text-align: right; }
+                    .totals-section { display: flex; flex-direction: column; align-items: flex-end; margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 15px; }
+                    .totals-row { display: flex; justify-content: space-between; width: 260px; margin-bottom: 8px; font-size: 13px; }
+                    .totals-label { color: #64748b; }
+                    .totals-val { font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+                    .grand-total { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
+                    .grand-total .totals-label { font-size: 15px; font-weight: 700; color: #0f172a; }
+                    .grand-total .totals-val { font-size: 20px; font-weight: 800; color: ${account.totalBalance > 0 ? '#ef4444' : '#10b981'}; }
+                    .footer { text-align: center; margin-top: 50px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; line-height: 1.5; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div>
+                            ${logoHtml}
+                            <div class="company-details">
+                                <div class="company-name">${settings?.academyName || 'MakerLab Academy'}</div>
+                                <div class="company-meta">${settings?.academicYear || 'Current Year'}</div>
+                            </div>
+                        </div>
+                        <div class="title-area">
+                            <h1 class="title">Family Statement</h1>
+                            <div class="subtitle">DATE: ${new Date().toLocaleDateString()}</div>
+                        </div>
+                    </div>
+
+                    <div class="info-group">
+                        <div class="info-label">Account Owner / Parent</div>
+                        <div class="info-val">${account.parentName || 'Parent Account'}</div>
+                        <div class="company-meta" style="margin-top:4px;">Phone: ${account.phone || 'N/A'}</div>
+                    </div>
+
+                    <div class="section-title">Children & Enrollments</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Child</th>
+                                <th>Program</th>
+                                <th class="text-right">Total Fee</th>
+                                <th class="text-right">Paid</th>
+                                <th class="text-right">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${account.children.map((c: any) => `
+                                <tr>
+                                    <td style="font-weight:600;">${c.student.name}</td>
+                                    <td>
+                                        <div>${c.enrollment.programName}</div>
+                                        <div style="font-size:10px; color:#64748b;">${c.enrollment.paymentPlan} &middot; ${c.enrollment.packName}</div>
+                                    </td>
+                                    <td class="text-right font-mono">${formatCurrency(c.enrollment.totalAmount || 0)}</td>
+                                    <td class="text-right font-mono" style="color:#10b981;">${formatCurrency(c.enrollment.paidAmount || 0)}</td>
+                                    <td class="text-right font-mono" style="font-weight:600;">${formatCurrency(c.enrollment.balance || 0)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="section-title">Payment History</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Child</th>
+                                <th>Method</th>
+                                <th>Reference</th>
+                                <th class="text-right">Amount</th>
+                                <th style="text-align:center;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${parentPayments.length === 0 ? `
+                                <tr><td colSpan="6" style="text-align:center; color:#94a3b8; font-style:italic;">No payments recorded.</td></tr>
+                            ` : parentPayments.map((p: Payment) => {
+                                const child = account.children.find((c: any) => c.enrollment.id === p.enrollmentId);
+                                return `
+                                    <tr>
+                                        <td style="color:#64748b;">${formatDate(p.date)}</td>
+                                        <td>
+                                            <div style="font-weight:500;">${child?.student.name || p.studentName}</div>
+                                            <div style="font-size:10px; color:#64748b;">${child?.enrollment.programName || ''}</div>
+                                        </td>
+                                        <td style="text-transform:capitalize;">${p.method}</td>
+                                        <td style="color:#64748b;">${p.checkNumber ? `#${p.checkNumber}` : p.bankName || '-'}</td>
+                                        <td class="text-right font-mono" style="font-weight:600; color:#10b981;">${formatCurrency(p.amount)}</td>
+                                        <td style="text-align:center; text-transform:uppercase; font-size:10px; font-weight:600; color:${['paid', 'verified'].includes(p.status) ? '#10b981' : p.status === 'check_bounced' ? '#ef4444' : '#d97706'};">
+                                            ${p.status}
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="totals-section">
+                        <div class="totals-row">
+                            <span class="totals-label">Total Expected Fee:</span>
+                            <span class="totals-val">${formatCurrency(account.totalExpected)}</span>
+                        </div>
+                        <div class="totals-row">
+                            <span class="totals-label">Total Paid Amount:</span>
+                            <span class="totals-val" style="color:#10b981;">${formatCurrency(account.totalPaid)}</span>
+                        </div>
+                        <div class="totals-row grand-total">
+                            <span class="totals-label">Outstanding Balance:</span>
+                            <span class="totals-val">${formatCurrency(account.totalBalance)}</span>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+                        <div>${settings?.receiptFooter || ''}</div>
+                        <div>${settings?.receiptContact || ''}</div>
+                        <div style="margin-top:10px; font-size:9px; color:#cbd5e1;">Generated electronically on ${new Date().toLocaleString()}</div>
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.open();
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
     };
 
  //  Excel Export 
@@ -564,6 +940,17 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg transition-colors font-bold text-sm shadow-lg shadow-emerald-900/20"
                         >
                             <CreditCard size={16} /> <span className="hidden sm:inline">Record</span> Payment
+                        </button>
+                    )}
+
+                    {can('finance.view_totals') && (
+                        <button
+                            onClick={handleRecalculateBalances}
+                            disabled={isFixingSession}
+                            className="flex items-center justify-center gap-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 border border-blue-500/30 px-3 py-2 rounded-lg transition-colors text-sm font-bold"
+                            title="Recalculate balances from payment history"
+                        >
+                            <RefreshCw size={16} className={isFixingSession ? 'animate-spin' : ''} /> Fix Balances
                         </button>
                     )}
                 </div>
@@ -895,16 +1282,26 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
  {/* Balance secondary filters  hide in monthly report mode */}
                     {viewMode === 'balances' && !selectedMonth && (
-                        <div className="flex gap-2 items-center pt-2 border-t border-slate-800/50 animate-in slide-in-from-top-2">
-                            <span className="text-xs font-bold text-slate-500 uppercase">Status:</span>
-                            {(['all', 'paid', 'unpaid'] as const).map(f => (
-                                <button key={f} onClick={() => setBalanceFilter(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${balanceFilter === f
-                                    ? f === 'paid' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900' : f === 'unpaid' ? 'bg-red-950/30 text-red-400 border-red-900' : 'bg-slate-800 text-white border-slate-600'
-                                    : 'text-slate-500 border-transparent hover:bg-slate-900'}`}>
-                                    {f === 'all' ? 'All' : f === 'paid' ? 'Fully Paid' : 'Unpaid / Partial'}
-                                </button>
-                            ))}
-                            <div className="ml-auto text-xs text-slate-500">{filteredEnrollments.length} students</div>
+                        <div className="flex flex-wrap gap-3 items-center pt-2 border-t border-slate-800/50 animate-in slide-in-from-top-2">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-slate-500 uppercase">Status:</span>
+                                {(['all', 'paid', 'unpaid'] as const).map(f => (
+                                    <button key={f} onClick={() => setBalanceFilter(f)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${balanceFilter === f
+                                        ? f === 'paid' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900' : f === 'unpaid' ? 'bg-red-950/30 text-red-400 border-red-900' : 'bg-slate-800 text-white border-slate-600'
+                                        : 'text-slate-500 border-transparent hover:bg-slate-900'}`}>
+                                        {f === 'all' ? 'All' : f === 'paid' ? 'Fully Paid' : 'Unpaid / Partial'}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
+                                <span className="text-xs font-bold text-slate-500 uppercase">Group by:</span>
+                                {(['student', 'parent'] as const).map(m => (
+                                    <button key={m} onClick={() => setBalanceGrouping(m)} className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${balanceGrouping === m ? 'bg-blue-900/30 text-blue-400 border-blue-800' : 'text-slate-500 border-transparent hover:bg-slate-900'}`}>
+                                        {m === 'student' ? 'Student' : 'Parent Account'}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="ml-auto text-xs text-slate-500">{balanceGrouping === 'student' ? `${filteredEnrollments.length} students` : `${parentAccounts.length} parent accounts`}</div>
                         </div>
                     )}
                     {viewMode === 'balances' && selectedMonth && (() => {
@@ -1091,9 +1488,9 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-900 text-slate-400 sticky top-0 z-10 text-xs uppercase tracking-wider">
                             <tr>
-                                <th className="p-4">Student</th>
-                                <th className="p-4">Program</th>
-                                <th className="p-4">Plan</th>
+                                <th className="p-4">{balanceGrouping === 'student' ? 'Student' : 'Parent Account'}</th>
+                                <th className="p-4">{balanceGrouping === 'student' ? 'Program' : 'Children'}</th>
+                                <th className="p-4">{balanceGrouping === 'student' ? 'Plan' : ''}</th>
                                 <th className="p-4 text-right">Total Fee</th>
                                 <th className="p-4 text-right">Paid</th>
                                 <th className="p-4 text-right">Balance</th>
@@ -1101,48 +1498,113 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
-                            {filteredEnrollments.length === 0
-                                ? <tr><td colSpan={7} className="p-8 text-center text-slate-500 italic">No students found.</td></tr>
-                                : filteredEnrollments.map(enrollment => (
-                                    <tr key={enrollment.id} className="hover:bg-slate-800/50 transition-colors group">
-                                        <td className="p-4">
-                                            <div className="font-bold text-white">{enrollment.studentName}</div>
-                                            <div className="text-[10px] text-slate-500 uppercase">{enrollment.gradeName} &middot; {enrollment.groupName}</div>
-                                        </td>
-                                        <td className="p-4">
-                                            <div className="text-xs text-blue-300">{enrollment.programName}</div>
-                                            <div className="text-[10px] text-slate-500">{enrollment.packName}</div>
-                                        </td>
-                                        <td className="p-4">
-                                            <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                                                {enrollment.paymentPlan}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-right text-slate-300 font-mono text-sm">{formatCurrency(enrollment.totalAmount || 0)}</td>
-                                        <td className="p-4 text-right text-emerald-400 font-mono text-sm">{formatCurrency(enrollment.paidAmount || 0)}</td>
-                                        <td className="p-4 text-right">
-                                            <span className={`font-bold font-mono px-2 py-1 rounded text-sm ${(enrollment.balance || 0) > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
-                                                {formatCurrency(enrollment.balance || 0)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 text-right">
-                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {enrollment.balance > 0 && (
-                                                    <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded text-emerald-500 transition-colors" title="Send Reminder (WhatsApp)">
-                                                        <Phone size={16} />
+                            {balanceGrouping === 'student' ? (
+                                filteredEnrollments.length === 0
+                                    ? <tr><td colSpan={7} className="p-8 text-center text-slate-500 italic">No students found.</td></tr>
+                                    : filteredEnrollments.map(enrollment => (
+                                        <tr key={enrollment.id} className="hover:bg-slate-800/50 transition-colors group">
+                                            <td className="p-4">
+                                                <div className="font-bold text-white">{enrollment.studentName}</div>
+                                                <div className="text-[10px] text-slate-500 uppercase">{enrollment.gradeName} &middot; {enrollment.groupName}</div>
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="text-xs text-blue-300">{enrollment.programName}</div>
+                                                <div className="text-[10px] text-slate-500">{enrollment.packName}</div>
+                                            </td>
+                                            <td className="p-4">
+                                                <span className="text-[10px] uppercase font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                                                    {enrollment.paymentPlan}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right text-slate-300 font-mono text-sm">{formatCurrency(enrollment.totalAmount || 0)}</td>
+                                            <td className="p-4 text-right text-emerald-400 font-mono text-sm">{formatCurrency(enrollment.paidAmount || 0)}</td>
+                                            <td className="p-4 text-right">
+                                                <span className={`font-bold font-mono px-2 py-1 rounded text-sm ${(enrollment.balance || 0) > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
+                                                    {formatCurrency(enrollment.balance || 0)}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {enrollment.balance > 0 && (
+                                                        <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded text-emerald-500 transition-colors" title="Send Reminder (WhatsApp)">
+                                                            <Phone size={16} />
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => onRecordPayment(enrollment.studentId)} className="p-2 hover:bg-slate-800 rounded text-blue-400 transition-colors" title="Record Payment">
+                                                        <CreditCard size={16} />
                                                     </button>
-                                                )}
-                                                <button onClick={() => onRecordPayment(enrollment.studentId)} className="p-2 hover:bg-slate-800 rounded text-blue-400 transition-colors" title="Record Payment">
-                                                    <CreditCard size={16} />
-                                                </button>
-                                                <button onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors" title="View Profile">
-                                                    <Eye size={16} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
-                            }
+                                                    <button onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors" title="View Profile">
+                                                        <Eye size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                            ) : (
+                                parentAccounts.length === 0
+                                    ? <tr><td colSpan={7} className="p-8 text-center text-slate-500 italic">No parent accounts found.</td></tr>
+                                    : parentAccounts.map((account, index) => (
+                                        <tr key={index} className="hover:bg-slate-800/50 transition-colors group">
+                                            <td className="p-4">
+                                                <div className="font-bold text-white flex items-center gap-2">
+                                                    <Users size={16} className="text-blue-400" />
+                                                    {account.parentName || 'Parent Account'}
+                                                </div>
+                                                <div className="text-xs text-slate-500 mt-1">{account.phone || 'No phone'}</div>
+                                            </td>
+                                            <td className="p-4">
+                                                <div className="flex flex-col gap-1">
+                                                    {account.children.map((c: any, i: number) => (
+                                                        <div key={i} className="text-xs text-slate-300 bg-slate-900 px-2 py-1 rounded inline-flex w-max items-center gap-1">
+                                                            <span className="font-bold">{c.student.name}</span>
+                                                            <span className="text-[10px] text-slate-500">({c.enrollment.programName})</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </td>
+                                            <td className="p-4"></td>
+                                            <td className="p-4 text-right text-slate-300 font-mono text-sm">{formatCurrency(account.totalExpected)}</td>
+                                            <td className="p-4 text-right text-emerald-400 font-mono text-sm">{formatCurrency(account.totalPaid)}</td>
+                                            <td className="p-4 text-right">
+                                                <span className={`font-bold font-mono px-2 py-1 rounded text-sm ${account.totalBalance > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
+                                                    {formatCurrency(account.totalBalance)}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button 
+                                                        onClick={() => {
+                                                            setStatementAccount(account);
+                                                            setIsStatementModalOpen(true);
+                                                        }}
+                                                        className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors"
+                                                        title="View Statement of Account"
+                                                    >
+                                                        <FileText size={16} />
+                                                    </button>
+                                                    {account.totalBalance > 0 && account.children.length > 1 && (
+                                                        <button 
+                                                            onClick={() => {
+                                                                setParentPaymentAccount(account);
+                                                                setParentPaymentForm(prev => ({ ...prev, amount: account.totalBalance.toString() as any }));
+                                                                setIsParentPaymentModalOpen(true);
+                                                            }} 
+                                                            className="p-2 hover:bg-blue-900/50 rounded text-blue-400 transition-colors border border-blue-900/50 bg-blue-950/20 text-xs flex items-center gap-1 font-bold" 
+                                                            title="Record Bulk Payment for all children"
+                                                        >
+                                                            <CreditCard size={14} /> Bulk Pay
+                                                        </button>
+                                                    )}
+                                                    {account.totalBalance > 0 && account.children.length === 1 && (
+                                                        <button onClick={() => onRecordPayment(account.children[0].student.id)} className="p-2 hover:bg-slate-800 rounded text-blue-400 transition-colors" title="Record Payment">
+                                                            <CreditCard size={16} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                            )}
                         </tbody>
                     </table>
                 )}
@@ -1193,6 +1655,12 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-blue-400 transition-colors" title="View Details">
                                                         <Eye size={16} />
+                                                    </button>
+                                                    <button onClick={() => {
+                                                        setEditingTransaction(payment);
+                                                        setEditTransactionForm(payment);
+                                                    }} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-blue-400 transition-colors" title="Edit Transaction">
+                                                        <Wrench size={16} />
                                                     </button>
                                                     <button onClick={() => generateReceipt(payment, enrollment, student, settings)} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400 transition-colors" title="Print Receipt">
                                                         <Printer size={16} />
@@ -1310,6 +1778,271 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     </div>
                 )}
             </div>
+
+            {/* --- PARENT PAYMENT MODAL --- */}
+            <Modal isOpen={isParentPaymentModalOpen} onClose={() => setIsParentPaymentModalOpen(false)} title="Record Bulk Parent Payment" size="md">
+                {parentPaymentAccount && (
+                    <form onSubmit={handleSubmitParentPayment} className="space-y-5">
+                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                            <h3 className="font-bold text-white mb-1">{parentPaymentAccount.parentName || 'Parent Account'}</h3>
+                            <p className="text-xs text-slate-400 mb-3">{parentPaymentAccount.phone || 'No phone'}</p>
+                            
+                            <div className="space-y-2">
+                                {parentPaymentAccount.children.map((c: any, i: number) => (
+                                    <div key={i} className="flex justify-between items-center text-sm border-t border-slate-700 pt-2">
+                                        <span className="text-slate-300">{c.student.name}</span>
+                                        <span className={`font-mono ${(c.enrollment.balance || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                                            Due: {formatCurrency(c.enrollment.balance || 0)}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex justify-between items-center mt-3 pt-3 border-t-2 border-slate-700/80 font-bold">
+                                <span className="text-white text-sm">Total Outstanding</span>
+                                <span className="text-red-400 font-mono">{formatCurrency(parentPaymentAccount.totalBalance)}</span>
+                            </div>
+                        </div>
+
+                        <div className="bg-blue-950/30 p-3 rounded-lg border border-blue-900/50 flex gap-3 items-start">
+                            <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                            <p className="text-xs text-blue-200">
+                                The payment amount will be automatically split and applied across the children's outstanding balances, starting with the oldest enrollments first.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Amount to Pay (MAD)</label>
+                                <input required type="number" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={parentPaymentForm.amount} onChange={e => setParentPaymentForm({ ...parentPaymentForm, amount: e.target.value as any })} />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
+                                <input required type="date" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={parentPaymentForm.date} onChange={e => setParentPaymentForm({ ...parentPaymentForm, date: e.target.value })} />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Payment Method</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {['cash', 'check', 'virement'].map(m => (
+                                    <button
+                                        key={m}
+                                        type="button"
+                                        onClick={() => setParentPaymentForm({ ...parentPaymentForm, method: m as any })}
+                                        className={`py-2 rounded-lg text-xs font-bold capitalize border transition-all ${parentPaymentForm.method === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+                                    >
+                                        {m === 'virement' ? 'Transfer' : m}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {parentPaymentForm.method === 'check' && (
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.checkNumber} onChange={e => setParentPaymentForm({ ...parentPaymentForm, checkNumber: e.target.value })} placeholder="e.g. 739201" /></div>
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.bankName} onChange={e => setParentPaymentForm({ ...parentPaymentForm, bankName: e.target.value })} placeholder="e.g. BMCE" /></div>
+                                </div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Deposit Date</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.depositDate} onChange={e => setParentPaymentForm({ ...parentPaymentForm, depositDate: e.target.value })} /></div>
+                            </div>
+                        )}
+
+                        {parentPaymentForm.method === 'virement' && (
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
+                                <div>
+                                    <label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Proof of Transfer</label>
+                                    <div className="flex items-center gap-3">
+                                        <label className="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors">
+                                            <Upload size={14} /> Upload Image
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleProofUpload} />
+                                        </label>
+                                        {parentPaymentForm.proofUrl && <div className="text-emerald-400 text-xs flex items-center gap-1"><ImageIcon size={14} /> Attached</div>}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <button type="submit" disabled={isSubmittingParentPayment} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+                            {isSubmittingParentPayment ? 'Processing...' : 'Confirm Bulk Payment'}
+                        </button>
+                    </form>
+                )}
+            </Modal>
+
+            {/* --- PARENT STATEMENT MODAL --- */}
+            <Modal isOpen={isStatementModalOpen} onClose={() => setIsStatementModalOpen(false)} title="Parent Statement of Account" size="lg">
+                {statementAccount && (() => {
+                    const childEnrollmentIds = statementAccount.children.map((c: any) => c.enrollment.id);
+                    const parentPayments = payments.filter(p => childEnrollmentIds.includes(p.enrollmentId))
+                        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                    return (
+                        <div className="space-y-6">
+                            {/* Family Summary Header */}
+                            <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 flex justify-between items-start">
+                                <div>
+                                    <h3 className="text-lg font-bold text-white mb-1">{statementAccount.parentName || 'Parent Account'}</h3>
+                                    <div className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12} /> {statementAccount.phone || 'No phone'}</div>
+                                    <div className="text-xs text-slate-500 mt-2">{statementAccount.children.length} Child(ren) Enrolled</div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Family Balance</div>
+                                    <div className={`text-2xl font-mono font-bold ${statementAccount.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                        {formatCurrency(statementAccount.totalBalance)}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 mt-1">Expected: {formatCurrency(statementAccount.totalExpected)} &middot; Paid: {formatCurrency(statementAccount.totalPaid)}</div>
+                                </div>
+                            </div>
+
+                            {/* Children & Enrollments Section */}
+                            <div className="space-y-2.5">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Children & Programs</h4>
+                                <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
+                                            <tr>
+                                                <th className="p-3">Child</th>
+                                                <th className="p-3">Program</th>
+                                                <th className="p-3 text-right">Total Fee</th>
+                                                <th className="p-3 text-right">Paid</th>
+                                                <th className="p-3 text-right">Balance</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800 text-slate-300">
+                                            {statementAccount.children.map((c: any, i: number) => (
+                                                <tr key={i} className="hover:bg-slate-850/50 transition-colors">
+                                                    <td className="p-3 font-medium text-white">{c.student.name}</td>
+                                                    <td className="p-3">
+                                                        <div>{c.enrollment.programName}</div>
+                                                        <div className="text-[10px] text-slate-500">{c.enrollment.paymentPlan} &middot; {c.enrollment.packName}</div>
+                                                    </td>
+                                                    <td className="p-3 text-right font-mono">{formatCurrency(c.enrollment.totalAmount || 0)}</td>
+                                                    <td className="p-3 text-right font-mono text-emerald-400">{formatCurrency(c.enrollment.paidAmount || 0)}</td>
+                                                    <td className="p-3 text-right font-mono font-bold text-slate-200">
+                                                        <span className={c.enrollment.balance > 0 ? 'text-red-400' : 'text-slate-500'}>
+                                                            {formatCurrency(c.enrollment.balance || 0)}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+            <Modal isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Edit Transaction">
+                <form onSubmit={handleSaveTransactionEdit} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Amount ({settings.currencySymbol})</label>
+                        <input type="number" step="0.01" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.amount || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, amount: Number(e.target.value) })} />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
+                        <input type="date" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.date || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, date: e.target.value })} />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Method</label>
+                        <select className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.method || 'cash'} onChange={e => setEditTransactionForm({ ...editTransactionForm, method: e.target.value as any })}>
+                            <option value="cash">Cash</option>
+                            <option value="check">Check</option>
+                            <option value="virement">Virement (Transfer)</option>
+                        </select>
+                    </div>
+                    {editTransactionForm.method === 'check' && (
+                        <div>
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Check Number</label>
+                            <input type="text" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.checkNumber || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, checkNumber: e.target.value })} />
+                        </div>
+                    )}
+                    <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-1">Status</label>
+                        <select className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.status || 'paid'} onChange={e => setEditTransactionForm({ ...editTransactionForm, status: e.target.value as any })}>
+                            <option value="paid">Paid</option>
+                            <option value="pending">Pending</option>
+                            <option value="check_deposited">Check Deposited</option>
+                            <option value="verified">Verified</option>
+                            <option value="check_bounced">Bounced</option>
+                        </select>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-6">
+                        <button type="button" onClick={() => setEditingTransaction(null)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancel</button>
+                        <button type="submit" disabled={isSubmittingTransactionEdit} className="px-6 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg font-bold transition-all flex items-center gap-2">
+                            {isSubmittingTransactionEdit ? 'Saving...' : 'Save Changes'} <CheckCircle2 size={16} />
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+                            {/* Transactions History Section */}
+                            <div className="space-y-2.5">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment History</h4>
+                                <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50 max-h-60 overflow-y-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead className="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800 sticky top-0">
+                                            <tr>
+                                                <th className="p-3">Date</th>
+                                                <th className="p-3">Child</th>
+                                                <th className="p-3">Method</th>
+                                                <th className="p-3">Ref/Bank</th>
+                                                <th className="p-3 text-right">Amount</th>
+                                                <th className="p-3 text-center">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800 text-slate-300">
+                                            {parentPayments.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={6} className="p-6 text-center text-slate-500 italic">No payments recorded yet.</td>
+                                                </tr>
+                                            ) : parentPayments.map((p: Payment, i: number) => {
+                                                const child = statementAccount.children.find((c: any) => c.enrollment.id === p.enrollmentId);
+                                                return (
+                                                    <tr key={i} className="hover:bg-slate-850/50 transition-colors">
+                                                        <td className="p-3 text-slate-400">{formatDate(p.date)}</td>
+                                                        <td className="p-3">
+                                                            <div className="font-medium text-white">{child?.student.name || p.studentName}</div>
+                                                            <div className="text-[10px] text-slate-500">{child?.enrollment.programName || ''}</div>
+                                                        </td>
+                                                        <td className="p-3 capitalize">{p.method}</td>
+                                                        <td className="p-3 text-slate-400">{p.checkNumber ? `#${p.checkNumber}` : p.bankName || '-'}</td>
+                                                        <td className="p-3 text-right font-mono font-bold text-emerald-400">{formatCurrency(p.amount)}</td>
+                                                        <td className="p-3 text-center">
+                                                            <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${
+                                                                ['paid', 'verified'].includes(p.status) ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/50' : 
+                                                                p.status === 'check_bounced' ? 'bg-red-950/30 text-red-400 border-red-900/50' :
+                                                                'bg-amber-950/30 text-amber-400 border-amber-900/50'
+                                                            }`}>
+                                                                {p.status}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Print Button */}
+                            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                                <button 
+                                    type="button"
+                                    onClick={() => handlePrintParentStatement(statementAccount, parentPayments)}
+                                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-blue-900/20"
+                                >
+                                    <Printer size={14} /> Print Statement
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => setIsStatementModalOpen(false)}
+                                    className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-bold transition-all border border-slate-700"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal>
         </div>
     );
 };

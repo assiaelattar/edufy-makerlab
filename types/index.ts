@@ -145,6 +145,11 @@ export interface Student {
 }
 
 
+export interface PaymentPromise {
+  month: string;
+  amount: number;
+}
+
 export interface Enrollment {
   id: string;
   organizationId: string;
@@ -166,6 +171,7 @@ export interface Enrollment {
   paidAmount: number;
   balance: number;
   discountAmount?: number; // Track negotiated discount
+  paymentPromises?: PaymentPromise[]; // e.g. [{month: "2024-09", amount: 1000}]
   status: 'active' | 'completed' | 'dropped';
   startDate: string;
   session?: string; // Academic Year (e.g. "2024-2025")
@@ -255,7 +261,26 @@ export interface AttendanceRecord {
   createdAt: Timestamp;
 }
 
-// --- NEW WORKSHOP MODULE TYPES ---
+// --- NEW CLASS SESSIONS MODULE TYPES ---
+export interface ClassSession {
+  id: string;
+  organizationId: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  title: string; // "STEMQuest - Innovator" or "Make & Go 3Hr"
+  subTitle: string; // "Group A"
+  type: 'program_class' | 'workshop_trial';
+  programId?: string;
+  gradeId?: string;
+  groupId?: string;
+  workshopSlotId?: string;
+  instructorId?: string;
+  instructorName?: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  color?: string; // Theme color
+  createdAt: Timestamp;
+}
 
 export interface WorkshopTemplate {
   id: string;
@@ -309,35 +334,40 @@ export interface Booking {
 export interface WorkshopEvaluation {
   id: string;
   organizationId: string;
-  workshopTitle: string;
+  sessionId: string; // The specific class_session physical record
+  workshopTitle: string; // Copied from class_session for easy reading
   instructorId: string;
   instructorName: string;
   date: string; // YYYY-MM-DD
   
-  // Instructor Inputs
-  responses: {
-    hardestPart: string;
-    instructorWords: string;
-    projectFailures: string;
-    safetyMaterialIssues: string;
+  // Franchise Inputs
+  predictiveFlags: {
+    inventoryWarned: boolean;
   };
+  preFlight: {
+    techReady: boolean;
+    materialStock: number; // 1-5
+    safetyZoned: boolean;
+  };
+  execution: {
+    instructionTime: string; // '< 10 mins' | '10-20 mins' | '> 20 mins'
+    autonomyLevel: string; // 'fixed_it' | 'pointed_error' | 'asked_questions'
+    struggleMetric: number; // 1-5
+    deliveryFocus: string; // 'Final Polish' | 'Iteration & Effort'
+    labRespect: boolean;
+  };
+  voiceTranscript: string;
   
-  // AI Metrics
-  metrics: {
-    handsOffIndex: number; // 0-25
-    discoveryStruggle: number; // 0-25
-    materialAuthenticity: number; // 0-25
-    processOverProduct: number; // 0-25
+  // AI Master Outputs
+  totalScore: number; // 0-100 (from Health_Score)
+  breakdown: { // Phase_Breakdown
+    setup: string;
+    instruction: string;
+    execution: string;
   };
+  rootCause: string;
+  actionableMandate: string;
   
-  totalScore: number; // 0-100
-  breakdown: {
-    handsOff: string;
-    discovery: string;
-    material: string;
-    process: string;
-  };
-  actionableFeedback: string;
   createdAt: Timestamp;
 }
 

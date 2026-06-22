@@ -53,7 +53,7 @@ import { NotificationDropdown } from './components/NotificationDropdown';
 
 import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from './services/firebase';
-import { formatCurrency, compressImage, calculateAge } from './utils/helpers';
+import { formatCurrency, compressImage, calculateAge, normalizePhone } from './utils/helpers';
 import { getStudentTheme } from './utils/theme';
 import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
@@ -104,7 +104,7 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfil
 }
 
 const AppContent = () => {
-    const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, t } = useAppContext();
+    const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, payments, t } = useAppContext();
     const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser, currentOrganization, isSuperAdmin } = useAuth();
     const { requestPermission } = useNotifications();
     const { alert: showAlert } = useConfirm();
@@ -167,6 +167,51 @@ const AppContent = () => {
     const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
+    // Parent Bulk Payment States
+    const [paymentMode, setPaymentMode] = useState<'individual' | 'parent'>('individual');
+    const [parentPaymentSearchQuery, setParentPaymentSearchQuery] = useState('');
+    const [selectedParentAccount, setSelectedParentAccount] = useState<any>(null);
+    const [isParentDropdownOpen, setIsParentDropdownOpen] = useState(false);
+
+    const parentAccounts = useMemo(() => {
+        const map = new Map<string, {
+            phone: string;
+            parentName: string;
+            children: { student: any; enrollment: any }[];
+            totalBalance: number;
+            totalPaid: number;
+            totalExpected: number;
+        }>();
+
+        enrollments.forEach(e => {
+            if (e.status !== 'active') return;
+            const student = students.find(s => s.id === e.studentId);
+            if (!student || student.status === 'inactive') return;
+
+            const phoneStr = normalizePhone(student.parentPhone || '');
+            const key = phoneStr || `solo-${e.id}`;
+
+            if (!map.has(key)) {
+                map.set(key, {
+                    phone: phoneStr,
+                    parentName: student.parentName || 'Unknown Parent',
+                    children: [],
+                    totalBalance: 0,
+                    totalPaid: 0,
+                    totalExpected: 0
+                });
+            }
+
+            const entry = map.get(key)!;
+            entry.children.push({ student, enrollment: e });
+            entry.totalBalance += (e.balance || 0);
+            entry.totalPaid += (e.paidAmount || 0);
+            entry.totalExpected += (e.totalAmount || 0);
+        });
+
+        return Array.from(map.values()).sort((a, b) => b.totalBalance - a.totalBalance);
+    }, [enrollments, students]);
+
     // --- SAAS ROUTE GUARD ---
     // Fixes issue where logging out from Super Admin (on saas-admin view) 
     // and logging in as Org Admin keeps the restricted view active.
@@ -179,6 +224,33 @@ const AppContent = () => {
             }
         }
     }, [currentView, isSuperAdmin, authLoading, appLoading, userProfile]);
+
+    // --- ONE-TIME AUTO-REPAIR FOR MISMATCHED PAYMENT DOCUMENTS ---
+    useEffect(() => {
+        if (!authLoading && !appLoading && userProfile && (userProfile.role === 'admin' || isSuperAdmin) && db && payments.length > 0) {
+            const runMigration = async () => {
+                if (!db) return;
+                if ((window as any).__paymentsMigrated) return;
+                (window as any).__paymentsMigrated = true;
+                
+                const mismatched = payments.filter(p => p.method === 'virement' && p.status === 'check_received');
+                if (mismatched.length === 0) return;
+                
+                console.log(`[Migration] Found ${mismatched.length} mismatched virement payments. Repairing...`);
+                for (const p of mismatched) {
+                    try {
+                        await updateDoc(doc(db, 'payments', p.id), {
+                            status: 'pending_verification'
+                        });
+                        console.log(`[Migration] Successfully repaired payment ${p.id}`);
+                    } catch (err) {
+                        console.error(`[Migration] Failed to repair payment ${p.id}:`, err);
+                    }
+                }
+            };
+            runMigration();
+        }
+    }, [authLoading, appLoading, userProfile, isSuperAdmin, payments]);
 
     // --- DYNAMIC TITLE UPDATE ---
     useEffect(() => {
@@ -202,6 +274,10 @@ const AppContent = () => {
         depositDate: '',
         date: new Date().toISOString().split('T')[0]
     });
+    
+    // Payment Promises (Contracts) State
+    const [enrollPaymentPromises, setEnrollPaymentPromises] = useState<{ month: string; amount: string; id: number }[]>([]);
+    const [currentPromise, setCurrentPromise] = useState({ month: new Date().toISOString().slice(0, 7), amount: '' });
 
     // Helper to get selected program details for enrollment
     const selectedProgram = useMemo(() => programs.find(p => p.id === enrollProgramForm.programId), [programs, enrollProgramForm.programId]);
@@ -235,6 +311,8 @@ const AppContent = () => {
             // Always reset payments on new session
             setEnrollPayments([]);
             setCurrentEnrollPayment({ amount: '', method: 'cash', checkNumber: '', bankName: '', depositDate: '', date: new Date().toISOString().split('T')[0] });
+            setEnrollPaymentPromises([]);
+            setCurrentPromise({ month: new Date().toISOString().slice(0, 7), amount: '' });
 
             // Reset flag for next time (after this render effect runs)
             preserveEnrollmentFormRef.current = false;
@@ -293,44 +371,281 @@ const AppContent = () => {
         }
     };
 
+    const handlePrintParentPaymentReceipt = (account: any, appliedPayments: any[], totalAmount: number, method: string, date: string) => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            showAlert("Warning", "Please allow popups to print receipts.", "warning");
+            return;
+        }
+
+        const logoHtml = settings?.logoUrl
+            ? `<div class="logo-container"><img src="${settings.logoUrl}" alt="Logo" /></div>`
+            : `<div class="logo-placeholder">${settings?.academyName?.charAt(0) || 'M'}</div>`;
+
+        const htmlContent = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Parent Payment Receipt - ${account.parentName || 'Parent'}</title>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+                <style>
+                    @media print {
+                        @page { margin: 20mm; size: A4; }
+                        body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                        .container { border: none !important; box-shadow: none !important; padding: 0 !important; }
+                    }
+                    body { font-family: 'Inter', sans-serif; color: #0f172a; background: #f8fafc; padding: 40px 0; margin: 0; }
+                    .container { max-width: 650px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+                    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; border-bottom: 2px solid #f1f5f9; padding-bottom: 24px; }
+                    .logo-container img { height: 60px; width: auto; object-fit: contain; }
+                    .logo-placeholder { width: 50px; height: 50px; background: #2563eb; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 24px; }
+                    .company-details { margin-top: 10px; }
+                    .company-name { font-size: 18px; font-weight: 700; }
+                    .company-meta { font-size: 12px; color: #64748b; }
+                    .title-area { text-align: right; }
+                    .title { font-size: 20px; font-weight: 800; text-transform: uppercase; margin: 0 0 5px 0; color: #10b981; }
+                    .subtitle { font-size: 12px; color: #64748b; font-family: 'JetBrains Mono', monospace; }
+                    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+                    .info-group { background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; }
+                    .info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px; }
+                    .info-val { font-size: 14px; font-weight: 600; }
+                    .data-table { width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 20px; }
+                    .data-table th { font-size: 11px; font-weight: 600; color: #475569; text-transform: uppercase; padding: 10px 12px; border-bottom: 2px solid #e2e8f0; }
+                    .data-table td { font-size: 13px; padding: 12px; border-bottom: 1px solid #e2e8f0; color: #334155; }
+                    .text-right { text-align: right; }
+                    .font-mono { font-family: 'JetBrains Mono', monospace; }
+                    .totals-section { display: flex; flex-direction: column; align-items: flex-end; margin-top: 30px; border-top: 2px solid #e2e8f0; padding-top: 15px; }
+                    .totals-row { display: flex; justify-content: space-between; width: 260px; margin-bottom: 8px; font-size: 13px; }
+                    .totals-label { color: #64748b; }
+                    .totals-val { font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+                    .grand-total { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
+                    .grand-total .totals-label { font-size: 15px; font-weight: 700; color: #0f172a; }
+                    .grand-total .totals-val { font-size: 20px; font-weight: 800; color: #2563eb; }
+                    .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; line-height: 1.5; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="header">
+                        <div>
+                            ${logoHtml}
+                            <div class="company-details">
+                                <div class="company-name">${settings?.academyName || 'MakerLab Academy'}</div>
+                                <div class="company-meta">${settings?.academicYear || 'Current Year'}</div>
+                            </div>
+                        </div>
+                        <div class="title-area">
+                            <h1 class="title">Receipt of Payment</h1>
+                            <div class="subtitle">DATE: ${new Date(date).toLocaleDateString()}</div>
+                        </div>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-group">
+                            <div class="info-label">Bill To / Parent</div>
+                            <div class="info-val">${account.parentName || 'Parent Account'}</div>
+                            <div style="font-size:12px; color:#64748b; margin-top:4px;">Phone: ${account.phone || 'N/A'}</div>
+                        </div>
+                        <div class="info-group">
+                            <div class="info-label">Payment Mode & Status</div>
+                            <div class="info-val" style="text-transform: capitalize;">${method}</div>
+                            <div style="font-size:12px; color:#64748b; margin-top:4px;">Status: Approved / Paid</div>
+                        </div>
+                    </div>
+
+                    <div class="section-title" style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 6px; margin-top: 30px; margin-bottom: 15px;">Payment Distribution</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Child</th>
+                                <th>Program</th>
+                                <th class="text-right">Amount Applied</th>
+                                <th class="text-right">Remaining Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${appliedPayments.map((p: any) => {
+                                const child = account.children.find((c: any) => c.enrollment.id === p.enrollmentId);
+                                return `
+                                    <tr>
+                                        <td style="font-weight:600;">${child?.student.name || p.studentName}</td>
+                                        <td>${child?.enrollment.programName || 'Program'}</td>
+                                        <td class="text-right font-mono" style="color:#10b981; font-weight:600;">${formatCurrency(p.amount)}</td>
+                                        <td class="text-right font-mono">${formatCurrency(child ? Math.max(0, (child.enrollment.balance || 0) - p.amount) : 0)}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+
+                    <div class="totals-section">
+                        <div class="totals-row grand-total">
+                            <span class="totals-label">Total Amount Paid:</span>
+                            <span class="totals-val">${formatCurrency(totalAmount)}</span>
+                        </div>
+                    </div>
+
+                    <div class="footer">
+                        <div>${settings?.receiptFooter || ''}</div>
+                        <div>${settings?.receiptContact || ''}</div>
+                        <div style="margin-top:10px; font-size:9px; color:#cbd5e1;">Generated electronically on ${new Date().toLocaleString()}</div>
+                    </div>
+                </div>
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+            </html>
+        `;
+
+        printWindow.document.open();
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+    };
+
     const handleSubmitPayment = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db) return;
-        if (!paymentForm.enrollmentId) { showAlert("Validation Error", "Please select a student/enrollment", "warning"); return; }
 
+        if (paymentMode === 'parent') {
+            if (!selectedParentAccount) { showAlert("Validation Error", "Please select a parent account", "warning"); return; }
+            const amountPaid = Number(paymentForm.amount);
+            if (isNaN(amountPaid) || amountPaid <= 0) { showAlert("Validation Error", "Please enter a valid payment amount", "warning"); return; }
+
+            setIsSubmittingPayment(true);
+            try {
+                let status = 'paid';
+                if (paymentForm.method === 'check') status = 'check_received';
+                if (paymentForm.method === 'virement') status = 'pending_verification';
+
+                let remainingToDistribute = amountPaid;
+                const childrenWithBalance = [...selectedParentAccount.children]
+                    .filter((c: any) => (c.enrollment.balance || 0) > 0)
+                    .sort((a, b) => new Date(a.enrollment.createdAt || 0).getTime() - new Date(b.enrollment.createdAt || 0).getTime());
+
+                const createdPayments: any[] = [];
+
+                for (const child of childrenWithBalance) {
+                    if (remainingToDistribute <= 0) break;
+                    const owed = child.enrollment.balance || 0;
+                    const applied = Math.min(owed, remainingToDistribute);
+
+                    const docRef = await addDoc(collection(db, 'payments'), {
+                        enrollmentId: child.enrollment.id,
+                        studentName: child.enrollment.studentName,
+                        amount: applied,
+                        date: paymentForm.date,
+                        method: paymentForm.method,
+                        status: status,
+                        organizationId: child.enrollment.organizationId || currentOrganization?.id || 'makerlab-academy',
+                        checkNumber: paymentForm.method === 'check' ? paymentForm.checkNumber : null,
+                        bankName: paymentForm.method === 'check' ? paymentForm.bankName : null,
+                        depositDate: paymentForm.method === 'check' ? paymentForm.depositDate : null,
+                        proofUrl: paymentForm.method === 'virement' ? paymentForm.proofUrl : null,
+                        session: computeAcademicYear(new Date(paymentForm.date)),
+                        createdAt: serverTimestamp()
+                    });
+
+                    createdPayments.push({
+                        id: docRef.id,
+                        enrollmentId: child.enrollment.id,
+                        studentName: child.enrollment.studentName,
+                        amount: applied
+                    });
+
+                    if (status === 'paid') {
+                        const newPaid = (child.enrollment.paidAmount || 0) + applied;
+                        const newBalance = (child.enrollment.totalAmount || 0) - newPaid;
+                        await updateDoc(doc(db, 'enrollments', child.enrollment.id), {
+                            paidAmount: newPaid,
+                            balance: newBalance
+                        });
+                    }
+
+                    remainingToDistribute -= applied;
+                }
+
+                // Apply remaining to first child if overpaid
+                if (remainingToDistribute > 0 && selectedParentAccount.children.length > 0) {
+                    const child = selectedParentAccount.children[0];
+                    const docRef = await addDoc(collection(db, 'payments'), {
+                        enrollmentId: child.enrollment.id,
+                        studentName: child.enrollment.studentName,
+                        amount: remainingToDistribute,
+                        date: paymentForm.date,
+                        method: paymentForm.method,
+                        status: status,
+                        organizationId: child.enrollment.organizationId || currentOrganization?.id || 'makerlab-academy',
+                        checkNumber: paymentForm.method === 'check' ? paymentForm.checkNumber : null,
+                        bankName: paymentForm.method === 'check' ? paymentForm.bankName : null,
+                        depositDate: paymentForm.method === 'check' ? paymentForm.depositDate : null,
+                        proofUrl: paymentForm.method === 'virement' ? paymentForm.proofUrl : null,
+                        session: computeAcademicYear(new Date(paymentForm.date)),
+                        createdAt: serverTimestamp()
+                    });
+
+                    createdPayments.push({
+                        id: docRef.id,
+                        enrollmentId: child.enrollment.id,
+                        studentName: child.enrollment.studentName,
+                        amount: remainingToDistribute
+                    });
+
+                    if (status === 'paid') {
+                        const newPaid = (child.enrollment.paidAmount || 0) + remainingToDistribute;
+                        const newBalance = (child.enrollment.totalAmount || 0) - newPaid;
+                        await updateDoc(doc(db, 'enrollments', child.enrollment.id), {
+                            paidAmount: newPaid,
+                            balance: newBalance
+                        });
+                    }
+                }
+
+                setIsPaymentModalOpen(false);
+                setPaymentForm(prev => ({ ...prev, amount: 0, checkNumber: '', bankName: '', depositDate: '', proofUrl: '' }));
+                setParentPaymentSearchQuery('');
+                setSelectedParentAccount(null);
+                
+                showAlert("Success", "Parent bulk payment recorded successfully!", "success");
+
+                // Auto Print Receipt
+                handlePrintParentPaymentReceipt(selectedParentAccount, createdPayments, amountPaid, paymentForm.method, paymentForm.date);
+            } catch (err) {
+                console.error("Failed to record parent payment:", err);
+                showAlert("Error", "Failed to record parent payment", "danger");
+            } finally {
+                setIsSubmittingPayment(false);
+            }
+            return;
+        }
+
+        // Original Individual Payment Logic
+        if (!paymentForm.enrollmentId) { showAlert("Validation Error", "Please select a student/enrollment", "warning"); return; }
         setIsSubmittingPayment(true);
         try {
             const enrollment = enrollments.find(e => e.id === paymentForm.enrollmentId);
             if (!enrollment) throw new Error("Enrollment not found");
 
-            // Determine Status based on Method
-            let status = 'paid'; // Default for Cash
+            let status = 'paid';
             if (paymentForm.method === 'check') status = 'check_received';
             if (paymentForm.method === 'virement') status = 'pending_verification';
 
-            // Record Payment
             await addDoc(collection(db, 'payments'), {
                 enrollmentId: paymentForm.enrollmentId,
                 studentName: enrollment.studentName,
                 amount: Number(paymentForm.amount),
                 date: paymentForm.date,
                 method: paymentForm.method,
-
                 status: status,
-                organizationId: enrollment.organizationId || currentOrganization?.id || 'makerlab-academy', // Safer: Inherit from Enrollment
-                // Optional fields based on method
+                organizationId: enrollment.organizationId || currentOrganization?.id || 'makerlab-academy',
                 checkNumber: paymentForm.method === 'check' ? paymentForm.checkNumber : null,
                 bankName: paymentForm.method === 'check' ? paymentForm.bankName : null,
                 depositDate: paymentForm.method === 'check' ? paymentForm.depositDate : null,
                 proofUrl: paymentForm.method === 'virement' ? paymentForm.proofUrl : null,
-
-                // Use the date of the payment to determine the correct academic session
                 session: computeAcademicYear(new Date(paymentForm.date)),
                 createdAt: serverTimestamp()
             });
 
-            // IMPORTANT: Only update balance immediately if CASH.
-            // Checks and Virements update balance when status changes to 'paid'/'verified'.
             if (status === 'paid') {
                 const newPaid = (enrollment.paidAmount || 0) + Number(paymentForm.amount);
                 const newBalance = (enrollment.totalAmount || 0) - newPaid;
@@ -368,6 +683,16 @@ const AppContent = () => {
 
     const handleRemoveEnrollmentPayment = (id: number) => {
         setEnrollPayments(enrollPayments.filter(p => p.id !== id));
+    };
+
+    const handleAddPromise = () => {
+        if (!currentPromise.amount || Number(currentPromise.amount) <= 0 || !currentPromise.month) return;
+        setEnrollPaymentPromises([...enrollPaymentPromises, { ...currentPromise, id: Date.now() }]);
+        setCurrentPromise({ month: new Date().toISOString().slice(0, 7), amount: '' });
+    };
+
+    const handleRemovePromise = (id: number) => {
+        setEnrollPaymentPromises(enrollPaymentPromises.filter(p => p.id !== id));
     };
 
     const handleEnrollFromGroup = (programId: string, gradeId: string, groupId: string) => {
@@ -435,9 +760,10 @@ const AppContent = () => {
                 const firstNameChar = names[0].charAt(0).toLowerCase();
                 const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
 
-                // Format: w.fakir@makerlab.academy
+                // Format: w.fakir@slug.edu
+                const domain = currentOrganization?.slug ? `${currentOrganization.slug}.edu` : 'makerlab.academy';
                 const username = `${firstNameChar}.${lastName}`;
-                const email = `${username}@makerlab.academy`;
+                const email = `${username}@${domain}`;
                 const password = Math.random().toString(36).slice(-6);
 
                 // Create Auth User
@@ -542,6 +868,7 @@ const AppContent = () => {
                 discountAmount: discountAmount > 0 ? discountAmount : 0, // Store discount
                 paidAmount: initialCleared,
                 balance: negotiatedPrice - initialCleared,
+                paymentPromises: enrollPaymentPromises.map(p => ({ month: p.month, amount: Number(p.amount) })),
                 status: 'active',
                 startDate: new Date().toISOString(),
                 // Auto-detect session from enrollment date (Sept-June rule)
@@ -561,7 +888,7 @@ const AppContent = () => {
                     checkNumber: p.checkNumber || null,
                     bankName: p.bankName || null,
                     depositDate: p.depositDate || null,
-                    status: p.method === 'cash' ? 'paid' : 'check_received',
+                    status: p.method === 'cash' ? 'paid' : p.method === 'virement' ? 'pending_verification' : 'check_received',
                     // Use payment date to determine session, not the admin's current setting
                     session: computeAcademicYear(new Date(p.date || new Date().toISOString())),
                     organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
@@ -677,11 +1004,11 @@ const AppContent = () => {
             case 'schedule': return <CalendarView />; // NEW
 
             // SAAS GUARDED ROUTES
-            case 'learning': return user?.role === 'student' || currentOrganization?.modules?.makerPro ? <LearningView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />; // Fallback to Dashboard if disabled
+            case 'learning': return userProfile?.role === 'student' || currentOrganization?.modules?.makerPro ? <LearningView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />; // Fallback to Dashboard if disabled
             case 'toolkit': return <ToolkitView />;
             case 'archive': return <ArchiveView />;
             case 'media': return <MediaView />;
-            case 'portfolio': return user?.role === 'student' || currentOrganization?.modules?.makerPro ? <PortfolioView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />;
+            case 'portfolio': return userProfile?.role === 'student' || currentOrganization?.modules?.makerPro ? <PortfolioView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />;
             case 'review': return <ReviewView />;
             case 'pickup': return <PickupView />;
             case 'parent-dashboard': return <ParentDashboardView />;
@@ -817,64 +1144,178 @@ const AppContent = () => {
                 {/* ... (Payment Modal Content - No Changes) ... */}
                 <form onSubmit={handleSubmitPayment} className="space-y-5">
 
-                    {/* Student Selector (Combobox) */}
-                    <div className="relative">
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Select Student & Program</label>
-                        {paymentForm.studentId && paymentForm.enrollmentId ? (
-                            <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                <div>
-                                    <div className="text-white font-bold text-sm">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.studentName}</div>
-                                    <div className="text-xs text-slate-400">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.programName}</div>
-                                </div>
-                                <button type="button" onClick={() => setPaymentForm({ ...paymentForm, studentId: '', enrollmentId: '' })} className="text-xs text-blue-400 hover:text-blue-300 font-medium">Change</button>
-                            </div>
-                        ) : (
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                                <input
-                                    type="text"
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none"
-                                    placeholder="Search active student..."
-                                    value={paymentSearchQuery}
-                                    onChange={(e) => { setPaymentSearchQuery(e.target.value); setIsDropdownOpen(true); }}
-                                    onFocus={() => setIsDropdownOpen(true)}
-                                />
-                                {isDropdownOpen && paymentSearchQuery && (
-                                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 custom-scrollbar">
-                                        {enrollments
-                                            .filter(e => {
-                                                if (e.status !== 'active') return false;
-                                                const student = students.find(s => s.id === e.studentId);
-                                                if (!student || student.status === 'inactive') return false;
-
-                                                return e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase());
-                                            })
-                                            .map(enrollment => (
-                                                <button
-                                                    key={enrollment.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPaymentForm({ ...paymentForm, studentId: enrollment.studentId, enrollmentId: enrollment.id, amount: enrollment.balance });
-                                                        setIsDropdownOpen(false);
-                                                        setPaymentSearchQuery('');
-                                                    }}
-                                                    className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-none"
-                                                >
-                                                    <div className="font-bold text-white text-sm">{enrollment.studentName}</div>
-                                                    <div className="flex justify-between text-xs text-slate-400">
-                                                        <span>{enrollment.programName}</span>
-                                                        <span className={enrollment.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}>Due: {formatCurrency(enrollment.balance)}</span>
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        {enrollments.filter(e => e.status === 'active' && e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase())).length === 0 && (
-                                            <div className="p-3 text-slate-500 text-xs text-center">No active enrollments found.</div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                    {/* Payment Mode Selector */}
+                    <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPaymentMode('individual');
+                                setPaymentForm(prev => ({ ...prev, studentId: '', enrollmentId: '', amount: 0 }));
+                                setSelectedParentAccount(null);
+                            }}
+                            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${paymentMode === 'individual' ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Individual Student
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPaymentMode('parent');
+                                setPaymentForm(prev => ({ ...prev, studentId: '', enrollmentId: '', amount: 0 }));
+                                setSelectedParentAccount(null);
+                            }}
+                            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${paymentMode === 'parent' ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            Parent Account (Family)
+                        </button>
                     </div>
+
+                    {/* Student Selector (Combobox) */}
+                    {paymentMode === 'individual' && (
+                        <div className="relative">
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Select Student & Program</label>
+                            {paymentForm.studentId && paymentForm.enrollmentId ? (
+                                <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                    <div>
+                                        <div className="text-white font-bold text-sm">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.studentName}</div>
+                                        <div className="text-xs text-slate-400">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.programName}</div>
+                                    </div>
+                                    <button type="button" onClick={() => setPaymentForm({ ...paymentForm, studentId: '', enrollmentId: '' })} className="text-xs text-blue-400 hover:text-blue-300 font-medium">Change</button>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                                    <input
+                                        type="text"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none"
+                                        placeholder="Search active student..."
+                                        value={paymentSearchQuery}
+                                        onChange={(e) => { setPaymentSearchQuery(e.target.value); setIsDropdownOpen(true); }}
+                                        onFocus={() => setIsDropdownOpen(true)}
+                                    />
+                                    {isDropdownOpen && paymentSearchQuery && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 custom-scrollbar">
+                                            {enrollments
+                                                .filter(e => {
+                                                    if (e.status !== 'active') return false;
+                                                    const student = students.find(s => s.id === e.studentId);
+                                                    if (!student || student.status === 'inactive') return false;
+
+                                                    return e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase());
+                                                })
+                                                .map(enrollment => (
+                                                    <button
+                                                        key={enrollment.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setPaymentForm({ ...paymentForm, studentId: enrollment.studentId, enrollmentId: enrollment.id, amount: enrollment.balance });
+                                                            setIsDropdownOpen(false);
+                                                            setPaymentSearchQuery('');
+                                                        }}
+                                                        className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-none"
+                                                    >
+                                                        <div className="font-bold text-white text-sm">{enrollment.studentName}</div>
+                                                        <div className="flex justify-between text-xs text-slate-400">
+                                                            <span>{enrollment.programName}</span>
+                                                            <span className={enrollment.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}>Due: {formatCurrency(enrollment.balance)}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            {enrollments.filter(e => e.status === 'active' && e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase())).length === 0 && (
+                                                <div className="p-3 text-slate-500 text-xs text-center">No active enrollments found.</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Parent Account Selector */}
+                    {paymentMode === 'parent' && (
+                        <div className="relative">
+                            <label className="block text-xs font-medium text-slate-400 mb-1">Select Parent Account</label>
+                            {selectedParentAccount ? (
+                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="text-white font-bold text-sm flex items-center gap-1.5">
+                                                <Users size={16} className="text-blue-450" />
+                                                {selectedParentAccount.parentName || 'Parent Account'}
+                                            </div>
+                                            <div className="text-xs text-slate-400 mt-1">Phone: {selectedParentAccount.phone || 'No phone'}</div>
+                                        </div>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => {
+                                                setSelectedParentAccount(null);
+                                                setPaymentForm(prev => ({ ...prev, amount: 0 }));
+                                            }} 
+                                            className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+                                        >
+                                            Change
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="border-t border-slate-900 pt-2 space-y-1.5">
+                                        {selectedParentAccount.children.map((c: any, i: number) => (
+                                            <div key={i} className="flex justify-between text-xs">
+                                                <span className="text-slate-400 font-medium">{c.student.name} <span className="text-[10px] text-slate-650">({c.enrollment.programName})</span></span>
+                                                <span className={`font-mono ${c.enrollment.balance > 0 ? 'text-amber-400' : 'text-slate-500'}`}>{formatCurrency(c.enrollment.balance)}</span>
+                                            </div>
+                                        ))}
+                                        <div className="flex justify-between text-xs font-bold border-t border-dashed border-slate-850 pt-2 mt-2">
+                                            <span className="text-white">Family Solde Balance</span>
+                                            <span className={`font-mono ${selectedParentAccount.totalBalance > 0 ? 'text-red-405' : 'text-emerald-450'}`}>{formatCurrency(selectedParentAccount.totalBalance)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                                    <input
+                                        type="text"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none"
+                                        placeholder="Search parent name or phone..."
+                                        value={parentPaymentSearchQuery}
+                                        onChange={(e) => { setParentPaymentSearchQuery(e.target.value); setIsParentDropdownOpen(true); }}
+                                        onFocus={() => setIsParentDropdownOpen(true)}
+                                    />
+                                    {isParentDropdownOpen && parentPaymentSearchQuery && (
+                                        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 custom-scrollbar">
+                                            {parentAccounts
+                                                .filter(p => 
+                                                    (p.parentName || '').toLowerCase().includes(parentPaymentSearchQuery.toLowerCase()) ||
+                                                    (p.phone || '').includes(parentPaymentSearchQuery)
+                                                )
+                                                .map((account, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedParentAccount(account);
+                                                            setPaymentForm(prev => ({ ...prev, amount: account.totalBalance }));
+                                                            setIsParentDropdownOpen(false);
+                                                            setParentPaymentSearchQuery('');
+                                                        }}
+                                                        className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-none"
+                                                    >
+                                                        <div className="font-bold text-white text-sm flex items-center gap-1.5"><Users size={14} className="text-blue-400" /> {account.parentName}</div>
+                                                        <div className="flex justify-between text-xs text-slate-400 mt-0.5">
+                                                            <span>{account.children.length} child(ren) &middot; {account.phone || 'No phone'}</span>
+                                                            <span className={account.totalBalance > 0 ? 'text-amber-400' : 'text-emerald-450'}>Solde: {formatCurrency(account.totalBalance)}</span>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            {parentAccounts.filter(p => (p.parentName || '').toLowerCase().includes(parentPaymentSearchQuery.toLowerCase()) || (p.phone || '').includes(parentPaymentSearchQuery)).length === 0 && (
+                                                <div className="p-3 text-slate-500 text-xs text-center">No parent accounts found.</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Payment Details */}
                     <div className="grid grid-cols-2 gap-4">
@@ -1095,6 +1536,39 @@ const AppContent = () => {
                                     </div>
                                 </div>
 
+                                {/* Payment Promises / Contract */}
+                                {enrollProgramForm.paymentPlan !== 'full' && (
+                                    <div className="bg-indigo-950/20 border border-indigo-900/50 p-4 rounded-xl mb-4 space-y-3">
+                                        <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex justify-between items-center">
+                                            <span>Payment Contract (Promises)</span>
+                                            <span className="text-slate-400 font-normal">
+                                                Promised: {formatCurrency(enrollPaymentPromises.reduce((s, p) => s + Number(p.amount), 0))} / {formatCurrency(remainingBalance)}
+                                            </span>
+                                        </div>
+                                        {enrollPaymentPromises.length > 0 && (
+                                            <div className="space-y-2">
+                                                {enrollPaymentPromises.map((p, idx) => (
+                                                    <div key={p.id} className="flex justify-between items-center bg-slate-900 p-2 rounded-lg border border-slate-800 text-sm">
+                                                        <div className="text-slate-300"><span className="text-indigo-400 font-mono text-xs">{p.month}</span> • {formatCurrency(Number(p.amount))}</div>
+                                                        <button onClick={() => handleRemovePromise(p.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        <div className="flex items-end gap-2 mt-2">
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-slate-500 block mb-1">Month</label>
+                                                <input type="month" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm focus:border-indigo-500 outline-none" value={currentPromise.month} onChange={e => setCurrentPromise({ ...currentPromise, month: e.target.value })} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-[10px] text-slate-500 block mb-1">Amount</label>
+                                                <input type="number" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm focus:border-indigo-500 outline-none" value={currentPromise.amount} onChange={e => setCurrentPromise({ ...currentPromise, amount: e.target.value })} placeholder="0.00" />
+                                            </div>
+                                            <button onClick={handleAddPromise} disabled={!currentPromise.amount || !currentPromise.month} className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-lg transition-colors disabled:opacity-50"><Plus size={18} /></button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Payment List */}
                                 {enrollPayments.length > 0 && (
                                     <div className="space-y-2 mb-4">
@@ -1150,6 +1624,7 @@ const AppContent = () => {
                                 onClick={() => {
                                     if (enrollmentStep === 1 && !enrollStudentForm.name && !quickEnrollStudentId) return showAlert("Validation Error", "Name is required", "warning");
                                     if (enrollmentStep === 2 && !enrollProgramForm.programId) return showAlert("Validation Error", "Program is required", "warning");
+                                    if (enrollmentStep === 2 && !enrollProgramForm.groupId) return showAlert("Validation Error", "Group selection is required", "warning");
                                     setEnrollmentStep(s => s + 1);
                                 }}
                                 className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold flex items-center gap-2"

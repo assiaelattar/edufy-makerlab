@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays, Percent, Printer, Tablet } from 'lucide-react';
+import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays, Percent, Printer, Tablet, FileText } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
@@ -9,6 +9,7 @@ import { db } from '../services/firebase';
 import { Program, ProgramPack, Grade, Group, Lead } from '../types';
 import { useReactToPrint } from 'react-to-print';
 import { FormTemplateRenderer } from '../components/enrollment/FormTemplateRenderer';
+import { DevisTemplateRenderer } from '../components/enrollment/DevisTemplateRenderer';
 import { QRCodeSVG } from 'qrcode.react';
 import { Copy, ArrowLeft, UserPlus, User } from 'lucide-react';
 
@@ -23,7 +24,7 @@ interface ProgramsViewProps {
 }
 
 export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
-  const { programs, navigateTo, leads } = useAppContext();
+  const { programs, navigateTo, leads, settings } = useAppContext();
   const { currentOrganization } = useAuth();
   const [isProgramModalOpen, setProgramModalOpen] = useState(false);
   const [viewDetailProgramId, setViewDetailProgramId] = useState<string | null>(null); // NEW: For Detail Modal
@@ -39,6 +40,29 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     contentRef: printComponentRef,
     documentTitle: `Inscription_${printTargetProgram?.name || 'Form'}`,
   });
+
+  // Devis State
+  const devisPrintComponentRef = React.useRef(null);
+  const [isDevisModalOpen, setIsDevisModalOpen] = useState(false);
+  const [devisTargetProgram, setDevisTargetProgram] = useState<Program | null>(null);
+  const [devisConfig, setDevisConfig] = useState({
+      parentName: '',
+      childName: '',
+      sessionDetails: '', // NEW
+      selectedPacks: [] as string[],
+      discount: 0
+  });
+
+  const handlePrintDevis = useReactToPrint({
+    contentRef: devisPrintComponentRef,
+    documentTitle: `Devis_${devisTargetProgram?.name || 'Program'}`,
+  });
+
+  const openDevisModal = (program: Program) => {
+      setDevisTargetProgram(program);
+      setDevisConfig({ parentName: '', childName: '', sessionDetails: '', selectedPacks: program.packs.length > 0 ? [program.packs[0].name] : [], discount: 0 });
+      setIsDevisModalOpen(true);
+  };
 
   // Image Upload State
   const [uploadingField, setUploadingField] = useState<string | null>(null);
@@ -331,6 +355,9 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                     )}
                   </div>
                   <div className="flex gap-1 -mr-2 -mt-2">
+                    <button onClick={() => openDevisModal(program)} title="Generate Quote (Devis)" className="p-3 md:p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors active:scale-90">
+                      <FileText size={18} />
+                    </button>
                     <button onClick={() => { setPrintTargetProgram(program); triggerPrint(program); }} title="Print Enrollment Form" className="p-3 md:p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors active:scale-90">
                       <Printer size={18} />
                     </button>
@@ -862,6 +889,116 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
         <div ref={printComponentRef}>
           {printTargetProgram && (
             <FormTemplateRenderer program={printTargetProgram} />
+          )}
+        </div>
+      </div>
+
+      {/* Devis Modal */}
+      <Modal isOpen={isDevisModalOpen} onClose={() => setIsDevisModalOpen(false)} title={`Generate Devis: ${devisTargetProgram?.name}`} size="md">
+        {devisTargetProgram && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Parent / Client Name</label>
+              <input 
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-blue-500" 
+                value={devisConfig.parentName} 
+                onChange={e => setDevisConfig(prev => ({ ...prev, parentName: e.target.value }))}
+                placeholder="e.g., M. Dupont" 
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Child Name (Optional)</label>
+              <input 
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-blue-500" 
+                value={devisConfig.childName} 
+                onChange={e => setDevisConfig(prev => ({ ...prev, childName: e.target.value }))}
+                placeholder="e.g., Leo" 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Session Details / Dates (Optional)</label>
+              <textarea 
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-blue-500 resize-none h-20 text-sm" 
+                value={devisConfig.sessionDetails} 
+                onChange={e => setDevisConfig(prev => ({ ...prev, sessionDetails: e.target.value }))}
+                placeholder="e.g., Du 15 Juillet au 25 Juillet, Lundi au Vendredi..." 
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Select Packs to Include</label>
+              <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2">
+                {devisTargetProgram.packs.map((pack, idx) => {
+                  const isSelected = devisConfig.selectedPacks.includes(pack.name);
+                  const price = devisTargetProgram.type === 'Regular Program' ? (pack.priceAnnual || pack.price || 0) : (pack.price || 0);
+                  return (
+                    <label key={idx} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${isSelected ? 'border-blue-500 bg-blue-500/10' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-600'}`}>
+                          {isSelected && <Check size={14} className="text-white" />}
+                        </div>
+                        <span className="text-sm font-bold text-white">{pack.name}</span>
+                      </div>
+                      <span className="text-sm font-mono text-slate-400">{formatCurrency(price)}</span>
+                      <input 
+                        type="checkbox" 
+                        className="hidden" 
+                        checked={isSelected} 
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setDevisConfig(prev => ({ ...prev, selectedPacks: [...prev.selectedPacks, pack.name] }));
+                          } else {
+                            setDevisConfig(prev => ({ ...prev, selectedPacks: prev.selectedPacks.filter(p => p !== pack.name) }));
+                          }
+                        }} 
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Discount Amount (Optional)</label>
+              <input 
+                type="number"
+                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white outline-none focus:border-blue-500" 
+                value={devisConfig.discount || ''} 
+                onChange={e => setDevisConfig(prev => ({ ...prev, discount: Number(e.target.value) }))}
+                placeholder="e.g., 500" 
+              />
+            </div>
+            <div className="pt-4 border-t border-slate-800 flex justify-end gap-3 mt-6">
+              <button onClick={() => setIsDevisModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white font-medium">Cancel</button>
+              <button 
+                onClick={() => {
+                  setTimeout(() => {
+                    handlePrintDevis();
+                    setIsDevisModalOpen(false);
+                  }, 100);
+                }} 
+                disabled={devisConfig.selectedPacks.length === 0}
+                className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center gap-2"
+              >
+                <FileText size={18} /> Generate Devis
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Hidden Devis Print Renderer */}
+      <div style={{ display: 'none' }}>
+        <div ref={devisPrintComponentRef}>
+          {devisTargetProgram && (
+            <DevisTemplateRenderer 
+              program={devisTargetProgram} 
+              settings={settings}
+              parentName={devisConfig.parentName}
+              childName={devisConfig.childName}
+              sessionDetails={devisConfig.sessionDetails}
+              selectedPacks={devisConfig.selectedPacks}
+              discount={devisConfig.discount}
+            />
           )}
         </div>
       </div>

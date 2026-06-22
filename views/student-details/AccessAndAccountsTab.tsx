@@ -3,11 +3,11 @@ import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle, Eye, EyeOff 
 import { Student } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useAppContext } from '../../context/AppContext';
-
+import { Modal } from '../../components/Modal';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: () => void;
+  handleCreateParentAccess: (email: string) => void;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
   shareCredentialsWhatsApp: () => void;
@@ -38,6 +38,8 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   // New PIN State
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
   const [showPin, setShowPin] = useState(false);
+  const [isParentEmailModalOpen, setIsParentEmailModalOpen] = useState(false);
+  const [parentEmailInput, setParentEmailInput] = useState(student.email || '');
 
   const handleGeneratePin = async () => {
     try {
@@ -246,7 +248,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 </button>
               </div>
               <button
-                onClick={handleCreateParentAccess}
+                onClick={() => setIsParentEmailModalOpen(true)}
                 disabled={isGeneratingAccess}
                 className="w-full mt-2 py-2 bg-indigo-950/30 hover:bg-indigo-900/50 text-indigo-300 text-xs font-bold rounded border border-indigo-900/30 flex items-center justify-center gap-1 transition-colors"
               >
@@ -262,7 +264,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             <div className="text-center py-4">
               <p className="text-slate-500 text-xs italic mb-3">Create a separate login for the parent.</p>
               <button
-                onClick={handleCreateParentAccess}
+                onClick={() => setIsParentEmailModalOpen(true)}
                 disabled={isGeneratingAccess}
                 className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded transition-colors flex items-center justify-center gap-2"
               >
@@ -306,6 +308,35 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           )}
         </div>
       )}
+      {/* PARENT EMAIL MODAL */}
+      <Modal isOpen={isParentEmailModalOpen} onClose={() => setIsParentEmailModalOpen(false)} title="Parent Account Email">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Please enter the parent's email address. If they already have an account, they will be linked automatically.
+          </p>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
+            <input 
+              type="email" 
+              value={parentEmailInput} 
+              onChange={(e) => setParentEmailInput(e.target.value)}
+              className="w-full bg-slate-900 text-white p-3 rounded-lg border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+              placeholder="parent@example.com"
+            />
+          </div>
+          <button 
+            onClick={() => {
+              setIsParentEmailModalOpen(false);
+              handleCreateParentAccess(parentEmailInput);
+            }}
+            disabled={!parentEmailInput || !parentEmailInput.includes('@')}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold rounded-lg transition-colors"
+          >
+            Confirm & Proceed
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 };
