@@ -1,12 +1,12 @@
 
-import React from 'react';
-import { BookOpen, Plus, Pencil, ArrowRightLeft, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { BookOpen, Plus, Pencil, ArrowRightLeft, Trash2, Award } from 'lucide-react';
 import { Enrollment } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 
 
 import { useAppContext } from '../../context/AppContext';
-import { generateRegistrationCertificate } from '../../utils/certificateGenerator';
+import { generateRegistrationCertificate, generateCompletionCertificate } from '../../utils/certificateGenerator';
 import { Modal } from '../../components/Modal';
 
 interface AcademicsTabProps {
@@ -30,9 +30,16 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
   const student = students.find(s => s.id === studentId); // Get student details
 
   // Attestation Modal State
-  const [attestationModal, setAttestationModal] = React.useState<{ isOpen: boolean, enrollment: Enrollment | null }>({ isOpen: false, enrollment: null });
-  const [customAdmissionDate, setCustomAdmissionDate] = React.useState('');
-  const [customIssueDate, setCustomIssueDate] = React.useState(new Date().toISOString().split('T')[0]);
+  const [attestationModal, setAttestationModal] = useState<{ isOpen: boolean, enrollment: Enrollment | null }>({ isOpen: false, enrollment: null });
+  const [customAdmissionDate, setCustomAdmissionDate] = useState('');
+  const [customIssueDate, setCustomIssueDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Completion Attestation State
+  const [completionModal, setCompletionModal] = useState<{ isOpen: boolean, enrollment: Enrollment | null }>({ isOpen: false, enrollment: null });
+  const [completionAcademyName, setCompletionAcademyName] = useState(settings.academyName || 'Makerlab Academy');
+  const [completionLogoUrl, setCompletionLogoUrl] = useState(settings.logoUrl || '');
+  const [completionIssueDate, setCompletionIssueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [completionModules, setCompletionModules] = useState('');
 
   const handleOpenAttestationModal = (enrollment: Enrollment) => {
     // Default Admission Date to Enrollment Start Date
@@ -51,6 +58,18 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
         issueDate: customIssueDate
       });
       setAttestationModal({ isOpen: false, enrollment: null });
+    }
+  };
+
+  const handleGenerateCompletion = () => {
+    if (student && completionModal.enrollment) {
+      generateCompletionCertificate(student, completionModal.enrollment, settings, {
+        academyName: completionAcademyName,
+        logoUrl: completionLogoUrl,
+        issueDate: completionIssueDate,
+        modules: completionModules.split('\n').map(m => m.trim()).filter(m => m.length > 0)
+      });
+      setCompletionModal({ isOpen: false, enrollment: null });
     }
   };
 
@@ -153,6 +172,15 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       <BookOpen size={16} />
                     </button>
                     <button
+                      onClick={() => {
+                        setCompletionModal({ isOpen: true, enrollment: e });
+                      }}
+                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
+                      title="Attestation de réussite"
+                    >
+                      <Award size={16} />
+                    </button>
+                    <button
                       onClick={(evt) => {
                         evt.stopPropagation();
                         initiateDeleteEnrollment(e.id);
@@ -218,6 +246,80 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
               className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2"
             >
               <BookOpen size={18} />
+              Générer Attestation
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* COMPLETION ATTESTATION MODAL */}
+      <Modal
+        isOpen={completionModal.isOpen}
+        onClose={() => setCompletionModal({ isOpen: false, enrollment: null })}
+        title="Attestation de réussite / Programme"
+      >
+        <div className="space-y-6">
+          <p className="text-slate-400 text-sm">
+            Personnalisez l'attestation de fin de programme avant de la générer.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Nom de l'Académie</label>
+              <input
+                type="text"
+                value={completionAcademyName}
+                onChange={(e) => setCompletionAcademyName(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="ex: Makerlab Academy"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">URL du Logo (optionnel)</label>
+              <input
+                type="text"
+                value={completionLogoUrl}
+                onChange={(e) => setCompletionLogoUrl(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
+              <input
+                type="date"
+                value={completionIssueDate}
+                onChange={(e) => setCompletionIssueDate(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Modules / Compétences acquises (1 par ligne)</label>
+              <textarea
+                value={completionModules}
+                onChange={(e) => setCompletionModules(e.target.value)}
+                rows={4}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="Introduction à la robotique\nProgrammation Python\nModélisation 3D..."
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button
+              onClick={() => setCompletionModal({ isOpen: false, enrollment: null })}
+              className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleGenerateCompletion}
+              className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-lg shadow-amber-900/20 flex items-center gap-2"
+            >
+              <Award size={18} />
               Générer Attestation
             </button>
           </div>

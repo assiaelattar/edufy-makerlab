@@ -102,6 +102,9 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [balanceFilter, setBalanceFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
     const [transactionStatusFilter, setTransactionStatusFilter] = useState<string>('all');
+    const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | 'cash' | 'check' | 'virement'>('all');
+    const [datePresetFilter, setDatePresetFilter] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'custom'>('all');
+    const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
     const [filterAudience, setFilterAudience] = useState<'all' | 'kids' | 'adults'>('all');
     const [showMonthlyChart, setShowMonthlyChart] = useState(true);
     const [isFixingSession, setIsFixingSession] = useState(false);
@@ -206,18 +209,37 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         };
         const matchesProgram = (progId: string) => selectedProgram === 'All' || progId === selectedProgram;
 
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().split('T')[0];
+        
+        const startOfThisWeek = new Date(now);
+        startOfThisWeek.setDate(now.getDate() - now.getDay());
+        const startOfThisWeekStr = new Date(startOfThisWeek.getFullYear(), startOfThisWeek.getMonth(), startOfThisWeek.getDate()).toISOString().split('T')[0];
+        
+        const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+
         const pFiltered = payments.filter(p => {
             const enrollment = enrollments.find(e => e.id === p.enrollmentId);
             // selectedMonth overrides the dateRange when set (YYYY-MM)
             const monthStart = selectedMonth ? selectedMonth + '-01' : dateRange.start;
             const monthEnd = selectedMonth ? selectedMonth + '-31' : dateRange.end;
+            
+            let matchesDatePreset = true;
+            if (datePresetFilter === 'today') matchesDatePreset = p.date === startOfToday;
+            else if (datePresetFilter === 'this_week') matchesDatePreset = p.date >= startOfThisWeekStr;
+            else if (datePresetFilter === 'this_month') matchesDatePreset = p.date >= startOfThisMonth;
+
+            const matchesMethod = paymentMethodFilter === 'all' || p.method === paymentMethodFilter;
+
             return matchesSession(p.session, enrollment?.session)
                 && matchesSearch(p.studentName + (p.checkNumber || ''))
                 && matchesProgram(enrollment?.programId || '')
                 && audienceMatchesProg(enrollment?.programId || '')
                 && (!monthStart || p.date >= monthStart)
                 && (!monthEnd || p.date <= monthEnd)
-                && (transactionStatusFilter === 'all' || p.status === transactionStatusFilter);
+                && (transactionStatusFilter === 'all' || p.status === transactionStatusFilter)
+                && matchesDatePreset
+                && matchesMethod;
         });
 
         const eFiltered = enrollments.filter(e =>
@@ -231,7 +253,40 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
         return { filteredPayments: pFiltered, filteredEnrollments: eFiltered };
     }, [payments, enrollments, searchQuery, selectedSession, selectedMonth, selectedProgram, dateRange,
-        balanceFilter, transactionStatusFilter, settings.academicYear, filterAudience]);
+        balanceFilter, transactionStatusFilter, paymentMethodFilter, datePresetFilter, settings.academicYear, filterAudience]);
+
+    const selectedSummary = useMemo(() => {
+        let total = 0;
+        let cash = 0;
+        let transfer = 0;
+        let check = 0;
+
+        filteredPayments.forEach(p => {
+            if (selectedTransactionIds.has(p.id)) {
+                total += p.amount;
+                if (p.method === 'cash') cash += p.amount;
+                else if (p.method === 'virement') transfer += p.amount;
+                else if (p.method === 'check') check += p.amount;
+            }
+        });
+
+        return { total, cash, transfer, check };
+    }, [filteredPayments, selectedTransactionIds]);
+
+    const handleSelectAllTransactions = () => {
+        if (selectedTransactionIds.size === filteredPayments.length && filteredPayments.length > 0) {
+            setSelectedTransactionIds(new Set());
+        } else {
+            setSelectedTransactionIds(new Set(filteredPayments.map(p => p.id)));
+        }
+    };
+
+    const toggleTransactionSelection = (id: string) => {
+        const next = new Set(selectedTransactionIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedTransactionIds(next);
+    };
 
     const parentAccounts = useMemo(() => {
         const map = new Map<string, {
@@ -1253,30 +1308,67 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
                     {/* Transaction secondary filters */}
                     {viewMode === 'transactions' && (
-                        <div className="flex flex-wrap gap-3 items-center pt-2 border-t border-slate-800/50 animate-in slide-in-from-top-2">
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-500 uppercase">Status:</span>
-                                <select value={transactionStatusFilter} onChange={(e) => setTransactionStatusFilter(e.target.value)} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none cursor-pointer">
-                                    <option value="all">All</option>
-                                    <option value="paid">Paid / Verified</option>
-                                    <option value="check_received">Check Received</option>
-                                    <option value="check_deposited">Check Deposited</option>
-                                    <option value="check_bounced">Bounced</option>
-                                    <option value="pending_verification">Pending Transfer</option>
-                                </select>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-bold text-slate-500 uppercase">Date:</span>
-                                <input type="date" className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} />
-                                <span className="text-slate-600 text-xs"> &middot;  &middot; </span>
-                                <input type="date" className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} />
-                                {(dateRange.start || dateRange.end || transactionStatusFilter !== 'all') && (
-                                    <button onClick={() => { setDateRange({ start: '', end: '' }); setTransactionStatusFilter('all'); }} className="text-xs text-red-400 hover:underline">Clear</button>
+                        <div className="flex flex-col gap-3 pt-2 border-t border-slate-800/50 animate-in slide-in-from-top-2">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">Date Filter:</span>
+                                    <select value={datePresetFilter} onChange={(e) => { setDatePresetFilter(e.target.value as any); if (e.target.value !== 'custom') setDateRange({start:'', end:''}); }} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none cursor-pointer">
+                                        <option value="all">All Time</option>
+                                        <option value="today">Today</option>
+                                        <option value="this_week">This Week</option>
+                                        <option value="this_month">This Month</option>
+                                        <option value="custom">Custom Date Range...</option>
+                                    </select>
+                                </div>
+                                {datePresetFilter === 'custom' && (
+                                    <div className="flex items-center gap-2">
+                                        <input type="date" className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} />
+                                        <span className="text-slate-600 text-xs"> &middot;  &middot; </span>
+                                        <input type="date" className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} />
+                                    </div>
                                 )}
+                                <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">Method:</span>
+                                    <select value={paymentMethodFilter} onChange={(e) => setPaymentMethodFilter(e.target.value as any)} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none cursor-pointer">
+                                        <option value="all">All Methods</option>
+                                        <option value="cash">Cash</option>
+                                        <option value="virement">Transfer</option>
+                                        <option value="check">Cheque</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
+                                    <span className="text-xs font-bold text-slate-500 uppercase">Status:</span>
+                                    <select value={transactionStatusFilter} onChange={(e) => setTransactionStatusFilter(e.target.value)} className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-white outline-none cursor-pointer">
+                                        <option value="all">All Statuses</option>
+                                        <option value="paid">Paid / Verified</option>
+                                        <option value="check_received">Check Received</option>
+                                        <option value="check_deposited">Check Deposited</option>
+                                        <option value="check_bounced">Bounced</option>
+                                        <option value="pending_verification">Pending Transfer</option>
+                                    </select>
+                                </div>
+                                {(dateRange.start || dateRange.end || transactionStatusFilter !== 'all' || paymentMethodFilter !== 'all' || datePresetFilter !== 'all') && (
+                                    <button onClick={() => { setDateRange({ start: '', end: '' }); setTransactionStatusFilter('all'); setPaymentMethodFilter('all'); setDatePresetFilter('all'); }} className="text-xs text-red-400 hover:underline ml-2">Clear Filters</button>
+                                )}
+                                <div className="ml-auto text-xs text-slate-500">
+                                    {filteredPayments.length} transactions &middot; {formatCurrency(filteredPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((s, p) => s + p.amount, 0))} cleared
+                                </div>
                             </div>
-                            <div className="ml-auto text-xs text-slate-500">
-                                {filteredPayments.length} transactions &middot; {formatCurrency(filteredPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((s, p) => s + p.amount, 0))} cleared
-                            </div>
+
+                            {selectedTransactionIds.size > 0 && (
+                                <div className="flex flex-wrap items-center gap-4 bg-emerald-950/20 border border-emerald-900/50 p-3 rounded-lg text-sm animate-in fade-in slide-in-from-top-2">
+                                    <div className="font-bold text-emerald-400 flex items-center gap-2">
+                                        <CheckCircle2 size={16} /> {selectedTransactionIds.size} Selected
+                                    </div>
+                                    <div className="flex gap-4 items-center">
+                                        <div className="text-slate-300">Total: <span className="font-bold text-white font-mono ml-1">{formatCurrency(selectedSummary.total)}</span></div>
+                                        {selectedSummary.cash > 0 && <div className="text-slate-400 text-xs">Cash: <span className="font-mono text-emerald-400">{formatCurrency(selectedSummary.cash)}</span></div>}
+                                        {selectedSummary.transfer > 0 && <div className="text-slate-400 text-xs">Transfer: <span className="font-mono text-blue-400">{formatCurrency(selectedSummary.transfer)}</span></div>}
+                                        {selectedSummary.check > 0 && <div className="text-slate-400 text-xs">Cheque: <span className="font-mono text-purple-400">{formatCurrency(selectedSummary.check)}</span></div>}
+                                    </div>
+                                    <button onClick={() => setSelectedTransactionIds(new Set())} className="ml-auto text-xs text-slate-400 hover:text-white underline">Deselect All</button>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1614,6 +1706,14 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-900 text-slate-400 sticky top-0 z-10 text-xs uppercase tracking-wider">
                             <tr>
+                                <th className="p-4 w-12 text-center">
+                                    <input 
+                                        type="checkbox" 
+                                        className="accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                                        checked={filteredPayments.length > 0 && selectedTransactionIds.size === filteredPayments.length}
+                                        onChange={handleSelectAllTransactions}
+                                    />
+                                </th>
                                 <th className="p-4 w-32">Date</th>
                                 <th className="p-4">Student</th>
                                 <th className="p-4">Program</th>
@@ -1625,12 +1725,20 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {filteredPayments.length === 0
-                                ? <tr><td colSpan={7} className="p-8 text-center text-slate-500">No transactions found.</td></tr>
+                                ? <tr><td colSpan={8} className="p-8 text-center text-slate-500">No transactions found.</td></tr>
                                 : filteredPayments.map(payment => {
                                     const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
                                     const student = students.find(s => s.id === enrollment?.studentId);
                                     return (
-                                        <tr key={payment.id} className="hover:bg-slate-800/50 transition-colors group">
+                                        <tr key={payment.id} className={`transition-colors group ${selectedTransactionIds.has(payment.id) ? 'bg-emerald-900/10 hover:bg-emerald-900/20' : 'hover:bg-slate-800/50'}`}>
+                                            <td className="p-4 text-center">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="accent-emerald-500 w-3.5 h-3.5 cursor-pointer"
+                                                    checked={selectedTransactionIds.has(payment.id)}
+                                                    onChange={() => toggleTransactionSelection(payment.id)}
+                                                />
+                                            </td>
                                             <td className="p-4 text-slate-400 font-mono text-xs">{formatDate(payment.date)}</td>
                                             <td className="p-4 font-medium text-white">{payment.studentName}</td>
                                             <td className="p-4 text-xs text-blue-300">{enrollment?.programName || ' &middot;  &middot; '}</td>

@@ -279,7 +279,7 @@ export const LoginView = () => {
                 let msg = "Authentication failed.";
                 if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
                     if (email === 'admin@edufy.com' && isLogin) {
-                        msg = "Account not found. This appears to be a fresh install.";
+                        msg = "Invalid email or password. If this is a new setup, please Sign Up first.";
                         setShowSignUpPrompt(true);
                     } else {
                         msg = "Invalid email or password.";
