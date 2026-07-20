@@ -8,6 +8,8 @@ import { formatCurrency } from '../../utils/helpers';
 import { useAppContext } from '../../context/AppContext';
 import { generateRegistrationCertificate, generateCompletionCertificate } from '../../utils/certificateGenerator';
 import { Modal } from '../../components/Modal';
+import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader } from '../../components/atlas/AtlasSurface';
+import { useConfirm } from '../../context/ConfirmContext';
 
 interface AcademicsTabProps {
   studentEnrollments: Enrollment[];
@@ -27,6 +29,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
   studentId,
 }) => {
   const { students, settings } = useAppContext();
+  const { alert: showAlert } = useConfirm();
   const student = students.find(s => s.id === studentId); // Get student details
 
   // Attestation Modal State
@@ -36,7 +39,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
 
   // Completion Attestation State
   const [completionModal, setCompletionModal] = useState<{ isOpen: boolean, enrollment: Enrollment | null }>({ isOpen: false, enrollment: null });
-  const [completionAcademyName, setCompletionAcademyName] = useState(settings.academyName || 'Makerlab Academy');
+  const [completionAcademyName, setCompletionAcademyName] = useState(settings.academyName || 'Edufy Academy');
   const [completionLogoUrl, setCompletionLogoUrl] = useState(settings.logoUrl || '');
   const [completionIssueDate, setCompletionIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [completionModules, setCompletionModules] = useState('');
@@ -51,113 +54,115 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
     setAttestationModal({ isOpen: true, enrollment });
   };
 
-  const handleGenerateAttestation = () => {
-    if (student && attestationModal.enrollment) {
+  const handleGenerateAttestation = async () => {
+    if (!student || !attestationModal.enrollment) {
+      await showAlert('Certificate is unavailable', 'The student or enrollment record is no longer available.', 'warning');
+      return;
+    }
+    if (!customAdmissionDate || !customIssueDate) {
+      await showAlert('Certificate dates required', 'Choose both the admission date and issue date.', 'warning');
+      return;
+    }
       generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
         admissionDate: customAdmissionDate,
         issueDate: customIssueDate
       });
       setAttestationModal({ isOpen: false, enrollment: null });
-    }
   };
 
-  const handleGenerateCompletion = () => {
-    if (student && completionModal.enrollment) {
+  const handleGenerateCompletion = async () => {
+    if (!student || !completionModal.enrollment) {
+      await showAlert('Certificate is unavailable', 'The student or enrollment record is no longer available.', 'warning');
+      return;
+    }
+    if (!completionAcademyName.trim() || !completionIssueDate) {
+      await showAlert('Certificate details required', 'Enter the academy name and issue date.', 'warning');
+      return;
+    }
       generateCompletionCertificate(student, completionModal.enrollment, settings, {
-        academyName: completionAcademyName,
-        logoUrl: completionLogoUrl,
+        academyName: completionAcademyName.trim(),
+        logoUrl: completionLogoUrl.trim(),
         issueDate: completionIssueDate,
         modules: completionModules.split('\n').map(m => m.trim()).filter(m => m.length > 0)
       });
       setCompletionModal({ isOpen: false, enrollment: null });
-    }
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/30">
-        <h3 className="font-bold text-white flex items-center gap-2">
-          <BookOpen className="w-4 h-4 text-blue-400" /> Active Enrollments
-        </h3>
-        <button
-          onClick={() => onQuickEnroll(studentId)}
-          className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg font-medium flex items-center gap-1 transition-colors shadow-lg shadow-blue-900/20"
-        >
-          <Plus size={14} /> New Enrollment
-        </button>
+    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+      <div className="p-4">
+        <AtlasSectionHeader
+          title="Enrollments"
+          description="Programs, schedules, tuition, and certificates"
+          icon={BookOpen}
+          meta={<span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-400">{studentEnrollments.length}</span>}
+          actions={<AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>New enrollment</AtlasActionButton>}
+        />
       </div>
-      <div className="divide-y divide-slate-800">
+      <div className="border-t border-white/10">
         {studentEnrollments.length === 0 ? (
-          <div className="p-12 text-center border-2 border-dashed border-slate-800 rounded-xl">
-            <div className="w-16 h-16 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600">
-              <BookOpen size={32} />
-            </div>
-            <h3 className="text-slate-400 font-bold mb-1">No Active Enrollments</h3>
-            <p className="text-slate-500 text-sm mb-4">Enroll this student in a program to get started.</p>
-            <button onClick={() => onQuickEnroll(studentId)} className="text-blue-400 hover:text-blue-300 text-sm font-bold">
-              + Enroll Now
-            </button>
+          <div className="p-4">
+            <AtlasEmptyState
+              icon={BookOpen}
+              title="No enrollments yet"
+              description="Add the student's first program to connect schedules, attendance, and billing."
+              action={<AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>Enroll student</AtlasActionButton>}
+            />
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 p-4">
+          <div className="divide-y divide-white/5">
             {studentEnrollments.map((e) => (
-              <div key={e.id} className="group relative bg-slate-900/50 hover:bg-slate-800/50 border border-slate-800 hover:border-blue-500/30 rounded-xl p-5 transition-all duration-300 hover:shadow-lg hover:shadow-blue-900/10">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-lg bg-blue-900/20 text-blue-500 flex items-center justify-center border border-blue-500/20 shrink-0">
-                      <BookOpen size={24} />
+              <div key={e.id} className="group px-4 py-4 transition-colors hover:bg-white/[0.025]">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-400/20 bg-teal-400/10 text-teal-300">
+                      <BookOpen size={19} />
                     </div>
-                    <div>
-                      <h4 className="font-bold text-white text-lg leading-tight mb-1 group-hover:text-blue-400 transition-colors">{e.programName}</h4>
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="text-slate-400 font-medium">{e.gradeName}</span>
-                        <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                        <span className="text-slate-400">{e.groupName}</span>
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-black text-white transition-colors group-hover:text-teal-300" title={e.programName}>{e.programName}</h4>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span>{e.gradeName}</span><span className="text-slate-700">/</span><span>{e.groupName}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${e.balance > 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                  <div className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${e.balance > 0 ? 'bg-amber-500/10 text-amber-300 border-amber-400/20' : 'bg-emerald-500/10 text-emerald-300 border-emerald-400/20'}`}>
                       {e.balance > 0 ? 'Payment Due' : 'Paid'}
-                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="px-2.5 py-1 rounded bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1 text-xs font-mono text-slate-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal-400"></span>
                     {e.groupTime}
                   </div>
                   {e.secondGroupTime && (
-                    <div className="px-2.5 py-1 rounded bg-indigo-950/30 border border-indigo-500/20 text-xs font-mono text-indigo-300 flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                    <div className="flex items-center gap-2 rounded-lg border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-xs font-mono text-sky-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400"></span>
                       + {e.secondGroupName}
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
-                  <div className="text-sm">
-                    <span className="text-slate-500 mr-2">Tuition:</span>
-                    <span className="text-white font-bold font-mono">{formatCurrency(e.totalAmount)}</span>
+                <div className="mt-3 flex flex-col gap-3 border-t border-white/5 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-xs">
+                    <span className="mr-2 text-slate-500">Tuition</span>
+                    <span className="font-mono font-bold text-white">{formatCurrency(e.totalAmount)}</span>
                     {e.balance > 0 && (
-                      <span className="ml-3 text-amber-400 font-mono text-xs">
-                        (Due: {formatCurrency(e.balance)})
-                      </span>
+                      <span className="ml-3 font-mono text-amber-300">Due {formatCurrency(e.balance)}</span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                  <div className="flex flex-wrap items-center gap-1">
                     <button
                       onClick={() => setEditEnrollment(e)}
-                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors"
+                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
                       title="Edit Enrollment"
                     >
                       <Pencil size={16} />
                     </button>
                     <button
                       onClick={() => navigateTo('activity-details', { activityId: { type: 'enrollment', id: e.id } })}
-                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-blue-400 rounded-lg transition-colors"
+                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
                       title="View Details"
                     >
                       <ArrowRightLeft size={16} />
@@ -217,7 +222,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 type="date"
                 value={customAdmissionDate}
                 onChange={(e) => setCustomAdmissionDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
               />
               <p className="text-xs text-slate-500 mt-1">Date à laquelle l'étudiant a commencé le programme.</p>
             </div>
@@ -228,7 +233,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 type="date"
                 value={customIssueDate}
                 onChange={(e) => setCustomIssueDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
               />
               <p className="text-xs text-slate-500 mt-1">Date de délivrance du document.</p>
             </div>
@@ -243,7 +248,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
             </button>
             <button
               onClick={handleGenerateAttestation}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg shadow-lg shadow-blue-900/20 flex items-center gap-2"
+              className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 font-bold text-slate-950 transition-colors hover:bg-teal-400"
             >
               <BookOpen size={18} />
               Générer Attestation
@@ -270,8 +275,8 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 type="text"
                 value={completionAcademyName}
                 onChange={(e) => setCompletionAcademyName(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="ex: Makerlab Academy"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+                placeholder="e.g. Edufy Academy"
               />
             </div>
 
@@ -281,7 +286,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 type="text"
                 value={completionLogoUrl}
                 onChange={(e) => setCompletionLogoUrl(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
                 placeholder="https://..."
               />
             </div>
@@ -292,7 +297,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 type="date"
                 value={completionIssueDate}
                 onChange={(e) => setCompletionIssueDate(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
               />
             </div>
 
@@ -302,7 +307,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 value={completionModules}
                 onChange={(e) => setCompletionModules(e.target.value)}
                 rows={4}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
                 placeholder="Introduction à la robotique\nProgrammation Python\nModélisation 3D..."
               />
             </div>

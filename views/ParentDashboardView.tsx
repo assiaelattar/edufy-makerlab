@@ -3,17 +3,20 @@ import { User, Calendar, CreditCard, Car, Bell, Phone, Clock, MapPin, CheckCircl
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { addDoc, collection, serverTimestamp, Timestamp, updateDoc, doc, Firestore } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, serverTimestamp, Timestamp, updateDoc, doc, Firestore } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { formatCurrency, formatDate } from '../utils/helpers';
 import { StudentProject, Payment, Enrollment } from '../types';
 import { getTheme } from '../utils/theme';
 import { ParentProjectModal } from './parent/ParentProjectModal';
 import { ProjectDetailsEnhanced } from '../sparkquest/components/ProjectDetailsEnhanced';
+import { useConfirm } from '../context/ConfirmContext';
+import { AtlasActionButton, AtlasEmptyState } from '../components/atlas/AtlasSurface';
 
 export const ParentDashboardView = () => {
     const { students, enrollments, payments, pickupQueue, settings, studentProjects, projectTemplates, badges, galleryItems } = useAppContext();
-    const { user, userProfile, signOut } = useAuth();
+    const { user, userProfile, currentOrganization, signOut } = useAuth();
+    const { alert: showAlert } = useConfirm();
 
     const [notifyingPickup, setNotifyingPickup] = useState(false);
     const [selectedChildIndex, setSelectedChildIndex] = useState(0);
@@ -267,8 +270,11 @@ export const ParentDashboardView = () => {
                     // Check if already active to prevent duplicates
                     const existing = pickupQueue.find(q => q.studentId === child.id && ['on_the_way', 'arrived', 'released'].includes(q.status));
                     if (existing) continue;
+                    const orgId = child.organizationId || userProfile?.organizationId || currentOrganization?.id;
+                    if (!orgId) continue;
 
                     await addDoc(collection(db, 'pickup_queue'), {
+                        organizationId: orgId,
                         studentId: child.id,
                         studentName: child.name,
                         parentName: user?.displayName || 'Parent',
@@ -303,9 +309,19 @@ export const ParentDashboardView = () => {
             }
         } catch (e) {
             console.error(e);
-            alert("Connection error. Please try again.");
+            await showAlert('Pickup update failed', 'We could not update the pickup status. Check your connection and try again.', 'warning');
         } finally {
             setNotifyingPickup(false);
+        }
+    };
+
+    const copyGalleryLink = async (url: string) => {
+        try {
+            await navigator.clipboard.writeText(url);
+            await showAlert('Link copied', 'The gallery link is ready to share.', 'success');
+        } catch (error) {
+            console.error('Unable to copy gallery link:', error);
+            await showAlert('Could not copy link', 'Your browser blocked clipboard access. Open the image and copy its address instead.', 'warning');
         }
     };
 
@@ -323,12 +339,14 @@ export const ParentDashboardView = () => {
 
     if (!activeChild) {
         return (
-            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-                <div className="bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl max-w-md">
-                    <User size={64} className="text-slate-600 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-white mb-2">Welcome Parent</h2>
-                    <p className="text-slate-400 text-sm mb-6">We couldn't find any student profiles linked to <span className="text-blue-400 font-mono">{user?.email}</span>.</p>
-                    <button onClick={handleSignOut} className="text-red-400 hover:text-red-300 text-sm font-bold flex items-center justify-center gap-2 w-full"><LogOut size={16} /> Sign Out</button>
+            <div className="flex min-h-screen items-center justify-center bg-[#08111F] p-6 text-center">
+                <div className="w-full max-w-lg">
+                    <AtlasEmptyState
+                        icon={User}
+                        title="No student profile is linked yet"
+                        description={`We could not find a student connected to ${user?.email || 'this account'}. Ask the academy team to link your family access.`}
+                        action={<AtlasActionButton icon={LogOut} variant="secondary" onClick={handleSignOut}>Sign out</AtlasActionButton>}
+                    />
                 </div>
             </div>
         );
@@ -341,17 +359,17 @@ export const ParentDashboardView = () => {
 
         if (isChildReleased) {
             return (
-                <div className="mt-4 md:mt-0 w-full md:w-auto bg-indigo-600/20 border border-indigo-500/50 p-3 rounded-xl flex items-center gap-3 animate-in fade-in zoom-in duration-300">
-                    <div className="bg-indigo-500 p-2 rounded-full animate-bounce">
-                        <Star size={20} className="text-white fill-current" />
+                <div className="flex w-full items-center gap-3 rounded-lg border border-amber-300/30 bg-amber-300/10 p-3 md:w-auto">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-300 text-slate-950">
+                        <Star size={18} className="fill-current" />
                     </div>
                     <div>
                         <div className="text-white font-bold text-sm">Released!</div>
-                        <div className="text-indigo-300 text-xs">Please confirm receipt</div>
+                        <div className="text-xs text-amber-200">Please confirm receipt</div>
                     </div>
                     <button
                         onClick={() => setActiveTab('pickup')}
-                        className="ml-auto bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+                        className="ml-auto min-h-9 rounded-lg bg-amber-300 px-3 py-1.5 text-xs font-black text-slate-950 transition-colors hover:bg-amber-200"
                     >
                         View
                     </button>
@@ -361,15 +379,15 @@ export const ParentDashboardView = () => {
 
         if (activeEntry?.status === 'arrived') {
             return (
-                <div className="mt-4 md:mt-0 w-full md:w-auto bg-emerald-600 p-1 rounded-xl shadow-lg shadow-emerald-900/40 animate-pulse">
-                    <div className="bg-slate-900 rounded-lg p-3 flex items-center justify-between gap-4">
+                <div className="w-full rounded-lg border border-teal-300/30 bg-teal-400/10 p-3 md:w-auto">
+                    <div className="flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3">
-                            <div className="bg-emerald-500/20 p-2 rounded-full">
-                                <CheckCircle2 size={20} className="text-emerald-500" />
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-400/10">
+                                <CheckCircle2 size={18} className="text-teal-300" />
                             </div>
                             <div>
                                 <div className="text-white font-bold text-sm leading-tight">You've Arrived</div>
-                                <div className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider">Waiting for Release</div>
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-teal-300">Waiting for release</div>
                             </div>
                         </div>
                     </div>
@@ -382,18 +400,9 @@ export const ParentDashboardView = () => {
                 <button
                     disabled={notifyingPickup}
                     onClick={() => handlePickupAction('arrive')}
-                    className="mt-4 md:mt-0 w-full md:w-auto bg-emerald-600 hover:bg-emerald-500 text-white p-1 rounded-xl shadow-lg shadow-emerald-900/40 transition-all hover:scale-[1.02] active:scale-95 group"
+                    className="group flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400 md:w-auto"
                 >
-                    <div className="bg-emerald-600 border-2 border-emerald-400/30 border-dashed rounded-lg p-3 flex items-center justify-center gap-3 h-full group-hover:border-solid transition-all">
-                        {notifyingPickup ? (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                        ) : (
-                            <>
-                                <MapPin size={20} className="fill-current animate-bounce" />
-                                <span className="font-black text-sm uppercase tracking-wide">I'm Here!</span>
-                            </>
-                        )}
-                    </div>
+                    {notifyingPickup ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" /> : <><MapPin size={18} /><span>I'm here</span></>}
                 </button>
             );
         }
@@ -403,71 +412,58 @@ export const ParentDashboardView = () => {
             <button
                 disabled={notifyingPickup}
                 onClick={() => handlePickupAction('notify')}
-                className="mt-4 md:mt-0 w-full md:w-auto bg-slate-800 hover:bg-slate-700 text-white p-1 rounded-xl shadow-lg border border-slate-700 transition-all hover:scale-[1.02] active:scale-95 group"
+                className="group flex min-h-10 w-full items-center justify-center gap-3 rounded-lg border border-white/10 bg-white/[0.05] px-4 py-2 text-white transition-colors hover:border-white/20 hover:bg-white/[0.08] md:w-auto"
             >
-                <div className="bg-slate-900/50 rounded-lg p-3 flex items-center justify-center gap-3 h-full">
-                    {notifyingPickup ? (
-                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    ) : (
-                        <>
-                            <Car size={20} className="text-slate-400 group-hover:text-white transition-colors" />
-                            <div className="text-left">
-                                <div className="font-bold text-sm leading-none group-hover:text-emerald-400 transition-colors">On My Way</div>
-                                <div className="text-[10px] text-slate-500 font-medium">Click when leaving</div>
-                            </div>
-                            <ChevronRight size={16} className="text-slate-600 group-hover:text-white opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all ml-2" />
-                        </>
-                    )}
-                </div>
+                {notifyingPickup ? <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <><Car size={18} className="text-teal-300" /><div className="text-left"><div className="text-sm font-bold leading-none">On my way</div><div className="mt-1 text-[10px] font-medium text-slate-500">Notify the pickup team</div></div><ChevronRight size={15} className="ml-1 text-slate-500" /></>}
             </button>
         );
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-cyan-500/30">
+        <div className="min-h-screen bg-[#08111F] font-sans text-slate-100 selection:bg-teal-500/30">
 
-            {/* Hero Header */}
-            <header className="sticky top-0 z-40 bg-gradient-to-r from-indigo-900/95 via-purple-900/95 to-pink-900/95 border-b border-slate-800/50 backdrop-blur-xl transition-all shadow-lg">
-                <div className="max-w-5xl mx-auto p-4 md:p-6">
-                    <div className="flex flex-row items-center justify-between mb-0 md:mb-6 gap-4">
+            <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0F1B2D]">
+                <div className="mx-auto max-w-6xl px-4 py-3 md:px-6 md:py-4">
+                    <div className="flex flex-row items-center justify-between gap-4">
                         <div className="flex items-center gap-3 md:gap-4 overflow-hidden">
                             {/* Level Badge - Compact on Mobile */}
-                            <div className="relative shrink-0 transition-transform scale-75 md:scale-100 origin-left">
-                                <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center text-lg md:text-2xl font-black shadow-lg shadow-orange-900/50 border-2 md:border-4 border-slate-900">
+                            <div className="relative shrink-0">
+                                <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-amber-300/25 bg-amber-300/10 text-lg font-black text-amber-100 md:h-12 md:w-12">
                                     {childData?.level || 1}
                                 </div>
-                                <div className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-1 md:p-1.5 border-2 border-yellow-400">
-                                    <Star size={10} className="md:w-[14px] md:h-[14px] text-yellow-400 fill-yellow-400" />
+                                <div className="absolute -bottom-1 -right-1 rounded-full border border-amber-300 bg-slate-900 p-1">
+                                    <Star size={10} className="text-amber-200 fill-amber-200" />
                                 </div>
                             </div>
 
                             <div className="min-w-0">
-                                <h1 className="font-black text-lg md:text-2xl text-white drop-shadow-lg truncate">{activeChild.name}</h1>
+                                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-300">Family workspace</p>
+                                <h1 className="truncate text-lg font-black text-white md:text-xl">{activeChild.name}</h1>
 
                                 {/* Mobile XP Bar Inline */}
                                 <div className="md:hidden flex items-center gap-2 mt-1">
                                     <div className="h-1.5 w-24 bg-slate-900/50 rounded-full overflow-hidden border border-slate-800/50">
-                                        <div className="h-full bg-gradient-to-r from-cyan-400 to-purple-400" style={{ width: `${getProgressWidth()}%` }}></div>
+                                        <div className="h-full bg-teal-400" style={{ width: `${getProgressWidth()}%` }}></div>
                                     </div>
-                                    <span className="text-[10px] text-cyan-300 font-bold">{childData?.totalXP} XP</span>
+                                    <span className="text-[10px] font-bold text-teal-300">{childData?.totalXP} XP</span>
                                 </div>
 
                                 {/* Desktop XP Text */}
                                 <div className="hidden md:flex items-center gap-2 text-sm">
-                                    <span className="text-cyan-300 font-mono font-bold">{childData?.totalXP || 0} XP</span>
+                                    <span className="font-mono font-bold text-teal-300">{childData?.totalXP || 0} XP</span>
                                     <span className="text-white/50">/</span>
                                     <span className="text-white/70">{childData?.nextLevelXP || 1000} XP</span>
                                 </div>
                             </div>
                         </div>
 
-                        <button onClick={signOut} className="bg-slate-900/50 hover:bg-slate-800 p-2 md:p-3 rounded-full text-slate-300 hover:text-white transition-all border border-slate-700/50 shrink-0">
+                        <button onClick={signOut} aria-label="Sign out" title="Sign out" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-white">
                             <LogOut size={18} className="md:w-5 md:h-5" />
                         </button>
                     </div>
 
                     {/* NEW: Pickup Action Button (Hero) */}
-                    <div className="mb-6 md:mb-8 flex flex-col md:flex-row items-center gap-4">
+                    <div className="mt-3 flex flex-col items-stretch gap-2 md:flex-row md:items-center">
                         <PickupActionButton />
 
                         {/* SparkQuest Launch Button */}
@@ -488,39 +484,37 @@ export const ParentDashboardView = () => {
 
                                 window.open(`${sparkQuestUrl}/?token=${bridgeToken}`, '_blank');
                             }}
-                            className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white px-5 py-3 rounded-xl font-black shadow-lg shadow-blue-900/40 border border-blue-400/50 flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 md:ml-auto"
+                            className="flex min-h-10 items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400 md:ml-auto"
                         >
-                            <Rocket size={20} className="fill-current text-yellow-300 animate-pulse" />
+                            <Rocket size={18} />
                             <span>Launch Student Portal</span>
                         </button>
                     </div>
 
                     {/* Desktop XP Progress Bar */}
-                    <div className="hidden md:block mb-4">
-                        <div className="h-4 w-full bg-slate-900/50 rounded-full overflow-hidden border border-slate-800/50 shadow-inner">
+                    <div className="mt-3 hidden md:block">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-950/70">
                             <div
-                                className="h-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500 transition-all duration-1000 ease-out relative"
+                                className="h-full bg-teal-400 transition-[width] duration-700 ease-out"
                                 style={{ width: `${getProgressWidth()}%` }}
-                            >
-                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                            </div>
+                            />
                         </div>
-                        <div className="text-right text-xs text-white/50 mt-1 uppercase tracking-wider font-bold">Level {childData?.level || 1} Progress</div>
+                        <div className="mt-1 text-right text-[10px] font-bold uppercase tracking-wider text-slate-500">Level {childData?.level || 1} progress</div>
                     </div>
 
                     {/* Child Selector */}
                     {myChildren.length > 1 && (
-                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mb-4">
+                        <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto pb-1">
                             {myChildren.map((child, idx) => (
                                 <button
                                     key={child.id}
                                     onClick={() => setSelectedChildIndex(idx)}
-                                    className={`flex items-center gap-2 px-4 py-2 rounded-full border-2 transition-all whitespace-nowrap ${selectedChildIndex === idx
-                                        ? 'bg-white text-indigo-900 border-white shadow-lg'
-                                        : 'bg-slate-900/50 border-slate-700 text-slate-300 hover:border-slate-600'
+                                    className={`flex min-h-9 items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm transition-colors ${selectedChildIndex === idx
+                                        ? 'border-teal-300/30 bg-teal-400/10 text-teal-100'
+                                        : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-white'
                                         }`}
                                 >
-                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${selectedChildIndex === idx ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'
+                                    <div className={`flex h-6 w-6 items-center justify-center rounded-lg text-xs font-bold ${selectedChildIndex === idx ? 'bg-teal-500 text-slate-950' : 'bg-slate-800 text-slate-400'
                                         }`}>
                                         {child.name.charAt(0)}
                                     </div>
@@ -531,7 +525,7 @@ export const ParentDashboardView = () => {
                     )}
 
                     {/* Navigation Tabs (Desktop) */}
-                    <div className="hidden md:flex gap-2 overflow-x-auto no-scrollbar">
+                    <nav aria-label="Family workspace sections" className="no-scrollbar mt-3 hidden gap-1 overflow-x-auto border-t border-white/10 pt-3 md:flex">
                         {[
                             { id: 'overview', label: 'Overview', icon: LucideIcons.LayoutDashboard },
                             { id: 'journey', label: 'Journey', icon: LucideIcons.MapPin },
@@ -545,21 +539,21 @@ export const ParentDashboardView = () => {
                             <button
                                 key={tab.id}
                                 onClick={() => navigateToTab(tab.id as any)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === tab.id
-                                    ? 'bg-white/10 text-white shadow-inner'
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                className={`flex min-h-9 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${activeTab === tab.id
+                                    ? 'bg-teal-400/10 text-teal-200'
+                                    : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'
                                     }`}
                             >
                                 <tab.icon size={16} />
                                 {tab.label}
                             </button>
                         ))}
-                    </div>
+                    </nav>
                 </div>
             </header>
 
             {/* Bottom Navigation (Mobile) - SIMPLIFIED */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900/95 backdrop-blur-xl border-t border-slate-800 z-50 flex justify-around items-center px-4 safe-area-pb">
+            <nav aria-label="Mobile family navigation" className="safe-area-pb fixed inset-x-0 bottom-0 z-50 flex h-16 items-center justify-around border-t border-white/10 bg-[#0F1B2D] px-3 md:hidden">
                 {[
                     { id: 'overview', label: 'Home', icon: LucideIcons.Home }, // Renamed from Overview
                     { id: 'journey', label: 'Journey', icon: LucideIcons.MapPin },
@@ -570,40 +564,40 @@ export const ParentDashboardView = () => {
                         key={tab.id}
                         onClick={() => navigateToTab(tab.id as any)}
                         className={`flex flex-col items-center justify-center w-full h-full gap-1 transition-all ${activeTab === tab.id || (tab.id === 'menu' && !['overview', 'journey', 'gallery'].includes(activeTab))
-                            ? 'text-indigo-400'
+                            ? 'text-teal-300'
                             : 'text-slate-500 hover:text-slate-300'
                             }`}
                     >
-                        {activeTab === tab.id && <div className="absolute top-0 w-8 h-1 bg-indigo-500 rounded-b-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />}
+                        {activeTab === tab.id && <div className="absolute top-0 h-0.5 w-8 bg-teal-400" />}
                         <tab.icon size={22} className={activeTab === tab.id ? 'fill-current opacity-20' : ''} />
                         <span className="text-[10px] font-bold tracking-tight">{tab.label}</span>
                     </button>
                 ))}
-            </div>
+            </nav>
 
-            <main className="max-w-5xl mx-auto p-4 pb-24 md:p-8">
+            <main className="mx-auto max-w-6xl p-4 pb-24 md:p-6 lg:p-8">
                 {/* Global Pickup Status Banner (if not on pickup tab) */}
                 {activeTab !== 'pickup' && activePickupEntry && (
                     <button
                         onClick={() => setActiveTab('pickup')}
                         className="w-full mb-6 relative overflow-hidden group"
                     >
-                        <div className={`p-4 rounded-xl border-2 flex items-center gap-4 transition-all shadow-lg text-left ${activePickupEntry.status === 'released'
-                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-indigo-900/50 animate-pulse'
+                        <div className={`flex items-center gap-4 rounded-lg border p-4 text-left transition-colors ${activePickupEntry.status === 'released'
+                            ? 'border-amber-300/30 bg-amber-300/10 text-amber-100'
                             : activePickupEntry.status === 'arrived'
-                                ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-900/50'
-                                : 'bg-slate-900 border-slate-700 text-slate-300'
+                                ? 'border-teal-300/30 bg-teal-400/10 text-teal-100'
+                                : 'border-white/10 bg-slate-900 text-slate-300'
                             }`}>
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 ${activePickupEntry.status === 'released' ? 'bg-white text-indigo-600' :
-                                activePickupEntry.status === 'arrived' ? 'bg-white text-emerald-600' : 'bg-slate-800'
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${activePickupEntry.status === 'released' ? 'bg-amber-300 text-slate-950' :
+                                activePickupEntry.status === 'arrived' ? 'bg-teal-400 text-slate-950' : 'bg-slate-800'
                                 }`}>
                                 {activePickupEntry.status === 'released' ? <Star size={24} fill="currentColor" /> : <Car size={24} />}
                             </div>
                             <div>
                                 <h4 className="font-bold text-lg leading-tight">
-                                    {activePickupEntry.status === 'released' ? `${activeChild.name.split(' ')[0]} is Released! 🎉` :
-                                        activePickupEntry.status === 'arrived' ? "Check-in Confirmed ✅" :
-                                            "Pickup in Progress 🚗"}
+                                    {activePickupEntry.status === 'released' ? `${activeChild.name.split(' ')[0]} is released` :
+                                        activePickupEntry.status === 'arrived' ? 'Check-in confirmed' :
+                                            'Pickup in progress'}
                                 </h4>
                                 <p className="text-xs opacity-80">
                                     {activePickupEntry.status === 'released' ? "Go to Pickup tab to confirm receipt" :
@@ -618,26 +612,29 @@ export const ParentDashboardView = () => {
 
                 {/* NEW: Menu Grid View */}
                 {(activeTab === 'menu' || !['overview', 'journey', 'gallery'].includes(activeTab)) && activeTab !== 'overview' && activeTab !== 'journey' && activeTab !== 'gallery' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <h2 className="text-2xl font-black text-white px-4">Menu</h2>
+                    <div className="space-y-5 animate-in fade-in duration-200">
+                        <div className="border-b border-white/10 pb-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-300">Family tools</p>
+                            <h2 className="mt-1 text-xl font-black text-white">Everything in one place</h2>
+                        </div>
 
-                        <div className="grid grid-cols-2 gap-4 px-4">
+                        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
                             {[
-                                { id: 'portfolio', label: 'Portfolio', icon: LucideIcons.BookOpen, color: 'bg-purple-500', desc: 'Published Projects' },
-                                { id: 'finance', label: 'Billing', icon: LucideIcons.Wallet, color: 'bg-emerald-500', desc: 'Invoices & Payments' },
-                                { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car, color: 'bg-blue-500', desc: 'Go Home Status' },
-                                { id: 'contact', label: 'Contact', icon: LucideIcons.Phone, color: 'bg-orange-500', desc: 'Get Help' },
-                                { id: 'settings', label: 'Settings', icon: LucideIcons.Settings, color: 'bg-slate-500', desc: 'Profile & App' },
+                                { id: 'portfolio', label: 'Portfolio', icon: LucideIcons.BookOpen, desc: 'Published projects' },
+                                { id: 'finance', label: 'Billing', icon: LucideIcons.Wallet, desc: 'Invoices and payments' },
+                                { id: 'pickup', label: 'Pickup', icon: LucideIcons.Car, desc: 'Arrival and release' },
+                                { id: 'contact', label: 'Contact', icon: LucideIcons.Phone, desc: 'Talk to the academy' },
+                                { id: 'settings', label: 'Settings', icon: LucideIcons.Settings, desc: 'Profile and access' },
                             ].map(item => (
                                 <button
                                     key={item.id}
                                     onClick={() => navigateToTab(item.id as any)}
-                                    className={`relative overflow-hidden rounded-2xl p-4 text-left border border-slate-700 hover:border-slate-500 transition-all group ${activeTab === item.id ? 'bg-slate-800' : 'bg-slate-900/50'}`}
+                                    className={`group rounded-lg border p-4 text-left transition-colors ${activeTab === item.id ? 'border-teal-300/30 bg-teal-400/10' : 'border-white/10 bg-slate-900/60 hover:border-white/20 hover:bg-slate-900'}`}
                                 >
-                                    <div className={`w-10 h-10 rounded-full ${item.color} flex items-center justify-center mb-3 shadow-lg group-hover:scale-110 transition-transform`}>
-                                        <item.icon size={20} className="text-white" />
+                                    <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-400/10">
+                                        <item.icon size={18} className="text-teal-300" />
                                     </div>
-                                    <div className="font-bold text-white text-lg">{item.label}</div>
+                                    <div className="text-sm font-bold text-white">{item.label}</div>
                                     <div className="text-xs text-slate-400">{item.desc}</div>
                                 </button>
                             ))}
@@ -645,10 +642,10 @@ export const ParentDashboardView = () => {
                             {/* Sign Out Button in Grid */}
                             <button
                                 onClick={handleSignOut}
-                                className="col-span-2 relative overflow-hidden rounded-2xl p-4 flex items-center justify-center gap-2 border border-red-900/30 bg-red-900/10 hover:bg-red-900/20 transition-all mt-4"
+                                className="col-span-2 flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-400/20 bg-rose-500/10 p-3 text-rose-300 transition-colors hover:bg-rose-500/15 md:col-span-1"
                             >
-                                <LogOut size={18} className="text-red-400" />
-                                <span className="font-bold text-red-400">Sign Out</span>
+                                <LogOut size={18} />
+                                <span className="font-bold">Sign out</span>
                             </button>
                         </div>
 
@@ -675,7 +672,7 @@ export const ParentDashboardView = () => {
 
                             const workshopTheme = currentStep
                                 ? `Next Mission: ${currentStep.title}`
-                                : "Next Mission: New Project Launch 🚀";
+                                : 'Next mission: new project launch';
 
                             const workshopDescription = currentStep && currentProject
                                 ? `${activeChild.name.split(' ')[0]} will be working on "${currentStep.title}" for their ${currentProject.title} project.`
@@ -686,20 +683,20 @@ export const ParentDashboardView = () => {
                             const scheduleText = activeEnrollment?.schedule || "Check Schedule";
 
                             return (
-                                <div className="bg-gradient-to-r from-blue-900/40 to-indigo-900/40 border border-blue-500/30 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                                <div className="flex flex-col gap-4 rounded-lg border border-teal-300/20 bg-teal-400/[0.06] p-4 md:flex-row md:items-center md:justify-between">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 relative">
-                                            <Calendar size={24} />
+                                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-400/10 text-teal-300">
+                                            <Calendar size={20} />
                                             {currentStep && (
-                                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-500 rounded-full flex items-center justify-center border-2 border-slate-900">
-                                                    <Sparkles size={10} className="text-white fill-current" />
+                                                <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full border-2 border-slate-900 bg-amber-300">
+                                                    <Sparkles size={10} className="text-slate-950" />
                                                 </div>
                                             )}
                                         </div>
                                         <div>
                                             <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-xs font-bold uppercase tracking-wider text-blue-400">Next Session</span>
-                                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium">
+                                                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-300">Next session</span>
+                                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-slate-300">
                                                     {scheduleText}
                                                 </span>
                                             </div>
@@ -711,8 +708,8 @@ export const ParentDashboardView = () => {
                                     </div>
                                     <button
                                         onClick={() => setActiveTab('journey')}
-                                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all shrink-0">
-                                        View Schedule
+                                        className="min-h-10 shrink-0 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400">
+                                        View learning plan
                                     </button>
                                 </div>
                             );
@@ -722,34 +719,31 @@ export const ParentDashboardView = () => {
                         <div>
                             <h2 className="text-lg font-bold text-white/90 mb-4 flex items-center gap-2">
                                 <Sparkles size={20} className="text-yellow-400" />
-                                {activeChild.name.split(' ')[0]}'s Achievements ✨
+                                Learning signals
                             </h2>
-                            <div className="grid grid-cols-3 gap-4 md:gap-6 mb-10">
+                            <div className="mb-10 grid grid-cols-3 gap-3">
                                 <div
                                     onClick={() => setActiveTab('portfolio')}
-                                    className="bg-gradient-to-br from-emerald-900/50 to-emerald-950/50 border-2 border-emerald-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl cursor-pointer">
-                                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/20 rounded-full blur-3xl"></div>
-                                    <Trophy size={28} className="text-emerald-400 mb-3 relative z-10 drop-shadow-lg" />
-                                    <div className="text-4xl font-black text-white relative z-10 mb-1">{childData?.completedProjects.length || 0}</div>
-                                    <div className="text-xs text-emerald-200 font-bold relative z-10 leading-tight">Projects<br />Mastered</div>
+                                    className="cursor-pointer rounded-lg border border-teal-300/20 bg-slate-900/70 p-4 transition-colors hover:border-teal-300/40">
+                                    <Trophy size={19} className="mb-3 text-teal-300" />
+                                    <div className="text-2xl font-black text-white">{childData?.completedProjects.length || 0}</div>
+                                    <div className="mt-1 text-[11px] font-bold leading-tight text-teal-200">Projects<br />mastered</div>
                                 </div>
 
                                 <div
                                     onClick={() => setActiveTab('portfolio')}
-                                    className="bg-gradient-to-br from-cyan-900/50 to-cyan-950/50 border-2 border-cyan-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl cursor-pointer">
-                                    <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/20 rounded-full blur-3xl"></div>
-                                    <Zap size={28} className="text-cyan-400 mb-3 relative z-10 drop-shadow-lg" fill="currentColor" />
-                                    <div className="text-4xl font-black text-white relative z-10 mb-1">{childData?.earnedSkills.length || 0}</div>
-                                    <div className="text-xs text-cyan-200 font-bold relative z-10 leading-tight">New Skills<br />Unlocked</div>
+                                    className="cursor-pointer rounded-lg border border-amber-300/20 bg-slate-900/70 p-4 transition-colors hover:border-amber-300/40">
+                                    <Zap size={19} className="mb-3 text-amber-200" />
+                                    <div className="text-2xl font-black text-white">{childData?.earnedSkills.length || 0}</div>
+                                    <div className="mt-1 text-[11px] font-bold leading-tight text-amber-100">Skills<br />unlocked</div>
                                 </div>
 
                                 <div
                                     onClick={() => setActiveTab('journey')}
-                                    className="bg-gradient-to-br from-purple-900/50 to-purple-950/50 border-2 border-purple-500/40 rounded-3xl p-5 md:p-6 relative overflow-hidden hover:scale-105 transition-transform shadow-xl cursor-pointer">
-                                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/20 rounded-full blur-3xl"></div>
-                                    <Rocket size={28} className="text-purple-400 mb-3 relative z-10 drop-shadow-lg" />
-                                    <div className="text-4xl font-black text-white relative z-10 mb-1">{childData?.activeProjects.length || 0}</div>
-                                    <div className="text-xs text-purple-200 font-bold relative z-10 leading-tight">Currently<br />Building</div>
+                                    className="cursor-pointer rounded-lg border border-sky-300/20 bg-slate-900/70 p-4 transition-colors hover:border-sky-300/40">
+                                    <Rocket size={19} className="mb-3 text-sky-300" />
+                                    <div className="text-2xl font-black text-white">{childData?.activeProjects.length || 0}</div>
+                                    <div className="mt-1 text-[11px] font-bold leading-tight text-sky-200">Currently<br />building</div>
                                 </div>
                             </div>
                         </div>
@@ -758,7 +752,7 @@ export const ParentDashboardView = () => {
                         <div className="mb-10">
                             <h2 className="text-lg font-bold text-white/90 mb-4 flex items-center gap-2">
                                 <LucideIcons.Activity size={20} className="text-blue-400" />
-                                What's New 🔔
+                                What's new
                             </h2>
 
                             {(() => {
@@ -771,7 +765,7 @@ export const ParentDashboardView = () => {
                                     subtitle?: string;
                                     image?: string;
                                     action?: { label: string; onClick: () => void };
-                                    theme: { bg: string; border: string; icon: any; iconColor: string };
+                                    theme: { surface: string; icon: any; iconColor: string };
                                 };
 
                                 const feed: FeedItem[] = [];
@@ -815,7 +809,7 @@ export const ParentDashboardView = () => {
                                             label: 'View Gallery',
                                             onClick: () => handleFeedInteraction(feedId, () => setActiveTab('gallery'))
                                         },
-                                        theme: { bg: 'from-pink-900/40 to-rose-900/40', border: 'border-pink-500/30', icon: LucideIcons.Camera, iconColor: 'text-pink-400' }
+                                        theme: { surface: 'border-white/10 bg-slate-900/70', icon: LucideIcons.Camera, iconColor: 'text-teal-300' }
                                     });
                                 });
 
@@ -834,7 +828,7 @@ export const ParentDashboardView = () => {
                                             subtitle: `Completed step in "${p.title}"`,
                                             image: s.proofUrl, // Optional proof
                                             action: s.proofUrl ? { label: 'View Proof', onClick: () => handleFeedInteraction(feedId, () => window.open(s.proofUrl, '_blank')) } : undefined,
-                                            theme: { bg: 'from-emerald-900/40 to-teal-900/40', border: 'border-emerald-500/30', icon: LucideIcons.Trophy, iconColor: 'text-emerald-400' }
+                                            theme: { surface: 'border-teal-300/20 bg-teal-400/[0.06]', icon: LucideIcons.Trophy, iconColor: 'text-teal-300' }
                                         });
                                     });
                                 });
@@ -854,7 +848,7 @@ export const ParentDashboardView = () => {
                                         title: 'Invoice Due',
                                         subtitle: `${pay.amount} ${settings.currency} - ${pay.description || 'Tuition Fee'}`,
                                         action: { label: 'Pay Now', onClick: () => handleFeedInteraction(feedId, () => setActiveTab('finance')) },
-                                        theme: { bg: 'from-orange-900/40 to-amber-900/40', border: 'border-orange-500/30', icon: LucideIcons.CreditCard, iconColor: 'text-orange-400' }
+                                        theme: { surface: 'border-amber-300/25 bg-amber-300/[0.06]', icon: LucideIcons.CreditCard, iconColor: 'text-amber-200' }
                                     });
                                 });
 
@@ -867,11 +861,11 @@ export const ParentDashboardView = () => {
                                         id: feedId,
                                         type: 'achievement',
                                         date: p.updatedAt,
-                                        title: 'New Project Published! 🚀',
+                                        title: 'New project published',
                                         subtitle: `"${p.title}" is now live in the showcase.`,
                                         image: p.thumbnailUrl || p.coverImage,
                                         action: { label: 'View Portfolio', onClick: () => handleFeedInteraction(feedId, () => setActiveTab('portfolio')) },
-                                        theme: { bg: 'from-fuchsia-900/40 to-purple-900/40', border: 'border-fuchsia-500/30', icon: LucideIcons.Award, iconColor: 'text-fuchsia-400' }
+                                        theme: { surface: 'border-teal-300/20 bg-teal-400/[0.06]', icon: LucideIcons.Award, iconColor: 'text-teal-300' }
                                     });
                                 });
 
@@ -894,10 +888,10 @@ export const ParentDashboardView = () => {
                                 if (displayFeed.length === 0) {
                                     // Smart Empty State (Still "Ready for Launch" but formatted for feed)
                                     return (
-                                        <div className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8 text-center relative overflow-hidden">
-                                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-                                            <LucideIcons.Radar size={48} className="mx-auto text-blue-500 mb-4 animate-spin-slow" />
-                                            <h3 className="text-xl font-bold text-white mb-2">Up to Date! 🌟</h3>
+                                        <div className="relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/60 p-8 text-center">
+                                            <div className="absolute inset-x-0 top-0 h-px bg-teal-300/70" />
+                                            <LucideIcons.Radar size={40} className="mx-auto mb-4 text-teal-300" />
+                                            <h3 className="mb-2 text-lg font-bold text-white">You're up to date</h3>
                                             <p className="text-slate-400 max-w-sm mx-auto mb-6">
                                                 You're all caught up on {activeChild.name.split(' ')[0]}'s latest news.
                                                 Check the <strong>Portfolio</strong> tab for full progress history.
@@ -910,7 +904,7 @@ export const ParentDashboardView = () => {
                                 return (
                                     <div className="space-y-4">
                                         {displayFeed.map(item => (
-                                            <div key={item.id} className={`bg-gradient-to-r ${item.theme.bg} border ${item.theme.border} rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center gap-4 transition-all hover:scale-[1.01] hover:shadow-lg relative group`}>
+                                            <div key={item.id} className={`group relative flex flex-col items-start gap-4 rounded-lg border p-4 transition-colors hover:border-white/20 md:flex-row md:items-center ${item.theme.surface}`}>
 
                                                 {/* Close Button (Hover only) */}
                                                 <button
@@ -984,8 +978,8 @@ export const ParentDashboardView = () => {
                         {childData?.badges && childData.badges.length > 0 && (
                             <div>
                                 <h2 className="text-lg font-bold text-white/90 mb-4 flex items-center gap-2">
-                                    <Award size={20} className="text-purple-400" />
-                                    Badges Collection 🏆
+                                    <Award size={20} className="text-amber-200" />
+                                    Badges collection
                                 </h2>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                     {childData.badges.map(badgeId => {
@@ -993,8 +987,8 @@ export const ParentDashboardView = () => {
                                         if (!badge) return null;
                                         const Icon = (LucideIcons[badge.icon as keyof typeof LucideIcons] || LucideIcons.Award) as React.ElementType;
                                         return (
-                                            <div key={badgeId} className={`bg-gradient-to-br from-${badge.color}-900/40 to-${badge.color}-950/40 border border-${badge.color}-500/30 p-4 rounded-2xl flex flex-col items-center text-center gap-2 hover:scale-105 transition-transform`}>
-                                                <div className={`w-12 h-12 rounded-full bg-${badge.color}-500/20 flex items-center justify-center text-${badge.color}-400 mb-1`}>
+                                            <div key={badgeId} className="flex flex-col items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.05] p-4 text-center">
+                                                <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-amber-200">
                                                     <Icon size={24} />
                                                 </div>
                                                 <h4 className="font-bold text-white text-sm">{badge.name}</h4>
@@ -1011,10 +1005,10 @@ export const ParentDashboardView = () => {
                             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
                                 <div>
                                     <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-3">
-                                        <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-xl">
-                                            <TrendingUp size={24} className="text-white" />
+                                        <div className="rounded-lg border border-teal-300/20 bg-teal-400/10 p-2">
+                                            <TrendingUp size={22} className="text-teal-300" />
                                         </div>
-                                        The Learning Adventure 🚀
+                                        Learning journey
                                     </h2>
                                     <p className="text-slate-400 text-sm">Follow {activeChild.name.split(' ')[0]}'s journey through exciting projects and new skills</p>
                                 </div>
@@ -1031,7 +1025,7 @@ export const ParentDashboardView = () => {
                                         <div className="absolute top-full right-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden z-20 hidden group-hover/filter:block animate-in fade-in zoom-in-95 duration-200">
                                             <button
                                                 onClick={() => setFilterStation('all')}
-                                                className={`w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 transition-colors ${filterStation === 'all' ? 'text-indigo-400 bg-slate-800/50' : 'text-slate-400'}`}
+                                                className={`w-full px-4 py-3 text-left text-xs font-bold transition-colors hover:bg-slate-800 ${filterStation === 'all' ? 'bg-teal-400/10 text-teal-300' : 'text-slate-400'}`}
                                             >
                                                 All Stations
                                             </button>
@@ -1043,7 +1037,7 @@ export const ParentDashboardView = () => {
                                                         onClick={() => setFilterStation(station)}
                                                         className={`w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-800 transition-colors flex items-center gap-2 ${filterStation === station ? 'text-white bg-slate-800/50' : 'text-slate-400'}`}
                                                     >
-                                                        <div className={`w-2 h-2 rounded-full ${theme.bgSoft.replace('bg-', 'bg-').replace('/10', '/50')}`} />
+                                                        <div className="h-2 w-2 rounded-full bg-teal-400" />
                                                         {theme.label}
                                                     </button>
                                                 );
@@ -1078,7 +1072,7 @@ export const ParentDashboardView = () => {
                                 {/* Connecting Line */}
                                 <div className="absolute left-[47px] md:left-[63px] top-6 bottom-6 w-1 bg-slate-800 rounded-full">
                                     <div
-                                        className="w-full bg-gradient-to-b from-cyan-500 to-purple-600 transition-all duration-1000"
+                                        className="w-full bg-teal-400 transition-[height] duration-700"
                                         style={{ height: `${childData?.projects && childData.projects.length > 0 ? (childData.completedProjects.length / childData.projects.length) * 100 : 0}%` }}
                                     />
                                 </div>
@@ -1097,15 +1091,12 @@ export const ParentDashboardView = () => {
                                             <div key={project.id} className="relative group">
                                                 {/* Node Icon - Desktop Absolute, Mobile Floating/Inline */}
                                                 <div
-                                                    className={`hidden md:flex absolute left-0 w-16 h-16 shrink-0 rounded-2xl items-center justify-center border-2 z-10 transition-all duration-300 bg-slate-900 ${isActive ? `border-${theme.colorHex} shadow-[0_0_20px_rgba(6,182,212,0.5)]` : ''
-                                                        } ${isCompleted ? 'border-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.5)]' : ''
-                                                        } ${isSubmitted ? 'border-purple-500 shadow-[0_0_20px_rgba(147,51,234,0.5)]' : ''
-                                                        }`}
+                                                    className={`absolute left-0 z-10 hidden h-14 w-14 shrink-0 items-center justify-center rounded-lg border bg-slate-900 md:flex ${isCompleted ? 'border-teal-400/50' : isSubmitted ? 'border-amber-300/50' : isActive ? 'border-teal-300/40' : 'border-white/10'}`}
                                                 >
                                                     {isCompleted ? (
                                                         <CheckCircle2 size={28} className="text-emerald-500" />
                                                     ) : isSubmitted ? (
-                                                        <Send size={24} className="text-purple-500" />
+                                                        <Send size={24} className="text-amber-200" />
                                                     ) : isActive ? (
                                                         <theme.icon size={28} className="text-cyan-400 animate-pulse" />
                                                     ) : (
@@ -1119,10 +1110,10 @@ export const ParentDashboardView = () => {
                                                         onClick={() => setExpandedProject(isExpanded ? null : project.id)}
                                                         className="w-full text-left"
                                                     >
-                                                        <div className={`bg-slate-900/80 backdrop-blur-sm border-2 rounded-3xl overflow-hidden transition-all shadow-xl hover:scale-[1.02] ${isActive ? 'border-cyan-500/40 shadow-cyan-900/20' :
-                                                            isCompleted ? 'border-emerald-500/40 shadow-emerald-900/20' :
-                                                                isSubmitted ? 'border-purple-500/40 shadow-purple-900/20' :
-                                                                    'border-slate-700/50 hover:border-slate-600'
+                                                        <div className={`overflow-hidden rounded-lg border bg-slate-900/80 transition-colors ${isActive ? 'border-teal-300/30' :
+                                                            isCompleted ? 'border-teal-400/30' :
+                                                                isSubmitted ? 'border-amber-300/30' :
+                                                                    'border-white/10 hover:border-white/20'
                                                             }`}>
 
                                                             {/* Card Content Wrapper */}
@@ -1131,7 +1122,7 @@ export const ParentDashboardView = () => {
                                                                 {(project.thumbnailUrl || project.mediaUrls?.[0]) && (
                                                                     <div className="h-48 md:h-auto md:w-1/3 bg-slate-950 relative overflow-hidden group-hover:brightness-110 transition-all">
                                                                         <img src={project.thumbnailUrl || project.mediaUrls![0]} className="w-full h-full object-cover" alt="Project Thumbnail" />
-                                                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60"></div>
+                                                                        <div className="absolute inset-0 bg-slate-950/20" />
                                                                         <div className="absolute bottom-2 left-2 flex gap-1">
                                                                             {hasPresentation && <div className="p-1 bg-red-600 rounded-md"><Play size={12} className="text-white" fill="currentColor" /></div>}
                                                                         </div>
@@ -1141,15 +1132,15 @@ export const ParentDashboardView = () => {
                                                                 <div className="flex-1 p-5 md:p-6 flex flex-col">
                                                                     <div className="flex items-center justify-between mb-4">
                                                                         <div className="flex items-center gap-2">
-                                                                            <span className={`text-xs px-2.5 py-1 rounded-lg border font-bold ${theme.bgSoft} ${theme.text} ${theme.border}`}>
+                                                                            <span className="rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-slate-300">
                                                                                 {theme.label}
                                                                             </span>
                                                                             <span className={`text-xs px-3 py-1.5 rounded-full border-2 font-bold shadow-lg ${isCompleted ? 'bg-emerald-500/30 text-emerald-200 border-emerald-400/50' :
-                                                                                isSubmitted ? 'bg-purple-500/30 text-purple-200 border-purple-400/50' :
+                                                                                isSubmitted ? 'bg-amber-300/10 text-amber-200 border-amber-300/30' :
                                                                                     isActive ? 'bg-cyan-500/30 text-cyan-200 border-cyan-400/50 animate-pulse' :
                                                                                         'bg-slate-800/50 text-slate-400 border-slate-600'
                                                                                 }`}>
-                                                                                {isCompleted ? '🎉 Mastered!' : isSubmitted ? '⏳ Under Review' : isActive ? '🔥 Working On It' : '🔐 Coming Soon'}
+                                                                                {isCompleted ? 'Mastered' : isSubmitted ? 'Under review' : isActive ? 'Working on it' : 'Coming soon'}
                                                                             </span>
                                                                         </div>
                                                                         <div className="flex items-center gap-3">
@@ -1178,7 +1169,7 @@ export const ParentDashboardView = () => {
                                                                         </div>
                                                                         <div className="h-3 bg-slate-800/80 rounded-full overflow-hidden border border-slate-700/50 shadow-inner">
                                                                             <div
-                                                                                className={`h-full bg-gradient-to-r ${theme.gradient} transition-all duration-500 relative`}
+                                                                                className="relative h-full bg-teal-400 transition-[width] duration-500"
                                                                                 style={{ width: `${progress}%` }}
                                                                             >
                                                                                 <div className="absolute inset-0 bg-white/10 animate-pulse"></div>
@@ -1192,7 +1183,7 @@ export const ParentDashboardView = () => {
 
                                                     {/* Expanded Content */}
                                                     {isExpanded && (
-                                                        <div className="mt-4 bg-slate-950/70 backdrop-blur-sm border-2 border-slate-800/50 rounded-2xl p-5 md:p-6 animate-in slide-in-from-top-2 fade-in duration-200 shadow-xl">
+                                                        <div className="mt-4 animate-in rounded-lg border border-white/10 bg-slate-950/70 p-5 fade-in duration-200 md:p-6">
 
                                                             {/* Evidence Gallery (New) */}
                                                             {(() => {
@@ -1202,9 +1193,9 @@ export const ParentDashboardView = () => {
 
                                                                 if (evidenceResources && evidenceResources.length > 0) {
                                                                     return (
-                                                                        <div className="mb-8 p-4 bg-slate-900/50 rounded-2xl border border-slate-800/50">
+                                                                        <div className="mb-8 rounded-lg border border-white/10 bg-slate-900/50 p-4">
                                                                             <h4 className="text-sm text-cyan-400 font-bold mb-3 flex items-center gap-2">
-                                                                                <LucideIcons.Camera size={16} /> PROJECT EVIDENCE 📸
+                                                                                <LucideIcons.Camera size={16} /> Project evidence
                                                                             </h4>
                                                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                                                                 {evidenceResources.map((proof, idx) => (
@@ -1242,7 +1233,7 @@ export const ParentDashboardView = () => {
                                                                 {(project.thumbnailUrl || project.mediaUrls?.[0]) && !hasPresentation && (
                                                                     <button
                                                                         onClick={() => window.open(project.thumbnailUrl || project.mediaUrls![0], '_blank')}
-                                                                        className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-indigo-900/50"
+                                                                        className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400"
                                                                     >
                                                                         <ImageIcon size={18} /> View Project Image
                                                                     </button>
@@ -1283,7 +1274,7 @@ export const ParentDashboardView = () => {
 
                                                             {/* Instructor Feedback */}
                                                             {project.instructorFeedback && (
-                                                                <div className="mt-6 bg-gradient-to-br from-amber-950/30 to-orange-950/30 border-2 border-amber-900/40 rounded-xl p-5 shadow-lg relative overflow-hidden">
+                                                                <div className="relative mt-6 overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/[0.05] p-5">
                                                                     <div className="absolute top-0 right-0 p-4 opacity-10"><Quote size={64} className="text-amber-500" /></div>
                                                                     <div className="flex items-center gap-2 mb-3">
                                                                         <div className="p-1.5 bg-amber-500/20 rounded-lg text-amber-400">
@@ -1339,10 +1330,10 @@ export const ParentDashboardView = () => {
                         {/* Portfolio Header */}
                         <div>
                             <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-3">
-                                <div className="p-2 bg-gradient-to-br from-fuchsia-600 to-purple-600 rounded-xl shadow-lg shadow-purple-500/20">
-                                    <BookOpen size={24} className="text-white" />
+                                <div className="rounded-lg border border-teal-300/20 bg-teal-400/10 p-2">
+                                    <BookOpen size={22} className="text-teal-300" />
                                 </div>
-                                {activeChild.name.split(' ')[0]}'s Portfolio 🌟
+                                {activeChild.name.split(' ')[0]}'s portfolio
                             </h2>
                             <p className="text-slate-400 text-sm">A collection of published projects and mastered skills.</p>
                         </div>
@@ -1356,7 +1347,7 @@ export const ParentDashboardView = () => {
                                         <div
                                             key={project.id}
                                             onClick={() => handleOpenProject(project)}
-                                            className="group bg-slate-900 border border-slate-700 hover:border-fuchsia-500/50 rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-300 flex flex-col h-full cursor-pointer hover:-translate-y-1"
+                                            className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-900 transition-colors hover:border-teal-300/35"
                                         >
                                             {/* Cover Image */}
                                             <div className="h-48 bg-slate-950 relative overflow-hidden">
@@ -1367,21 +1358,21 @@ export const ParentDashboardView = () => {
                                                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                                     />
                                                 ) : (
-                                                    <div className={`w-full h-full flex items-center justify-center bg-gradient-to-br ${theme.bg}`}>
+                                                    <div className="flex h-full w-full items-center justify-center bg-slate-950">
                                                         <theme.icon size={48} className="text-white/20" />
                                                     </div>
                                                 )}
 
                                                 {/* Overlay Grade/Badge */}
-                                                <div className="absolute top-3 left-3 bg-slate-900/90 backdrop-blur text-white text-[10px] font-bold px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1">
-                                                    <theme.icon size={10} className={theme.text} />
+                                                <div className="absolute left-3 top-3 flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950/90 px-2 py-1 text-[10px] font-bold text-white">
+                                                    <theme.icon size={10} className="text-teal-300" />
                                                     {theme.label}
                                                 </div>
                                             </div>
 
                                             {/* Content */}
                                             <div className="p-5 flex-1 flex flex-col">
-                                                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-fuchsia-400 transition-colors leading-tight">
+                                                <h3 className="mb-2 text-lg font-bold leading-tight text-white transition-colors group-hover:text-teal-300">
                                                     {project.title}
                                                 </h3>
                                                 <p className="text-slate-400 text-xs line-clamp-3 mb-4 flex-1">
@@ -1409,7 +1400,7 @@ export const ParentDashboardView = () => {
                                                         e.stopPropagation();
                                                         handleOpenProject(project);
                                                     }}
-                                                    className="w-full py-2 bg-slate-800 hover:bg-fuchsia-600 text-white text-xs font-bold rounded-xl transition-all border border-slate-700 hover:border-fuchsia-500 flex items-center justify-center gap-2"
+                                                    className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] py-2 text-xs font-bold text-white transition-colors hover:border-teal-300/30 hover:bg-teal-400/10"
                                                 >
                                                     View Project <ChevronRight size={14} />
                                                 </button>
@@ -1457,7 +1448,7 @@ export const ParentDashboardView = () => {
                                 })}
                             </div>
                         ) : (
-                            <div className="text-center py-20 bg-slate-900/30 rounded-3xl border border-slate-800 border-dashed">
+                            <div className="rounded-lg border border-dashed border-white/10 bg-slate-900/30 py-20 text-center">
                                 <BookOpen size={48} className="mx-auto text-slate-700 mb-4" />
                                 <h3 className="text-white font-bold mb-2">Portfolio is Empty</h3>
                                 <p className="text-slate-500 text-sm max-w-xs mx-auto">
@@ -1466,14 +1457,14 @@ export const ParentDashboardView = () => {
                                 </p>
                                 <button
                                     onClick={() => setActiveTab('journey')}
-                                    className="mt-6 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-full transition-colors"
+                                    className="mt-6 min-h-10 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400"
                                 >
                                     Go to Journey
                                 </button>
 
                                 {/* DEBUG INFO */}
                                 <div className="mt-8 p-4 bg-black/50 overflow-auto max-h-64 text-[10px] text-left font-mono rounded">
-                                    <p className="font-bold text-indigo-400 mb-2">DEBUGGING ID MISMATCH</p>
+                                    <p className="mb-2 font-bold text-teal-300">Debugging ID mismatch</p>
                                     <p>Active Child Name: {activeChild.name}</p>
                                     <p>Active Child ID (Firestore): "{activeChild.id}"</p>
                                     <p>Active Child LoginInfo: {JSON.stringify(activeChild.loginInfo)}</p>
@@ -1502,12 +1493,12 @@ export const ParentDashboardView = () => {
                 {activeTab === 'contact' && (
                     <div className="space-y-8 max-w-2xl mx-auto">
                         <div className="text-center mb-8">
-                            <h2 className="text-2xl font-black text-white mb-2">We're Here to Help! 👋</h2>
+                            <h2 className="mb-2 text-xl font-black text-white">We're here to help</h2>
                             <p className="text-slate-400">Need assistance? Reach out to the right person directly.</p>
                         </div>
 
                         {/* Curriculum Contact */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-blue-500/50 transition-colors">
+                        <div className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900 p-6 transition-colors hover:border-teal-300/30">
                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                                 <LucideIcons.BookOpen size={100} />
                             </div>
@@ -1536,21 +1527,21 @@ export const ParentDashboardView = () => {
                         </div>
 
                         {/* Finance & Schedule Contact */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-purple-500/50 transition-colors">
+                        <div className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900 p-6 transition-colors hover:border-teal-300/30">
                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                                 <LucideIcons.CalendarClock size={100} />
                             </div>
                             <div className="flex items-start gap-4 relative z-10">
-                                <div className="w-14 h-14 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 border border-purple-500/30 shrink-0">
+                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-400/10 text-teal-300">
                                     <LucideIcons.CreditCard size={28} />
                                 </div>
                                 <div className="flex-1">
                                     <h3 className="text-lg font-bold text-white">Mme. Noufissa</h3>
-                                    <p className="text-purple-400 text-xs font-bold uppercase tracking-wider mb-2">Finance & Scheduling</p>
+                                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-teal-300">Finance &amp; scheduling</p>
                                     <p className="text-slate-400 text-sm mb-4">For billing inquiries, invoices, payment plans, or schedule changes.</p>
 
                                     <div className="flex flex-wrap gap-3">
-                                        <a href="tel:0661198278" className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-purple-600 hover:text-white text-slate-300 rounded-xl text-sm font-bold transition-all">
+                                        <a href="tel:0661198278" className="flex items-center gap-2 rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-slate-300 transition-colors hover:bg-teal-500 hover:text-slate-950">
                                             <LucideIcons.Phone size={16} /> Call
                                         </a>
                                         <a href="https://wa.me/212661198278" target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-emerald-900/30 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 hover:border-transparent rounded-xl text-sm font-bold transition-all">
@@ -1565,7 +1556,7 @@ export const ParentDashboardView = () => {
                         </div>
 
                         {/* General Makerspace Info */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden group hover:border-orange-500/50 transition-colors">
+                        <div className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900 p-6 transition-colors hover:border-amber-300/30">
                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                                 <LucideIcons.Wrench size={100} />
                             </div>
@@ -1587,9 +1578,9 @@ export const ParentDashboardView = () => {
                             </div>
                         </div>
 
-                        <div className="mt-12 p-6 bg-slate-900/50 rounded-2xl border border-slate-800 text-center">
+                        <div className="mt-12 rounded-lg border border-white/10 bg-slate-900/50 p-6 text-center">
                             <p className="text-slate-500 text-sm">
-                                📍 <span className="font-bold text-white">MakerLab Academy</span> • Casablanca, Morocco
+                                <MapPin size={14} className="inline text-teal-300" /> <span className="font-bold text-white">MakerLab Academy</span> - Casablanca, Morocco
                             </p>
                         </div>
                     </div>
@@ -1599,13 +1590,13 @@ export const ParentDashboardView = () => {
                 {
                     activeTab === 'finance' && (
                         <div className="space-y-6">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="rounded-lg border border-white/10 bg-slate-900 p-6">
                                 <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                                     <LucideIcons.CreditCard className="text-emerald-400" />
                                     Financial Overview
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="p-6 rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700">
+                                    <div className="rounded-lg border border-white/10 bg-slate-950/70 p-6">
                                         <div className="text-sm text-slate-400 font-bold uppercase mb-2">Total Due</div>
                                         <div className="text-3xl font-black text-white">{formatCurrency(financialStatus.totalDue)}</div>
                                     </div>
@@ -1669,7 +1660,7 @@ export const ParentDashboardView = () => {
                 {
                     activeTab === 'profile' && (
                         <div className="space-y-6">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="rounded-lg border border-white/10 bg-slate-900 p-6">
                                 <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                                     <LucideIcons.User className="text-blue-400" />
                                     Student Profile & Settings
@@ -1684,7 +1675,7 @@ export const ParentDashboardView = () => {
                                                 <label className="block text-xs font-bold text-slate-500 mb-1">Parent Name</label>
                                                 <input
                                                     type="text"
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
+                                                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
                                                     defaultValue={activeChild.parentName}
                                                     onBlur={async (e) => {
                                                         if (!db) return;
@@ -1696,7 +1687,7 @@ export const ParentDashboardView = () => {
                                                 <label className="block text-xs font-bold text-slate-500 mb-1">Parent Phone</label>
                                                 <input
                                                     type="text"
-                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
+                                                    className="w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
                                                     defaultValue={activeChild.parentPhone}
                                                     onBlur={async (e) => {
                                                         if (!db) return;
@@ -1711,7 +1702,7 @@ export const ParentDashboardView = () => {
                                     <div className="p-4 rounded-xl bg-slate-950/50 border border-slate-800">
                                         <h3 className="font-bold text-white mb-4 flex items-center gap-2"><LucideIcons.HeartPulse size={16} className="text-rose-400" /> Medical & Important Notes</h3>
                                         <textarea
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none min-h-[100px]"
+                                            className="min-h-[100px] w-full rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
                                             placeholder="Allergies, medical conditions, or other important notes..."
                                             defaultValue={activeChild.medicalInfo}
                                             onBlur={async (e) => {
@@ -1752,7 +1743,7 @@ export const ParentDashboardView = () => {
                                                 id="newPickupParams"
                                                 type="text"
                                                 placeholder="Add Name (e.g. Uncle John)"
-                                                className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 outline-none"
+                                                className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-teal-500"
                                                 onKeyDown={async (e) => {
                                                     if (e.key === 'Enter') {
                                                         const input = e.currentTarget;
@@ -1773,7 +1764,7 @@ export const ParentDashboardView = () => {
                                                     await updateDoc(doc(db as Firestore, 'students', activeChild.id), { authorizedPickups: newPickups });
                                                     input.value = '';
                                                 }}
-                                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold"
+                                                className="rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400"
                                             >
                                                 Add
                                             </button>
@@ -1788,7 +1779,7 @@ export const ParentDashboardView = () => {
                 {
                     activeTab === 'gallery' && (
                         <div className="space-y-6">
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="rounded-lg border border-white/10 bg-slate-900 p-6">
                                 <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
                                     <LucideIcons.Camera className="text-pink-400" />
                                     Photo Gallery
@@ -1827,7 +1818,7 @@ export const ParentDashboardView = () => {
                                                             alt={item.caption || 'Gallery photo'}
                                                             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                                         />
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                                        <div className="absolute inset-0 flex flex-col justify-end bg-slate-950/70 p-4 opacity-0 transition-opacity group-hover:opacity-100">
                                                             <div className="flex items-center gap-2 text-white font-bold text-xs mb-1">
                                                                 <LucideIcons.Maximize2 size={14} /> View Full
                                                             </div>
@@ -1845,8 +1836,8 @@ export const ParentDashboardView = () => {
 
                                             {/* Lightbox Modal */}
                                             {selectedImage && (
-                                                <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-200">
-                                                    <div className="relative w-full max-w-4xl max-h-[90vh] flex flex-col bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-800">
+                                                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 p-4 animate-in fade-in duration-200">
+                                                    <div className="relative flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-900 shadow-2xl">
 
                                                         {/* Header */}
                                                         <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-900/50">
@@ -1914,17 +1905,15 @@ export const ParentDashboardView = () => {
                                                                                     });
                                                                                 } catch (fallbackErr) {
                                                                                     // Clipboard Fallback
-                                                                                    navigator.clipboard.writeText(selectedImage.url);
-                                                                                    alert("Link copied to clipboard!");
+                                                                                    await copyGalleryLink(selectedImage.url);
                                                                                 }
                                                                             }
                                                                         } else {
                                                                             // Fallback: Copy Link
-                                                                            navigator.clipboard.writeText(selectedImage.url);
-                                                                            alert("Link copied to clipboard!");
+                                                                            await copyGalleryLink(selectedImage.url);
                                                                         }
                                                                     }}
-                                                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all"
+                                                                    className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400"
                                                                 >
                                                                     <LucideIcons.Share2 size={16} /> Share
                                                                 </button>
@@ -1960,16 +1949,16 @@ export const ParentDashboardView = () => {
                                 completedPickupToday ? (
                                     // STEP 3: COMPLETED STATE
                                     <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                                        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 p-8 rounded-2xl text-center">
-                                            <div className="w-24 h-24 bg-gradient-to-br from-green-400 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl shadow-emerald-900/50">
-                                                <CheckCircle2 size={48} className="text-white" />
+                                        <div className="rounded-lg border border-teal-300/25 bg-teal-400/[0.06] p-8 text-center">
+                                            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-lg border border-teal-300/25 bg-teal-400/10">
+                                                <CheckCircle2 size={34} className="text-teal-300" />
                                             </div>
-                                            <h3 className="text-2xl font-black text-white mb-2">Pickup Completed! 🌟</h3>
+                                            <h3 className="mb-2 text-xl font-black text-white">Pickup completed</h3>
                                             <p className="text-slate-300 text-sm mb-6">
                                                 {completedPickupToday.pickerName || 'You'} successfully picked up {activeChild.name.split(' ')[0]} at {new Date((completedPickupToday.confirmedAt as any).seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
                                             </p>
                                             <div className="p-4 bg-slate-900/50 rounded-xl text-xs text-slate-400 italic">
-                                                Have a wonderful evening! See you next time. 👋
+                                                Have a wonderful evening. See you next time.
                                             </div>
                                         </div>
 
@@ -1984,36 +1973,36 @@ export const ParentDashboardView = () => {
                                             <div className="grid gap-3">
                                                 <button
                                                     onClick={() => setSelectedPicker(userProfile?.name || 'Me')}
-                                                    className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${selectedPicker === (userProfile?.name || 'Me') || !selectedPicker
-                                                        ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+                                                    className={`flex items-center gap-3 rounded-lg border p-4 transition-colors ${selectedPicker === (userProfile?.name || 'Me') || !selectedPicker
+                                                        ? 'border-teal-300/40 bg-teal-400/10 text-white'
+                                                        : 'border-white/10 bg-slate-900 text-slate-400 hover:border-white/20'}`}
                                                 >
-                                                    <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-white font-bold">
+                                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500 font-bold text-slate-950">
                                                         {(userProfile?.name || 'Me').charAt(0)}
                                                     </div>
                                                     <div className="text-left">
                                                         <div className="font-bold">Me ({userProfile?.name || 'Parent'})</div>
                                                         <div className="text-xs opacity-70">Primary Parent</div>
                                                     </div>
-                                                    {(!selectedPicker || selectedPicker === (userProfile?.name || 'Me')) && <CheckCircle2 className="ml-auto text-indigo-400" />}
+                                                    {(!selectedPicker || selectedPicker === (userProfile?.name || 'Me')) && <CheckCircle2 className="ml-auto text-teal-300" />}
                                                 </button>
 
                                                 {activeChild.authorizedPickups?.map(name => (
                                                     <button
                                                         key={name}
                                                         onClick={() => setSelectedPicker(name)}
-                                                        className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${selectedPicker === name
-                                                            ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                                                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'}`}
+                                                        className={`flex items-center gap-3 rounded-lg border p-4 transition-colors ${selectedPicker === name
+                                                            ? 'border-teal-300/40 bg-teal-400/10 text-white'
+                                                            : 'border-white/10 bg-slate-900 text-slate-400 hover:border-white/20'}`}
                                                     >
-                                                        <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold">
+                                                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-700 font-bold text-white">
                                                             {name.charAt(0)}
                                                         </div>
                                                         <div className="text-left">
                                                             <div className="font-bold">{name}</div>
                                                             <div className="text-xs opacity-70">Authorized Pickup</div>
                                                         </div>
-                                                        {selectedPicker === name && <CheckCircle2 className="ml-auto text-indigo-400" />}
+                                                        {selectedPicker === name && <CheckCircle2 className="ml-auto text-teal-300" />}
                                                     </button>
                                                 ))}
                                             </div>
@@ -2022,7 +2011,7 @@ export const ParentDashboardView = () => {
                                         <button
                                             onClick={() => handlePickupAction('notify')}
                                             disabled={notifyingPickup}
-                                            className="w-full py-6 rounded-2xl font-black text-xl flex flex-col items-center justify-center gap-2 transition-all shadow-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-indigo-900/30 active:scale-[0.98]"
+                                            className="flex min-h-16 w-full flex-col items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-4 text-lg font-black text-slate-950 transition-colors hover:bg-teal-400"
                                         >
                                             {notifyingPickup ? (
                                                 <div className="w-8 h-8 border-4 border-white-400 border-t-transparent rounded-full animate-spin" />
@@ -2030,7 +2019,7 @@ export const ParentDashboardView = () => {
                                                 <>
                                                     <div className="flex items-center gap-3">
                                                         <Car size={28} />
-                                                        <span>I'm On My Way 🚀</span>
+                                                        <span>I'm on my way</span>
                                                     </div>
                                                     <span className="text-sm font-normal opacity-80">Tap when you leave home/work</span>
                                                 </>
@@ -2042,28 +2031,28 @@ export const ParentDashboardView = () => {
                                 // STEP 2: ACTIVE PICKUP PHASES
                                 <div className="space-y-6 animate-in zoom-in-95 duration-300">
                                     {activePickupEntry.status === 'on_the_way' && (
-                                        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-500/30 p-6 rounded-2xl text-center">
-                                            <div className="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-                                                <Car size={40} className="text-indigo-400" />
+                                        <div className="rounded-lg border border-teal-300/25 bg-teal-400/[0.06] p-6 text-center">
+                                            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-400/10">
+                                                <Car size={28} className="text-teal-300" />
                                             </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">Have a safe drive! 🚗</h3>
+                                            <h3 className="mb-2 text-xl font-bold text-white">Have a safe drive</h3>
                                             <p className="text-slate-400 text-sm mb-6">We've notified the team that <b>{activePickupEntry.pickerName}</b> is coming.</p>
 
                                             <button
                                                 onClick={() => handlePickupAction('arrive')}
-                                                className="w-full py-4 rounded-xl font-bold bg-white text-indigo-900 hover:bg-indigo-50 transition-colors shadow-lg"
+                                                className="min-h-11 w-full rounded-lg border border-teal-300/30 bg-teal-500 py-3 font-bold text-slate-950 transition-colors hover:bg-teal-400"
                                             >
-                                                I've Arrived at the Gate 👋
+                                                I've arrived at the gate
                                             </button>
                                         </div>
                                     )}
 
                                     {activePickupEntry.status === 'arrived' && (
-                                        <div className="bg-gradient-to-br from-emerald-900/50 to-teal-900/50 border border-emerald-500/30 p-6 rounded-2xl text-center">
+                                        <div className="rounded-lg border border-teal-300/25 bg-teal-400/[0.06] p-6 text-center">
                                             <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                                                 <CheckCircle2 size={40} className="text-emerald-400 animate-bounce" />
                                             </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">You're Checked In! ✅</h3>
+                                            <h3 className="mb-2 text-xl font-bold text-white">You're checked in</h3>
                                             <p className="text-slate-400 text-sm mb-6">Please wait at the designated area. We are bringing <b>{activeChild.name.split(' ')[0]}</b> out to you.</p>
                                             <div className="p-3 bg-slate-900/50 rounded-lg text-xs text-slate-500 animate-pulse">
                                                 Waiting for instructor to release student...
@@ -2072,18 +2061,17 @@ export const ParentDashboardView = () => {
                                     )}
 
                                     {activePickupEntry.status === 'released' && (
-                                        <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-1 rounded-2xl shadow-xl shadow-blue-900/50">
-                                            <div className="bg-slate-900/90 rounded-xl p-6 text-center h-full">
-                                                <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg border-4 border-slate-900 relative">
-                                                    <div className="absolute inset-0 bg-white/30 rounded-full animate-ping opacity-75"></div>
-                                                    <Star size={48} className="text-white relative z-10" fill="currentColor" />
+                                        <div className="rounded-lg border border-amber-300/30 bg-amber-300/[0.06] p-1">
+                                            <div className="h-full rounded-lg bg-slate-900/90 p-6 text-center">
+                                                <div className="relative mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg border border-amber-300/30 bg-amber-300/10">
+                                                    <Star size={34} className="text-amber-200" fill="currentColor" />
                                                 </div>
-                                                <h3 className="text-2xl font-black text-white mb-2">{activeChild.name.split(' ')[0]} is Released! 🎉</h3>
-                                                <p className="text-blue-200 text-sm mb-8">They have left the Makerlab and are coming to you.</p>
+                                                <h3 className="mb-2 text-xl font-black text-white">{activeChild.name.split(' ')[0]} is released</h3>
+                                                <p className="mb-8 text-sm text-amber-100/80">They have left the Makerlab and are coming to you.</p>
 
                                                 <button
                                                     onClick={() => handlePickupAction('confirm')}
-                                                    className="w-full py-4 rounded-xl font-black text-lg bg-gradient-to-r from-yellow-400 to-orange-500 text-white hover:to-orange-600 transition-all shadow-lg active:scale-95"
+                                                    className="min-h-11 w-full rounded-lg border border-amber-200/30 bg-amber-300 py-3 text-lg font-black text-slate-950 transition-colors hover:bg-amber-200"
                                                 >
                                                     Confirm Pickup & Close
                                                 </button>
@@ -2093,7 +2081,7 @@ export const ParentDashboardView = () => {
                                 </div>
                             )}
 
-                            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <div className="rounded-lg border border-white/10 bg-slate-900 p-6">
                                 <h3 className="font-bold text-white mb-2">Pickup Guidelines</h3>
                                 <ul className="list-disc pl-5 text-slate-400 text-sm space-y-2">
                                     <li>Please ensure you are parked safely.</li>

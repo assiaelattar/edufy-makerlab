@@ -1,13 +1,15 @@
 
-import React, { useState } from 'react';
-import { Megaphone, Calendar, DollarSign, Users, Plus, Send, Eye, Trash2, MoreHorizontal, Search, Filter, ArrowRight, ArrowLeft, CheckCircle2, Clock, LayoutGrid, List, Upload, Link as LinkIcon, AlertCircle, Check, X as XIcon, Download, Table as TableIcon, Kanban as KanbanIcon, TrendingUp, Briefcase, Phone } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Megaphone, Calendar, DollarSign, Users, Plus, Send, Eye, Trash2, Search, Filter, ArrowRight, ArrowLeft, CheckCircle2, Clock, Upload, Link as LinkIcon, AlertCircle, Download, Table as TableIcon, Kanban as KanbanIcon, TrendingUp, Briefcase, Phone, ShieldCheck, X, ClipboardCheck, Pencil } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
-import { addDoc, collection, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { addDoc, arrayUnion, collection, serverTimestamp, updateDoc, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { MarketingPost, Campaign, Lead, Program } from '../types';
+import { MarketingPost, Campaign, Lead } from '../types';
 import { formatDate, formatCurrency } from '../utils/helpers';
 
 import { LeadProfileModal } from './marketing/LeadProfileModal'; // New Modal
@@ -19,9 +21,31 @@ interface MarketingViewProps {
     onEnrollLead?: (lead: Lead) => void;
 }
 
+const LEAD_STAGES: { id: Lead['status']; label: string; tone: string }[] = [
+    { id: 'new', label: 'New', tone: 'text-sky-300' },
+    { id: 'contacted', label: 'Contacted', tone: 'text-slate-300' },
+    { id: 'interested', label: 'Interested', tone: 'text-amber-200' },
+    { id: 'workshop_booked', label: 'Workshop booked', tone: 'text-teal-300' },
+    { id: 'demo_booked', label: 'Demo booked', tone: 'text-teal-300' },
+    { id: 'converted', label: 'Converted', tone: 'text-emerald-300' },
+    { id: 'closed', label: 'Closed', tone: 'text-rose-300' }
+];
+
+const REQUIRED_CAMPAIGN_ASSETS = ['landing page', 'ad creative (square)', 'ad creative (story)', 'ad copy'];
+const cleanPhone = (phone = '') => phone.replace(/\D/g, '');
+const isWebUrl = (value: string) => {
+    try {
+        return ['http:', 'https:'].includes(new URL(value).protocol);
+    } catch {
+        return false;
+    }
+};
+
 export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) => {
     const { marketingPosts, campaigns, leads, programs, students, bookings } = useAppContext(); // Get students for unified view
-    const { userProfile, can } = useAuth();
+    const { currentOrganization, can } = useAuth();
+    const { confirm, alert: showAlert } = useConfirm();
+    const orgId = currentOrganization?.id || '';
     const [activeTab, setActiveTab] = useState<'content' | 'campaigns' | 'leads' | 'upsell'>('content');
     const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
 
@@ -43,6 +67,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     const [isKitModalOpen, setIsKitModalOpen] = useState(false);
     const [selectedCampaignForKit, setSelectedCampaignForKit] = useState<Campaign | null>(null);
     const [campaignForm, setCampaignForm] = useState<Partial<Campaign>>({ name: '', budget: 0, spend: 0, status: 'planned', startDate: '', endDate: '', goals: '' });
+    const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null);
 
     // --- LEADS STATE ---
     const [isLeadModalOpen, setIsLeadModalOpen] = useState(false);
@@ -52,24 +77,33 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     const [selectedInterestFilter, setSelectedInterestFilter] = useState('');
     const [selectedLeadForProfile, setSelectedLeadForProfile] = useState<Lead | null>(null);
     const [mobileKanbanColumn, setMobileKanbanColumn] = useState<Lead['status']>('new'); // Mobile View State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [campaignStatusFilter, setCampaignStatusFilter] = useState<'all' | Campaign['status']>('all');
+    const [profileInitialAction, setProfileInitialAction] = useState<'call' | 'booking' | null>(null);
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
+    const [actionFeedback, setActionFeedback] = useState<{ kind: 'success' | 'error' | 'info'; message: string } | null>(null);
+    const canCreateMarketing = can('marketing.create');
 
     // Auto-Status Listener (Sync bookings to lead status)
     React.useEffect(() => {
-        if (!leads.length || !bookings.length) return;
+        if (!db || !orgId || !canCreateMarketing || !leads.length || !bookings.length) return;
 
         leads.forEach(lead => {
             if (['new', 'contacted', 'interested'].includes(lead.status)) {
-                const leadPhone = lead.phone.replace(/\D/g, '');
+                if (lead.organizationId !== orgId) return;
+                const leadPhone = cleanPhone(lead.phone);
                 if (!leadPhone) return;
 
-                const hasBooking = bookings.some(b => b.phoneNumber && b.phoneNumber.replace(/\D/g, '') === leadPhone);
+                const hasBooking = bookings.some(b => b.organizationId === orgId && cleanPhone(b.phoneNumber) === leadPhone && b.status !== 'cancelled');
                 if (hasBooking) {
-                    console.log(`Auto-updating lead ${lead.name} to workshop_booked`);
-                    handleUpdateLeadStatus(lead.id, 'workshop_booked');
+                    void updateDoc(doc(db, 'leads', lead.id), { status: 'workshop_booked', timeline: arrayUnion({ date: new Date().toISOString(), type: 'status_change', details: 'Workshop booking detected; pipeline moved to workshop booked.', author: 'Edufy automation' }) }).catch(error => {
+                        console.error('Lead booking sync failed', error);
+                        setActionFeedback({ kind: 'error', message: `Could not sync ${lead.name}'s booking status. Refresh and try again.` });
+                    });
                 }
             }
         });
-    }, [bookings, leads]); // Safe dependency as status change removes from candidate set
+    }, [bookings, canCreateMarketing, leads, orgId]);
 
     // --- INVITE STATE ---
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
@@ -77,26 +111,39 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     const [selectedTemplateForInvite, setSelectedTemplateForInvite] = useState<string>('');
     const { workshopTemplates } = useAppContext();
     const [isGrowthWizardOpen, setIsGrowthWizardOpen] = useState(false);
+    const [growthWizardInitialType, setGrowthWizardInitialType] = useState<'holiday' | 'next_level'>('holiday');
 
-    const handleGenerateInvite = () => {
-        if (!selectedLeadForInvite || !selectedTemplateForInvite) return;
+    const handleGenerateInvite = async () => {
+        if (!selectedLeadForInvite || !selectedTemplateForInvite || !canCreateMarketing) return;
         const template = workshopTemplates.find(t => t.id === selectedTemplateForInvite);
-        if (!template) return;
+        const phone = cleanPhone(selectedLeadForInvite.phone);
+        if (!template || template.organizationId !== orgId || !template.shareableSlug || phone.length < 8) {
+            setActionFeedback({ kind: 'error', message: 'This invitation needs a valid phone number and an active workshop booking link.' });
+            return;
+        }
 
-        const message = `Hello ${selectedLeadForInvite.parentName}! We noticed ${selectedLeadForInvite.name} is interested in tech. We'd love to invite them to our "${template.title}" workshop at Edufy MakerLab. \n\nBook a free demo spot here: https://makerlab.academy/book-demo?ref=${selectedLeadForInvite.id}&tmpl=${template.id}\n\nSee you there!`;
+        const bookingUrl = `${window.location.origin}/w/${template.shareableSlug}`;
+        const organizationName = currentOrganization?.name || 'our academy';
+        const message = `Hello ${selectedLeadForInvite.parentName}, we'd like to invite ${selectedLeadForInvite.name} to "${template.title}" at ${organizationName}.\n\nChoose a workshop time here: ${bookingUrl}`;
 
-        // Copy to clipboard
-        navigator.clipboard.writeText(message);
-
-        // Open WhatsApp
-        const waLink = `https://wa.me/${selectedLeadForInvite.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-        window.open(waLink, '_blank');
+        try {
+            await navigator.clipboard.writeText(message);
+        } catch {
+            setActionFeedback({ kind: 'info', message: 'The invitation could not be copied, but WhatsApp will still open with the message.' });
+        }
+        const waLink = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        const opened = window.open(waLink, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+            setActionFeedback({ kind: 'error', message: 'Your browser blocked WhatsApp. Allow pop-ups, then try again.' });
+            return;
+        }
 
         setIsInviteModalOpen(false);
         // Optional: Update status to 'contacted' if it was 'new'
         if (selectedLeadForInvite.status === 'new') {
-            handleUpdateLeadStatus(selectedLeadForInvite.id, 'contacted');
+            await handleUpdateLeadStatus(selectedLeadForInvite.id, 'contacted');
         }
+        setActionFeedback({ kind: 'success', message: 'Invitation prepared in WhatsApp. Sending remains under your control.' });
     };
 
     // Unified Contact List Logic (Leads + Students)
@@ -119,138 +166,321 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     ];
 
     // Filter Logic
+    const normalizedSearch = searchQuery.trim().toLowerCase();
     const filteredContacts = unifiedContacts.filter(c => {
-        if (!selectedInterestFilter) return true;
-        if (selectedInterestFilter === 'Active Student' && c.type === 'student') return true;
-        return c.interests?.some(i => i === selectedInterestFilter) || false;
+        const matchesInterest = !selectedInterestFilter || (selectedInterestFilter === 'Active Student' && c.type === 'student') || c.interests?.some(i => i === selectedInterestFilter);
+        const matchesSearch = !normalizedSearch || [c.name, c.parentName, c.phone, c.email, c.source].some(value => value?.toLowerCase().includes(normalizedSearch));
+        return Boolean(matchesInterest && matchesSearch);
     });
 
     const filteredLeadsOnly = leads.filter(l => {
-        if (!selectedInterestFilter) return true;
-        return l.interests?.some(i => i === selectedInterestFilter) || false;
+        const matchesInterest = !selectedInterestFilter || l.interests?.some(i => i === selectedInterestFilter);
+        const matchesSearch = !normalizedSearch || [l.name, l.parentName, l.phone, l.email, l.source].some(value => value?.toLowerCase().includes(normalizedSearch));
+        return Boolean(matchesInterest && matchesSearch);
     });
 
-    // --- EXPORT HANDLER ---
-    const handleExport = () => {
-        const dataToExport = filteredContacts.map(c => ({
-            Name: c.name,
-            Parent: c.parentName,
-            Phone: c.phone,
-            Type: c.type.toUpperCase(),
-            Status: c.status,
-            Source: c.source,
-            Interests: c.interests?.join(', ') || ''
-        }));
+    const visibleCampaigns = campaigns.filter(campaign => campaignStatusFilter === 'all' || campaign.status === campaignStatusFilter);
+    const interestOptions = useMemo(() => Array.from(new Set([
+        ...programs.map(program => program.name),
+        ...leads.flatMap(lead => lead.interests || []),
+        'Holiday Camp'
+    ])).sort(), [leads, programs]);
 
-        const ws = XLSX.utils.json_to_sheet(dataToExport);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Contacts");
-        XLSX.writeFile(wb, "Makerlab_Contacts_Export.xlsx");
+    const requireCreateAccess = () => {
+        if (canCreateMarketing && orgId) return true;
+        setActionFeedback({ kind: 'error', message: !orgId ? 'Select an organization before changing Marketing data.' : 'You have view-only Marketing access.' });
+        return false;
     };
 
-    // --- CONTENT HANDLERS ---
-    const handleSavePost = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!db) return;
-        await addDoc(collection(db, 'marketing_posts'), { ...postForm, createdAt: serverTimestamp(), attachments: [], feedback: '' });
-        setIsPostModalOpen(false);
-        setPostForm({ platform: 'instagram', content: '', date: new Date().toISOString().split('T')[0], status: 'planned' });
+    const openNewCampaign = () => {
+        setEditingCampaignId(null);
+        setCampaignForm({ name: '', budget: 0, spend: 0, status: 'planned', startDate: '', endDate: '', goals: '' });
+        setActionFeedback(null);
+        setIsCampaignModalOpen(true);
+    };
+
+    const openCampaignEditor = (campaign: Campaign) => {
+        setEditingCampaignId(campaign.id);
+        setCampaignForm({ name: campaign.name, budget: campaign.budget, spend: campaign.spend, status: campaign.status, startDate: campaign.startDate, endDate: campaign.endDate, goals: campaign.goals });
+        setActionFeedback(null);
+        setIsCampaignModalOpen(true);
+    };
+
+    const handleExport = () => {
+        if (filteredContacts.length === 0) {
+            setActionFeedback({ kind: 'info', message: 'There are no contacts in the current filter to export.' });
+            return;
+        }
+        const dataToExport = filteredContacts.map(c => ({ Name: c.name, Parent: c.parentName, Phone: c.phone, Email: c.email || '', Type: c.type.toUpperCase(), Status: c.status, Source: c.source, Interests: c.interests?.join(', ') || '' }));
+        const ws = XLSX.utils.json_to_sheet(dataToExport);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Contacts');
+        XLSX.writeFile(wb, `Edufy_CRM_Contacts_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setActionFeedback({ kind: 'success', message: `${filteredContacts.length} contacts exported from the current view.` });
+    };
+
+    const handleSavePost = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!db || !requireCreateAccess()) return;
+        if (!postForm.content?.trim() || !postForm.date) {
+            setActionFeedback({ kind: 'error', message: 'Add post content and a planned date before creating the task.' });
+            return;
+        }
+        setPendingAction('post-create');
+        try {
+            await addDoc(collection(db, 'marketing_posts'), { ...postForm, content: postForm.content.trim(), organizationId: orgId, createdAt: serverTimestamp(), attachments: [], feedback: '' });
+            setIsPostModalOpen(false);
+            setPostForm({ platform: 'instagram', content: '', date: new Date().toISOString().split('T')[0], status: 'planned' });
+            setActionFeedback({ kind: 'success', message: 'Content task added to the planning queue.' });
+        } catch (error) {
+            console.error('Post creation failed', error);
+            setActionFeedback({ kind: 'error', message: 'The content task could not be created. Try again.' });
+        } finally { setPendingAction(null); }
     };
 
     const handleMoveStatus = async (post: MarketingPost, direction: 'next' | 'prev') => {
-        if (!db) return;
+        if (!db || !requireCreateAccess() || pendingAction) return;
+        const currentPost = marketingPosts.find(item => item.id === post.id);
+        if (!currentPost || currentPost.organizationId !== orgId) {
+            setActionFeedback({ kind: 'error', message: 'This content task is unavailable in the current organization.' });
+            return;
+        }
         const flow: MarketingPost['status'][] = ['planned', 'in_progress', 'review', 'approved', 'published'];
-        const currentIndex = flow.indexOf(post.status);
+        const currentIndex = flow.indexOf(currentPost.status);
         const nextStatus = flow[currentIndex + 1];
         const prevStatus = flow[currentIndex - 1];
-
-        if (direction === 'next') {
-            // Logic checks
-            if (post.status === 'in_progress') {
-                // Must attach work to move to review
-                setSelectedPostId(post.id);
-                setIsSubmitModalOpen(true);
-                return;
-            }
-            if (post.status === 'review') {
-                // Only users with approval permission can approve
-                if (!can('marketing.approve')) {
-                    alert("You do not have permission to approve content. Please wait for an administrator.");
-                    return;
-                }
-                // Open Review Modal
-                setSelectedPost(post);
-                setFeedback('');
-                setIsReviewModalOpen(true);
-                return;
-            }
-            if (nextStatus) await updateDoc(doc(db, 'marketing_posts', post.id), { status: nextStatus });
-        } else {
-            if (prevStatus) await updateDoc(doc(db, 'marketing_posts', post.id), { status: prevStatus });
+        if (direction === 'next' && currentPost.status === 'in_progress') {
+            setSelectedPostId(currentPost.id);
+            setIsSubmitModalOpen(true);
+            return;
         }
+        if (direction === 'next' && currentPost.status === 'review') {
+            if (!can('marketing.approve')) {
+                showAlert('Approval restricted', 'You do not have permission to approve content. Please wait for an administrator.', 'warning');
+                return;
+            }
+            setSelectedPost(currentPost);
+            setFeedback('');
+            setIsReviewModalOpen(true);
+            return;
+        }
+        const targetStatus = direction === 'next' ? nextStatus : prevStatus;
+        if (!targetStatus) return;
+        if (targetStatus === 'published') {
+            const accepted = await confirm({ title: 'Mark this post as published?', message: 'Edufy does not publish to social networks. Confirm only after the post is live in the external platform.', confirmText: 'Mark published', cancelText: 'Keep approved', variant: 'info' });
+            if (!accepted) return;
+        }
+        setPendingAction(`post-${currentPost.id}`);
+        try {
+            await updateDoc(doc(db, 'marketing_posts', currentPost.id), { status: targetStatus });
+            setActionFeedback({ kind: 'success', message: `Content moved to ${targetStatus.replace('_', ' ')}.` });
+        } catch (error) {
+            console.error('Post status update failed', error);
+            setActionFeedback({ kind: 'error', message: 'The content status could not be updated. Try again.' });
+        } finally { setPendingAction(null); }
     };
 
     const handleSubmitWork = async () => {
-        if (!db || !selectedPostId || !submissionLink) return;
-        await updateDoc(doc(db, 'marketing_posts', selectedPostId), {
-            status: 'review',
-            attachments: [submissionLink] // Simple array for now
-        });
-        setIsSubmitModalOpen(false);
-        setSubmissionLink('');
-        setSelectedPostId(null);
+        if (!db || !selectedPostId || !requireCreateAccess() || pendingAction) return;
+        const currentPost = marketingPosts.find(post => post.id === selectedPostId);
+        if (!currentPost || currentPost.organizationId !== orgId) {
+            setActionFeedback({ kind: 'error', message: 'This content task is unavailable in the current organization.' });
+            return;
+        }
+        const normalizedLink = submissionLink.trim();
+        if (!isWebUrl(normalizedLink)) {
+            setActionFeedback({ kind: 'error', message: 'Enter a complete http or https asset link before submitting.' });
+            return;
+        }
+        setPendingAction('post-submit');
+        try {
+            await updateDoc(doc(db, 'marketing_posts', currentPost.id), { status: 'review', attachments: [normalizedLink] });
+            setIsSubmitModalOpen(false);
+            setSubmissionLink('');
+            setSelectedPostId(null);
+            setActionFeedback({ kind: 'success', message: 'Content submitted for approval.' });
+        } catch (error) {
+            console.error('Content submission failed', error);
+            setActionFeedback({ kind: 'error', message: 'The content could not be submitted. Check the link and try again.' });
+        } finally { setPendingAction(null); }
     };
 
     const handleApprovePost = async () => {
-        if (!db || !selectedPost) return;
-        await updateDoc(doc(db, 'marketing_posts', selectedPost.id), { status: 'approved' });
-        setIsReviewModalOpen(false);
+        if (!db || !selectedPost || !can('marketing.approve') || pendingAction) return;
+        const currentPost = marketingPosts.find(post => post.id === selectedPost.id);
+        if (!currentPost || currentPost.organizationId !== orgId) {
+            setActionFeedback({ kind: 'error', message: 'This content task is unavailable in the current organization.' });
+            return;
+        }
+        setPendingAction('post-approve');
+        try {
+            await updateDoc(doc(db, 'marketing_posts', currentPost.id), { status: 'approved', feedback: '' });
+            setIsReviewModalOpen(false);
+            setActionFeedback({ kind: 'success', message: 'Content approved and ready for external publishing.' });
+        } catch (error) {
+            console.error('Content approval failed', error);
+            setActionFeedback({ kind: 'error', message: 'The approval could not be saved. Try again.' });
+        } finally { setPendingAction(null); }
     };
 
     const handleRejectPost = async () => {
-        if (!db || !selectedPost) return;
-        if (!feedback) return alert("Please provide feedback for rejection.");
-        await updateDoc(doc(db, 'marketing_posts', selectedPost.id), {
-            status: 'in_progress',
-            feedback: feedback
-        });
-        setIsReviewModalOpen(false);
+        if (!db || !selectedPost || !can('marketing.approve') || pendingAction) return;
+        const currentPost = marketingPosts.find(post => post.id === selectedPost.id);
+        if (!currentPost || currentPost.organizationId !== orgId) {
+            setActionFeedback({ kind: 'error', message: 'This content task is unavailable in the current organization.' });
+            return;
+        }
+        if (!feedback.trim()) {
+            showAlert('Feedback required', 'Add feedback before sending this post back for revisions.', 'warning');
+            return;
+        }
+        setPendingAction('post-reject');
+        try {
+            await updateDoc(doc(db, 'marketing_posts', currentPost.id), { status: 'in_progress', feedback: feedback.trim() });
+            setIsReviewModalOpen(false);
+            setActionFeedback({ kind: 'success', message: 'Content returned for revision with feedback.' });
+        } catch (error) {
+            console.error('Content revision request failed', error);
+            setActionFeedback({ kind: 'error', message: 'The revision request could not be saved. Try again.' });
+        } finally { setPendingAction(null); }
     };
 
-    // --- CAMPAIGN HANDLERS ---
-    const handleSaveCampaign = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!db) return;
-        await addDoc(collection(db, 'campaigns'), { ...campaignForm, createdAt: serverTimestamp() });
-        setIsCampaignModalOpen(false);
-        setCampaignForm({ name: '', budget: 0, spend: 0, status: 'planned', startDate: '', endDate: '', goals: '' });
+    const handleSaveCampaign = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!db || !requireCreateAccess()) return;
+        const name = campaignForm.name?.trim() || '';
+        const budget = Number(campaignForm.budget || 0);
+        const spend = Number(campaignForm.spend || 0);
+        if (!name || !campaignForm.startDate || !campaignForm.endDate) {
+            setActionFeedback({ kind: 'error', message: 'Campaign name, start date, and end date are required.' });
+            return;
+        }
+        if (campaignForm.endDate < campaignForm.startDate) {
+            setActionFeedback({ kind: 'error', message: 'Campaign end date must be on or after its start date.' });
+            return;
+        }
+        if (budget < 0 || spend < 0) {
+            setActionFeedback({ kind: 'error', message: 'Budget and spend cannot be negative.' });
+            return;
+        }
+        setPendingAction('campaign-create');
+        try {
+            if (editingCampaignId) {
+                const existingCampaign = campaigns.find(campaign => campaign.id === editingCampaignId);
+                if (!existingCampaign || existingCampaign.organizationId !== orgId) throw new Error('Campaign tenant mismatch');
+                await updateDoc(doc(db, 'campaigns', editingCampaignId), { name, budget, spend, startDate: campaignForm.startDate, endDate: campaignForm.endDate, goals: campaignForm.goals?.trim() || '' });
+            } else {
+                await addDoc(collection(db, 'campaigns'), { ...campaignForm, name, budget, spend, status: 'planned', organizationId: orgId, createdAt: serverTimestamp(), assets: [] });
+            }
+            setIsCampaignModalOpen(false);
+            setCampaignForm({ name: '', budget: 0, spend: 0, status: 'planned', startDate: '', endDate: '', goals: '' });
+            setActionFeedback({ kind: 'success', message: editingCampaignId ? 'Campaign details updated.' : 'Campaign created as planned. Prepare and approve its kit before activation.' });
+            setEditingCampaignId(null);
+        } catch (error) {
+            console.error('Campaign creation failed', error);
+            setActionFeedback({ kind: 'error', message: 'The campaign could not be created. Try again.' });
+        } finally { setPendingAction(null); }
     };
 
-    // --- LEAD HANDLERS ---
-    const handleSaveLead = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!db) return;
-        await addDoc(collection(db, 'leads'), { ...leadForm, createdAt: serverTimestamp() });
-        setIsLeadModalOpen(false);
-        setLeadForm({ name: '', parentName: '', phone: '', email: '', status: 'new', source: 'Facebook' });
+    const handleCampaignStatus = async (campaign: Campaign, status: Campaign['status']) => {
+        if (!db || campaign.organizationId !== orgId || !can('marketing.approve') || pendingAction) return;
+        if (status === 'active') {
+            const kitReady = REQUIRED_CAMPAIGN_ASSETS.every(required => (campaign.assets || []).some(asset => asset.name.toLowerCase().includes(required) && asset.status === 'approved'));
+            if (!kitReady) {
+                setActionFeedback({ kind: 'error', message: 'Approve every required campaign-kit asset before activating this campaign.' });
+                return;
+            }
+        }
+        setPendingAction(`campaign-${campaign.id}`);
+        try {
+            await updateDoc(doc(db, 'campaigns', campaign.id), { status });
+            setActionFeedback({ kind: 'success', message: `Campaign marked ${status}. External publishing and ad delivery remain manual.` });
+        } catch (error) {
+            console.error('Campaign status update failed', error);
+            setActionFeedback({ kind: 'error', message: 'The campaign status could not be updated. Try again.' });
+        } finally { setPendingAction(null); }
+    };
+
+    const handleSaveLead = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!db || !requireCreateAccess()) return;
+        const phone = cleanPhone(leadForm.phone || '');
+        if (!leadForm.name?.trim() || !leadForm.parentName?.trim() || phone.length < 8) {
+            setActionFeedback({ kind: 'error', message: 'Add the child, parent, and a valid phone number with at least 8 digits.' });
+            return;
+        }
+        const duplicate = leads.some(lead => lead.organizationId === orgId && cleanPhone(lead.phone) === phone && !['converted', 'closed'].includes(lead.status));
+        if (duplicate) {
+            setActionFeedback({ kind: 'error', message: 'An open lead with this phone number already exists. Open the existing record instead.' });
+            return;
+        }
+        setPendingAction('lead-create');
+        try {
+            await addDoc(collection(db, 'leads'), { ...leadForm, name: leadForm.name.trim(), parentName: leadForm.parentName.trim(), phone: leadForm.phone?.trim(), email: leadForm.email?.trim() || '', organizationId: orgId, createdAt: serverTimestamp() });
+            setIsLeadModalOpen(false);
+            setLeadForm({ name: '', parentName: '', phone: '', email: '', status: 'new', source: 'Facebook' });
+            setActionFeedback({ kind: 'success', message: 'Lead added to the new stage.' });
+        } catch (error) {
+            console.error('Lead creation failed', error);
+            setActionFeedback({ kind: 'error', message: 'The lead could not be created. Try again.' });
+        } finally { setPendingAction(null); }
     };
 
     const handleUpdateLeadStatus = async (id: string, newStatus: Lead['status']) => {
-        if (!db) return;
-        await updateDoc(doc(db, 'leads', id), { status: newStatus });
+        if (!db || !requireCreateAccess()) return;
+        const lead = leads.find(item => item.id === id);
+        if (!lead || lead.organizationId !== orgId || lead.status === newStatus) return;
+        try {
+            await updateDoc(doc(db, 'leads', id), { status: newStatus, timeline: arrayUnion({ date: new Date().toISOString(), type: 'status_change', details: `Pipeline moved from ${lead.status.replace('_', ' ')} to ${newStatus.replace('_', ' ')}`, author: 'Marketing team' }) });
+            setActionFeedback({ kind: 'success', message: `${lead.name} moved to ${newStatus.replace('_', ' ')}.` });
+        } catch (error) {
+            console.error('Lead stage update failed', error);
+            setActionFeedback({ kind: 'error', message: `Could not move ${lead.name}. Try again.` });
+        }
     };
 
     const handleDeleteItem = async (collectionName: string, id: string) => {
-        if (!db || !confirm('Are you sure?')) return;
-        await deleteDoc(doc(db, collectionName, id));
+        if (!db || !requireCreateAccess()) return;
+        let item: MarketingPost | Campaign | Lead | undefined;
+        let itemLabel = 'item';
+        switch (collectionName) {
+            case 'marketing_posts':
+                item = marketingPosts.find(post => post.id === id);
+                itemLabel = 'content task';
+                break;
+            case 'campaigns':
+                item = campaigns.find(campaign => campaign.id === id);
+                itemLabel = 'campaign';
+                break;
+            case 'leads':
+                item = leads.find(lead => lead.id === id);
+                itemLabel = 'lead';
+                break;
+            default:
+                setActionFeedback({ kind: 'error', message: 'Unsupported Marketing deletion request.' });
+                return;
+        }
+        if (!item || item.organizationId !== orgId) {
+            setActionFeedback({ kind: 'error', message: `This ${itemLabel} is unavailable in the current organization.` });
+            return;
+        }
+        const approved = await confirm({ title: 'Delete item?', message: 'This item will be removed from the Marketing Hub.', confirmText: 'Delete', cancelText: 'Cancel', variant: 'danger' });
+        if (!approved) return;
+        try {
+            await deleteDoc(doc(db, collectionName, id));
+            setActionFeedback({ kind: 'success', message: 'Item deleted.' });
+        } catch (error) {
+            console.error('Marketing item deletion failed', error);
+            setActionFeedback({ kind: 'error', message: 'The item could not be deleted. Try again.' });
+        }
     };
 
     // --- RENDER HELPERS ---
     const renderContentCard = (post: MarketingPost) => (
-        <div key={post.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl shadow-sm hover:border-purple-500/50 transition-all group relative flex flex-col gap-2 mb-3">
+        <article key={post.id} className="group relative mb-2 flex flex-col gap-2 rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-teal-400/30">
             <div className="flex justify-between items-start">
-                <span className={`text-[10px] uppercase font-bold px-2 py-1 rounded border ${post.platform === 'instagram' ? 'text-pink-400 border-pink-900/50 bg-pink-950/30' : post.platform === 'facebook' ? 'text-blue-400 border-blue-900/50 bg-blue-950/30' : 'text-slate-400 border-slate-800 bg-slate-950'}`}>{post.platform}</span>
-                <button onClick={() => handleDeleteItem('marketing_posts', post.id)} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                <span className="rounded border border-white/10 bg-slate-950 px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{post.platform}</span>
+                <button onClick={() => handleDeleteItem('marketing_posts', post.id)} disabled={!canCreateMarketing || pendingAction !== null} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${post.platform} content task`} title="Delete content task"><Trash2 size={14} /></button>
             </div>
             <p className="text-sm text-white font-medium line-clamp-3">{post.content}</p>
             <div className="text-[10px] text-slate-500 flex justify-between mt-1">
@@ -259,51 +489,82 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             </div>
 
             {post.feedback && post.status === 'in_progress' && (
-                <div className="bg-red-950/20 border border-red-900/30 p-2 rounded text-xs text-red-300 mt-2">
+                <div className="mt-2 rounded border border-rose-400/20 bg-rose-500/10 p-2 text-xs text-rose-200">
                     <strong className="block text-[9px] uppercase opacity-70">Feedback:</strong> {post.feedback}
                 </div>
             )}
 
             <div className="flex justify-between items-center border-t border-slate-800 pt-2 mt-2">
                 {post.status !== 'planned' ? (
-                    <button onClick={() => handleMoveStatus(post, 'prev')} className="p-1 hover:bg-slate-800 rounded text-slate-500"><ArrowLeft size={14} /></button>
+                    <button onClick={() => handleMoveStatus(post, 'prev')} disabled={!canCreateMarketing || pendingAction !== null} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white disabled:opacity-30" aria-label="Move content back"><ArrowLeft size={14} /></button>
                 ) : <div></div>}
 
                 {/* Status Specific Actions */}
                 {post.status === 'in_progress' && (
-                    <button onClick={() => handleMoveStatus(post, 'next')} className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded flex items-center gap-1">Submit <Upload size={10} /></button>
+                    <button onClick={() => handleMoveStatus(post, 'next')} disabled={!canCreateMarketing || pendingAction !== null} className="flex min-h-8 items-center gap-1 rounded-lg bg-teal-500 px-2 text-xs font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-40">Submit <Upload size={11} /></button>
                 )}
                 {post.status === 'review' && (
                     can('marketing.approve') ? (
-                        <button onClick={() => handleMoveStatus(post, 'next')} className="text-xs bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded flex items-center gap-1">Review <Eye size={10} /></button>
+                        <button onClick={() => handleMoveStatus(post, 'next')} disabled={pendingAction !== null} className="flex min-h-8 items-center gap-1 rounded-lg bg-amber-300 px-2 text-xs font-bold text-slate-950 hover:bg-amber-200 disabled:opacity-40">Review <Eye size={11} /></button>
                     ) : (
                         <span className="text-xs text-amber-500 flex items-center gap-1 font-bold bg-amber-950/20 px-2 py-1 rounded border border-amber-900/30"><Clock size={10} /> Waiting Approval</span>
                     )
                 )}
                 {post.status === 'approved' && (
-                    <button onClick={() => handleMoveStatus(post, 'next')} className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded flex items-center gap-1">Publish <Send size={10} /></button>
+                    <button onClick={() => handleMoveStatus(post, 'next')} disabled={!canCreateMarketing || pendingAction !== null} className="flex min-h-8 items-center gap-1 rounded-lg bg-teal-500 px-2 text-xs font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-40">Mark published <ClipboardCheck size={11} /></button>
                 )}
                 {(post.status === 'planned') && (
-                    <button onClick={() => handleMoveStatus(post, 'next')} className="p-1 hover:bg-slate-800 rounded text-slate-500 hover:text-blue-400"><ArrowRight size={14} /></button>
+                    <button onClick={() => handleMoveStatus(post, 'next')} disabled={!canCreateMarketing || pendingAction !== null} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-teal-300 disabled:opacity-30" aria-label="Start content task"><ArrowRight size={14} /></button>
                 )}
             </div>
-        </div>
+        </article>
     );
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 md:h-full flex flex-col animate-in fade-in slide-in-from-right-4">
+        <div className="flex min-h-0 flex-col gap-4 pb-24 md:h-full md:pb-8">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4 shrink-0">
-                <div>
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><Megaphone className="w-6 h-6 text-purple-500" /> Marketing Hub</h2>
-                    <p className="text-slate-500 text-sm">Manage content, track campaigns, and nurture leads.</p>
+            <AtlasCommandHeader
+                eyebrow="Growth engine"
+                title="Marketing Hub"
+                description="Plan content, manage campaigns, nurture leads, and convert workshop interest into enrollment."
+                icon={Megaphone}
+                badges={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">{filteredContacts.length} contacts</span>}
+                actions={
+                    <div className="flex flex-wrap gap-2">
+                        <button onClick={() => setIsGrowthWizardOpen(true)} disabled={!canCreateMarketing} title={!canCreateMarketing ? 'Marketing create access is required' : undefined} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 text-sm font-bold text-amber-200 transition hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40">
+                            <TrendingUp size={16} /> Growth wizard
+                        </button>
+                        <button onClick={() => { setActionFeedback(null); setIsLeadModalOpen(true); }} disabled={!canCreateMarketing} title={!canCreateMarketing ? 'Marketing create access is required' : undefined} className="flex h-10 items-center justify-center gap-2 rounded-lg bg-teal-400 px-3 text-sm font-bold text-slate-950 transition hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-40">
+                            <Plus size={16} /> Add lead
+                        </button>
+                    </div>
+                }
+            />
+
+            {actionFeedback && (
+                <div className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${actionFeedback.kind === 'success' ? 'border-teal-400/25 bg-teal-400/10 text-teal-100' : actionFeedback.kind === 'error' ? 'border-rose-400/25 bg-rose-400/10 text-rose-100' : 'border-amber-300/25 bg-amber-300/10 text-amber-100'}`} role="status">
+                    <span>{actionFeedback.message}</span>
+                    <button type="button" onClick={() => setActionFeedback(null)} className="shrink-0 rounded p-0.5 text-current opacity-70 hover:opacity-100" aria-label="Dismiss message"><X size={15} /></button>
                 </div>
+            )}
+
+            {!canCreateMarketing && <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">View-only workspace. You can inspect and export CRM data; creating and moving records requires Marketing create access.</div>}
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                <AtlasSignalCard label="Open Leads" value={leads.filter(l => !['converted', 'closed'].includes(l.status)).length} icon={Users} tone="teal" detail="Active CRM opportunities" />
+                <AtlasSignalCard label="Campaign Spend" value={formatCurrency(campaigns.reduce((sum, c) => sum + (c.spend || 0), 0))} icon={DollarSign} tone="amber" detail={`${campaigns.length} campaigns tracked`} />
+                <AtlasSignalCard label="Content Queue" value={marketingPosts.filter(p => p.status !== 'published').length} icon={Calendar} tone="blue" detail="Posts before publish" />
+                <AtlasSignalCard label="Booked Leads" value={leads.filter(l => ['workshop_booked', 'demo_booked'].includes(l.status)).length} icon={Phone} tone="emerald" detail="Ready for follow-up" />
             </div>
-            <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 overflow-x-auto whitespace-nowrap min-w-0 max-w-full">
-                <button onClick={() => setActiveTab('content')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'content' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}><Calendar size={16} /> Content</button>
-                <button onClick={() => setActiveTab('campaigns')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'campaigns' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}><DollarSign size={16} /> Campaigns</button>
-                <button onClick={() => setActiveTab('leads')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'leads' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}><Users size={16} /> CRM</button>
-                <button onClick={() => setActiveTab('upsell')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'upsell' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}><TrendingUp size={16} /> Growth</button>
+            <div className="sticky top-0 z-20 flex min-w-0 max-w-full overflow-x-auto whitespace-nowrap rounded-lg border border-white/10 bg-slate-950/95 p-1" role="tablist" aria-label="Marketing workspace">
+                {([
+                    ['content', 'Content', Calendar],
+                    ['campaigns', 'Campaigns', DollarSign],
+                    ['leads', 'CRM', Users],
+                    ['upsell', 'Growth', TrendingUp]
+                ] as const).map(([id, label, Icon]) => (
+                    <button key={id} role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id)} className={`flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors ${activeTab === id ? 'bg-slate-800 text-white' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-200'}`}><Icon size={15} /> {label}</button>
+                ))}
             </div>
 
 
@@ -311,24 +572,22 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {
                 activeTab === 'content' && (
                     <div className="md:h-full flex flex-col min-h-0">
-                        <div className="flex justify-end mb-4 shrink-0">
-                            <button onClick={() => setIsPostModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><Plus size={16} /> Schedule Post</button>
-                        </div>
+                        <AtlasSectionHeader title="Content operations" description="Move work through preparation and approval. Publishing to social providers is recorded manually." icon={Calendar} actions={<AtlasActionButton icon={Plus} variant="primary" onClick={() => { setActionFeedback(null); setIsPostModalOpen(true); }} disabled={!canCreateMarketing}>Schedule post</AtlasActionButton>} />
                         <div className="flex-1 overflow-x-auto pb-4">
-                            <div className="flex gap-4 min-w-[1000px] h-full">
+                            <div className="mt-3 flex h-full min-w-[1000px] gap-3">
                                 {['planned', 'in_progress', 'review', 'approved'].map(status => (
-                                    <div key={status} className="flex-1 flex flex-col min-w-[240px] bg-slate-950/50 rounded-xl border border-slate-800 h-full">
-                                        <div className={`p-3 font-bold text-xs uppercase tracking-wider border-b border-slate-800 bg-slate-900 rounded-t-xl flex justify-between ${status === 'review' ? 'text-purple-400 border-purple-900/50' : status === 'approved' ? 'text-emerald-400 border-emerald-900/50' : 'text-slate-400'}`}>
-                                            {status.replace('_', ' ')}
+                                    <section key={status} className="flex h-full min-w-[240px] flex-1 flex-col rounded-lg border border-white/10 bg-slate-950/50">
+                                        <div className={`flex justify-between border-b border-white/10 bg-slate-900 p-3 text-xs font-bold uppercase ${status === 'review' ? 'text-amber-200' : status === 'approved' ? 'text-teal-300' : 'text-slate-400'}`}>
+                                            {status === 'approved' ? 'Ready / published' : status.replace('_', ' ')}
                                             <span className="bg-slate-950 px-2 rounded text-white">{marketingPosts.filter(p => (status === 'approved' ? (p.status === 'approved' || p.status === 'published') : p.status === status)).length}</span>
                                         </div>
-                                        <div className="p-3 space-y-3 overflow-y-auto custom-scrollbar flex-1">
+                                        <div className="flex-1 space-y-2 overflow-y-auto p-2 custom-scrollbar">
                                             {marketingPosts
                                                 .filter(p => (status === 'approved' ? (p.status === 'approved' || p.status === 'published') : p.status === status))
                                                 .map(renderContentCard)}
-                                            {marketingPosts.filter(p => p.status === status).length === 0 && <div className="text-center text-slate-600 text-xs italic py-4">No posts</div>}
+                                            {marketingPosts.filter(p => (status === 'approved' ? (p.status === 'approved' || p.status === 'published') : p.status === status)).length === 0 && <div className="px-3 py-8 text-center text-xs text-slate-600">No content in this stage.</div>}
                                         </div>
-                                    </div>
+                                    </section>
                                 ))}
                             </div>
                         </div>
@@ -340,52 +599,47 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {
                 activeTab === 'campaigns' && (
                     <div className="md:h-full flex flex-col min-h-0">
-                        <div className="flex justify-end mb-4">
-                            <button onClick={() => setIsCampaignModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><Plus size={16} /> New Campaign</button>
-                        </div>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:overflow-y-auto custom-scrollbar">
-                            {campaigns.map(campaign => (
-                                <div key={campaign.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-white">{campaign.name}</h3>
-                                            <div className="flex gap-2 mt-1">
-                                                <span className="text-xs bg-slate-950 px-2 py-1 rounded border border-slate-800 text-slate-400">{formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}</span>
-                                                <span className={`text-xs px-2 py-1 rounded border font-bold uppercase ${campaign.status === 'active' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>{campaign.status}</span>
+                        <AtlasSectionHeader title="Campaign control" description="Prepare launch assets, approve the kit, then activate the campaign for manual execution." icon={Megaphone} actions={<AtlasActionButton icon={Plus} variant="primary" onClick={openNewCampaign} disabled={!canCreateMarketing}>New campaign</AtlasActionButton>} />
+                        <AtlasToolbar className="mt-3" trailing={<span className="text-xs text-slate-500">{visibleCampaigns.length} shown</span>}>
+                            <Filter size={14} className="text-slate-500" />
+                            <select value={campaignStatusFilter} onChange={event => setCampaignStatusFilter(event.target.value as typeof campaignStatusFilter)} className="h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-400">
+                                <option value="all">All statuses</option><option value="planned">Planned</option><option value="active">Active</option><option value="completed">Completed</option>
+                            </select>
+                        </AtlasToolbar>
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:overflow-y-auto lg:grid-cols-2 custom-scrollbar">
+                            {visibleCampaigns.map(campaign => {
+                                const approvedRequired = REQUIRED_CAMPAIGN_ASSETS.filter(required => (campaign.assets || []).some(asset => asset.name.toLowerCase().includes(required) && asset.status === 'approved')).length;
+                                const kitReady = approvedRequired === REQUIRED_CAMPAIGN_ASSETS.length;
+                                return (
+                                <article key={campaign.id} className="rounded-lg border border-white/10 bg-slate-900 p-4">
+                                    <div className="mb-4 flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h3 className="truncate text-base font-bold text-white">{campaign.name}</h3>
+                                            <div className="mt-1 flex flex-wrap gap-2">
+                                                <span className="rounded border border-white/10 bg-slate-950 px-2 py-1 text-xs text-slate-400">{formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}</span>
+                                                <span className={`rounded border px-2 py-1 text-xs font-bold uppercase ${campaign.status === 'active' ? 'border-teal-400/25 bg-teal-400/10 text-teal-200' : campaign.status === 'completed' ? 'border-white/10 bg-white/[0.04] text-slate-400' : 'border-amber-300/25 bg-amber-300/10 text-amber-200'}`}>{campaign.status}</span>
                                             </div>
                                         </div>
-                                        <button onClick={() => handleDeleteItem('campaigns', campaign.id)} className="text-slate-500 hover:text-red-400"><Trash2 size={16} /></button>
+                                        <button onClick={() => handleDeleteItem('campaigns', campaign.id)} disabled={!canCreateMarketing || pendingAction !== null || campaign.status === 'active'} title={campaign.status === 'active' ? 'Complete the active campaign before deleting it' : 'Delete campaign'} className="rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${campaign.name}`}><Trash2 size={16} /></button>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-4 mb-4">
-                                        <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                                            <span className="text-[10px] uppercase text-slate-500 font-bold">Budget</span>
-                                            <div className="text-white font-mono">{formatCurrency(campaign.budget)}</div>
+                                    <div className="mb-4 grid grid-cols-3 gap-2">
+                                        <div className="rounded border border-white/10 bg-slate-950 p-3"><span className="text-[10px] font-bold uppercase text-slate-500">Budget</span><div className="font-mono text-sm text-white">{formatCurrency(campaign.budget)}</div></div>
+                                        <div className="rounded border border-white/10 bg-slate-950 p-3"><span className="text-[10px] font-bold uppercase text-slate-500">Spend</span><div className="font-mono text-sm text-white">{formatCurrency(campaign.spend)}</div></div>
+                                        <div className="rounded border border-white/10 bg-slate-950 p-3"><span className="text-[10px] font-bold uppercase text-slate-500">Kit</span><div className={`font-mono text-sm ${kitReady ? 'text-teal-300' : 'text-amber-200'}`}>{approvedRequired}/{REQUIRED_CAMPAIGN_ASSETS.length}</div></div>
+                                    </div>
+                                    <p className="min-h-10 text-sm text-slate-400"><span className="font-bold text-slate-300">Goal:</span> {campaign.goals || 'No campaign goal recorded.'}</p>
+                                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+                                        <button type="button" disabled title="Attribution reporting requires a connected ad or analytics provider" className="text-xs text-slate-600">Reporting not connected</button>
+                                        <div className="flex flex-wrap gap-2">
+                                            <AtlasActionButton icon={Pencil} onClick={() => openCampaignEditor(campaign)} disabled={!canCreateMarketing}>Edit</AtlasActionButton>
+                                            <AtlasActionButton icon={Briefcase} onClick={() => { setSelectedCampaignForKit(campaign); setIsKitModalOpen(true); }}>Campaign kit</AtlasActionButton>
+                                            {campaign.status === 'planned' && <AtlasActionButton icon={ShieldCheck} variant="primary" onClick={() => void handleCampaignStatus(campaign, 'active')} disabled={!can('marketing.approve') || !kitReady || pendingAction !== null} title={!kitReady ? 'Approve all required kit assets first' : 'Activate campaign'}>Activate</AtlasActionButton>}
+                                            {campaign.status === 'active' && <AtlasActionButton icon={CheckCircle2} onClick={() => void handleCampaignStatus(campaign, 'completed')} disabled={!can('marketing.approve') || pendingAction !== null}>Complete</AtlasActionButton>}
                                         </div>
-                                        <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                                            <span className="text-[10px] uppercase text-slate-500 font-bold">Spend</span>
-                                            <div className="text-white font-mono">{formatCurrency(campaign.spend)}</div>
-                                        </div>
-                                        <div className="bg-slate-950 p-3 rounded border border-slate-800">
-                                            <span className="text-[10px] uppercase text-slate-500 font-bold">ROI</span>
-                                            <div className="text-emerald-400 font-mono">--%</div>
-                                        </div>
                                     </div>
-                                    <div className="flex gap-2 text-xs text-slate-500 mb-4">
-                                        <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(campaign.startDate)} - {formatDate(campaign.endDate)}</span>
-                                        <span className="flex items-center gap-1"><DollarSign size={12} /> Budget: ${formatCurrency(campaign.budget)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center pt-3 border-t border-slate-800">
-                                        <button className="text-xs text-slate-400 hover:text-white">View Report</button>
-                                        <button
-                                            onClick={() => { setSelectedCampaignForKit(campaign); setIsKitModalOpen(true); }}
-                                            className="text-xs bg-slate-800 hover:bg-slate-700 text-purple-400 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"
-                                        >
-                                            <Briefcase size={12} /> Kit
-                                        </button>
-                                    </div>
-                                    <div className="text-sm text-slate-400"><span className="font-bold text-slate-300">Goals:</span> {campaign.goals}</div>
-                                </div>
-                            ))}
+                                </article>
+                            );})}
+                            {visibleCampaigns.length === 0 && <div className="lg:col-span-2"><AtlasEmptyState icon={Megaphone} title="No campaigns in this view" description="Change the status filter or create a planned campaign with a clear goal and launch kit." action={canCreateMarketing ? <AtlasActionButton icon={Plus} variant="primary" onClick={openNewCampaign}>Create campaign</AtlasActionButton> : undefined} /></div>}
                         </div>
                     </div>
                 )
@@ -395,37 +649,19 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {
                 activeTab === 'leads' && (
                     <div className="md:h-full flex flex-col min-h-0">
-                        <div className="flex items-center gap-4">
-                            <h3 className="font-bold text-white">Acquisition Pipeline</h3>
-                            {/* View Toggle */}
-                            <div className="flex bg-slate-950 rounded-lg border border-slate-800 p-0.5">
-                                <button onClick={() => setViewMode('board')} className={`p-1.5 rounded ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}><KanbanIcon size={14} /></button>
-                                <button onClick={() => setViewMode('table')} className={`p-1.5 rounded ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`}><TableIcon size={14} /></button>
+                        <AtlasSectionHeader title="Acquisition pipeline" description="Search, qualify, book, and convert every inquiry from one operational record." icon={Users} meta={<span className="rounded-full bg-teal-400/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">{filteredLeadsOnly.length} leads</span>} />
+                        <AtlasToolbar className="mt-3" trailing={<><AtlasActionButton icon={Download} onClick={handleExport}>Export view</AtlasActionButton><AtlasActionButton icon={Plus} variant="primary" onClick={() => { setActionFeedback(null); setIsLeadModalOpen(true); }} disabled={!canCreateMarketing}>Add lead</AtlasActionButton></>}>
+                            <div className="relative min-w-[190px] flex-1 sm:max-w-xs"><Search size={14} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search name, phone, source" className="h-10 w-full rounded-lg border border-white/10 bg-slate-900 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400" /></div>
+                            <div className="flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-slate-900 px-2"><Filter size={13} className="text-slate-500" /><select className="min-w-[130px] bg-transparent text-sm text-white outline-none" value={selectedInterestFilter} onChange={event => setSelectedInterestFilter(event.target.value)}><option value="">All interests</option>{interestOptions.map(option => <option key={option} value={option}>{option}</option>)}</select></div>
+                            <div className="flex h-10 rounded-lg border border-white/10 bg-slate-950 p-1" aria-label="CRM view">
+                                <button onClick={() => setViewMode('board')} className={`flex h-8 w-8 items-center justify-center rounded-md ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`} aria-label="Board view" title="Board view"><KanbanIcon size={14} /></button>
+                                <button onClick={() => setViewMode('table')} className={`flex h-8 w-8 items-center justify-center rounded-md ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`} aria-label="Table view" title="Table view"><TableIcon size={14} /></button>
                             </div>
-
-                            {/* Smart Filter */}
-                            <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1">
-                                <Filter size={12} className="text-slate-500" />
-                                <select
-                                    className="bg-transparent text-xs text-white border-none focus:ring-0 cursor-pointer outline-none min-w-[120px]"
-                                    value={selectedInterestFilter}
-                                    onChange={e => setSelectedInterestFilter(e.target.value)}
-                                >
-                                    <option value="">All Interests</option>
-                                    {programs.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                    <option value="Holiday Camp">Holiday Camp</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            {/* Quick Add Placeholder - to be enhanced */}
-                            <button onClick={handleExport} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 border border-slate-700"><Download size={14} /> Export</button>
-                            <button onClick={() => setIsLeadModalOpen(true)} className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><Plus size={16} /> Quick Add Lead</button>
-                        </div>
+                        </AtlasToolbar>
 
                         {/* TABLE VIEW */}
                         {viewMode === 'table' ? (
-                            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex-1 flex flex-col min-h-0 mt-4">
+                            <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-900">
                                 <div className="overflow-auto custom-scrollbar flex-1">
                                     <table className="w-full text-left border-collapse">
                                         <thead className="bg-slate-950 text-xs uppercase text-slate-500 font-bold sticky top-0 z-10">
@@ -440,14 +676,12 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
                                             {filteredLeadsOnly.map((contact, idx) => (
-                                                <tr key={`${contact.id}-${idx}`} className="hover:bg-slate-800/50 transition-colors cursor-pointer group" onClick={() => setSelectedLeadForProfile(contact)}>
+                                                <tr key={`${contact.id}-${idx}`} className="cursor-pointer transition-colors hover:bg-slate-800/50" onClick={() => { setProfileInitialAction(null); setSelectedLeadForProfile(contact); }}>
                                                     <td className="p-4 font-bold text-white">{contact.name}</td>
                                                     <td className="p-4 text-sm text-slate-300">{contact.parentName}</td>
                                                     <td className="p-4 text-sm text-slate-400">{contact.phone}</td>
                                                     <td className="p-4">
-                                                        <span className={`text-xs px-2 py-1 rounded ${contact.status === 'converted' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-800 text-slate-400'}`}>
-                                                            {contact.status}
-                                                        </span>
+                                                        <select value={contact.status} onClick={event => event.stopPropagation()} onChange={event => void handleUpdateLeadStatus(contact.id, event.target.value as Lead['status'])} disabled={!canCreateMarketing} className="h-9 rounded-lg border border-white/10 bg-slate-950 px-2 text-xs font-bold capitalize text-slate-300 outline-none focus:border-teal-400 disabled:opacity-60">{LEAD_STAGES.map(stage => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</select>
                                                     </td>
                                                     <td className="p-4">
                                                         <div className="flex flex-wrap gap-1">
@@ -457,10 +691,11 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                                         </div>
                                                     </td>
                                                     <td className="p-4 text-right">
-                                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteItem('leads', contact.id); }} className="p-2 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14} /></button>
+                                                        <button onClick={(e) => { e.stopPropagation(); void handleDeleteItem('leads', contact.id); }} disabled={!canCreateMarketing} className="rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${contact.name}`}><Trash2 size={14} /></button>
                                                     </td>
                                                 </tr>
                                             ))}
+                                            {filteredLeadsOnly.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-sm text-slate-500">No leads match the current search and interest filter.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>
@@ -469,46 +704,45 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                             /* KANBAN VIEW */
                             <div className="flex-1 flex flex-col min-h-0 min-w-0 mt-4">
                                 {/* Mobile Column Selector */}
-                                <div className="md:hidden flex overflow-x-auto gap-2 mb-4 pb-2 border-b border-slate-800 whitespace-nowrap">
-                                    {['new', 'contacted', 'workshop_booked', 'demo_booked', 'converted'].map(status => (
+                                <div className="mb-3 flex gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-2 md:hidden">
+                                    {LEAD_STAGES.map(stage => (
                                         <button
-                                            key={status}
-                                            onClick={() => setMobileKanbanColumn(status as any)}
-                                            className={`px-3 py-1.5 rounded-full text-xs font-bold capitalize transition-colors ${mobileKanbanColumn === status ? 'bg-purple-600 text-white' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
+                                            key={stage.id}
+                                            onClick={() => setMobileKanbanColumn(stage.id)}
+                                            className={`h-9 rounded-lg px-3 text-xs font-bold transition-colors ${mobileKanbanColumn === stage.id ? 'bg-teal-500 text-slate-950' : 'border border-white/10 bg-slate-900 text-slate-500'}`}
                                         >
-                                            {status.replace('_', ' ')}
+                                            {stage.label} ({filteredLeadsOnly.filter(lead => lead.status === stage.id).length})
                                         </button>
                                     ))}
                                 </div>
 
                                 <div className="flex-1 overflow-x-auto pb-4">
-                                    <div className="flex gap-4 md:min-w-[1200px] h-full">
-                                        {['new', 'contacted', 'workshop_booked', 'demo_booked', 'converted'].map(status => (
+                                    <div className="flex h-full gap-3 md:min-w-[1960px]">
+                                        {LEAD_STAGES.map(stage => (
                                             <div
-                                                key={status}
-                                                className={`flex-1 flex-col min-w-[280px] bg-slate-950/50 rounded-xl border border-slate-800 h-full ${
-                                                    // Mobile Logic: Show only selected column, or all on desktop
-                                                    mobileKanbanColumn === status ? 'flex' : 'hidden md:flex'
+                                                key={stage.id}
+                                                className={`h-full min-w-[268px] flex-1 flex-col rounded-lg border border-white/10 bg-slate-950/50 ${
+                                                    mobileKanbanColumn === stage.id ? 'flex' : 'hidden md:flex'
                                                     }`}
                                             >
-                                                <div className={`p-3 font-bold text-xs uppercase tracking-wider border-b border-slate-800 bg-slate-900 rounded-t-xl flex justify-between ${status === 'new' ? 'text-blue-400 border-blue-900/50' : status === 'converted' ? 'text-emerald-400 border-emerald-900/50' : 'text-slate-400'}`}>
-                                                    {status.replace('_', ' ')}
+                                                <div className={`flex justify-between border-b border-white/10 bg-slate-900 p-3 text-xs font-bold uppercase ${stage.tone}`}>
+                                                    {stage.label}
                                                     <span className="bg-slate-950 px-2 rounded text-white">
-                                                        {filteredLeadsOnly.filter(l => (status === 'demo_booked' ? (l.status === 'workshop_booked' || l.status === 'demo_booked') : l.status === status)).length}
+                                                        {filteredLeadsOnly.filter(lead => lead.status === stage.id).length}
                                                     </span>
                                                 </div>
-                                                <div className="p-3 space-y-3 overflow-y-auto custom-scrollbar flex-1">
+                                                <div className="flex-1 space-y-2 overflow-y-auto p-2 custom-scrollbar">
                                                     {filteredLeadsOnly
-                                                        .filter(l => (status === 'demo_booked' ? (l.status === 'workshop_booked' || l.status === 'demo_booked') : l.status === status))
+                                                        .filter(lead => lead.status === stage.id)
                                                         .map(lead => (
-                                                            <div
+                                                            <article
                                                                 key={lead.id}
-                                                                onClick={() => setSelectedLeadForProfile(lead)}
-                                                                className="bg-slate-900 border border-slate-800 p-3 rounded-lg shadow-sm hover:border-blue-500/50 transition-all cursor-pointer group relative"
+                                                                onClick={() => { setProfileInitialAction(null); setSelectedLeadForProfile(lead); }}
+                                                                className="cursor-pointer rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-teal-400/30"
                                                             >
                                                                 <div className="flex justify-between items-start mb-1">
                                                                     <h4 className="font-bold text-white text-sm">{lead.name}</h4>
-                                                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteItem('leads', lead.id); }} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12} /></button>
+                                                                    <button onClick={(e) => { e.stopPropagation(); void handleDeleteItem('leads', lead.id); }} disabled={!canCreateMarketing} className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${lead.name}`}><Trash2 size={12} /></button>
                                                                 </div>
                                                                 <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-2">
                                                                     <Users size={10} /> {lead.parentName}
@@ -526,17 +760,19 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
                                                                             setSelectedLeadForInvite(lead);
+                                                                            setSelectedTemplateForInvite('');
                                                                             setIsInviteModalOpen(true);
                                                                         }}
-                                                                        className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center justify-center gap-1"
+                                                                        disabled={!canCreateMarketing || !cleanPhone(lead.phone)}
+                                                                        className="flex min-h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-slate-800 px-2 text-xs font-bold text-slate-300 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                                                                     >
                                                                         <Send size={10} /> Invite
                                                                     </button>
-                                                                    <button className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs font-medium flex items-center justify-center gap-1"><Phone size={10} /> Call</button>
+                                                                    <button onClick={(event) => { event.stopPropagation(); setProfileInitialAction('call'); setSelectedLeadForProfile(lead); }} disabled={!canCreateMarketing} className="flex min-h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-slate-800 px-2 text-xs font-bold text-slate-300 hover:bg-slate-700 disabled:opacity-40"><Phone size={10} /> Log call</button>
                                                                 </div>
-                                                            </div>
+                                                            </article>
                                                         ))}
-                                                    {filteredLeadsOnly.filter(l => (status === 'demo_booked' ? (l.status === 'workshop_booked' || l.status === 'demo_booked') : l.status === status)).length === 0 && <div className="text-center text-slate-600 text-xs italic py-4">No leads</div>}
+                                                    {filteredLeadsOnly.filter(lead => lead.status === stage.id).length === 0 && <div className="px-3 py-8 text-center text-xs text-slate-600">No leads in this stage.</div>}
                                                 </div>
                                             </div>
                                         ))}
@@ -551,27 +787,17 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {/* UPSELL GROWTH TAB (Retention) */}
             {
                 activeTab === 'upsell' && (
-                    <div className="md:h-full flex flex-col min-h-0 flex-center text-center p-8">
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 max-w-2xl mx-auto">
-                            <TrendingUp size={48} className="mx-auto text-purple-500 mb-4" />
-                            <h3 className="text-2xl font-bold text-white mb-2">Student Growth Engine</h3>
-                            <p className="text-slate-400 mb-6">Launch targeted campaigns to your active students. Promote holiday camps, advanced workshops, or new semester enrollments.</p>
-
-                            <div className="grid grid-cols-2 gap-4 text-left">
-                                <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 cursor-pointer hover:border-purple-500 transition-colors">
-                                    <h4 className="font-bold text-white mb-1">Holiday Camps</h4>
-                                    <p className="text-xs text-slate-500">Target students by age or current program to upsell seasonal camps.</p>
-                                </div>
-                                <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 cursor-pointer hover:border-purple-500 transition-colors">
-                                    <h4 className="font-bold text-white mb-1">Next Level Unlock</h4>
-                                    <p className="text-xs text-slate-500">Auto-target students finishing 'Level 1' programs.</p>
-                                </div>
-                            </div>
-
-
-
-                            <button onClick={() => setIsGrowthWizardOpen(true)} className="mt-6 bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 mx-auto"><Plus size={18} /> Create Growth Campaign</button>
+                    <div className="flex min-h-0 flex-col md:h-full">
+                        <AtlasSectionHeader title="Student growth" description="Build a reviewable follow-up audience from active enrollments without sending messages automatically." icon={TrendingUp} />
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            <button type="button" onClick={() => { setGrowthWizardInitialType('holiday'); setIsGrowthWizardOpen(true); }} disabled={!canCreateMarketing} className="min-h-36 rounded-lg border border-amber-300/20 bg-slate-900 p-4 text-left transition-colors hover:border-amber-300/40 disabled:cursor-not-allowed disabled:opacity-50">
+                                <Calendar size={20} className="text-amber-200" /><h3 className="mt-3 text-base font-bold text-white">Fill seasonal programs</h3><p className="mt-1 text-sm leading-6 text-slate-400">Choose a current program or all active students, then create a deduplicated holiday-camp follow-up pipeline.</p><span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-amber-200">Build audience <ArrowRight size={13} /></span>
+                            </button>
+                            <button type="button" onClick={() => { setGrowthWizardInitialType('next_level'); setIsGrowthWizardOpen(true); }} disabled={!canCreateMarketing} className="min-h-36 rounded-lg border border-teal-400/20 bg-slate-900 p-4 text-left transition-colors hover:border-teal-400/40 disabled:cursor-not-allowed disabled:opacity-50">
+                                <TrendingUp size={20} className="text-teal-300" /><h3 className="mt-3 text-base font-bold text-white">Move students forward</h3><p className="mt-1 text-sm leading-6 text-slate-400">Create next-program opportunities from a selected enrolled cohort and keep follow-up inside the CRM.</p><span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-teal-300">Build audience <ArrowRight size={13} /></span>
+                            </button>
                         </div>
+                        <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-400"><strong className="text-slate-200">Controlled handoff:</strong> growth campaigns create planned campaign and lead records only. They do not message families or purchase ads.</div>
                     </div>
                 )
             }
@@ -582,9 +808,10 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                 selectedLeadForProfile && (
                     <LeadProfileModal
                         isOpen={!!selectedLeadForProfile}
-                        onClose={() => setSelectedLeadForProfile(null)}
-                        lead={selectedLeadForProfile}
-                        onEnroll={() => onEnrollLead && onEnrollLead(selectedLeadForProfile)}
+                        onClose={() => { setSelectedLeadForProfile(null); setProfileInitialAction(null); }}
+                        lead={leads.find(lead => lead.id === selectedLeadForProfile.id) || selectedLeadForProfile}
+                        onEnroll={() => onEnrollLead && onEnrollLead(leads.find(lead => lead.id === selectedLeadForProfile.id) || selectedLeadForProfile)}
+                        initialAction={profileInitialAction}
                     />
                 )
             }
@@ -592,10 +819,12 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {/* Create Post Modal */}
             <Modal isOpen={isPostModalOpen} onClose={() => setIsPostModalOpen(false)} title="Schedule Post">
                 <form onSubmit={handleSavePost} className="space-y-4">
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">This creates an Edufy content task. Publishing remains manual in the selected social platform.</p>
+                    {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Platform</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={postForm.platform} onChange={e => setPostForm({ ...postForm, platform: e.target.value as any })}><option value="instagram">Instagram</option><option value="facebook">Facebook</option><option value="linkedin">LinkedIn</option><option value="tiktok">TikTok</option></select></div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Content / Caption</label><textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24" value={postForm.content} onChange={e => setPostForm({ ...postForm, content: e.target.value })} /></div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Planned Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={postForm.date} onChange={e => setPostForm({ ...postForm, date: e.target.value })} /></div>
-                    <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold">Create Task</button>
+                    <button type="submit" disabled={pendingAction === 'post-create'} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50"><Plus size={16} /> {pendingAction === 'post-create' ? 'Creating...' : 'Create task'}</button>
                 </form>
             </Modal>
 
@@ -603,14 +832,16 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             <Modal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} title="Submit Work for Review">
                 <div className="space-y-4">
                     <p className="text-sm text-slate-400">Please provide a link to the creative assets (Google Drive, Canva, Dropbox).</p>
+                    {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Asset URL</label><input className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={submissionLink} onChange={e => setSubmissionLink(e.target.value)} placeholder="https://..." /></div>
-                    <button onClick={handleSubmitWork} disabled={!submissionLink} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold disabled:opacity-50 disabled:cursor-not-allowed">Submit for Review</button>
+                    <button onClick={handleSubmitWork} disabled={!submissionLink || pendingAction === 'post-submit'} className="h-10 w-full rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-50">{pendingAction === 'post-submit' ? 'Submitting...' : 'Submit for review'}</button>
                 </div>
             </Modal>
 
             {/* Admin Review Modal */}
             <Modal isOpen={isReviewModalOpen} onClose={() => setIsReviewModalOpen(false)} title="Review Content">
                 <div className="space-y-4">
+                    {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
                     <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
                         <h4 className="text-sm font-bold text-white mb-2">Submission</h4>
                         <p className="text-xs text-slate-400 mb-2">{selectedPost?.content}</p>
@@ -620,8 +851,8 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <button onClick={handleApprovePost} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center justify-center gap-2"><CheckCircle2 size={16} /> Approve & Publish</button>
-                        <button onClick={() => { if (!feedback) alert("Enter feedback first"); else handleRejectPost(); }} className="py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold flex items-center justify-center gap-2"><AlertCircle size={16} /> Reject</button>
+                        <button onClick={handleApprovePost} disabled={pendingAction !== null} className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-3 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50"><CheckCircle2 size={16} /> {pendingAction === 'post-approve' ? 'Approving...' : 'Approve'}</button>
+                        <button onClick={handleRejectPost} disabled={pendingAction !== null} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 text-sm font-bold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><AlertCircle size={16} /> {pendingAction === 'post-reject' ? 'Returning...' : 'Request revision'}</button>
                     </div>
                     <div>
                         <label className="block text-xs font-medium text-slate-400 mb-1">Feedback (Required for rejection)</label>
@@ -633,7 +864,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {/* INVITE MODAL */}
             <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Invite to Workshop">
                 <div className="space-y-4">
-                    <p className="text-sm text-slate-400">Select a workshop template to generate a personalized invitation for <strong>{selectedLeadForInvite?.name}</strong>.</p>
+                    <p className="text-sm text-slate-400">Choose an active workshop to prepare a personalized booking message for <strong>{selectedLeadForInvite?.name}</strong>.</p>
 
                     <div>
                         <label className="block text-xs font-medium text-slate-400 mb-1">Workshop Template</label>
@@ -643,29 +874,30 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                             onChange={e => setSelectedTemplateForInvite(e.target.value)}
                         >
                             <option value="">Select a workshop...</option>
-                            {workshopTemplates.filter(t => t.isActive).map(t => (
+                            {workshopTemplates.filter(t => t.isActive && t.organizationId === orgId && t.shareableSlug).map(t => (
                                 <option key={t.id} value={t.id}>{t.title} ({t.duration} min)</option>
                             ))}
                         </select>
                     </div>
 
-                    <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 text-xs text-slate-500 italic">
-                        "Hello {selectedLeadForInvite?.parentName}! We noticed {selectedLeadForInvite?.name} is interested in tech..."
+                    <div className="rounded-lg border border-slate-800 bg-slate-950 p-4 text-xs leading-5 text-slate-500">
+                        Edufy will copy a message with the public booking link and open WhatsApp. It will not send the message automatically.
                     </div>
+                    {workshopTemplates.filter(template => template.isActive && template.organizationId === orgId && template.shareableSlug).length === 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">No active workshop with a public booking link is available. Create or activate one in Workshops first.</div>}
 
                     <button
                         onClick={handleGenerateInvite}
-                        disabled={!selectedTemplateForInvite}
-                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                        disabled={!selectedTemplateForInvite || !canCreateMarketing || !cleanPhone(selectedLeadForInvite?.phone)}
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        <Send size={16} /> Generate Link & Open WhatsApp
+                        <Send size={16} /> Prepare in WhatsApp
                     </button>
                 </div>
             </Modal>
 
-            {/* Other Modals (Campaign, Lead) - same as before... */}
-            <Modal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} title="New Campaign">
+            <Modal isOpen={isCampaignModalOpen} onClose={() => { setIsCampaignModalOpen(false); setEditingCampaignId(null); }} title={editingCampaignId ? 'Edit campaign' : 'New campaign'}>
                 <form onSubmit={handleSaveCampaign} className="space-y-4">
+                    {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Campaign Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.name} onChange={e => setCampaignForm({ ...campaignForm, name: e.target.value })} /></div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs font-medium text-slate-400 mb-1">Budget</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.budget} onChange={e => setCampaignForm({ ...campaignForm, budget: Number(e.target.value) })} /></div>
@@ -676,24 +908,26 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                         <div><label className="block text-xs font-medium text-slate-400 mb-1">End Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.endDate} onChange={e => setCampaignForm({ ...campaignForm, endDate: e.target.value })} /></div>
                     </div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Goals</label><input className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.goals} onChange={e => setCampaignForm({ ...campaignForm, goals: e.target.value })} placeholder="e.g. 20 Enrollments" /></div>
-                    <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold">Create Campaign</button>
+                    <button type="submit" disabled={pendingAction === 'campaign-create'} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50">{editingCampaignId ? <Pencil size={16} /> : <Plus size={16} />} {pendingAction === 'campaign-create' ? 'Saving...' : editingCampaignId ? 'Save campaign' : 'Create campaign'}</button>
                 </form>
             </Modal>
 
             <Modal isOpen={isLeadModalOpen} onClose={() => setIsLeadModalOpen(false)} title="Add New Lead">
                 <form onSubmit={handleSaveLead} className="space-y-4">
+                    {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Child Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.name} onChange={e => setLeadForm({ ...leadForm, name: e.target.value })} /></div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Parent Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.parentName} onChange={e => setLeadForm({ ...leadForm, parentName: e.target.value })} /></div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs font-medium text-slate-400 mb-1">Phone</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.phone} onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })} /></div>
                         <div><label className="block text-xs font-medium text-slate-400 mb-1">Source</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.source} onChange={e => setLeadForm({ ...leadForm, source: e.target.value })}><option>Facebook</option><option>Instagram</option><option>Google</option><option>Walk-in</option><option>Referral</option></select></div>
                     </div>
-                    <button type="submit" className="w-full py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-bold">Add Lead</button>
+                    <div><label className="mb-1 block text-xs font-medium text-slate-400">Email (optional)</label><input type="email" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white" value={leadForm.email || ''} onChange={event => setLeadForm({ ...leadForm, email: event.target.value })} /></div>
+                    <button type="submit" disabled={pendingAction === 'lead-create'} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50"><Plus size={16} /> {pendingAction === 'lead-create' ? 'Adding...' : 'Add lead'}</button>
                 </form>
             </Modal>
 
 
-            <GrowthWizardModal isOpen={isGrowthWizardOpen} onClose={() => setIsGrowthWizardOpen(false)} />
+            <GrowthWizardModal isOpen={isGrowthWizardOpen} onClose={() => setIsGrowthWizardOpen(false)} initialCampaignType={growthWizardInitialType} />
 
             {/* Campaign Kit Modal */}
             {
@@ -701,7 +935,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                     <CampaignKitModal
                         isOpen={isKitModalOpen}
                         onClose={() => setIsKitModalOpen(false)}
-                        campaign={selectedCampaignForKit}
+                        campaign={campaigns.find(campaign => campaign.id === selectedCampaignForKit.id) || selectedCampaignForKit}
                     />
                 )
             }

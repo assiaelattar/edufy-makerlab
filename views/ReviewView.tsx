@@ -1,377 +1,184 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, Clock, Eye, AlertCircle, MessageSquare, ChevronRight, Filter, Search, Award, Check, ExternalLink, ArrowLeft, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, ArrowLeft, Award, CheckCircle2, Clock, ExternalLink, Eye, Filter, MessageSquare, Microscope, Search, Trash2, Users, XCircle } from 'lucide-react';
+import { deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { updateDoc, doc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import { db } from '../services/firebase';
-import { STUDIO_THEME, studioClass } from '../utils/studioTheme';
-import { formatDate } from '../utils/helpers';
-import { StudentProject, ProjectStep } from '../types';
 
 const QUICK_FEEDBACKS = [
-    "Great work! 🌟",
-    "Excellent attention to detail.",
-    "Please verify the wiring diagram.",
-    "Can you explain your code comments?",
-    "Image is blurry, please re-upload.",
-    "Concept is good, but implementation needs work."
+    'Great work. The evidence is clear.',
+    'Excellent attention to detail.',
+    'Please verify the wiring diagram.',
+    'Explain the key choices in your code.',
+    'The image is unclear. Please upload another.',
+    'The concept is strong; refine the implementation.'
 ];
 
 export const ReviewView = () => {
     const { studentProjects, students, navigateTo, viewParams } = useAppContext();
     const { userProfile } = useAuth();
     const { confirm, alert } = useConfirm();
-    const isInstructor = userProfile?.role === 'instructor' || userProfile?.role === 'admin';
-
-    // State
     const [filter, setFilter] = useState<'queue' | 'all'>('queue');
     const [search, setSearch] = useState('');
     const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
     const [feedback, setFeedback] = useState('');
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-    // --- Deep Link Logic ---
     useEffect(() => {
-        const pId = viewParams?.projectId;
-        if (pId && studentProjects.find(p => p.id === pId)) {
-            setSelectedProjectId(pId);
-        }
+        const projectId = viewParams?.projectId;
+        if (projectId && studentProjects.some(project => project.id === projectId)) setSelectedProjectId(projectId);
     }, [viewParams, studentProjects]);
 
-    // --- Computed Data ---
+    const pendingProjectCount = useMemo(() => studentProjects.filter(project => project.steps?.some(step => step.status === 'PENDING_REVIEW')).length, [studentProjects]);
+    const pendingStepCount = useMemo(() => studentProjects.reduce((total, project) => total + (project.steps?.filter(step => step.status === 'PENDING_REVIEW').length || 0), 0), [studentProjects]);
+    const reviewedProjectCount = useMemo(() => studentProjects.filter(project => project.steps?.some(step => step.status === 'DONE' || step.status === 'REJECTED')).length, [studentProjects]);
+
     const reviewQueue = useMemo(() => {
-        return studentProjects.filter(p => {
-            if (filter === 'queue') {
-                return p.steps?.some(s => s.status === 'PENDING_REVIEW');
-            }
-            return true;
-        }).filter(p => {
-            const st = students.find(s => s.id === p.studentId);
-            const term = search.toLowerCase();
-            return p.title.toLowerCase().includes(term) || st?.name.toLowerCase().includes(term);
-        }).sort((a, b) => { // Safe sort
-            const dateA = a.updatedAt ? (typeof (a.updatedAt as any).toDate === 'function' ? (a.updatedAt as any).toDate() : new Date(a.updatedAt as any)) : new Date(0);
-            const dateB = b.updatedAt ? (typeof (b.updatedAt as any).toDate === 'function' ? (b.updatedAt as any).toDate() : new Date(b.updatedAt as any)) : new Date(0);
-            return dateB.getTime() - dateA.getTime();
-        });
+        const term = search.trim().toLowerCase();
+        return studentProjects
+            .filter(project => filter === 'all' || project.steps?.some(step => step.status === 'PENDING_REVIEW'))
+            .filter(project => {
+                const student = students.find(item => item.id === project.studentId);
+                return !term || project.title.toLowerCase().includes(term) || student?.name.toLowerCase().includes(term);
+            })
+            .sort((a, b) => {
+                const dateA = a.updatedAt ? (typeof (a.updatedAt as any).toDate === 'function' ? (a.updatedAt as any).toDate() : new Date(a.updatedAt as any)) : new Date(0);
+                const dateB = b.updatedAt ? (typeof (b.updatedAt as any).toDate === 'function' ? (b.updatedAt as any).toDate() : new Date(b.updatedAt as any)) : new Date(0);
+                return dateB.getTime() - dateA.getTime();
+            });
     }, [studentProjects, students, filter, search]);
 
-    const activeProject = useMemo(() => studentProjects.find(p => p.id === selectedProjectId), [selectedProjectId, studentProjects]);
-    const activeStudent = useMemo(() => students.find(s => s.id === activeProject?.studentId), [activeProject, students]);
-
-    const pendingSteps = useMemo(() => {
-        return activeProject?.steps?.filter(s => s.status === 'PENDING_REVIEW') || [];
-    }, [activeProject]);
-
-
-    // --- Actions ---
+    const activeProject = useMemo(() => studentProjects.find(project => project.id === selectedProjectId), [studentProjects, selectedProjectId]);
+    const activeStudent = useMemo(() => students.find(student => student.id === activeProject?.studentId), [students, activeProject]);
+    const pendingSteps = useMemo(() => activeProject?.steps?.filter(step => step.status === 'PENDING_REVIEW') || [], [activeProject]);
 
     const handleApproveStep = async (stepId: string) => {
         if (!db || !activeProject) return;
-
         try {
-            const updatedSteps = activeProject.steps.map(s =>
-                s.id === stepId ? { ...s, status: 'DONE', reviewedBy: userProfile?.uid, reviewedAt: new Date().toISOString() } : s
-            );
-
-            // Notify Student Logic could go here (Cloud Function or client-side write to notifications)
-
-            await updateDoc(doc(db, 'student_projects', activeProject.id), {
-                steps: updatedSteps
-            });
-            // Auto-advance or clear selection if no more steps?
-            // For now, keep selected to show state change
+            const updatedSteps = activeProject.steps.map(step => step.id === stepId ? { ...step, status: 'DONE', reviewedBy: userProfile?.uid, reviewedAt: new Date().toISOString() } : step);
+            await updateDoc(doc(db, 'student_projects', activeProject.id), { steps: updatedSteps });
             setFeedback('');
-        } catch (e) {
-            console.error(e);
-            alert("Error", "Error approving step", "danger");
+        } catch (error) {
+            console.error(error);
+            alert('Review not saved', 'The approval could not be saved. Try again.', 'danger');
         }
     };
 
     const handleRejectStep = async (stepId: string) => {
         if (!db || !activeProject) return;
-        if (!feedback) {
-            alert("Feedback Required", "Please provide feedback for rejection.", "warning");
+        if (!feedback.trim()) {
+            alert('Feedback required', 'Add a clear next step before requesting revisions.', 'warning');
             return;
         }
-
         try {
-            const updatedSteps = activeProject.steps.map(s =>
-                s.id === stepId ? { ...s, status: 'REJECTED', reviewNotes: feedback, reviewedBy: userProfile?.uid, reviewedAt: new Date().toISOString() } : s
-            );
-
-            await updateDoc(doc(db, 'student_projects', activeProject.id), {
-                steps: updatedSteps
-            });
+            const updatedSteps = activeProject.steps.map(step => step.id === stepId ? { ...step, status: 'REJECTED', reviewNotes: feedback, reviewedBy: userProfile?.uid, reviewedAt: new Date().toISOString() } : step);
+            await updateDoc(doc(db, 'student_projects', activeProject.id), { steps: updatedSteps });
             setFeedback('');
-        } catch (e) {
-            console.error(e);
-            alert("Error", "Error rejecting step", "danger");
+        } catch (error) {
+            console.error(error);
+            alert('Review not saved', 'The revision request could not be saved. Try again.', 'danger');
         }
     };
 
     const handleDeleteProject = async () => {
         if (!db || !activeProject) return;
-        if (!await confirm({ title: "Delete Project?", message: "Are you sure you want to DELETE this project? This cannot be undone.", variant: "danger", confirmText: "Delete Forever" })) return;
-
+        const approved = await confirm({ title: 'Delete project?', message: 'This removes the project and its review history permanently.', variant: 'danger', confirmText: 'Delete project' });
+        if (!approved) return;
         try {
             await deleteDoc(doc(db, 'student_projects', activeProject.id));
-            alert("Success", "Project deleted.", "success");
+            alert('Project deleted', 'The project has been removed.', 'success');
             setSelectedProjectId(null);
-        } catch (e) {
-            console.error(e);
-            alert("Error", "Error deleting project.", "danger");
+        } catch (error) {
+            console.error(error);
+            alert('Project not deleted', 'The project could not be removed. Try again.', 'danger');
         }
     };
 
     return (
-        <div className="h-full relative isolate">
-            <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-right-4 pb-24 md:pb-8">
+        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+            <AtlasCommandHeader
+                eyebrow="Coaching workspace"
+                title="Review center"
+                description="Move each learner forward with evidence-based approval and specific revision guidance."
+                icon={Microscope}
+                badges={<span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold text-amber-200">{pendingStepCount} steps waiting</span>}
+                actions={<AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('dashboard')}>Dashboard</AtlasActionButton>}
+            />
 
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-center gap-4 shrink-0">
-                    <div className="flex items-center gap-4">
-                        <button onClick={() => navigateTo('dashboard')} className="p-2 bg-white rounded-xl shadow-sm hover:bg-slate-50 text-slate-500">
-                            <ArrowLeft size={20} />
-                        </button>
-                        <div>
-                            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                                <CheckCircle2 size={32} className="text-emerald-500" />
-                                Review Center
-                            </h2>
-                            <p className="text-slate-500 text-sm font-medium">Verify proofs & grade submissions.</p>
-                        </div>
-                    </div>
-                    <div className="flex bg-white p-1.5 rounded-xl shadow-sm border border-slate-100">
-                        <button onClick={() => setFilter('queue')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filter === 'queue' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
-                            <Clock size={16} /> Pending Queue
-                        </button>
-                        <button onClick={() => setFilter('all')} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filter === 'all' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
-                            <Filter size={16} /> All Projects
-                        </button>
-                    </div>
-                </div>
-
-                {/* Content Split */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
-
-                    {/* LEFT LIST (4 Cols) */}
-                    <div className="lg:col-span-4 flex flex-col gap-4 overflow-hidden bg-white/50 rounded-[2rem] border border-slate-200/50 p-4 backdrop-blur-sm">
-                        {/* Search */}
-                        <div className="relative shrink-0">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input
-                                className="w-full bg-white border-2 border-slate-100 rounded-xl py-3 pl-10 pr-4 text-sm font-medium focus:border-indigo-500 outline-none transition-colors"
-                                placeholder="Search student or project..."
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-                            {reviewQueue.length === 0 ? (
-                                <div className="text-center py-20 flex flex-col items-center justify-center opacity-50">
-                                    <Award size={48} className="text-slate-300 mb-2" />
-                                    <p className="text-slate-500 font-bold">All caught up!</p>
-                                </div>
-                            ) : (
-                                reviewQueue.map(p => {
-                                    const st = students.find(s => s.id === p.studentId);
-                                    const pendingCount = p.steps?.filter(s => s.status === 'PENDING_REVIEW').length || 0;
-                                    const isSelected = selectedProjectId === p.id;
-
-                                    return (
-                                        <div
-                                            key={p.id}
-                                            onClick={() => setSelectedProjectId(p.id)}
-                                            className={`group p-4 rounded-2xl border-2 cursor-pointer transition-all relative overflow-hidden ${isSelected ? 'bg-white border-indigo-500 shadow-md scale-[1.02]' : 'bg-white border-transparent hover:border-indigo-200 hover:shadow-sm'}`}
-                                        >
-                                            {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-indigo-500"></div>}
-                                            <div className="flex justify-between items-start mb-2 pl-2">
-                                                <span className="font-ex-bold text-slate-700 clamp-1 leading-tight">{p.title}</span>
-                                                {pendingCount > 0 && <span className="bg-amber-100 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse">{pendingCount}</span>}
-                                            </div>
-                                            <div className="flex items-center gap-2 pl-2">
-                                                <div className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 text-xs font-bold flex items-center justify-center">
-                                                    {st?.name.charAt(0)}
-                                                </div>
-                                                <p className="text-xs text-slate-500 font-bold">{st?.name || 'Unknown'}</p>
-                                            </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </div>
-
-                    {/* RIGHT DETAIL (8 Cols) */}
-                    <div className="lg:col-span-8 bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-xl shadow-slate-200/50 flex flex-col overflow-hidden relative z-10">
-                        {activeProject ? (
-                            <div className="flex flex-col h-full overflow-y-auto custom-scrollbar">
-                                {/* Project Header */}
-                                <div className="flex items-center gap-5 mb-8 pb-6 border-b border-slate-100 justify-between">
-                                    <div className="flex items-center gap-5">
-                                        <div className="w-20 h-20 rounded-2xl bg-slate-100 overflow-hidden shrink-0 border-2 border-slate-200 shadow-inner">
-                                            {activeProject.mediaUrls?.[0] ? <img src={activeProject.mediaUrls[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-3xl">🏗️</div>}
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h2 className="text-2xl font-black text-slate-800 tracking-tight">{activeProject.title}</h2>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${activeProject.status === 'published' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
-                                                    {activeProject.status}
-                                                </span>
-                                            </div>
-                                            <p className="text-slate-500 font-medium flex items-center gap-2">
-                                                Author: <span className="font-bold text-slate-700">{activeStudent?.name}</span>
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={handleDeleteProject}
-                                        className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 hover:text-red-600 transition-colors"
-                                        title="Delete Project"
-                                    >
-                                        <Trash2 size={20} />
-                                    </button>
-                                </div>
-
-                                {/* PENDING SUBMISSIONS */}
-                                {pendingSteps.length > 0 ? (
-                                    <div className="space-y-8 pb-10">
-                                        {pendingSteps.map(step => (
-                                            <div key={step.id} className="bg-amber-50 rounded-[2rem] p-1 border border-amber-100/50 shadow-sm animate-in fade-in slide-in-from-bottom-4">
-                                                <div className="bg-white rounded-[1.8rem] p-6 border border-amber-100">
-                                                    <div className="flex justify-between items-center mb-6">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center">
-                                                                <Eye size={20} />
-                                                            </div>
-                                                            <div>
-                                                                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Reviewing Step</div>
-                                                                <div className="font-black text-slate-800 text-lg">{step.title}</div>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-                                                            Submitted {step.reviewedAt ? new Date(step.reviewedAt as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now'}
-                                                        </span>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                                        {/* Evidence */}
-                                                        <div className="space-y-2">
-                                                            <p className="text-xs font-bold text-slate-400 uppercase ml-1">Evidence Provided</p>
-                                                            {step.evidence ? (
-                                                                <div className="rounded-2xl overflow-hidden border-2 border-slate-100 bg-slate-50 group relative">
-                                                                    <img src={step.evidence.startsWith('http') ? step.evidence : `data:image/png;base64,${step.evidence}`} className="w-full h-auto max-h-64 object-contain" />
-                                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                                        <button
-                                                                            onClick={() => setPreviewImage(step.evidence?.startsWith('http') ? step.evidence : `data:image/png;base64,${step.evidence}`)}
-                                                                            className="px-4 py-2 bg-white rounded-xl font-bold text-sm transform scale-95 group-hover:scale-100 transition-transform flex items-center gap-2"
-                                                                        >
-                                                                            <ExternalLink size={14} /> View Full Size
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="h-40 flex flex-col items-center justify-center bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 gap-2">
-                                                                    <AlertCircle size={24} />
-                                                                    <span className="font-bold text-sm">No visual evidence</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {/* Student Notes */}
-                                                        <div className="flex flex-col space-y-2">
-                                                            <p className="text-xs font-bold text-slate-400 uppercase ml-1">Student Reflection</p>
-                                                            <div className="flex-1 bg-indigo-50/50 p-4 rounded-2xl border-2 border-indigo-50 text-slate-600 font-medium italic relative">
-                                                                <MessageSquare size={16} className="absolute top-4 right-4 text-indigo-200" />
-                                                                "{step.note || 'No notes provided by the student.'}"
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Action Area */}
-                                                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-
-                                                        {/* Quick Chips */}
-                                                        <div className="flex flex-wrap gap-2 mb-3">
-                                                            {QUICK_FEEDBACKS.map(msg => (
-                                                                <button
-                                                                    key={msg}
-                                                                    onClick={() => setFeedback(prev => prev ? prev + " " + msg : msg)}
-                                                                    className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
-                                                                >
-                                                                    {msg}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-
-                                                        <div className="mb-4">
-                                                            <textarea
-                                                                className="w-full p-4 bg-white rounded-xl border-2 border-slate-200 text-sm font-medium focus:border-indigo-500 outline-none min-h-[100px] transition-all"
-                                                                placeholder="Write constructive feedback here (Required for Rejection)..."
-                                                                value={feedback}
-                                                                onChange={e => setFeedback(e.target.value)}
-                                                            />
-                                                        </div>
-                                                        <div className="flex gap-4">
-                                                            <button
-                                                                onClick={() => handleRejectStep(step.id)}
-                                                                className="flex-1 py-3.5 bg-white border-2 border-red-100 text-red-600 font-bold rounded-xl hover:bg-red-50 hover:border-red-200 transition-all flex items-center justify-center gap-2"
-                                                            >
-                                                                <XCircle size={20} /> Request Revisions
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleApproveStep(step.id)}
-                                                                className="flex-[2] py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all flex items-center justify-center gap-2 transform active:scale-95"
-                                                            >
-                                                                <CheckCircle2 size={20} /> Approve & Continue
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-16 bg-gradient-to-b from-slate-50 to-white rounded-[2rem] border-2 border-dashed border-slate-200">
-                                        <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                            <Award size={40} className="text-emerald-600" />
-                                        </div>
-                                        <h3 className="text-xl font-black text-slate-800 mb-2">All Clear!</h3>
-                                        <p className="text-slate-500 font-medium max-w-xs mx-auto mb-6">This project has no pending reviews. You're mostly just supervising now.</p>
-                                        <button onClick={() => setFilter('queue')} className="text-indigo-600 font-bold hover:underline">Back to Queue</button>
-                                    </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="flex-1 flex flex-col items-center justify-center text-slate-300">
-                                <div className="w-32 h-32 bg-slate-50 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                                    <Clock size={48} className="opacity-50" />
-                                </div>
-                                <p className="font-bold text-xl text-slate-400">Select a project to review</p>
-                                <p className="text-sm font-medium opacity-70">Pick from the queue on the left</p>
-                            </div>
-                        )}
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <AtlasSignalCard label="Review queue" value={pendingProjectCount} detail="Projects needing attention" icon={Clock} tone={pendingProjectCount > 0 ? 'amber' : 'emerald'} onClick={() => setFilter('queue')} />
+                <AtlasSignalCard label="Pending steps" value={pendingStepCount} detail="Evidence awaiting a decision" icon={Eye} tone="teal" onClick={() => setFilter('queue')} />
+                <AtlasSignalCard label="Reviewed projects" value={reviewedProjectCount} detail="With coaching decisions" icon={CheckCircle2} tone="emerald" onClick={() => setFilter('all')} />
             </div>
 
-            {/* Image Preview Modal */}
-            {previewImage && (
-                <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setPreviewImage(null)}>
-                    <button className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors">
-                        <XCircle size={32} />
-                    </button>
-                    <img
-                        src={previewImage}
-                        className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-                        onClick={e => e.stopPropagation()}
-                    />
-                </div>
-            )}
+            <AtlasToolbar
+                leading={<div className="relative w-full sm:max-w-md"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search learner or project" className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950/70 py-2 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/20" /></div>}
+                trailing={<div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-1"><button type="button" onClick={() => setFilter('queue')} className={`min-h-8 rounded-md px-3 text-xs font-bold transition-colors ${filter === 'queue' ? 'bg-teal-400/15 text-teal-200' : 'text-slate-500 hover:text-white'}`}><Clock size={14} className="mr-1.5 inline" />Queue</button><button type="button" onClick={() => setFilter('all')} className={`min-h-8 rounded-md px-3 text-xs font-bold transition-colors ${filter === 'all' ? 'bg-teal-400/15 text-teal-200' : 'text-slate-500 hover:text-white'}`}><Filter size={14} className="mr-1.5 inline" />All projects</button></div>}
+            ><span className="text-xs text-slate-500">{reviewQueue.length} visible</span></AtlasToolbar>
 
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-12">
+                <section className="flex min-h-[320px] flex-col rounded-lg border border-white/10 bg-slate-950/45 p-3 lg:col-span-4 lg:min-h-0">
+                    <AtlasSectionHeader title="Projects" description="Oldest context stays visible while you review." icon={Users} meta={<span className="text-xs text-slate-500">{reviewQueue.length}</span>} />
+                    <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                        {reviewQueue.length === 0 ? (
+                            <AtlasEmptyState title={filter === 'queue' ? 'Queue cleared' : 'No projects found'} description={filter === 'queue' ? 'New evidence will appear here when learners submit it.' : 'Try another learner or project name.'} icon={Award} action={filter === 'all' ? <AtlasActionButton onClick={() => setSearch('')}>Clear search</AtlasActionButton> : undefined} />
+                        ) : reviewQueue.map(project => {
+                            const student = students.find(item => item.id === project.studentId);
+                            const pendingCount = project.steps?.filter(step => step.status === 'PENDING_REVIEW').length || 0;
+                            const selected = selectedProjectId === project.id;
+                            return (
+                                <button type="button" key={project.id} onClick={() => { setSelectedProjectId(project.id); setFeedback(''); }} className={`w-full rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${selected ? 'border-teal-300/35 bg-teal-400/10' : 'border-white/[0.07] bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.04]'}`}>
+                                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="truncate text-sm font-black text-white">{project.title}</div><div className="mt-1 flex items-center gap-2 text-xs text-slate-500"><span className="flex h-5 w-5 items-center justify-center rounded-md bg-white/[0.05] font-black text-slate-300">{student?.name.charAt(0) || '?'}</span><span className="truncate">{student?.name || 'Unknown learner'}</span></div></div>{pendingCount > 0 && <span className="shrink-0 rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-black text-amber-200">{pendingCount} waiting</span>}</div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </section>
+
+                <section className="min-h-[460px] overflow-hidden rounded-lg border border-white/10 bg-slate-950/45 p-4 lg:col-span-8 lg:min-h-0">
+                    {!activeProject ? (
+                        <AtlasEmptyState title="Choose a project" description="Select a learner submission to inspect evidence and leave coaching feedback." icon={Microscope} />
+                    ) : (
+                        <div className="flex h-full flex-col overflow-y-auto custom-scrollbar">
+                            <AtlasSectionHeader
+                                title={activeProject.title}
+                                description={`Learner: ${activeStudent?.name || 'Unknown learner'}`}
+                                icon={Eye}
+                                meta={<span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${activeProject.status === 'published' ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>{activeProject.status}</span>}
+                                actions={<button type="button" onClick={handleDeleteProject} className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50" title="Delete project" aria-label="Delete project"><Trash2 size={17} /></button>}
+                            />
+
+                            {pendingSteps.length === 0 ? (
+                                <div className="mt-4"><AtlasEmptyState title="This project is clear" description="There are no pending steps. Return to the queue for the next learner." icon={CheckCircle2} action={<AtlasActionButton onClick={() => { setFilter('queue'); setSelectedProjectId(null); }}>Return to queue</AtlasActionButton>} /></div>
+                            ) : (
+                                <div className="mt-4 space-y-4 pb-2">
+                                    {pendingSteps.map(step => {
+                                        const evidenceUrl = step.evidence ? (step.evidence.startsWith('http') ? step.evidence : `data:image/png;base64,${step.evidence}`) : null;
+                                        return (
+                                            <article key={step.id} className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                                                <div className="flex flex-col gap-2 border-b border-white/[0.07] pb-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="text-[10px] font-black uppercase text-amber-200">Awaiting review</div><h4 className="mt-1 text-base font-black text-white">{step.title}</h4></div><span className="text-xs text-slate-500">Submitted {step.reviewedAt ? new Date(step.reviewedAt as string).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'recently'}</span></div>
+                                                <div className="grid grid-cols-1 gap-4 py-4 md:grid-cols-2">
+                                                    <div><div className="mb-2 text-[10px] font-bold uppercase text-slate-500">Evidence</div>{evidenceUrl ? <button type="button" onClick={() => setPreviewImage(evidenceUrl)} className="group relative block w-full overflow-hidden rounded-lg border border-white/10 bg-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"><img src={evidenceUrl} className="h-52 w-full object-contain" alt={`Evidence for ${step.title}`} /><span className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md bg-slate-950/90 px-2 py-1 text-xs font-bold text-white"><ExternalLink size={13} />Open</span></button> : <AtlasEmptyState title="No visual evidence" description="Use the learner reflection and request evidence if needed." icon={AlertCircle} />}</div>
+                                                    <div><div className="mb-2 text-[10px] font-bold uppercase text-slate-500">Learner reflection</div><div className="min-h-[208px] rounded-lg border border-sky-300/10 bg-sky-400/[0.04] p-4 text-sm leading-6 text-slate-300"><MessageSquare size={16} className="mb-3 text-sky-300" />{step.note || 'No reflection was provided.'}</div></div>
+                                                </div>
+                                                <div className="rounded-lg border border-white/[0.07] bg-slate-950/60 p-3">
+                                                    <div className="mb-3 flex gap-2 overflow-x-auto pb-1 custom-scrollbar">{QUICK_FEEDBACKS.map(message => <button type="button" key={message} onClick={() => setFeedback(current => current ? `${current} ${message}` : message)} className="min-h-8 shrink-0 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs font-bold text-slate-400 transition-colors hover:border-teal-300/30 hover:text-teal-200">{message}</button>)}</div>
+                                                    <label className="block"><span className="mb-2 block text-[10px] font-bold uppercase text-slate-500">Coaching note</span><textarea value={feedback} onChange={event => setFeedback(event.target.value)} placeholder="Name what works and the learner's next concrete step" className="min-h-[96px] w-full resize-y rounded-lg border border-white/10 bg-slate-950/80 p-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/20" /></label>
+                                                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end"><AtlasActionButton icon={XCircle} variant="danger" onClick={() => handleRejectStep(step.id)}>Request revisions</AtlasActionButton><AtlasActionButton icon={CheckCircle2} variant="primary" onClick={() => handleApproveStep(step.id)}>Approve step</AtlasActionButton></div>
+                                                </div>
+                                            </article>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </section>
+            </div>
+
+            {previewImage && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 p-4" onClick={() => setPreviewImage(null)} role="dialog" aria-modal="true" aria-label="Evidence preview"><button type="button" onClick={() => setPreviewImage(null)} className="absolute right-4 top-4 rounded-lg p-2 text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Close preview"><XCircle size={28} /></button><img src={previewImage} className="max-h-full max-w-full rounded-lg object-contain" onClick={event => event.stopPropagation()} alt="Submitted evidence preview" /></div>}
         </div>
-    )
+    );
 };

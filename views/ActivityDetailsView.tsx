@@ -1,15 +1,24 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRightLeft, Printer, CalendarCheck, Phone, User, Clock, CheckCircle2, AlertCircle, Building, Briefcase, ArrowRight, Loader2, ImageIcon, Eye, Trash2, Pencil, XCircle, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ArrowRightLeft, Printer, CalendarCheck, Phone, User, Clock, CheckCircle2, AlertCircle, Building, Briefcase, ArrowRight, ImageIcon, Eye, Trash2, Pencil, XCircle, Receipt, BookOpen, WalletCards, ExternalLink } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { formatCurrency, formatDate, generateReceipt } from '../utils/helpers';
 import { updateDoc, doc, deleteDoc, increment } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Payment } from '../types';
 import { Modal } from '../components/Modal';
+import { useConfirm } from '../context/ConfirmContext';
+import {
+    AtlasActionButton,
+    AtlasCommandHeader,
+    AtlasEmptyState,
+    AtlasSectionHeader,
+    AtlasSignalCard
+} from '../components/atlas/AtlasSurface';
 
 export const ActivityDetailsView = () => {
     const { viewParams, navigateTo, enrollments, payments, students, settings, bookings, workshopTemplates, workshopSlots } = useAppContext();
+    const { confirm, alert: showAlert } = useConfirm();
     const { activityId } = viewParams;
     
     // Edit Payment State
@@ -17,17 +26,7 @@ export const ActivityDetailsView = () => {
     const [editForm, setEditForm] = useState<Partial<Payment>>({});
     const [showProofModal, setShowProofModal] = useState(false);
 
-    // Confirmation Modal State
-    const [confirmConfig, setConfirmConfig] = useState<{
-        isOpen: boolean;
-        title: string;
-        message: string;
-        type: 'info' | 'danger' | 'warning';
-        action: () => Promise<void>;
-        isLoading?: boolean;
-    }>({ isOpen: false, title: '', message: '', type: 'info', action: async () => {} });
-
-    if (!activityId) return <div>Activity not found</div>;
+    if (!activityId) return <AtlasEmptyState icon={Receipt} title="Activity not found" description="This record is unavailable or the link is incomplete." />;
 
     // Navigation Helper
     const getBackTarget = () => {
@@ -58,7 +57,7 @@ export const ActivityDetailsView = () => {
 
     // --- ACTIONS ---
 
-    const openStatusConfirmation = (payment: Payment, newStatus: Payment['status']) => {
+    const openStatusConfirmation = async (payment: Payment, newStatus: Payment['status']) => {
         let title = "Update Status";
         let message = "Are you sure you want to update the status of this payment?";
         let type: 'info' | 'danger' | 'warning' = 'info';
@@ -76,64 +75,58 @@ export const ActivityDetailsView = () => {
             message = "Mark this check as deposited in the bank? Funds are not yet cleared.";
         }
 
-        setConfirmConfig({
-            isOpen: true,
+        const approved = await confirm({
             title,
             message,
-            type,
-            action: async () => {
-                if (!db) return;
-                try {
-                    const updates: any = { status: newStatus };
-                    if (newStatus === 'check_deposited' && !payment.depositDate) {
-                        updates.depositDate = new Date().toISOString().split('T')[0];
-                    }
-                    await updateDoc(doc(db, 'payments', payment.id), updates);
-                    
-                    // Handle Balance Update - ONLY when funds clear
-                    if ((newStatus === 'paid' || newStatus === 'verified') && payment.status !== 'paid' && payment.status !== 'verified') {
-                        const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
-                        if (enrollment) {
-                            const newPaid = (enrollment.paidAmount || 0) + payment.amount;
-                            const newBalance = enrollment.totalAmount - newPaid;
-                            await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
-                        }
-                    }
-                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
-                } catch (e) {
-                    console.error(e);
-                    alert("Error updating status.");
+            variant: type,
+            confirmText: newStatus === 'check_bounced' ? 'Reject check' : 'Update status'
+        });
+        if (!approved || !db) return;
+
+        try {
+            const updates: any = { status: newStatus };
+            if (newStatus === 'check_deposited' && !payment.depositDate) {
+                updates.depositDate = new Date().toISOString().split('T')[0];
+            }
+            await updateDoc(doc(db, 'payments', payment.id), updates);
+
+            if ((newStatus === 'paid' || newStatus === 'verified') && payment.status !== 'paid' && payment.status !== 'verified') {
+                const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
+                if (enrollment) {
+                    const newPaid = (enrollment.paidAmount || 0) + payment.amount;
+                    const newBalance = enrollment.totalAmount - newPaid;
+                    await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
                 }
             }
-        });
+        } catch (error) {
+            console.error(error);
+            await showAlert('Status was not updated', 'The payment record could not be changed. Try again.', 'danger');
+        }
     };
 
-    const openDeleteConfirmation = (payment: Payment) => {
-        setConfirmConfig({
-            isOpen: true,
+    const openDeleteConfirmation = async (payment: Payment) => {
+        const approved = await confirm({
             title: "Delete Payment Record",
             message: "Are you sure you want to permanently delete this payment? If the payment was already cleared, the student's balance will increase (debt returns).",
-            type: 'danger',
-            action: async () => {
-                if (!db) return;
-                try {
-                    // Recalculate balance for the enrollment based on all remaining payments
-                    const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
-                    if (enrollment) {
-                        const otherPayments = payments.filter(p => p.enrollmentId === payment.enrollmentId && p.id !== payment.id);
-                        const newPaid = otherPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
-                        const newBalance = (enrollment.totalAmount || 0) - newPaid;
-                        await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
-                    }
-                    await deleteDoc(doc(db, 'payments', payment.id));
-                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
-                    navigateTo(backTarget.view, backTarget.params);
-                } catch (err) {
-                    console.error(err);
-                    alert("Failed to delete payment.");
-                }
-            }
+            variant: 'danger',
+            confirmText: 'Delete payment'
         });
+        if (!approved || !db) return;
+
+        try {
+            const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
+            if (enrollment) {
+                const otherPayments = payments.filter(p => p.enrollmentId === payment.enrollmentId && p.id !== payment.id);
+                const newPaid = otherPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
+                const newBalance = (enrollment.totalAmount || 0) - newPaid;
+                await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
+            }
+            await deleteDoc(doc(db, 'payments', payment.id));
+            navigateTo(backTarget.view, backTarget.params);
+        } catch (error) {
+            console.error(error);
+            await showAlert('Payment was not deleted', 'The payment record is still available. Try again.', 'danger');
+        }
     };
 
     const handleEditPayment = async (e: React.FormEvent) => {
@@ -185,7 +178,7 @@ export const ActivityDetailsView = () => {
             setIsEditModalOpen(false);
         } catch(err) {
             console.error(err);
-            alert("Failed to update payment.");
+            await showAlert('Payment was not updated', 'The changes could not be saved. Review the details and try again.', 'danger');
         }
     };
 
@@ -231,26 +224,38 @@ export const ActivityDetailsView = () => {
     // --- CASE 1: WORKSHOP BOOKING ---
     if (activityId.type === 'booking') {
         const booking = bookings.find(b => b.id === activityId.id);
-        if (!booking) return <div className="p-8 text-center text-slate-500">Booking not found.</div>;
+        if (!booking) return <AtlasEmptyState icon={CalendarCheck} title="Booking not found" description="This workshop booking may have been removed." />;
         const template = workshopTemplates.find(t => t.id === booking.workshopTemplateId);
+        const slot = workshopSlots.find(s => s.id === booking.workshopSlotId);
         return (
-            <div className="max-w-2xl mx-auto pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
-               <button onClick={() => navigateTo(backTarget.view, backTarget.params)} className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"><ArrowLeft size={16}/> {backTarget.label}</button>
-               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-                   <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-pink-900/20 to-slate-900 flex justify-between items-start">
-                       <div>
-                           <div className="flex items-center gap-2 mb-1"><CalendarCheck className="text-pink-500" size={20}/><h2 className="text-xl font-bold text-white">Workshop Booking</h2></div>
-                           <p className="text-slate-400 text-sm">For {template?.title}</p>
-                       </div>
-                       <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${booking.status === 'confirmed' ? 'bg-emerald-500 text-emerald-950' : 'bg-slate-700 text-slate-300'}`}>{booking.status}</span>
-                   </div>
-                   <div className="p-6 space-y-6">
-                        <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 grid grid-cols-2 gap-4">
-                             <div><span className="text-slate-500 text-xs uppercase tracking-wider font-bold mb-1 block">Parent</span><div className="font-medium text-white flex items-center gap-2"><User size={14} className="text-blue-400"/> {booking.parentName}</div><div className="text-sm text-slate-400 mt-1 flex items-center gap-2"><Phone size={14} className="text-emerald-400"/> <a href={`tel:${booking.phoneNumber}`} className="hover:text-white">{booking.phoneNumber}</a></div></div>
-                             <div><span className="text-slate-500 text-xs uppercase tracking-wider font-bold mb-1 block">Student</span><div className="font-medium text-white">{booking.kidName}</div><div className="text-sm text-slate-400 mt-1">{booking.kidAge} years old</div></div>
-                        </div>
-                   </div>
-               </div>
+            <div className="mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8">
+                <AtlasCommandHeader
+                    eyebrow="Workshop record"
+                    title={booking.kidName}
+                    description={`Booking for ${template?.title || 'workshop session'}, coordinated with ${booking.parentName}.`}
+                    icon={CalendarCheck}
+                    badges={<span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${booking.status === 'confirmed' || booking.status === 'attended' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-slate-300'}`}>{booking.status.replace('_', ' ')}</span>}
+                    actions={<AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton>}
+                />
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <AtlasSignalCard label="Workshop" value={template?.title || 'Unassigned'} detail="Booked experience" icon={BookOpen} tone="teal" />
+                    <AtlasSignalCard label="Session date" value={slot?.date ? formatDate(slot.date) : 'Not set'} detail={slot ? `${slot.startTime} - ${slot.endTime}` : 'Schedule unavailable'} icon={Clock} tone="blue" />
+                    <AtlasSignalCard label="Learner age" value={`${booking.kidAge} years`} detail={booking.kidInterests || 'No interests recorded'} icon={User} tone="slate" />
+                    <AtlasSignalCard label="Family contact" value={booking.parentName} detail={booking.phoneNumber} icon={Phone} tone="amber" />
+                </div>
+                <section className="space-y-4 rounded-lg border border-white/10 bg-slate-900/55 p-5">
+                    <AtlasSectionHeader
+                        title="Booking details"
+                        description="Family contact, learner context, and the selected workshop schedule."
+                        icon={CalendarCheck}
+                        actions={<a href={`tel:${booking.phoneNumber}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-3.5 py-2 text-sm font-bold text-slate-200 transition-colors hover:bg-white/[0.08]"><Phone size={16}/>Call parent</a>}
+                    />
+                    <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg border border-white/10 bg-slate-950/60 p-4"><dt className="text-[10px] font-bold uppercase text-slate-500">Parent</dt><dd className="mt-1 font-bold text-white">{booking.parentName}</dd><dd className="text-sm text-slate-400">{booking.phoneNumber}</dd></div>
+                        <div className="rounded-lg border border-white/10 bg-slate-950/60 p-4"><dt className="text-[10px] font-bold uppercase text-slate-500">Learner</dt><dd className="mt-1 font-bold text-white">{booking.kidName}</dd><dd className="text-sm text-slate-400">{booking.kidAge} years old</dd></div>
+                        {booking.notes && <div className="rounded-lg border border-white/10 bg-slate-950/60 p-4 sm:col-span-2"><dt className="text-[10px] font-bold uppercase text-slate-500">Notes</dt><dd className="mt-1 text-sm leading-6 text-slate-300">{booking.notes}</dd></div>}
+                    </dl>
+                </section>
             </div>
         );
     } 
@@ -258,15 +263,25 @@ export const ActivityDetailsView = () => {
     // --- CASE 2: ENROLLMENT ---
     else if (activityId.type === 'enrollment') {
         const enrollment = enrollments.find(e => e.id === activityId.id);
-        if (!enrollment) return <div>Enrollment not found</div>;
+        if (!enrollment) return <AtlasEmptyState icon={BookOpen} title="Enrollment not found" description="This enrollment may have been archived or removed." />;
         return (
-           <div className="max-w-3xl mx-auto pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
-               <button onClick={() => navigateTo(backTarget.view, backTarget.params)} className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"><ArrowLeft size={16}/> {backTarget.label}</button>
-               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                   <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-blue-900/20 to-slate-900">
-                       <h2 className="text-xl font-bold text-white mb-1">Enrollment Details</h2>
-                       <p className="text-blue-400 font-medium">{enrollment.studentName}</p>
-                   </div>
+           <div className="mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8">
+               <AtlasCommandHeader
+                   eyebrow="Enrollment record"
+                   title={enrollment.studentName}
+                   description={`${enrollment.programName} · ${enrollment.gradeName} · ${enrollment.groupName}`}
+                   icon={BookOpen}
+                   badges={<span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${enrollment.status === 'active' ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/[0.04] text-slate-300'}`}>{enrollment.status}</span>}
+                   actions={<><AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton><AtlasActionButton icon={ExternalLink} variant="primary" onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })}>Open profile</AtlasActionButton></>}
+               />
+               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                   <AtlasSignalCard label="Total tuition" value={formatCurrency(enrollment.totalAmount || 0)} detail="Enrollment value" icon={WalletCards} tone="blue" />
+                   <AtlasSignalCard label="Paid" value={formatCurrency(enrollment.paidAmount || 0)} detail="Cleared payments" icon={CheckCircle2} tone="emerald" />
+                   <AtlasSignalCard label="Balance due" value={formatCurrency(enrollment.balance || 0)} detail={enrollment.balance > 0 ? 'Family follow-up needed' : 'Account settled'} icon={AlertCircle} tone={enrollment.balance > 0 ? 'amber' : 'teal'} />
+                   <AtlasSignalCard label="Pack" value={enrollment.packName || 'Not set'} detail={enrollment.startDate ? `Started ${formatDate(enrollment.startDate)}` : 'Start date unavailable'} icon={Briefcase} tone="slate" />
+               </div>
+               <section className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+                   <div className="p-5"><AtlasSectionHeader title="Learning placement" description="The program, level, and class attached to this enrollment." icon={BookOpen} /></div>
                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
                        <div className="space-y-4">
                            <div><span className="text-slate-500 text-xs block">Program</span><span className="text-white font-medium">{enrollment.programName}</span></div>
@@ -276,10 +291,7 @@ export const ActivityDetailsView = () => {
                            <div><span className="text-slate-500 text-xs block">Balance</span><span className={`font-bold text-lg ${enrollment.balance > 0 ? 'text-red-400' : 'text-slate-300'}`}>{formatCurrency(enrollment.balance)}</span></div>
                        </div>
                    </div>
-                   <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-end gap-3">
-                        <button onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm transition-colors">View Student Profile</button>
-                   </div>
-               </div>
+               </section>
            </div>
         );
     } 
@@ -287,27 +299,28 @@ export const ActivityDetailsView = () => {
     // --- CASE 3: PAYMENT (Detail View) ---
     else {
         const payment = payments.find(p => p.id === activityId.id);
-        if(!payment) return <div>Payment not found</div>;
+        if(!payment) return <AtlasEmptyState icon={Receipt} title="Payment not found" description="This payment may have been deleted or moved." />;
         const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
         const student = students.find(s => s.id === enrollment?.studentId);
 
         return (
-            <div className="max-w-2xl mx-auto pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4 relative">
-               <button onClick={() => navigateTo(backTarget.view, backTarget.params)} className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"><ArrowLeft size={16}/> {backTarget.label}</button>
-               
-               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
-                    <div className="p-6 border-b border-slate-800 bg-gradient-to-r from-emerald-900/20 to-slate-900 flex justify-between items-start">
-                        <div>
-                            <h2 className="text-xl font-bold text-white mb-1">Payment Details</h2>
-                            <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${['paid','verified'].includes(payment.status) ? 'bg-emerald-500 text-emerald-950' : payment.status === 'check_bounced' ? 'bg-red-500 text-white' : 'bg-amber-500 text-amber-950'}`}>
-                                {payment.status.replace('_', ' ')}
-                            </span>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-3xl font-bold text-white">{formatCurrency(payment.amount)}</div>
-                            <div className="text-slate-500 text-sm">{formatDate(payment.date)}</div>
-                        </div>
-                    </div>
+            <div className="relative mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8">
+               <AtlasCommandHeader
+                   eyebrow="Payment record"
+                   title={formatCurrency(payment.amount)}
+                   description={`Recorded for ${payment.studentName} on ${formatDate(payment.date)}.`}
+                   icon={Receipt}
+                   badges={<span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${['paid','verified'].includes(payment.status) ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 bg-red-400/10 text-red-300' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>{payment.status.replace('_', ' ')}</span>}
+                   actions={<><AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton><AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings)}>Print receipt</AtlasActionButton></>}
+               />
+               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                   <AtlasSignalCard label="Amount" value={formatCurrency(payment.amount)} detail="Recorded payment" icon={WalletCards} tone="teal" />
+                   <AtlasSignalCard label="Method" value={payment.method === 'virement' ? 'Bank transfer' : payment.method} detail="Payment channel" icon={ArrowRightLeft} tone="blue" />
+                   <AtlasSignalCard label="Status" value={payment.status.replace('_', ' ')} detail={['paid','verified'].includes(payment.status) ? 'Funds cleared' : 'Action may be required'} icon={CheckCircle2} tone={['paid','verified'].includes(payment.status) ? 'emerald' : payment.status === 'check_bounced' ? 'red' : 'amber'} />
+                   <AtlasSignalCard label="Linked balance" value={formatCurrency(enrollment?.balance || 0)} detail={enrollment?.programName || 'Enrollment unavailable'} icon={BookOpen} tone="slate" />
+               </div>
+               <section className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+                    <div className="p-5 pb-0"><AtlasSectionHeader title="Payment workflow" description="Review evidence, move the payment through clearance, or correct the record." icon={WalletCards} /></div>
                     <div className="p-6 space-y-6">
                         
                         {/* CHECK LIFECYCLE */}
@@ -389,31 +402,31 @@ export const ActivityDetailsView = () => {
                         
                         {enrollment && <div className="bg-slate-950 p-4 rounded border border-slate-800"><h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Linked Enrollment</h4><div className="text-sm text-white font-medium">{enrollment.programName}</div><div className="text-xs text-slate-500">{enrollment.gradeName} • {enrollment.groupName}</div></div>}
                     </div>
-                    <div className="p-4 bg-slate-950 border-t border-slate-800 flex justify-between items-center gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-slate-950/60 p-4">
                         <div className="flex gap-2">
-                            <button onClick={() => { setEditForm(payment); setIsEditModalOpen(true); }} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition-colors border border-slate-700 flex items-center gap-2"><Pencil size={14}/> Edit</button>
-                            <button onClick={() => openDeleteConfirmation(payment)} className="px-3 py-2 bg-slate-800 hover:bg-red-900/20 text-slate-400 hover:text-red-400 rounded-lg text-sm transition-colors border border-slate-700 hover:border-red-900/50 flex items-center gap-2"><Trash2 size={14}/></button>
+                            <AtlasActionButton icon={Pencil} onClick={() => { setEditForm(payment); setIsEditModalOpen(true); }}>Edit payment</AtlasActionButton>
+                            <AtlasActionButton aria-label="Delete payment" title="Delete payment" icon={Trash2} variant="danger" onClick={() => openDeleteConfirmation(payment)} />
                         </div>
-                        <button onClick={() => generateReceipt(payment, enrollment, student, settings)} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm transition-colors flex items-center gap-2"><Printer size={16}/> Print Receipt</button>
+                        <AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings)}>Print receipt</AtlasActionButton>
                     </div>
-               </div>
+               </section>
 
                {/* Proof Modal */}
                {showProofModal && payment.proofUrl && (
-                   <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setShowProofModal(false)}>
-                       <img src={payment.proofUrl} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="Proof Fullscreen" />
+                   <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4" onClick={() => setShowProofModal(false)} role="dialog" aria-label="Payment proof">
+                       <img src={payment.proofUrl} className="max-h-full max-w-full rounded-lg shadow-2xl" alt="Payment proof" />
                    </div>
                )}
 
                {/* Edit Payment Modal */}
                <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title="Edit Payment Record">
                    <form onSubmit={handleEditPayment} className="space-y-4">
-                        <div><label className="text-xs text-slate-400 block mb-1">Amount</label><input type="number" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: Number(e.target.value)})} /></div>
-                        <div><label className="text-xs text-slate-400 block mb-1">Date</label><input type="date" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-400">Amount</label><input type="number" className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white outline-none focus:border-teal-400/60" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: Number(e.target.value)})} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-400">Date</label><input type="date" className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white outline-none focus:border-teal-400/60" value={editForm.date} onChange={e => setEditForm({...editForm, date: e.target.value})} /></div>
                         <div>
                             <label className="text-xs text-slate-400 block mb-1">Method</label>
                             <select 
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded p-2 text-white" 
+                                className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white outline-none focus:border-teal-400/60"
                                 value={editForm.method} 
                                 onChange={e => setEditForm({...editForm, method: e.target.value as any})}>
                                 <option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option>
@@ -422,49 +435,15 @@ export const ActivityDetailsView = () => {
                         {editForm.method === 'check' && (
                             <>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs text-slate-400 block mb-1">Check No.</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={editForm.checkNumber || ''} onChange={e => setEditForm({...editForm, checkNumber: e.target.value})} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1">Bank</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={editForm.bankName || ''} onChange={e => setEditForm({...editForm, bankName: e.target.value})} /></div>
+                                    <div><label className="mb-1 block text-xs text-slate-400">Check No.</label><input className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white outline-none focus:border-teal-400/60" value={editForm.checkNumber || ''} onChange={e => setEditForm({...editForm, checkNumber: e.target.value})} /></div>
+                                    <div><label className="mb-1 block text-xs text-slate-400">Bank</label><input className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white outline-none focus:border-teal-400/60" value={editForm.bankName || ''} onChange={e => setEditForm({...editForm, bankName: e.target.value})} /></div>
                                 </div>
-                                <div><label className="text-xs text-slate-400 block mb-1">Deposit Date</label><input type="date" className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" value={editForm.depositDate || ''} onChange={e => setEditForm({...editForm, depositDate: e.target.value})} /></div>
+                                <div><label className="mb-1 block text-xs text-slate-400">Deposit date</label><input type="date" className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950 p-2 text-white outline-none focus:border-teal-400/60" value={editForm.depositDate || ''} onChange={e => setEditForm({...editForm, depositDate: e.target.value})} /></div>
                             </>
                         )}
-                        <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold">Save Changes</button>
+                        <AtlasActionButton type="submit" variant="primary" className="w-full">Save changes</AtlasActionButton>
                    </form>
                </Modal>
-
-                {/* Custom Confirmation Modal */}
-                <Modal isOpen={confirmConfig.isOpen} onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))} title={confirmConfig.title} size="md">
-                    <div className="space-y-6">
-                        <div className="flex items-start gap-4">
-                            <div className={`p-3 rounded-full ${confirmConfig.type === 'danger' ? 'bg-red-900/20 text-red-500' : confirmConfig.type === 'warning' ? 'bg-amber-900/20 text-amber-500' : 'bg-blue-900/20 text-blue-500'}`}>
-                                <AlertTriangle size={24}/>
-                            </div>
-                            <div>
-                                <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{confirmConfig.message}</p>
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-3 pt-2">
-                            <button 
-                                onClick={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
-                                className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button 
-                                onClick={async () => {
-                                    setConfirmConfig(prev => ({ ...prev, isLoading: true }));
-                                    await confirmConfig.action();
-                                    setConfirmConfig(prev => ({ ...prev, isLoading: false }));
-                                }}
-                                disabled={confirmConfig.isLoading}
-                                className={`px-5 py-2 rounded-lg text-white text-sm font-bold flex items-center gap-2 shadow-lg transition-all ${confirmConfig.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : confirmConfig.type === 'warning' ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20'}`}
-                            >
-                                {confirmConfig.isLoading && <Loader2 size={16} className="animate-spin"/>}
-                                Confirm
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
             </div>
         );
     }

@@ -13,6 +13,8 @@ interface AuthContextType {
   // SaaS Context
   currentOrganization: Organization | null;
   isSuperAdmin: boolean;
+  isPlatformBootstrapAdmin: boolean;
+  switchOrganization: (organizationId: string) => Promise<boolean>;
 
   loading: boolean;
   roles: RoleDefinition[];
@@ -32,6 +34,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Default Roles if not in DB
 const DEFAULT_ROLES: RoleDefinition[] = [
+  {
+    id: 'super_admin',
+    label: 'Atlas Super Admin',
+    description: 'Platform-level access across tenants, apps, billing, and system settings.',
+    permissions: ['*'],
+    isSystem: true
+  },
+  {
+    id: 'owner',
+    label: 'Organization Owner',
+    description: 'Tenant owner with full access to organization settings, billing, team, and data.',
+    permissions: ['*'],
+    isSystem: true
+  },
   {
     id: 'admin',
     label: 'Administrator',
@@ -130,54 +146,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roleDefinition, setRoleDefinition] = useState<RoleDefinition | null>(null);
   const [roles, setRoles] = useState<RoleDefinition[]>(DEFAULT_ROLES);
   const [loading, setLoading] = useState(true);
+  const [platformBootstrapComplete, setPlatformBootstrapComplete] = useState(false);
 
   // Ref to track demo mode status across closures/effects to prevent auto-logout
   const isDemoMode = useRef(false);
 
-  // 1. Sync Roles from Firestore (or seed if empty)
+  // 1. Merge platform role defaults with organization-specific overrides.
   useEffect(() => {
-    if (!db) return;
-    const firestore = db; // Capture strictly typed reference
+    if (!db || !user || !auth?.currentUser) {
+      setRoles(DEFAULT_ROLES);
+      return;
+    }
+    const firestore = db;
+    let platformRoles = DEFAULT_ROLES;
+    let tenantOverrides: RoleDefinition[] = [];
 
-    const unsubscribe = onSnapshot(collection(firestore, 'roles'), (snap) => {
-      if (snap.empty) {
-        // Seed default roles if empty
-        DEFAULT_ROLES.forEach(role => {
-          setDoc(doc(firestore, 'roles', role.id), role);
-        });
-      } else {
-        const loadedRoles = snap.docs.map(d => d.data() as RoleDefinition);
+    const publishMergedRoles = () => {
+      const baseRoles = DEFAULT_ROLES.map(defaultRole => platformRoles.find(role => role.id === defaultRole.id) || defaultRole);
+      const customRoles = platformRoles.filter(role => !baseRoles.some(baseRole => baseRole.id === role.id));
+      setRoles([...baseRoles, ...customRoles].map(baseRole => tenantOverrides.find(role => role.id === baseRole.id) || baseRole));
+    };
 
-        // Migration & Self-Healing Logic
-        // Check for missing roles OR missing permissions in existing roles
-        DEFAULT_ROLES.forEach(defRole => {
-          const existingRole = loadedRoles.find(r => r.id === defRole.id);
-
-          if (!existingRole) {
-            console.log(`Seeding missing role: ${defRole.id}`);
-            setDoc(doc(firestore, 'roles', defRole.id), defRole);
-          } else {
-            // Check if the existing role is missing any new permissions we added in code
-            // We assume DEFAULT_ROLES contains the "source of truth" for required permissions
-            const missingPerms = defRole.permissions.filter(p => !existingRole.permissions.includes(p));
-
-            if (missingPerms.length > 0) {
-              console.log(`Healing role ${defRole.id}: Adding missing permissions`, missingPerms);
-              // Merge permissions
-              const updatedPerms = Array.from(new Set([...existingRole.permissions, ...defRole.permissions]));
-              updateDoc(doc(firestore, 'roles', defRole.id), {
-                permissions: updatedPerms,
-                description: defRole.description // Keep description updated too
-              });
-            }
-          }
-        });
-
-        setRoles(loadedRoles);
-      }
+    const platformUnsubscribe = onSnapshot(collection(firestore, 'roles'), (snap) => {
+      platformRoles = snap.empty ? DEFAULT_ROLES : snap.docs.map(roleDoc => ({ ...roleDoc.data(), id: roleDoc.id } as RoleDefinition));
+      publishMergedRoles();
+    }, (error) => {
+      console.error('Unable to sync platform role definitions:', error);
+      platformRoles = DEFAULT_ROLES;
+      publishMergedRoles();
     });
-    return () => unsubscribe();
-  }, []);
+
+    const tenantUnsubscribe = currentOrganization?.id
+      ? onSnapshot(collection(firestore, 'organizations', currentOrganization.id, 'roles'), (snap) => {
+          tenantOverrides = snap.docs.map(roleDoc => ({ ...roleDoc.data(), id: roleDoc.id } as RoleDefinition));
+          publishMergedRoles();
+        }, (error) => {
+          console.error('Unable to sync organization role overrides:', error);
+          tenantOverrides = [];
+          publishMergedRoles();
+        })
+      : () => undefined;
+
+    return () => {
+      platformUnsubscribe();
+      tenantUnsubscribe();
+    };
+  }, [currentOrganization?.id, user]);
+
+  useEffect(() => {
+    if (!db || !user) {
+      setPlatformBootstrapComplete(false);
+      return;
+    }
+
+    return onSnapshot(doc(db, 'platformSettings', 'core'), snapshot => {
+      setPlatformBootstrapComplete(snapshot.exists() && snapshot.data().bootstrapComplete === true);
+    }, error => {
+      console.warn('Unable to read Atlas platform bootstrap state.', error);
+      setPlatformBootstrapComplete(false);
+    });
+  }, [user]);
 
   // 2. Handle Auth State Changes
   useEffect(() => {
@@ -333,7 +361,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     setUserProfile(null);
     setRoleDefinition(null);
+    setCurrentOrganization(null);
     if (auth) await firebaseSignOut(auth);
+  };
+
+  const switchOrganization = async (organizationId: string): Promise<boolean> => {
+    if (!db || userProfile?.role !== 'super_admin') return false;
+    const organizationSnapshot = await getDoc(doc(db, 'organizations', organizationId));
+    if (!organizationSnapshot.exists()) return false;
+    setCurrentOrganization({ id: organizationSnapshot.id, ...organizationSnapshot.data() } as Organization);
+    return true;
   };
 
   const loginAsDemo = async () => {
@@ -548,7 +585,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const can = (permission: string): boolean => {
     if (!userProfile || userProfile.status !== 'active') return false;
-    if (userProfile.role === 'admin') return true;
+    if (userProfile.role === 'super_admin' || userProfile.role === 'owner' || userProfile.role === 'admin') return true;
     if (!roleDefinition) return false;
 
     // Wildcard check
@@ -569,12 +606,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userRole = userProfile?.role || null;
   const authError = !userProfile ? 'Profile not found' : userProfile.status !== 'active' ? 'Account inactive' : !roleDefinition ? 'Role not defined' : null;
 
-  const isSuperAdmin = userProfile?.organizationId === 'makerlab-academy' && userProfile?.role === 'admin';
+  const isPlatformBootstrapAdmin = !platformBootstrapComplete
+    && userProfile?.organizationId === 'makerlab-academy'
+    && userProfile?.role === 'admin';
+  const isSuperAdmin = userProfile?.role === 'super_admin' || isPlatformBootstrapAdmin;
 
   return (
     <AuthContext.Provider value={{
       user, userProfile, roleDefinition, loading, roles, signOut, can, loginAsDemo, switchRole, impersonateUser, createSecondaryUser,
-      isAuthorized, authError, userRole, currentOrganization, isSuperAdmin
+      switchOrganization, isAuthorized, authError, userRole, currentOrganization, isSuperAdmin, isPlatformBootstrapAdmin
     }}>
       {children}
     </AuthContext.Provider>

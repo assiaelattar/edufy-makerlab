@@ -1,17 +1,27 @@
 
-import React, { useState, useMemo } from 'react';
-import { TrendingDown, Plus, Filter, Search, DollarSign, PieChart, Trash2, Receipt, CheckCircle2, XCircle, Upload, Image as ImageIcon, Clock, Save, ArrowRight, Settings, CalendarCheck, Repeat, AlertTriangle, CheckSquare, Edit } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { TrendingDown, Plus, Search, DollarSign, PieChart, Trash2, Receipt, CheckCircle2, Upload, Image as ImageIcon, Clock, ArrowRight, Settings, Repeat, Edit, Download, Loader2, Info } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
 import { formatCurrency, formatDate, compressImage } from '../utils/helpers';
-import { addDoc, collection, serverTimestamp, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Expense, ExpenseTemplate } from '../types';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+
+const getRecurringDueDate = (month: string, dayDue?: number) => {
+    const [year, monthNumber] = month.split('-').map(Number);
+    const lastDay = new Date(year, monthNumber, 0).getDate();
+    const dueDay = Math.min(Math.max(Number(dayDue) || 1, 1), lastDay);
+    return `${month}-${String(dueDay).padStart(2, '0')}`;
+};
 
 export const ExpensesView = () => {
     const { expenses, expenseTemplates, payments, settings } = useAppContext();
     const { can, currentOrganization } = useAuth();
+    const { confirm, alert: showAlert } = useConfirm();
     const orgId = currentOrganization?.id || '';
 
     // Dynamic session list derived from real data
@@ -52,6 +62,14 @@ export const ExpensesView = () => {
     // Payment Flow State
     const [payingTemplate, setPayingTemplate] = useState<ExpenseTemplate | null>(null);
     const [paymentProof, setPaymentProof] = useState<string>('');
+    const [isSavingExpense, setIsSavingExpense] = useState(false);
+    const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+    const [isSavingRecurringPayment, setIsSavingRecurringPayment] = useState(false);
+
+    useEffect(() => {
+        if (availableSessions.length === 0 || availableSessions.includes(selectedSession)) return;
+        setSelectedSession(settings.academicYear && availableSessions.includes(settings.academicYear) ? settings.academicYear : availableSessions[0]);
+    }, [availableSessions, selectedSession, settings.academicYear]);
 
     // --- DATA PROCESSING ---
     
@@ -60,6 +78,10 @@ export const ExpensesView = () => {
         if (!selectedMonth) return [];
         
         return expenseTemplates.filter(t => t.recurring).map(template => {
+            if (template.frequency === 'weekly') {
+                return { template, status: 'manual' as const, expense: undefined, dueDate: undefined };
+            }
+            const dueDate = getRecurringDueDate(selectedMonth, template.dayDue);
             // Find if paid this month
             const matchedExpense = expenses.find(e => 
                 e.templateId === template.id && 
@@ -69,8 +91,9 @@ export const ExpensesView = () => {
             
             return {
                 template,
-                status: matchedExpense ? 'paid' : 'due',
-                expense: matchedExpense
+                status: matchedExpense ? 'paid' as const : dueDate > new Date().toISOString().split('T')[0] ? 'scheduled' as const : 'due' as const,
+                expense: matchedExpense,
+                dueDate
             };
         });
     }, [expenseTemplates, expenses, selectedMonth, selectedSession]);
@@ -122,16 +145,80 @@ export const ExpensesView = () => {
         return isNaN(d.getTime()) ? selectedMonth : d.toLocaleString('default', { month: 'long' });
     }, [selectedMonth]);
 
+    const recurringDueCount = recurringStatus.filter(item => item.status === 'due').length;
+    const recurringScheduledCount = recurringStatus.filter(item => item.status === 'scheduled').length;
+    const recurringManualCount = recurringStatus.filter(item => item.status === 'manual').length;
+
+    const requireExpenseWriteAccess = async () => {
+        if (!can('expenses.manage')) {
+            await showAlert('Permission required', 'Your role cannot change expense records or recurring charges.', 'warning');
+            return false;
+        }
+        if (!orgId || currentOrganization?.status !== 'active') {
+            await showAlert('Active organization required', 'Select an active organization before changing the expense ledger.', 'warning');
+            return false;
+        }
+        return true;
+    };
+
+    const requireExactTemplateTenant = async (template: ExpenseTemplate | null | undefined) => {
+        const templateOrganizationId = (template as (ExpenseTemplate & { organizationId?: string }) | null | undefined)?.organizationId;
+        if (templateOrganizationId === orgId) return true;
+        await showAlert('Recurring charge unavailable', 'This template is missing the active tenant ID or belongs to another organization.', 'danger');
+        return false;
+    };
+
+    const requireExactStoredTenant = async (collectionName: 'expenses' | 'expense_templates', id: string, label: string) => {
+        if (!db) return false;
+        try {
+            const snapshot = await getDoc(doc(db, collectionName, id));
+            if (snapshot.exists() && snapshot.data().organizationId === orgId) return true;
+            await showAlert(`${label} unavailable`, `This ${label.toLowerCase()} is missing the active tenant ID, belongs to another organization, or no longer exists.`, 'danger');
+            return false;
+        } catch (error) {
+            console.error(error);
+            await showAlert(`Could not verify ${label.toLowerCase()}`, 'Edufy could not verify tenant ownership. No ledger change was made.', 'danger');
+            return false;
+        }
+    };
+
+    const validateExpense = (draft: Partial<Expense>) => {
+        if (!draft.title?.trim()) return 'Enter an expense title.';
+        if (!draft.beneficiary?.trim()) return 'Enter the beneficiary or supplier.';
+        const amount = Number(draft.amount);
+        if (!Number.isFinite(amount) || amount <= 0) return 'Amount must be greater than zero.';
+        if (!draft.date || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) return 'Choose a valid accounting date.';
+        return null;
+    };
+
+    const getTemplateDueDate = (template: ExpenseTemplate) => {
+        if (!selectedMonth) return new Date().toISOString().split('T')[0];
+        return getRecurringDueDate(selectedMonth, template.dayDue);
+    };
+
     // --- ACTIONS ---
 
-    const handlePayTemplateOpen = (template: ExpenseTemplate) => {
+    const handlePayTemplateOpen = async (template: ExpenseTemplate) => {
+        if (template.frequency === 'weekly') {
+            await showAlert('Weekly schedule needs more detail', 'This template does not store a weekday or number of occurrences. Record each weekly charge from "Record expense" so the ledger is not understated.', 'info');
+            return;
+        }
+        const existingExpense = expenses.find(expense =>
+            expense.templateId === template.id &&
+            expense.session === selectedSession &&
+            (!selectedMonth || expense.date.startsWith(selectedMonth))
+        );
+        if (existingExpense) {
+            await showAlert('Charge already recorded', `${template.title} is already in the ${displayMonthName} ledger. Open that expense to review or edit it.`, 'warning');
+            return;
+        }
         setPayingTemplate(template);
         setExpenseForm({
             title: template.title || '',
             category: template.category || 'other',
             amount: template.amount || 0,
             beneficiary: template.beneficiary || '',
-            date: new Date().toISOString().split('T')[0],
+            date: getTemplateDueDate(template),
             method: 'cash',
             status: 'paid',
             notes: `Monthly payment for ${template.title || ''}`
@@ -144,6 +231,20 @@ export const ExpensesView = () => {
         e.preventDefault();
         if (!db || !payingTemplate) return;
 
+        if (!(await requireExpenseWriteAccess())) return;
+        if (!(await requireExactTemplateTenant(payingTemplate))) return;
+        if (!(await requireExactStoredTenant('expense_templates', payingTemplate.id, 'Recurring charge'))) return;
+        const validationError = validateExpense(expenseForm);
+        if (validationError) {
+            await showAlert('Check recurring payment', validationError, 'warning');
+            return;
+        }
+        if (expenses.some(expense => expense.templateId === payingTemplate.id && expense.session === selectedSession && expense.date.startsWith((expenseForm.date || '').slice(0, 7)))) {
+            await showAlert('Duplicate recurring payment', 'A payment for this recurring charge already exists in the selected month. Edit the existing record instead.', 'warning');
+            return;
+        }
+
+        setIsSavingRecurringPayment(true);
         try {
             const payload: any = {
                 title: expenseForm.title || '',
@@ -164,24 +265,48 @@ export const ExpensesView = () => {
             await addDoc(collection(db, 'expenses'), payload);
             setIsPayTemplateModalOpen(false);
             setPayingTemplate(null);
+            setPaymentProof('');
+            await showAlert('Recurring payment recorded', `${payload.title} was added to the ${displayMonthName} expense ledger.`, 'success');
         } catch (err) {
             console.error(err);
-            alert("Error recording payment.");
+            showAlert("Error", "Could not record this recurring payment. Please try again.", "danger");
+        } finally {
+            setIsSavingRecurringPayment(false);
         }
     };
 
     const handleSaveTemplate = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db) return;
+        if (!(await requireExpenseWriteAccess())) return;
+        if (editingTemplateId) {
+            const existingTemplate = expenseTemplates.find(template => template.id === editingTemplateId);
+            if (!(await requireExactTemplateTenant(existingTemplate))) return;
+            if (!(await requireExactStoredTenant('expense_templates', editingTemplateId, 'Recurring charge'))) return;
+        }
+        if (!templateForm.title?.trim() || !templateForm.beneficiary?.trim()) {
+            await showAlert('Check recurring charge', 'Enter a title and beneficiary.', 'warning');
+            return;
+        }
+        if (!Number.isFinite(Number(templateForm.amount)) || Number(templateForm.amount) <= 0) {
+            await showAlert('Check recurring charge', 'Default amount must be greater than zero.', 'warning');
+            return;
+        }
+        const dayDue = Number(templateForm.dayDue);
+        if (!Number.isInteger(dayDue) || dayDue < 1 || dayDue > 31) {
+            await showAlert('Check recurring charge', 'Due day must be between 1 and 31.', 'warning');
+            return;
+        }
+        setIsSavingTemplate(true);
         try {
             const templateData = {
-                title: templateForm.title || '',
+                title: templateForm.title.trim(),
                 category: templateForm.category || 'other',
-                amount: templateForm.amount || 0,
-                beneficiary: templateForm.beneficiary || '',
+                amount: Number(templateForm.amount),
+                beneficiary: templateForm.beneficiary.trim(),
                 recurring: templateForm.recurring ?? true,
-                frequency: templateForm.frequency || 'monthly',
-                dayDue: templateForm.dayDue || 1
+                frequency: 'monthly' as const,
+                dayDue
             };
             if (editingTemplateId) {
                 await updateDoc(doc(db, 'expense_templates', editingTemplateId), templateData);
@@ -190,18 +315,39 @@ export const ExpensesView = () => {
                 await addDoc(collection(db, 'expense_templates'), { ...templateData, organizationId: orgId, createdAt: serverTimestamp() });
             }
             setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 });
-        } catch (err) { console.error(err); }
+            await showAlert(editingTemplateId ? 'Recurring charge updated' : 'Recurring charge added', 'The monthly obligation is ready for period tracking.', 'success');
+        } catch (err) {
+            console.error(err);
+            showAlert("Error", "Could not save this recurring charge.", "danger");
+        } finally {
+            setIsSavingTemplate(false);
+        }
     };
 
     const handleSaveAdHocExpense = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db) return;
+        if (!(await requireExpenseWriteAccess())) return;
+        const validationError = validateExpense(expenseForm);
+        if (validationError) {
+            await showAlert('Check expense record', validationError, 'warning');
+            return;
+        }
+        if (isEditing && editingId) {
+            const original = expenses.find(expense => expense.id === editingId);
+            if (!original || original.organizationId !== orgId) {
+                await showAlert('Expense unavailable', 'This record does not belong to the active organization.', 'danger');
+                return;
+            }
+            if (!(await requireExactStoredTenant('expenses', editingId, 'Expense'))) return;
+        }
+        setIsSavingExpense(true);
         try {
             const payload: any = {
-                title: expenseForm.title || '',
+                title: expenseForm.title!.trim(),
                 category: expenseForm.category || 'other',
-                amount: expenseForm.amount || 0,
-                beneficiary: expenseForm.beneficiary || '',
+                amount: Number(expenseForm.amount),
+                beneficiary: expenseForm.beneficiary!.trim(),
                 date: expenseForm.date || new Date().toISOString().split('T')[0],
                 method: expenseForm.method || 'cash',
                 status: expenseForm.status || 'paid',
@@ -220,18 +366,62 @@ export const ExpensesView = () => {
             setIsModalOpen(false);
             setIsEditing(false);
             setEditingId(null);
-        } catch (err) { console.error(err); }
+            await showAlert(isEditing ? 'Expense updated' : 'Expense recorded', 'The expense ledger has been updated.', 'success');
+        } catch (err) {
+            console.error(err);
+            showAlert("Error", "Could not save this expense record.", "danger");
+        } finally {
+            setIsSavingExpense(false);
+        }
     };
 
     const handleDeleteExpense = async (id: string) => {
-        if (!confirm("Delete this expense record?")) return;
+        if (!(await requireExpenseWriteAccess())) return;
+        const expense = expenses.find(item => item.id === id);
+        if (!expense || expense.organizationId !== orgId) {
+            await showAlert('Expense unavailable', 'This record does not belong to the active organization.', 'danger');
+            return;
+        }
+        if (!(await requireExactStoredTenant('expenses', id, 'Expense'))) return;
+        const approved = await confirm({
+            title: "Delete expense?",
+            message: "This expense record will be permanently removed from the tenant finance ledger.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            variant: "danger"
+        });
+        if (!approved) return;
         if (!db) return;
-        await deleteDoc(doc(db, 'expenses', id));
+        try {
+            await deleteDoc(doc(db, 'expenses', id));
+            await showAlert('Expense deleted', 'The expense was removed from the tenant ledger.', 'success');
+        } catch (err) {
+            console.error(err);
+            showAlert("Error", "Could not delete this expense record.", "danger");
+        }
     };
 
     const handleDeleteTemplate = async (id: string) => {
-        if (!db || !confirm("Delete this template?")) return;
-        await deleteDoc(doc(db, 'expense_templates', id));
+        if (!db) return;
+        if (!(await requireExpenseWriteAccess())) return;
+        const template = expenseTemplates.find(item => item.id === id);
+        if (!(await requireExactTemplateTenant(template))) return;
+        if (!(await requireExactStoredTenant('expense_templates', id, 'Recurring charge'))) return;
+        const approved = await confirm({
+            title: "Delete recurring charge?",
+            message: "This removes the template only. Existing expense records will remain in the ledger.",
+            confirmText: "Delete",
+            cancelText: "Cancel",
+            variant: "danger"
+        });
+        if (!approved) return;
+        try {
+            await deleteDoc(doc(db, 'expense_templates', id));
+            await showAlert('Recurring charge deleted', 'The template was removed. Existing expense records were preserved.', 'success');
+        } catch (err) {
+            console.error(err);
+            showAlert("Error", "Could not delete this recurring charge.", "danger");
+        }
     };
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: 'form' | 'pay') => {
@@ -243,49 +433,104 @@ export const ExpensesView = () => {
             else setPaymentProof(compressed);
         } catch(err) {
             console.error(err);
-            alert("Image processing failed.");
+            showAlert("Upload failed", "Image processing failed. Try a smaller or different image.", "danger");
         }
     };
 
+    const handleExportExpenses = async () => {
+        if (filteredExpenses.length === 0) {
+            await showAlert('Nothing to export', 'Adjust the period or filters so at least one expense is visible.', 'info');
+            return;
+        }
+        const escapeCell = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        const header = ['Record ID', 'Date', 'Session', 'Title', 'Category', 'Beneficiary', 'Method', 'Status', 'Amount', 'Receipt attached', 'Notes'];
+        const rows = filteredExpenses.map(expense => [
+            expense.id, expense.date, expense.session || selectedSession, expense.title, expense.category,
+            expense.beneficiary, expense.method, expense.status, expense.amount,
+            expense.receiptUrl ? 'Yes' : 'No', expense.notes || ''
+        ]);
+        const csv = [header, ...rows].map(row => row.map(escapeCell).join(',')).join('\r\n');
+        const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `expenses_${selectedSession}_${selectedMonth || 'all-periods'}.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        await showAlert('Expense export ready', `${filteredExpenses.length} ledger record${filteredExpenses.length === 1 ? '' : 's'} exported with the current filters.`, 'success');
+    };
+
     return (
-        <div className="space-y-6 pb-24 md:pb-8 md:h-full flex flex-col animate-in fade-in slide-in-from-right-4">
+        <div className="flex flex-col space-y-6 pb-24 md:h-full md:pb-8">
             
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
-                <div>
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><TrendingDown className="w-6 h-6 text-rose-500"/> Expenses & Bills</h2>
-                    <p className="text-slate-500 text-sm">Manage recurring obligations and track operating costs.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                     <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} className="bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-3 py-2 focus:border-rose-500 outline-none">
-                        {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-slate-950 border border-slate-800 text-white text-sm rounded-lg px-3 py-2 focus:border-rose-500 outline-none"/>
-                    
+            <AtlasCommandHeader
+                eyebrow="Finance operations"
+                title="Expenses & Bills"
+                description="Control recurring obligations, record operating costs, and protect the center's margin."
+                icon={TrendingDown}
+                badges={
+                    <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">
+                        {selectedSession} / {displayMonthName}
+                    </span>
+                }
+                actions={
+                    <>
                     {can('expenses.manage') && (
                         <>
-                            <button onClick={() => setIsTemplateManagerOpen(true)} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700" title="Manage Recurring Templates">
-                                <Settings size={18}/>
-                            </button>
-                            <button onClick={() => { setIsEditing(false); setExpenseForm({title: '', category: 'other', amount: 0, date: new Date().toISOString().split('T')[0], method: 'cash', status: 'paid', beneficiary: ''}); setIsModalOpen(true); }} className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white px-4 py-2 rounded-lg transition-colors font-bold text-sm shadow-lg shadow-rose-900/20">
-                                <Plus size={16}/> Record Expense
-                            </button>
+                            <AtlasActionButton icon={Settings} onClick={() => setIsTemplateManagerOpen(true)} title="Manage recurring charges">Recurring</AtlasActionButton>
+                            <AtlasActionButton variant="primary" icon={Plus} onClick={() => { setIsEditing(false); setExpenseForm({title: '', category: 'other', amount: 0, date: new Date().toISOString().split('T')[0], method: 'cash', status: 'paid', beneficiary: ''}); setIsModalOpen(true); }}>
+                                Record expense
+                            </AtlasActionButton>
                         </>
                     )}
-                </div>
+                    </>
+                }
+            />
+
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <AtlasSignalCard label="Period expenses" value={formatCurrency(stats.totalExpenses)} detail={displayMonthName} icon={TrendingDown} tone="red" />
+                <AtlasSignalCard label="Session margin" value={formatCurrency(stats.sessionNetProfit)} detail={`${formatCurrency(stats.sessionTotalIncome)} income`} icon={DollarSign} tone={stats.sessionNetProfit >= 0 ? 'emerald' : 'red'} />
+                <AtlasSignalCard label="Recurring due" value={recurringDueCount} detail={recurringScheduledCount > 0 ? `${recurringScheduledCount} scheduled later` : recurringDueCount === 1 ? 'Charge needs payment' : 'Charges need payment'} icon={Clock} tone={recurringDueCount > 0 ? 'amber' : 'slate'} />
+                <AtlasSignalCard label="Highest category" value={stats.topCategory} detail="Largest period cost" icon={PieChart} tone="blue" />
             </div>
+
+            <AtlasToolbar
+                leading={
+                    <>
+                        <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-bold text-white outline-none focus:border-teal-400/50">
+                            {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-bold text-white outline-none focus:border-teal-400/50"/>
+                    </>
+                }
+                trailing={
+                    <AtlasActionButton icon={Download} onClick={handleExportExpenses} disabled={filteredExpenses.length === 0} title={filteredExpenses.length === 0 ? 'No visible expense records to export' : 'Export the filtered expense ledger as CSV'}>
+                        Export {filteredExpenses.length > 0 ? `(${filteredExpenses.length})` : ''}
+                    </AtlasActionButton>
+                }
+            >
+                <span className="text-xs text-slate-500">Showing expenses for the selected academic session and month.</span>
+            </AtlasToolbar>
 
             {/* RECURRING CHARGES GRID */}
             {recurringStatus.length > 0 && (
                 <div className="space-y-3">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2"><Repeat size={14}/> Recurring Charges for {displayMonthName}</h3>
+                    <AtlasSectionHeader
+                        title={`Recurring charges / ${displayMonthName}`}
+                        description="Review fixed obligations before they become overdue."
+                        icon={Repeat}
+                        meta={
+                            <span className="rounded-md bg-amber-400/10 px-2 py-1 text-[10px] font-bold uppercase text-amber-200">
+                                {recurringDueCount} due{recurringManualCount > 0 ? ` / ${recurringManualCount} manual` : ''}
+                            </span>
+                        }
+                    />
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {recurringStatus.map(({ template, status, expense }) => (
-                            <div key={template.id} className={`border rounded-xl p-4 relative group transition-all ${status === 'paid' ? 'bg-slate-900/50 border-emerald-900/30' : 'bg-slate-900 border-amber-900/30 shadow-lg shadow-amber-900/5'}`}>
+                        {recurringStatus.map(({ template, status, expense, dueDate }) => (
+                            <div key={template.id} className={`group relative rounded-lg border p-4 transition-colors ${status === 'paid' ? 'border-emerald-400/20 bg-slate-900/50' : status === 'manual' || status === 'scheduled' ? 'border-sky-400/20 bg-slate-900/70' : 'border-amber-300/25 bg-slate-900'}`}>
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${status === 'paid' ? 'bg-emerald-900/20 text-emerald-500' : 'bg-amber-900/20 text-amber-500'}`}>
-                                            {status === 'paid' ? <CheckCircle2 size={16}/> : <Clock size={16}/>}
+                                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${status === 'paid' ? 'bg-emerald-900/20 text-emerald-500' : status === 'manual' || status === 'scheduled' ? 'bg-sky-900/20 text-sky-400' : 'bg-amber-900/20 text-amber-500'}`}>
+                                            {status === 'paid' ? <CheckCircle2 size={16}/> : status === 'manual' ? <Info size={16}/> : <Clock size={16}/>}
                                         </div>
                                         <div>
                                             <div className="text-sm font-bold text-white leading-tight">{template.title}</div>
@@ -297,20 +542,25 @@ export const ExpensesView = () => {
                                             <div className="text-emerald-400 font-bold text-sm">{formatCurrency(expense.amount)}</div>
                                             <div className="text-[10px] text-slate-500">{formatDate(expense.date)}</div>
                                         </div>
+                                    ) : status === 'due' || status === 'scheduled' ? (
+                                        <div className="text-right">
+                                            <div className="text-slate-300 font-bold text-sm">{formatCurrency(template.amount)}</div>
+                                            <div className={`text-[10px] font-medium ${status === 'due' ? 'text-amber-500' : 'text-sky-400'}`}>{status === 'due' ? 'Due' : 'Scheduled'} {dueDate ? formatDate(dueDate) : ''}</div>
+                                        </div>
                                     ) : (
                                         <div className="text-right">
                                             <div className="text-slate-300 font-bold text-sm">{formatCurrency(template.amount)}</div>
-                                            <div className="text-[10px] text-amber-500 font-medium">Due Now</div>
+                                            <div className="text-[10px] text-sky-400 font-medium">Manual schedule</div>
                                         </div>
                                     )}
                                 </div>
                                 
-                                {status === 'due' && (
+                                {(status === 'due' || status === 'scheduled') && (
                                     <button 
                                         onClick={() => handlePayTemplateOpen(template)}
-                                        className="w-full mt-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                                        className={`w-full mt-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${status === 'due' ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'border border-sky-400/20 bg-sky-400/10 text-sky-300 hover:bg-sky-400/15'}`}
                                     >
-                                        Pay Now <ArrowRight size={12}/>
+                                        {status === 'due' ? 'Record payment' : 'Record early'} <ArrowRight size={12}/>
                                     </button>
                                 )}
                                 {status === 'paid' && (
@@ -318,38 +568,26 @@ export const ExpensesView = () => {
                                         Paid via {expense?.method}
                                     </div>
                                 )}
+                                {status === 'manual' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePayTemplateOpen(template)}
+                                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-sky-400/20 bg-sky-400/10 py-2 text-xs font-bold text-sky-300 transition-colors hover:bg-sky-400/15"
+                                        title="Weekly templates need a weekday or occurrence count before automatic tracking is reliable"
+                                    >
+                                        Review limitation <Info size={12} />
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>
                 </div>
             )}
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><TrendingDown size={14}/> Period Expenses</div>
-                    <div className="text-3xl font-bold text-white">{formatCurrency(stats.totalExpenses)}</div>
-                    <div className="text-xs text-slate-500 mt-2 font-medium">For {displayMonthName}</div>
-                </div>
-                <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><DollarSign size={14}/> Session Net Profit</div>
-                    <div className={`text-3xl font-bold ${stats.sessionNetProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatCurrency(stats.sessionNetProfit)}</div>
-                    <div className="text-xs flex items-center gap-2 mt-2 pt-2 border-t border-slate-800/50 font-medium">
-                        <span className="text-emerald-500" title="Total Session Income">{formatCurrency(stats.sessionTotalIncome)}</span>
-                        <span className="text-slate-500">-</span>
-                        <span className="text-red-400" title="Total Session Expenses">{formatCurrency(stats.sessionTotalExpenses)}</span>
-                    </div>
-                </div>
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 rounded-xl p-5">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Highest Category</div>
-                    <div className="text-xl font-bold text-white capitalize">{stats.topCategory}</div>
-                </div>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:h-full md:min-h-0">
                 {/* Expense History List */}
                 <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col min-h-[400px] md:h-full">
-                    <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                    <AtlasToolbar className="rounded-none border-0 border-b border-slate-800 bg-slate-950/30">
                         <div className="relative w-full sm:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
                             <input type="text" placeholder="Search expenses..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white focus:border-rose-500 outline-none" />
@@ -359,15 +597,20 @@ export const ExpensesView = () => {
                                 <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap border transition-colors ${categoryFilter === cat ? 'bg-rose-950/30 text-rose-400 border-rose-900/50' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'}`}>{cat}</button>
                             ))}
                         </div>
-                    </div>
+                    </AtlasToolbar>
 
                     <div className="md:flex-1 md:overflow-y-auto custom-scrollbar p-2">
                         {filteredExpenses.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-64 text-slate-500"><Receipt size={48} className="mb-4 opacity-20"/><p>No expenses found.</p></div>
+                            <AtlasEmptyState
+                                title="No expenses found"
+                                description="Adjust the month, academic session, category, or search terms. No totals or exports are generated from an empty result."
+                                icon={Receipt}
+                                action={(searchQuery || categoryFilter !== 'All') ? <AtlasActionButton onClick={() => { setSearchQuery(''); setCategoryFilter('All'); }}>Clear filters</AtlasActionButton> : undefined}
+                            />
                         ) : (
                             <div className="space-y-2">
                                 {filteredExpenses.map(expense => (
-                                    <div key={expense.id} className="bg-slate-950 border border-slate-800 hover:border-slate-700 p-4 rounded-xl transition-all group">
+                                    <div key={expense.id} className="group rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-700">
                                         <div className="flex justify-between items-start">
                                             <div className="flex items-start gap-3">
                                                 <div className={`p-2 rounded-lg ${expense.category === 'rent' ? 'bg-blue-900/20 text-blue-400' : expense.category === 'salary' ? 'bg-purple-900/20 text-purple-400' : 'bg-slate-800 text-slate-400'}`}><DollarSign size={18}/></div>
@@ -386,11 +629,11 @@ export const ExpensesView = () => {
                                         <div className="mt-3 pt-3 border-t border-slate-800 flex justify-between items-center">
                                             <div className="text-xs text-slate-500">{expense.notes || '-'}</div>
                                             <div className="flex gap-2">
-                                                {expense.receiptUrl && <button onClick={() => setShowProof(expense.receiptUrl!)} className="p-1.5 hover:bg-slate-800 rounded text-blue-400"><ImageIcon size={14}/></button>}
+                                                {expense.receiptUrl && <button onClick={() => setShowProof(expense.receiptUrl!)} className="p-1.5 hover:bg-slate-800 rounded text-sky-400" title="View receipt" aria-label={`View receipt for ${expense.title}`}><ImageIcon size={14}/></button>}
                                                 {can('expenses.manage') && (
                                                     <>
                                                         <button onClick={() => { setExpenseForm(expense); setEditingId(expense.id); setIsEditing(true); setIsModalOpen(true); }} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-blue-400" title="Edit Expense"><Edit size={14}/></button>
-                                                        <button onClick={() => handleDeleteExpense(expense.id)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400"><Trash2 size={14}/></button>
+                                                        <button onClick={() => handleDeleteExpense(expense.id)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400" title="Delete expense" aria-label={`Delete ${expense.title}`}><Trash2 size={14}/></button>
                                                     </>
                                                 )}
                                             </div>
@@ -406,13 +649,14 @@ export const ExpensesView = () => {
                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 h-fit">
                     <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><PieChart size={16} className="text-rose-400"/> Category Breakdown</h3>
                     <div className="space-y-3">
+                        {Object.keys(stats.breakdown).length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-5 text-center text-xs leading-5 text-slate-500">No category totals are available for the filtered period.</p>}
                         {Object.entries(stats.breakdown).sort(([,a], [,b]) => (b as number) - (a as number)).map(([cat, amount]) => {
                             const val = amount as number;
                             const percentage = stats.totalExpenses > 0 ? (val / stats.totalExpenses) * 100 : 0;
                             return (
                                 <div key={cat}>
                                     <div className="flex justify-between text-xs mb-1"><span className="text-slate-300 capitalize">{cat}</span><span className="text-slate-400">{Math.round(percentage)}%</span></div>
-                                    <div className="h-2 bg-slate-950 rounded-full overflow-hidden"><div className="h-full bg-rose-600 rounded-full" style={{ width: `${percentage}%` }}></div></div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-slate-950"><div className="h-full rounded-full bg-amber-300" style={{ width: `${percentage}%` }}></div></div>
                                     <div className="text-[10px] text-slate-500 mt-0.5 text-right">{formatCurrency(val)}</div>
                                 </div>
                             )
@@ -429,10 +673,15 @@ export const ExpensesView = () => {
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Title</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.title} onChange={e => setExpenseForm({...expenseForm, title: e.target.value})} placeholder="e.g. Plumbing Repair"/></div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="block text-xs font-medium text-slate-400 mb-1">Category</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white capitalize" value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value as any})}>{['rent', 'salary', 'utilities', 'material', 'marketing', 'other'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}/></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" min="0.01" step="0.01" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}/></div>
                     </div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input type="date" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})}/></div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Beneficiary</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.beneficiary} onChange={e => setExpenseForm({...expenseForm, beneficiary: e.target.value})}/></div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Payment method</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.method || 'cash'} onChange={e => setExpenseForm({...expenseForm, method: e.target.value as Expense['method']})}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank transfer</option></select></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Ledger status</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.status || 'paid'} onChange={e => setExpenseForm({...expenseForm, status: e.target.value as Expense['status']})}><option value="paid">Paid</option><option value="pending">Pending</option></select></div>
+                    </div>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Audit notes</label><textarea rows={3} className="w-full resize-y p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.notes || ''} onChange={e => setExpenseForm({...expenseForm, notes: e.target.value})} placeholder="Reference, approval context, or supplier details" /></div>
                     <div>
                         <label className="block text-xs font-medium text-slate-400 mb-1">Receipt (Optional)</label>
                         <div className="flex items-center gap-3">
@@ -443,7 +692,9 @@ export const ExpensesView = () => {
                             {expenseForm.receiptUrl && <span className="text-xs text-emerald-400 flex items-center gap-1"><ImageIcon size={12}/> Attached</span>}
                         </div>
                     </div>
-                    <button type="submit" className="w-full py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-bold">Save Expense</button>
+                    <button type="submit" disabled={isSavingExpense} className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-500 py-3 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50">
+                        {isSavingExpense && <Loader2 size={16} className="animate-spin" />}{isSavingExpense ? 'Saving expense...' : isEditing ? 'Save expense changes' : 'Record expense'}
+                    </button>
                 </form>
             </Modal>
 
@@ -457,7 +708,7 @@ export const ExpensesView = () => {
                     
                     <div>
                         <label className="block text-xs font-medium text-slate-400 mb-1">Payment Amount (Adjust if needed)</label>
-                        <input type="number" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-xl text-center focus:border-emerald-500 outline-none" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}/>
+                        <input type="number" min="0.01" step="0.01" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-xl text-center focus:border-emerald-500 outline-none" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}/>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -480,8 +731,8 @@ export const ExpensesView = () => {
                         )}
                     </div>
 
-                    <button type="submit" className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
-                        <CheckCircle2 size={18}/> Confirm Payment
+                    <button type="submit" disabled={isSavingRecurringPayment} className="w-full py-3 bg-teal-500 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 text-slate-950 rounded-lg font-bold flex items-center justify-center gap-2">
+                        {isSavingRecurringPayment ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18}/>} {isSavingRecurringPayment ? 'Recording payment...' : 'Record recurring payment'}
                     </button>
                 </form>
             </Modal>
@@ -490,28 +741,27 @@ export const ExpensesView = () => {
             <Modal isOpen={isTemplateManagerOpen} onClose={() => setIsTemplateManagerOpen(false)} title="Manage Recurring Charges">
                 <div className="space-y-6">
                     {/* Create New Template */}
-                    <form onSubmit={handleSaveTemplate} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <form onSubmit={handleSaveTemplate} className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3">
                         <h4 className="text-sm font-bold text-white mb-2">{editingTemplateId ? 'Edit Recurring Charge' : 'Define New Recurring Charge'}</h4>
                         <div className="grid grid-cols-2 gap-3">
                             <input required placeholder="Title (e.g. Office Rent)" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.title} onChange={e => setTemplateForm({...templateForm, title: e.target.value})}/>
                             <select className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm capitalize" value={templateForm.category} onChange={e => setTemplateForm({...templateForm, category: e.target.value as any})}>{['rent', 'salary', 'utilities', 'material', 'marketing', 'other'].map(c => <option key={c} value={c}>{c}</option>)}</select>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <input type="number" required placeholder="Default Amount" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.amount} onChange={e => setTemplateForm({...templateForm, amount: Number(e.target.value)})}/>
+                            <input type="number" min="0.01" step="0.01" required placeholder="Default Amount" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.amount} onChange={e => setTemplateForm({...templateForm, amount: Number(e.target.value)})}/>
                             <input required placeholder="Beneficiary" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.beneficiary} onChange={e => setTemplateForm({...templateForm, beneficiary: e.target.value})}/>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <select className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.frequency} onChange={e => setTemplateForm({...templateForm, frequency: e.target.value as any})}>
-                                <option value="monthly">Monthly</option>
-                                <option value="weekly">Weekly</option>
-                            </select>
+                            <div><label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">Frequency</label><select disabled className="w-full cursor-not-allowed p-2 bg-slate-900 border border-slate-700 rounded text-slate-400 text-sm" value="monthly"><option value="monthly">Monthly</option></select></div>
+                            <div><label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">Due day</label><input type="number" min="1" max="31" required className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.dayDue || 1} onChange={e => setTemplateForm({...templateForm, dayDue: Number(e.target.value)})}/></div>
                         </div>
+                        <p className="text-[11px] leading-5 text-slate-500">Monthly schedules are tracked automatically. Existing weekly templates stay visible but require manual expense records because they do not store a weekday or occurrence count.</p>
                         <div className="flex gap-2">
                             {editingTemplateId && (
                                 <button type="button" onClick={() => { setEditingTemplateId(null); setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 }); }} className="flex-1 py-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg text-sm transition-colors font-bold">Cancel Edit</button>
                             )}
-                            <button type="submit" className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all">
-                                <Plus size={16} /> {editingTemplateId ? 'Update Template' : 'Add Template'}
+                            <button type="submit" disabled={isSavingTemplate} className="flex-1 py-2 bg-teal-500 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 text-slate-950 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors">
+                                {isSavingTemplate ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} {isSavingTemplate ? 'Saving...' : editingTemplateId ? 'Update charge' : 'Add charge'}
                             </button>
                         </div>
                     </form>
@@ -519,6 +769,7 @@ export const ExpensesView = () => {
                     {/* List Templates */}
                     <div className="mt-6 space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Active Templates</h4>
+                        {expenseTemplates.filter(t => t.recurring).length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-5 text-center text-xs leading-5 text-slate-500">No recurring charges yet. Define a monthly obligation above to track it by due day.</p>}
                         {expenseTemplates.filter(t => t.recurring).map(template => (
                             <div key={template.id} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg hover:border-slate-700 transition-colors">
                                 <div>
@@ -543,12 +794,9 @@ export const ExpensesView = () => {
             </Modal>
 
             {/* Receipt Viewer */}
-            {showProof && (
-                <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setShowProof(null)}>
-                    <img src={showProof} className="max-w-full max-h-full rounded-lg shadow-2xl" alt="Receipt" />
-                    <button className="absolute top-4 right-4 text-white bg-slate-800 p-2 rounded-full hover:bg-slate-700"><XCircle size={24}/></button>
-                </div>
-            )}
+            <Modal isOpen={!!showProof} onClose={() => setShowProof(null)} title="Expense receipt" size="lg">
+                {showProof && <img src={showProof} className="max-h-[70vh] w-full rounded-lg bg-slate-950 object-contain" alt="Expense receipt" />}
+            </Modal>
         </div>
     );
 };

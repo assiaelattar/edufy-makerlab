@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { X, Bell, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
 export interface ToastMessage {
   id: string;
@@ -14,53 +14,63 @@ interface ToastProps {
   onClose: (id: string) => void;
 }
 
+const toastStyles: Record<ToastMessage['type'], { icon: React.ReactNode; border: string; surface: string }> = {
+  success: {
+    icon: <CheckCircle2 className="h-5 w-5 text-[#2DD4BF]" />,
+    border: 'border-l-[#14B8A6]',
+    surface: 'bg-[#14B8A6]/10',
+  },
+  error: {
+    icon: <AlertCircle className="h-5 w-5 text-[#FB7185]" />,
+    border: 'border-l-[#FB7185]',
+    surface: 'bg-[#FB7185]/10',
+  },
+  warning: {
+    icon: <AlertTriangle className="h-5 w-5 text-[#F2C766]" />,
+    border: 'border-l-[#F2C766]',
+    surface: 'bg-[#F2C766]/10',
+  },
+  info: {
+    icon: <Info className="h-5 w-5 text-[#2DD4BF]" />,
+    border: 'border-l-[#14B8A6]',
+    surface: 'bg-[#14B8A6]/10',
+  },
+};
+
 const ToastItem: React.FC<ToastProps> = ({ toast, onClose }) => {
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       onClose(toast.id);
     }, 5000);
-    return () => clearTimeout(timer);
+
+    return () => window.clearTimeout(timer);
   }, [toast.id, onClose]);
 
-  const icons = {
-    success: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
-    error: <AlertCircle className="w-5 h-5 text-red-400" />,
-    warning: <Bell className="w-5 h-5 text-amber-400" />,
-    info: <Info className="w-5 h-5 text-blue-400" />
-  };
-
-  const borderColors = {
-    success: 'border-emerald-500/50',
-    error: 'border-red-500/50',
-    warning: 'border-amber-500/50',
-    info: 'border-blue-500/50'
-  };
-
-  const bgColors = {
-    success: 'bg-emerald-950/90',
-    error: 'bg-red-950/90',
-    warning: 'bg-amber-950/90',
-    info: 'bg-blue-950/90'
-  };
+  const styles = toastStyles[toast.type];
 
   return (
-    <div className={`
-      flex items-start gap-3 p-4 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 animate-in slide-in-from-top-2 mb-3 w-80 pointer-events-auto
-      ${borderColors[toast.type]} ${bgColors[toast.type]}
-    `}>
-      <div className="shrink-0 mt-0.5">{icons[toast.type]}</div>
-      <div className="flex-1 min-w-0">
-        <h4 className="text-sm font-bold text-white leading-tight">{toast.title}</h4>
-        <p className="text-xs text-slate-300 mt-1 leading-normal">{toast.message}</p>
-        <span className="text-[10px] text-slate-500 mt-2 block opacity-70">
-            {new Date(toast.timestamp).toLocaleTimeString()}
-        </span>
+    <div
+      className={`pointer-events-auto flex w-full items-start gap-3 rounded-lg border border-l-4 border-white/10 bg-[#0F1B2D] p-3 shadow-xl transition duration-200 animate-in slide-in-from-right-2 ${styles.border}`}
+      role={toast.type === 'error' ? 'alert' : 'status'}
+    >
+      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles.surface}`}>
+        {styles.icon}
       </div>
-      <button 
-        onClick={() => onClose(toast.id)} 
-        className="shrink-0 text-slate-400 hover:text-white transition-colors"
+      <div className="min-w-0 flex-1 py-0.5">
+        <h4 className="text-sm font-bold leading-5 text-white">{toast.title}</h4>
+        <p className="mt-0.5 break-words text-xs leading-5 text-slate-300">{toast.message}</p>
+        <time className="mt-1.5 block font-mono text-[10px] leading-4 text-slate-500" dateTime={new Date(toast.timestamp).toISOString()}>
+          {new Date(toast.timestamp).toLocaleTimeString()}
+        </time>
+      </div>
+      <button
+        type="button"
+        onClick={() => onClose(toast.id)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+        aria-label={`Dismiss ${toast.title}`}
+        title="Dismiss"
       >
-        <X size={16} />
+        <X className="h-4 w-4" />
       </button>
     </div>
   );
@@ -68,8 +78,12 @@ const ToastItem: React.FC<ToastProps> = ({ toast, onClose }) => {
 
 export const ToastContainer = ({ toasts, removeToast }: { toasts: ToastMessage[], removeToast: (id: string) => void }) => {
   return (
-    <div className="fixed top-4 right-4 z-[100] flex flex-col items-end pointer-events-none">
-      {toasts.map(toast => (
+    <div
+      className="pointer-events-none fixed inset-x-3 top-3 z-[100] flex flex-col items-end gap-2 sm:inset-x-auto sm:right-4 sm:top-4 sm:w-[22rem]"
+      aria-live="polite"
+      aria-relevant="additions removals"
+    >
+      {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onClose={removeToast} />
       ))}
     </div>

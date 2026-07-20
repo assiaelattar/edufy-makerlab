@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, LayoutDashboard, UserPlus, Copy, Share2, Award, Shield, Sparkles } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,7 +10,7 @@ import { db } from '../services/firebase';
 import { Modal } from '../components/Modal';
 import { Enrollment, Payment, StudentProject } from '../types';
 import { getTheme } from '../utils/theme';
-import Tabs from '../components/Tabs';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { AcademicsTab } from './student-details/AcademicsTab';
 import { FinanceTab } from './student-details/FinanceTab';
 import { PortfolioTab } from './student-details/PortfolioTab';
@@ -28,7 +28,7 @@ export const StudentDetailsView = ({
 }) => {
     const { students, enrollments, programs, payments, attendanceRecords, studentProjects, navigateTo, settings, viewParams, sendNotification, badges } = useAppContext();
     const { createSecondaryUser, userProfile, currentOrganization } = useAuth();
-    const { confirm } = useConfirm();
+    const { confirm, alert: showAlert } = useConfirm();
 
     const { studentId } = viewParams;
     const isStudentRole = userProfile?.role === 'student';
@@ -54,12 +54,37 @@ export const StudentDetailsView = ({
     const [isGeneratingAccess, setIsGeneratingAccess] = useState(false);
     const [confirmModal, setConfirmModal] = useState<any>({ isOpen: false, title: '', message: '', type: 'danger', isLoading: false, action: async () => { } });
     const [activeTab, setActiveTab] = useState('Academics');
-
-    if (!student) return <div className="p-8 text-center text-slate-500">Student profile not found.</div>;
-
-    // --- NEW: Local Edit State ---
     const [isEditingStudent, setIsEditingStudent] = useState(false);
-    const [editFormData, setEditFormData] = useState<Partial<typeof student>>({});
+    const [editFormData, setEditFormData] = useState<Record<string, any>>({});
+    const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+    const badgeTone: Record<string, string> = {
+        blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
+        purple: 'bg-purple-950/30 text-purple-300 border-purple-500/30',
+        amber: 'bg-amber-950/30 text-amber-300 border-amber-500/30',
+        yellow: 'bg-yellow-950/30 text-yellow-300 border-yellow-500/30',
+        sky: 'bg-sky-950/30 text-sky-300 border-sky-500/30',
+        violet: 'bg-violet-950/30 text-violet-300 border-violet-500/30',
+        pink: 'bg-pink-950/30 text-pink-300 border-pink-500/30',
+        emerald: 'bg-emerald-950/30 text-emerald-300 border-emerald-500/30',
+        slate: 'bg-slate-800 text-slate-300 border-slate-600',
+        indigo: 'bg-indigo-950/30 text-indigo-300 border-indigo-500/30',
+        cyan: 'bg-cyan-950/30 text-cyan-300 border-cyan-500/30',
+        rose: 'bg-rose-950/30 text-rose-300 border-rose-500/30',
+        green: 'bg-green-950/30 text-green-300 border-green-500/30',
+        teal: 'bg-teal-950/30 text-teal-300 border-teal-500/30'
+    };
+
+    if (!student) return (
+        <div className="p-4">
+            <AtlasEmptyState
+                icon={Users}
+                title="Student record not found"
+                description="This record may have been removed or may not belong to the active organization."
+                action={<AtlasActionButton icon={ArrowLeft} variant="primary" onClick={() => navigateTo('students')}>Back to students</AtlasActionButton>}
+            />
+        </div>
+    );
 
     const handleEditClick = () => {
         setEditFormData({
@@ -90,10 +115,10 @@ export const StudentDetailsView = ({
 
             await updateDoc(doc(db, 'students', student.id), cleanData);
             setIsEditingStudent(false);
-            alert("Student details updated successfully!");
+            await showAlert('Student updated', 'Student details were saved successfully.', 'success');
         } catch (err: any) {
             console.error("Error updating student:", err);
-            alert("Failed to update student details.");
+            await showAlert('Could not update student', 'Student details were not saved. Please try again.', 'danger');
         }
     };
 
@@ -266,7 +291,7 @@ export const StudentDetailsView = ({
                                         if (!badge) return null;
                                         const Icon = (LucideIcons[badge.icon as keyof typeof LucideIcons] || LucideIcons.Award) as React.ElementType;
                                         return (
-                                            <div key={badgeId} className={`px-3 py-2 bg-${badge.color}-950/30 text-${badge.color}-400 text-xs font-bold rounded-xl border border-${badge.color}-500/30 flex items-center gap-2`} title={badge.description}>
+                                            <div key={badgeId} className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-2 ${badgeTone[badge.color] || badgeTone.slate}`} title={badge.description}>
                                                 <Icon size={16} /> {badge.name}
                                             </div>
                                         );
@@ -329,18 +354,32 @@ export const StudentDetailsView = ({
         if (!db || !student) return;
         const isRegenerating = !!student.loginInfo;
         if (isRegenerating) { 
-            const isConfirmed = await confirm("Are you sure you want to regenerate access? This will create a NEW account and password. The previous login will stop working.");
+            const isConfirmed = await confirm({
+                title: 'Regenerate student access',
+                message: 'This creates a replacement login. The previous authentication account cannot be disabled from this screen.',
+                variant: 'warning',
+                confirmText: 'Regenerate'
+            });
             if (!isConfirmed) return;
         }
         setIsGeneratingAccess(true);
         try {
+            if (currentOrganization?.id && student.organizationId && currentOrganization.id !== student.organizationId) {
+                await showAlert('Record is outside this organization', 'Refresh the student directory before creating portal access.', 'danger');
+                return;
+            }
             const names = (student.name || '').trim().split(' ').map((n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, ''));
             const firstName = names[0];
             const lastName = names.length > 1 ? names[names.length - 1] : names[0];
 
             // Format: firstname.lastname@domain.edu
             const baseUsername = `${firstName}.${lastName}`;
-            const domain = currentOrganization?.slug ? `${currentOrganization.slug}.edu` : 'makerlab.academy';
+            const organizationId = currentOrganization?.id || student.organizationId;
+            if (!organizationId) {
+                await showAlert('Organization required', 'Select an organization before creating student access.', 'warning');
+                return;
+            }
+            const domain = currentOrganization?.slug ? `${currentOrganization.slug}.edu` : 'edufy.local';
 
             const password = Math.random().toString(36).slice(-8);
             let uid = '';
@@ -348,6 +387,7 @@ export const StudentDetailsView = ({
 
             // Recursive function to find available email
             const createUniqueUser = async (attempt: number): Promise<{ uid: string, email: string }> => {
+                if (attempt >= 50) throw new Error('Could not allocate a unique student email. Contact an administrator.');
                 const currentEmail = attempt === 0
                     ? `${baseUsername}@${domain}`
                     : `${baseUsername}${attempt}@${domain}`;
@@ -372,7 +412,7 @@ export const StudentDetailsView = ({
 
             await setDoc(doc(db, 'users', uid), {
                 uid,
-                organizationId: currentOrganization?.id || student.organizationId,
+                organizationId,
                 email: finalEmail,
                 name: student.name,
                 role: 'student',
@@ -382,18 +422,20 @@ export const StudentDetailsView = ({
             });
             await updateDoc(doc(db, 'students', student.id), { loginInfo: { username, email: finalEmail, initialPassword: password, uid } });
 
-            // Send Notification
-            const { sendNotification } = useAppContext();
             try {
                 await sendNotification(uid, 'Welcome to Edufy!', 'Your student portal account has been created.', 'success');
             } catch (e) {
                 console.error("Failed to send notification", e);
             }
 
-            alert(`Access ${isRegenerating ? 'Regenerated' : 'Generated'} Successfully!\nEmail: ${finalEmail}\nPassword: ${password}`);
+            await showAlert(
+                `Access ${isRegenerating ? 'regenerated' : 'generated'}`,
+                `Email: ${finalEmail}\nPassword: ${password}`,
+                'success'
+            );
         } catch (err: any) {
             console.error(err);
-            alert(`Error: ${err.message}`);
+            await showAlert('Could not create access', err.message, 'danger');
         } finally { setIsGeneratingAccess(false); }
     };
 
@@ -401,17 +443,33 @@ export const StudentDetailsView = ({
     const handleCreateParentAccess = async (parentEmail: string) => {
         if (!db || !student) return;
         if (!parentEmail || !parentEmail.includes('@')) {
-            alert("Invalid email provided.");
+            await showAlert('Invalid email', 'Enter a valid parent email address.', 'warning');
             return;
         }
 
         // Check if regenerating
         if (student.parentLoginInfo) {
-            if (!confirm("Are you sure you want to regenerate access? This will create a NEW password for the parent account if we cannot recover the old one. If the parent knows their password, you don't need to do this.")) return;
+            const isConfirmed = await confirm({
+                title: 'Regenerate parent access',
+                message: 'Edufy will link the email entered next. Existing passwords cannot be viewed or reset from this screen.',
+                variant: 'warning',
+                confirmText: 'Continue'
+            });
+            if (!isConfirmed) return;
         }
 
         setIsGeneratingAccess(true);
         try {
+            if (currentOrganization?.id && student.organizationId && currentOrganization.id !== student.organizationId) {
+                await showAlert('Record is outside this organization', 'Refresh the student directory before creating parent access.', 'danger');
+                return;
+            }
+            const organizationId = currentOrganization?.id || student.organizationId;
+            if (!organizationId) {
+                await showAlert('Organization required', 'Select an organization before creating parent access.', 'warning');
+                return;
+            }
+            const normalizedParentEmail = parentEmail.trim().toLowerCase();
             const parentName = student.parentName || "Parent";
             const password = Math.random().toString(36).slice(-8);
 
@@ -420,14 +478,15 @@ export const StudentDetailsView = ({
 
             // 1. Try to create the user
             try {
-                uid = await createSecondaryUser(parentEmail, password);
+                uid = await createSecondaryUser(normalizedParentEmail, password);
                 // If successful, it's a new user
             } catch (e: any) {
                 if (e.message?.includes('already exists') || e.code === 'auth/email-already-in-use') {
                     // User exists. Find their UID from Firestore 'users' collection
                     const q = (await import('firebase/firestore')).query(
                         (await import('firebase/firestore')).collection(db, 'users'),
-                        (await import('firebase/firestore')).where('email', '==', parentEmail)
+                        (await import('firebase/firestore')).where('email', '==', normalizedParentEmail),
+                        (await import('firebase/firestore')).where('organizationId', '==', organizationId)
                     );
                     const querySnap = await (await import('firebase/firestore')).getDocs(q);
 
@@ -435,7 +494,7 @@ export const StudentDetailsView = ({
                         uid = querySnap.docs[0].id;
                         isExistingUser = true;
                     } else {
-                        alert(`Account ${parentEmail} exists in Auth but not in Users database. Please contact support to fix this inconsistency.`);
+                        await showAlert('Account cannot be linked', `An account already uses ${normalizedParentEmail}, but it is not available in this organization. Contact an administrator to resolve the account ownership.`, 'warning');
                         setIsGeneratingAccess(false);
                         return;
                     }
@@ -445,14 +504,14 @@ export const StudentDetailsView = ({
             }
 
             if (!uid) {
-                alert("Could not obtain User ID.");
+                await showAlert('Could not create access', 'Could not obtain a user ID for this parent account.', 'danger');
                 setIsGeneratingAccess(false);
                 return;
             }
 
             // 2. Update Student Record
             const newParentLoginInfo = {
-                email: parentEmail,
+                email: normalizedParentEmail,
                 initialPassword: isExistingUser ? '********' : password,
                 uid
             };
@@ -462,8 +521,8 @@ export const StudentDetailsView = ({
             // 3. Ensure User Profile Exists/Is Updated
             await setDoc(doc(db, 'users', uid), {
                 uid,
-                organizationId: currentOrganization?.id || student.organizationId,
-                email: parentEmail,
+                organizationId,
+                email: normalizedParentEmail,
                 name: parentName,
                 role: 'parent',
                 status: 'active',
@@ -472,25 +531,25 @@ export const StudentDetailsView = ({
             }, { merge: true });
 
             if (isExistingUser) {
-                alert(`Successfully linked existing parent account (${parentEmail}).\nThe parent can log in with their existing password.`);
+                await showAlert('Parent account linked', `Existing parent account ${normalizedParentEmail} is now linked. The parent can log in with their existing password.`, 'success');
             } else {
                 setCredentialsModal({
                     isOpen: true,
-                    data: { name: parentName, email: parentEmail, pass: password, role: 'Parent' }
+                    data: { name: parentName, email: normalizedParentEmail, pass: password, role: 'Parent' }
                 });
             }
 
         } catch (err: any) {
             console.error(err);
-            alert(`Error: ${err.message}`);
+            await showAlert('Could not create parent access', err.message, 'danger');
         } finally {
             setIsGeneratingAccess(false);
         }
     };
 
-    const initiateDeleteEnrollment = (enrollmentId: string) => {
+    const initiateDeleteEnrollment = async (enrollmentId: string) => {
         const hasPayments = payments.some(p => p.enrollmentId === enrollmentId);
-        if (hasPayments) { alert("Cannot delete enrollment because payments have been recorded. Please delete the associated payments first to ensure financial accuracy."); return; }
+        if (hasPayments) { await showAlert('Enrollment has payments', 'Delete the associated payments first to preserve financial accuracy.', 'warning'); return; }
         setConfirmModal({ isOpen: true, title: "Delete Enrollment", message: "Are you sure you want to delete this enrollment? This action cannot be undone and will remove the student from class lists.", type: 'danger', isLoading: false, action: async () => { if (!db) return; await deleteDoc(doc(db, 'enrollments', enrollmentId)); } });
     };
 
@@ -510,13 +569,13 @@ export const StudentDetailsView = ({
 
     const handleExecuteConfirm = async () => {
         setConfirmModal((prev: any) => ({ ...prev, isLoading: true }));
-        try { await confirmModal.action(); setConfirmModal((prev: any) => ({ ...prev, isOpen: false, isLoading: false })); } catch (err) { console.error(err); alert("An error occurred."); setConfirmModal((prev: any) => ({ ...prev, isLoading: false })); }
+        try { await confirmModal.action(); setConfirmModal((prev: any) => ({ ...prev, isOpen: false, isLoading: false })); } catch (err) { console.error(err); await showAlert('Action failed', 'An error occurred while completing this action.', 'danger'); setConfirmModal((prev: any) => ({ ...prev, isLoading: false })); }
     };
 
     const handleSaveEnrollment = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db || !editEnrollment || !editEnrollment.id) return;
-        try { const original = enrollments.find(en => en.id === editEnrollment.id); if (!original) return; let updates: any = { ...editEnrollment }; if (editEnrollment.totalAmount !== undefined) { updates.balance = Number(editEnrollment.totalAmount) - (original.paidAmount || 0); } await updateDoc(doc(db, 'enrollments', editEnrollment.id), updates); setEditEnrollment(null); alert("Enrollment updated successfully."); } catch (err) { console.error(err); alert("Failed to update enrollment."); }
+        try { const original = enrollments.find(en => en.id === editEnrollment.id); if (!original) return; let updates: any = { ...editEnrollment }; if (editEnrollment.totalAmount !== undefined) { updates.balance = Number(editEnrollment.totalAmount) - (original.paidAmount || 0); } await updateDoc(doc(db, 'enrollments', editEnrollment.id), updates); setEditEnrollment(null); await showAlert('Enrollment updated', 'Enrollment details were saved successfully.', 'success'); } catch (err) { console.error(err); await showAlert('Could not update enrollment', 'Enrollment details were not saved.', 'danger'); }
     };
 
     const handleSavePayment = async (e: React.FormEvent) => {
@@ -564,10 +623,10 @@ export const StudentDetailsView = ({
             }
 
             setEditPayment(null);
-            alert("Payment updated.");
+            await showAlert('Payment updated', 'Payment details were saved successfully.', 'success');
         } catch (err) {
             console.error(err);
-            alert("Failed to update payment.");
+            await showAlert('Could not update payment', 'Payment details were not saved.', 'danger');
         }
     };
 
@@ -584,203 +643,164 @@ export const StudentDetailsView = ({
 
     const handleShareSchedule = async () => {
         if (!db) return;
-        if (!student.parentPhone) return alert("Parent phone number is missing.");
+        if (!student.parentPhone) {
+            await showAlert('Parent phone missing', 'Add a parent phone number before sharing the schedule.', 'warning');
+            return;
+        }
 
-        // Track sharing
+        let phone = student.parentPhone.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+
+        const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
+        const msg = `Hello! Here is the weekly schedule for ${student.name} at ${academyName}.\n\nStudent portal:\n${window.location.origin}\n\nLogin email: ${student.loginInfo?.email || 'Not created yet'}\nPassword: ${student.loginInfo?.initialPassword || 'Contact the academy'}\n\nSee you in class.`;
+
+        const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+        if (!shareWindow) {
+            await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try sharing the schedule again.', 'warning');
+            return;
+        }
+
         try {
             await updateDoc(doc(db, 'students', student.id) as any, {
                 lastScheduleSharedAt: serverTimestamp() as any
             });
         } catch (error) {
             console.error("Error tracking schedule share:", error);
+            await showAlert('Schedule opened, tracking failed', 'WhatsApp opened, but Edufy could not record the share time.', 'warning');
         }
-
-        let phone = student.parentPhone.replace(/[^0-9]/g, '');
-        if (phone.startsWith('0')) phone = '212' + phone.substring(1);
-
-        const msg = `Hello! Here is the weekly schedule for ${student.name} at MakerLab Academy.\n\nYou can access the student portal here:\n${window.location.origin}\n\nLogin Email: ${student.loginInfo?.email || 'N/A'}\nPassword: ${student.loginInfo?.initialPassword || '********'}\n\nSee you in class! 🚀`;
-
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
     };
 
-    const shareCredentialsWhatsApp = () => {
-        if (!student.loginInfo || !student.parentPhone) return alert("Missing login info or parent phone.");
-        const msg = `Hello! Here are the login credentials for ${student.name}'s student portal:\n\nLink: ${window.location.origin}\nEmail: ${student.loginInfo.email}\nPassword: ${student.loginInfo.initialPassword || '********'}`;
-        window.open(`https://wa.me/${student.parentPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
-    };
-
-
-
-    const handleImpersonate = () => {
-        if (!student.loginInfo?.email) {
-            alert("Student does not have login credentials.");
+    const shareCredentialsWhatsApp = async () => {
+        if (!student.loginInfo || !student.parentPhone) {
+            await showAlert('Credentials cannot be shared', 'Missing student login info or parent phone number.', 'warning');
             return;
         }
-
-        // Create a bridge token payload
-        const payload = {
-            uid: student.loginInfo.uid || student.id,
-            email: student.loginInfo.email,
-            role: 'student',
-            name: student.name,
-            photoURL: null
-        };
-
-        const bridgeToken = btoa(JSON.stringify(payload));
-
-        // Determine SparkQuest URL 
-        // Logic: If on localhost, assume SparkQuest is on :3000 (standard vite dev port for 2nd app) or :5174? 
-        // Better: Use a config or assume localhost:3000 for dev, and production URL for prod.
-        const isLocal = window.location.hostname === 'localhost';
-        const sparkQuestUrl = isLocal
-            ? 'http://localhost:3000'
-            : 'https://sparkquest-makerlab.vercel.app';
-
-        window.open(`${sparkQuestUrl}/?token=${bridgeToken}`, '_blank');
+        const msg = `Hello! Here are the login credentials for ${student.name}'s student portal:\n\nLink: ${window.location.origin}\nEmail: ${student.loginInfo.email}\nPassword: ${student.loginInfo.initialPassword || '********'}`;
+        const shareWindow = window.open(`https://wa.me/${student.parentPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+        if (!shareWindow) {
+            await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try sharing the credentials again.', 'warning');
+        }
     };
 
-    const stemQuestEnrollment = studentEnrollments.find(e => e.programName.toLowerCase().includes('stem'));
+    const copyCredential = async (label: string, value: string) => {
+        try {
+            await navigator.clipboard.writeText(value);
+            await showAlert(`${label} copied`, `${label} is ready to paste.`, 'success');
+        } catch (error) {
+            console.error(`Could not copy ${label.toLowerCase()}:`, error);
+            await showAlert(`${label} was not copied`, 'Clipboard access is unavailable. Select the value and copy it manually.', 'warning');
+        }
+    };
+
+
+
+    const stemEnrollment = studentEnrollments.find(e => e.programName.toLowerCase().includes('stem'));
     let membershipEndStr = null;
-    if (stemQuestEnrollment && stemQuestEnrollment.createdAt) {
-        const start = new Date(stemQuestEnrollment.createdAt);
+    if (stemEnrollment && stemEnrollment.createdAt) {
+        const rawStart = stemEnrollment.createdAt as any;
+        const start = rawStart?.toDate ? rawStart.toDate() : new Date(rawStart);
         start.setFullYear(start.getFullYear() + 1);
         membershipEndStr = start.toLocaleDateString('fr-MA', { month: 'long', year: 'numeric' });
     }
 
+    const activeEnrollments = studentEnrollments.filter(enrollment => enrollment.status === 'active');
+    const outstandingBalance = studentEnrollments.reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
+    const attendedSessions = studentAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
+    const attendanceRate = studentAttendance.length > 0 ? Math.round((attendedSessions / studentAttendance.length) * 100) : null;
+    const studentTabs = [
+        { label: 'Academics', icon: GraduationCap, count: studentEnrollments.length },
+        { label: 'Finance', icon: Wallet, count: studentPayments.length },
+        { label: 'Portfolio', icon: FolderKanban, count: publishedProjects.length },
+        { label: 'Attendance', icon: Calendar, count: studentAttendance.length }
+    ];
+
     return (
-        <div className="space-y-6 flex flex-col animate-in fade-in slide-in-from-right-4">
-            <div className="relative rounded-3xl overflow-hidden border border-slate-800 shadow-2xl mb-8">
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/50"></div>
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+        <div className="flex flex-col gap-5 pb-8">
+            <AtlasCommandHeader
+                eyebrow="Student service record"
+                title={student.name}
+                description={`${student.school || 'School not listed'} / ${student.parentName || 'Parent not listed'}${student.birthDate ? ` / ${calculateAge(student.birthDate)} years old` : ''}`}
+                icon={Users}
+                badges={<>
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${student.status === 'inactive' ? 'border-red-400/30 bg-red-500/10 text-red-300' : 'border-teal-400/30 bg-teal-400/10 text-teal-200'}`}>
+                        {student.status === 'inactive' ? 'Inactive' : 'Active record'}
+                    </span>
+                    {membershipEndStr && <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">STEM program until {membershipEndStr}</span>}
+                </>}
+                actions={<>
+                    <AtlasActionButton icon={Printer} onClick={() => generateStudentSchedulePrint(student, studentEnrollments, settings)}>Schedule</AtlasActionButton>
+                    <AtlasActionButton icon={student.lastScheduleSharedAt ? CheckCircle2 : Share2} onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>
+                        {student.lastScheduleSharedAt ? 'Shared' : 'Share'}
+                    </AtlasActionButton>
+                    <AtlasActionButton icon={Pencil} onClick={handleEditClick}>Edit</AtlasActionButton>
+                    <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('students')} title="Back to students" aria-label="Back to students" />
+                </>}
+            />
 
-                <div className="relative z-10 p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                    <div className="flex items-center gap-6">
-                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-0.5 shadow-lg shadow-indigo-500/20">
-                            <div className="w-full h-full rounded-xl bg-slate-900 flex items-center justify-center text-3xl font-bold text-white">
-                                {student.name.charAt(0)}
-                            </div>
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-3 mb-1">
-                                <h1 className="text-3xl font-bold text-white tracking-tight">{student.name}</h1>
-                                {student.status === 'inactive' && (
-                                    <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide">
-                                        Inactive
-                                    </span>
-                                )}
-                                {membershipEndStr && (
-                                    <span className="bg-indigo-900/50 text-indigo-300 border border-indigo-700/50 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide" title="StemQuest Membership Expiration">
-                                        Ends {membershipEndStr}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex flex-wrap items-center gap-4 text-slate-400 text-sm mt-2">
-                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors" title="Email">
-                                    <Mail size={14} className="text-indigo-500" /> {student.email || 'No email'}
-                                </span>
-                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors" title="Parent Phone">
-                                    <Phone size={14} className="text-indigo-500" /> {student.parentPhone}
-                                </span>
-                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors" title="Date of Birth">
-                                    <Calendar size={14} className="text-indigo-500" />
-                                    {student.birthDate ? (
-                                        <>
-                                            {student.birthDate} <span className="text-xs bg-slate-800 px-1.5 rounded text-slate-500">({calculateAge(student.birthDate)} yo)</span>
-                                            {(() => {
-                                                const days = getDaysUntilBirthday(student.birthDate);
-                                                if (days !== null && days <= 21) {
-                                                    return (
-                                                        <span className={`ml-2 text-xs font-bold px-2 py-0.5 rounded-full animate-pulse flex items-center gap-1 ${days === 0 ? 'bg-amber-500 text-slate-900 shadow-lg shadow-amber-500/50' : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'}`}>
-                                                            {days === 0 ? <><Sparkles size={12} /> Happy Birthday!</> : <><Clock size={12} /> {days} days left</>}
-                                                        </span>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </>
-                                    ) : (
-                                        <span className="text-slate-600 italic">No DOB Set</span>
-                                    )}
-                                </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-4 text-slate-400 text-sm mt-1">
-                                <span className="flex items-center gap-1.5">
-                                    <Users size={14} className="text-slate-600" /> <span className="text-slate-500">Parent:</span> <span className={!student.parentName ? "text-slate-600 italic" : "text-slate-300"}>{student.parentName || 'Not Listed'}</span>
-                                </span>
-                                <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                                <span className="flex items-center gap-1.5">
-                                    <BookOpen size={14} className="text-slate-600" /> <span className={!student.school ? "text-slate-600 italic" : "text-slate-300"}>{student.school || 'No School Listed'}</span>
-                                </span>
-                            </div>
-                            {student.medicalInfo ? (
-                                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-red-950/30 border border-red-900/50 rounded-lg text-red-200 text-xs font-bold animate-pulse">
-                                    <AlertCircle size={14} className="text-red-500" /> Medical Info: {student.medicalInfo}
-                                </div>
-                            ) : (
-                                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-slate-800/30 border border-slate-800 rounded-lg text-slate-500 text-xs">
-                                    <Shield size={14} className="text-emerald-500/50" /> No Medical Alerts
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="flex gap-3 w-full md:w-auto">
-                        <button onClick={handleImpersonate} title="Login as Student (SparkQuest)" className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-900/30 transition-all hover:scale-105 active:scale-95">
-                            <Rocket size={18} />
-                        </button>
-                        <button onClick={() => setViewMode('student_preview')} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 active:scale-95 text-sm font-bold">
-                            <LayoutDashboard size={18} /> <span className="hidden sm:inline">Portal Preview</span>
-                        </button>
-                        <button onClick={() => generateStudentSchedulePrint(student, studentEnrollments, settings)} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-all hover:border-slate-600 text-sm font-medium">
-                            <Printer size={18} /> <span className="hidden sm:inline">Schedule</span>
-                        </button>
-                        <button
-                            onClick={handleShareSchedule}
-                            className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl shadow-lg transition-all hover:scale-105 active:scale-95 text-sm font-bold ${student.lastScheduleSharedAt ? 'bg-emerald-700 text-emerald-100 shadow-emerald-900/10' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/20'}`}
-                            title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : "Share via WhatsApp"}
-                        >
-                            {student.lastScheduleSharedAt ? <CheckCircle2 size={18} /> : <Share2 size={18} />}
-                            <span className="hidden sm:inline">{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</span>
-                        </button>
-                        <button onClick={handleEditClick} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl border border-slate-700 transition-all hover:border-slate-600 text-sm font-medium">
-                            <Pencil size={18} /> <span className="hidden sm:inline">Edit</span>
-                        </button>
-                        <button onClick={() => navigateTo('students')} className="flex-none flex items-center justify-center p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl border border-slate-700 transition-all" title="Back to Directory">
-                            <ArrowLeft size={18} />
-                        </button>
-                    </div>
-                </div>
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Academics')} />
+                <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
+                <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'red' : 'blue'} onClick={() => setActiveTab('Attendance')} />
+                <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => setActiveTab('Portfolio')} />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-white/10 py-3 text-xs text-slate-400">
+                <span className="flex min-w-0 items-center gap-2"><Mail size={14} className="shrink-0 text-teal-300" /><span className="truncate">{student.email || 'No email added'}</span></span>
+                <span className="flex items-center gap-2"><Phone size={14} className="text-teal-300" />{student.parentPhone || 'No parent phone'}</span>
+                <span className="flex items-center gap-2"><Calendar size={14} className="text-teal-300" />{student.birthDate || 'No birth date'}</span>
+                <span className={`flex items-center gap-2 ${student.medicalInfo ? 'text-red-300' : 'text-slate-500'}`}><Shield size={14} />{student.medicalInfo ? `Medical: ${student.medicalInfo}` : 'No medical alerts'}</span>
+            </div>
 
+            <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <main className="min-w-0">
+                    <div className="mb-4 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/55 p-1.5">
+                        <div className="flex min-w-max items-center gap-1" role="tablist" aria-label="Student record sections">
+                            {studentTabs.map((tab, index) => {
+                                const Icon = tab.icon;
+                                const selected = activeTab === tab.label;
+                                return (
+                                    <button
+                                        key={tab.label}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={selected}
+                                        ref={element => { tabRefs.current[index] = element; }}
+                                        id={`student-tab-${tab.label.toLowerCase()}`}
+                                        aria-controls={`student-panel-${tab.label.toLowerCase()}`}
+                                        tabIndex={selected ? 0 : -1}
+                                        onClick={() => setActiveTab(tab.label)}
+                                        onKeyDown={(event) => {
+                                            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                                            event.preventDefault();
+                                            const nextIndex = event.key === 'Home'
+                                                ? 0
+                                                : event.key === 'End'
+                                                    ? studentTabs.length - 1
+                                                    : (index + (event.key === 'ArrowRight' ? 1 : -1) + studentTabs.length) % studentTabs.length;
+                                            setActiveTab(studentTabs[nextIndex].label);
+                                            tabRefs.current[nextIndex]?.focus();
+                                        }}
+                                        className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${selected ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}
+                                    >
+                                        <Icon size={16} />
+                                        {tab.label}
+                                        <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${selected ? 'bg-slate-950/15 text-slate-900' : 'bg-white/[0.06] text-slate-500'}`}>{tab.count}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
 
-
-                <div className="lg:col-span-2 space-y-6">
-
-                    <Tabs tabs={[
-
-                        { label: 'Academics', icon: 'A', color: 'bg-sky-600' },
-
-                        { label: 'Finance', icon: 'F', color: 'bg-emerald-600' },
-
-                        { label: 'Portfolio', icon: 'P', color: 'bg-amber-600' },
-
-                        { label: 'Attendance', icon: 'A', color: 'bg-red-600' }
-
-                    ]}>
-
-                        <AcademicsTab
+                    <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="min-w-0" tabIndex={0}>
+                        {activeTab === 'Academics' && <AcademicsTab
                             studentEnrollments={studentEnrollments}
                             onQuickEnroll={onQuickEnroll}
                             navigateTo={navigateTo as any}
                             setEditEnrollment={setEditEnrollment}
                             initiateDeleteEnrollment={initiateDeleteEnrollment}
                             studentId={student.id}
-                        />
-                        <FinanceTab
+                        />}
+                        {activeTab === 'Finance' && <FinanceTab
                             studentPayments={studentPayments}
                             studentEnrollments={studentEnrollments}
                             student={student}
@@ -790,25 +810,29 @@ export const StudentDetailsView = ({
                             initiateDeletePayment={initiateDeletePayment}
                             settings={settings}
                             onShareReceipt={handleShareReceipt}
-                        />
-                        <PortfolioTab
+                        />}
+                        {activeTab === 'Portfolio' && <PortfolioTab
                             publishedProjects={publishedProjects}
                             setSelectedProject={setSelectedProject}
-                        />
-                        <AttendanceTab
+                        />}
+                        {activeTab === 'Attendance' && <AttendanceTab
                             studentAttendance={studentAttendance}
                             absenceCount={absenceCount}
                             lateCount={lateCount}
                             student={student}
                             settings={settings}
-                        />
+                        />}
+                    </div>
+                </main>
 
-                    </Tabs>
-
-                </div>
-
-
-                <div className="space-y-6">
+                <aside className="min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
+                    <div className="flex items-center gap-2 border-b border-white/10 pb-3">
+                        <UserRoundCog size={17} className="text-teal-300" />
+                        <div>
+                            <h3 className="text-sm font-black text-white">Access and accounts</h3>
+                            <p className="text-[11px] text-slate-500">Portal, kiosk, and family access</p>
+                        </div>
+                    </div>
                     <AccessAndAccountsTab
                         student={student}
                         handleGenerateAccess={handleGenerateAccess}
@@ -820,7 +844,7 @@ export const StudentDetailsView = ({
                         settings={settings}
                         isAdult={isAdult}
                     />
-                </div>
+                </aside>
             </div>
             {renderProjectModal()}
             <Modal isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
@@ -980,7 +1004,7 @@ export const StudentDetailsView = ({
                         </div>
                     </div>
 
-                    <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2">
+                    <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">
                         <Save size={16} /> Save Changes
                     </button>
                 </form>
@@ -994,7 +1018,7 @@ export const StudentDetailsView = ({
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
                     {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
-                    <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center justify-center gap-2"><Save size={16} /> Save Changes</button>
+                    <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400"><Save size={16} /> Save changes</button>
                 </form>
             </Modal>
             <Modal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal((prev: any) => ({ ...prev, isOpen: false }))} title={confirmModal.title} size="md">
@@ -1020,14 +1044,14 @@ export const StudentDetailsView = ({
                                     <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider mb-1 block">Login Email</label>
                                     <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-800">
                                         <code className="text-white font-mono text-sm">{credentialsModal.data.email}</code>
-                                        <button onClick={() => navigator.clipboard.writeText(credentialsModal.data!.email)} className="text-slate-500 hover:text-white p-1"><Copy size={14} /></button>
+                                        <button onClick={() => copyCredential('Email', credentialsModal.data!.email)} className="rounded-lg p-1 text-slate-500 hover:bg-white/[0.05] hover:text-white" title="Copy email" aria-label="Copy email"><Copy size={14} /></button>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider mb-1 block">Password</label>
                                     <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-800">
                                         <code className="text-emerald-400 font-mono text-lg font-bold">{credentialsModal.data.pass}</code>
-                                        <button onClick={() => navigator.clipboard.writeText(credentialsModal.data!.pass)} className="text-slate-500 hover:text-white p-1"><Copy size={14} /></button>
+                                        <button onClick={() => copyCredential('Password', credentialsModal.data!.pass)} className="rounded-lg p-1 text-slate-500 hover:bg-white/[0.05] hover:text-white" title="Copy password" aria-label="Copy password"><Copy size={14} /></button>
                                     </div>
                                 </div>
                             </div>
@@ -1149,7 +1173,7 @@ export const StudentDetailsView = ({
                         </button>
                         <button
                             type="submit"
-                            className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold shadow-lg shadow-blue-900/20"
+                            className="min-h-10 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 font-bold text-slate-950 transition-colors hover:bg-teal-400"
                         >
                             Save Changes
                         </button>

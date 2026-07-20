@@ -1,153 +1,236 @@
-
-import React, { useState } from 'react';
-import { Search, Download, ExternalLink, CheckCircle2, Star, Filter } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+    Boxes,
+    CheckCircle2,
+    ExternalLink,
+    LockKeyhole,
+    PackageCheck,
+    Search,
+    Sparkles,
+    Star,
+    Store,
+    Unplug
+} from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { AVAILABLE_APPS, AppManifest } from '../services/appRegistry';
-import { updateDoc, doc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { useConfirm } from '../context/ConfirmContext';
+import { useModuleContext } from '../context/ModuleContext';
+import type { AtlasEntitlement } from '../services/entitlementService';
+import {
+    AtlasActionButton,
+    AtlasCommandHeader,
+    AtlasEmptyState,
+    AtlasSignalCard,
+    AtlasToolbar
+} from '../components/atlas/AtlasSurface';
+
+type CatalogKind = 'all' | 'module' | 'app';
+
+const accessLabel = (entitlement: AtlasEntitlement) => {
+    if (entitlement.source === 'plan') return 'In your plan';
+    if (entitlement.source === 'add_on') return 'Add-on';
+    if (entitlement.source === 'free') return 'Free';
+    if (entitlement.source === 'platform') return 'Core';
+    return 'Upgrade';
+};
 
 export const AppStoreView = () => {
-    const { navigateTo, settings } = useAppContext();
+    const { navigateTo } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
+    const { confirm, alert: showAlert } = useConfirm();
+    const {
+        currentPlan,
+        entitlements,
+        activateItem,
+        deactivateItem,
+        requestAddOn
+    } = useModuleContext();
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<string>('all');
-    const [installingId, setInstallingId] = useState<string | null>(null);
+    const [selectedKind, setSelectedKind] = useState<CatalogKind>('all');
+    const [selectedCategory, setSelectedCategory] = useState('all');
+    const [workingId, setWorkingId] = useState<string | null>(null);
+    const [requestedIds, setRequestedIds] = useState<string[]>([]);
 
-    const installedApps = currentOrganization?.installedApps || [];
+    const canManage = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
+    const publishedEntitlements = entitlements.filter(entry => entry.item.isPublished);
+    const categories = useMemo(() => [
+        'all',
+        ...Array.from(new Set(publishedEntitlements.map(entry => entry.item.category)))
+    ], [publishedEntitlements]);
 
-    const handleInstall = async (appId: string) => {
-        if (!currentOrganization || !db) return;
-        setInstallingId(appId);
-        try {
-            await updateDoc(doc(db, 'organizations', currentOrganization.id), {
-                installedApps: arrayUnion(appId)
-            });
-            // Force reload or optimistic update happens via AuthContext snapshot
-        } catch (error) {
-            console.error("Failed to install app:", error);
-            alert("Failed to install app. Please try again.");
-        } finally {
-            setInstallingId(null);
-        }
-    };
-
-    const handleUninstall = async (appId: string) => {
-        if (!currentOrganization || !db) return;
-        if (!confirm("Are you sure you want to uninstall this app? Data may be retained but access will be removed.")) return;
-        setInstallingId(appId);
-        try {
-            await updateDoc(doc(db, 'organizations', currentOrganization.id), {
-                installedApps: arrayRemove(appId)
-            });
-        } catch (error) {
-            console.error("Failed to uninstall app:", error);
-        } finally {
-            setInstallingId(null);
-        }
-    };
-
-    const filteredApps = AVAILABLE_APPS.filter(app => {
-        const matchesSearch = app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            app.description.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'all' || app.category === selectedCategory;
-        return matchesSearch && matchesCategory;
+    const filteredItems = publishedEntitlements.filter(entitlement => {
+        const query = searchQuery.trim().toLowerCase();
+        const matchesSearch = !query || [entitlement.item.name, entitlement.item.description, entitlement.item.category]
+            .some(value => value.toLowerCase().includes(query));
+        const matchesKind = selectedKind === 'all' || entitlement.item.kind === selectedKind;
+        const matchesCategory = selectedCategory === 'all' || entitlement.item.category === selectedCategory;
+        return matchesSearch && matchesKind && matchesCategory;
     });
 
-    return (
-        <div className="space-y-6 pb-24 md:pb-8 flex flex-col h-full animate-in fade-in slide-in-from-right-4">
+    const activeCount = publishedEntitlements.filter(entry => entry.active).length;
+    const includedCount = publishedEntitlements.filter(entry => entry.entitled).length;
+    const paidCount = publishedEntitlements.filter(entry => entry.item.billing === 'paid').length;
 
-            {/* Header */}
-            <div className="bg-gradient-to-r from-violet-900/50 to-indigo-900/50 p-8 rounded-2xl border border-white/10 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-violet-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-                <div className="relative z-10 max-w-2xl">
-                    <h1 className="text-3xl font-bold text-white mb-2">App Marketplace</h1>
-                    <p className="text-violet-200 text-lg">Supercharge your academy with AI tools and extensions.</p>
-                </div>
+    const openItem = (entitlement: AtlasEntitlement) => {
+        if (entitlement.item.kind === 'module' && entitlement.item.module) {
+            navigateTo(entitlement.item.module.id);
+            return;
+        }
+        navigateTo('saas-app', { appId: entitlement.item.id });
+    };
+
+    const handleActivate = async (entitlement: AtlasEntitlement) => {
+        setWorkingId(entitlement.item.id);
+        try {
+            const activated = await activateItem(entitlement.item.id);
+            if (!activated) {
+                showAlert('Activation unavailable', 'This item is not available for self-service activation.', 'warning');
+                return;
+            }
+            showAlert('Added to workspace', `${entitlement.item.name} is now available from your Atlas navigation.`, 'success');
+        } catch (error) {
+            console.error(error);
+            showAlert('Activation failed', 'The workspace could not be updated. Check your connection and try again.', 'danger');
+        } finally {
+            setWorkingId(null);
+        }
+    };
+
+    const handleDeactivate = async (entitlement: AtlasEntitlement) => {
+        const approved = await confirm({
+            title: `Remove ${entitlement.item.name} from the workspace?`,
+            message: 'Existing records stay available. The module will disappear from team navigation until it is activated again.',
+            confirmText: 'Remove from workspace',
+            cancelText: 'Keep active',
+            variant: 'danger'
+        });
+        if (!approved) return;
+
+        setWorkingId(entitlement.item.id);
+        try {
+            const removed = await deactivateItem(entitlement.item.id);
+            if (removed) showAlert('Removed from workspace', `${entitlement.item.name} is no longer in the active navigation.`, 'success');
+        } catch (error) {
+            console.error(error);
+            showAlert('Removal failed', 'The workspace could not be updated. Try again.', 'danger');
+        } finally {
+            setWorkingId(null);
+        }
+    };
+
+    const handleRequest = async (entitlement: AtlasEntitlement) => {
+        setWorkingId(entitlement.item.id);
+        try {
+            await requestAddOn(entitlement.item.id);
+            setRequestedIds(previous => previous.includes(entitlement.item.id) ? previous : [...previous, entitlement.item.id]);
+            showAlert('Add-on requested', `The Atlas team can now review ${entitlement.item.name} for this workspace.`, 'success');
+        } catch (error) {
+            console.error(error);
+            showAlert('Request not sent', 'The add-on request could not be saved. Try again.', 'danger');
+        } finally {
+            setWorkingId(null);
+        }
+    };
+
+    return (
+        <div className="flex min-h-full flex-col gap-5 pb-24 md:pb-8">
+            <AtlasCommandHeader
+                eyebrow="Workspace catalog"
+                title="Modules & apps"
+                description="Build a focused Atlas workspace from the capabilities included in your plan."
+                icon={Store}
+                badges={
+                    <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold text-slate-300">
+                        {currentPlan?.name || currentOrganization?.subscription?.planId || 'Custom plan'}
+                    </span>
+                }
+            />
+
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AtlasSignalCard label="Catalog" value={publishedEntitlements.length} detail="Available capabilities" icon={Boxes} tone="teal" />
+                <AtlasSignalCard label="Entitled" value={includedCount} detail="Included or granted" icon={PackageCheck} tone="emerald" />
+                <AtlasSignalCard label="Active" value={activeCount} detail="Shown to your team" icon={CheckCircle2} tone="blue" />
+                <AtlasSignalCard label="Paid add-ons" value={paidCount} detail="Optional capabilities" icon={Star} tone="amber" />
             </div>
 
-            {/* Toolbar */}
-            <div className="flex flex-col md:flex-row justify-between gap-4 bg-slate-900/50 p-2 rounded-xl border border-slate-800/50">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                    <input
-                        type="text"
-                        placeholder="Search apps..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white focus:border-violet-500 hover:border-slate-700 transition-all outline-none"
-                    />
-                </div>
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
-                    {['all', 'marketing', 'productivity', 'design', 'analytics'].map(cat => (
-                        <button
-                            key={cat}
-                            onClick={() => setSelectedCategory(cat)}
-                            className={`px-4 py-2 rounded-lg text-xs font-bold capitalize whitespace-nowrap transition-all border ${selectedCategory === cat ? 'bg-violet-600 text-white border-violet-500' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
-                        >
-                            {cat}
-                        </button>
+            <AtlasToolbar
+                leading={
+                    <div className="relative min-w-0 flex-1 sm:min-w-72">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <input
+                            type="search"
+                            aria-label="Search modules and apps"
+                            placeholder="Search modules and apps"
+                            value={searchQuery}
+                            onChange={event => setSearchQuery(event.target.value)}
+                            className="h-10 w-full rounded-lg border border-white/10 bg-slate-900 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10"
+                        />
+                    </div>
+                }
+            >
+                <div className="flex gap-1 rounded-lg bg-slate-900/70 p-1">
+                    {(['all', 'module', 'app'] as CatalogKind[]).map(kind => (
+                        <button key={kind} type="button" onClick={() => setSelectedKind(kind)} className={`h-8 rounded-md px-3 text-xs font-bold capitalize transition-colors ${selectedKind === kind ? 'bg-teal-400 text-slate-950' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}>{kind === 'all' ? 'All' : `${kind}s`}</button>
                     ))}
                 </div>
-            </div>
+                <select aria-label="Filter catalog category" value={selectedCategory} onChange={event => setSelectedCategory(event.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-xs font-bold capitalize text-slate-300 outline-none focus:border-teal-400/60">
+                    {categories.map(category => <option key={category} value={category}>{category === 'all' ? 'All categories' : category}</option>)}
+                </select>
+            </AtlasToolbar>
 
-            {/* Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredApps.map(app => {
-                    const isInstalled = installedApps.includes(app.id);
-                    return (
-                        <div key={app.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:border-violet-500/50 transition-all group flex flex-col h-full relative">
-                            <div onClick={() => navigateTo('app-details', { appId: app.id })} className="p-6 flex-1 cursor-pointer">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white shadow-lg ${app.id.includes('social') ? 'bg-gradient-to-br from-pink-500 to-rose-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'}`}>
-                                        <app.icon size={28} />
+            {filteredItems.length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {filteredItems.map(entitlement => {
+                        const item = entitlement.item;
+                        const Icon = item.module?.icon || item.app?.icon || Sparkles;
+                        const isWorking = workingId === item.id;
+                        const requested = requestedIds.includes(item.id);
+                        const priceLabel = item.priceMonthly > 0 ? `${item.priceMonthly} ${item.currency}/mo` : 'Custom price';
+
+                        return (
+                            <article key={`${item.kind}-${item.id}`} className="flex min-h-[248px] flex-col rounded-lg border border-white/10 bg-slate-900/65 p-4 transition-colors hover:border-teal-300/30">
+                                <div className="flex items-start gap-3">
+                                    <span className="atlas-accent-well flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border"><Icon size={19} /></span>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-1.5">
+                                            <span className="text-[9px] font-bold uppercase text-slate-600">{item.kind}</span>
+                                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${entitlement.entitled ? 'bg-teal-300/10 text-teal-200' : 'bg-amber-300/10 text-amber-200'}`}>{accessLabel(entitlement)}</span>
+                                            {entitlement.active && <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-300"><CheckCircle2 size={10} /> Active</span>}
+                                        </div>
+                                        <h2 className="atlas-text-strong mt-1 text-sm font-black">{item.name}</h2>
+                                        <p className="atlas-text-subtle mt-1 line-clamp-2 text-xs leading-5">{item.description}</p>
                                     </div>
-                                    {app.isPremium && <span className="bg-amber-950/30 text-amber-500 text-[10px] font-bold px-2 py-1 rounded border border-amber-900/50 flex items-center gap-1"><Star size={10} fill="currentColor" /> PREMIUM</span>}
                                 </div>
-                                <h3 className="text-lg font-bold text-white mb-1 group-hover:text-violet-400 transition-colors">{app.name}</h3>
-                                <p className="text-sm text-slate-400 line-clamp-2 mb-4">{app.description}</p>
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    <span className="text-[10px] font-medium bg-slate-800 text-slate-400 px-2 py-1 rounded capitalize">{app.category}</span>
-                                    <span className="text-[10px] font-medium bg-slate-800 text-slate-400 px-2 py-1 rounded">v{app.version}</span>
-                                    {app.pricing && <span className="text-[10px] font-bold bg-violet-950/50 text-violet-400 px-2 py-1 rounded border border-violet-900/50">{app.pricing.price} {app.pricing.currency}/{app.pricing.interval === 'monthly' ? 'mo' : app.pricing.interval === 'yearly' ? 'yr' : 'one-time'}</span>}
-                                </div>
-                            </div>
-                            <div className="p-4 border-t border-slate-800 bg-slate-950/30 flex gap-2">
-                                {isInstalled ? (
-                                    <>
-                                        <button
-                                            onClick={() => navigateTo('saas-app', { appId: app.id })}
-                                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <ExternalLink size={14} /> Open
-                                        </button>
-                                        <button
-                                            onClick={() => handleUninstall(app.id)}
-                                            className="px-3 bg-slate-900 hover:bg-red-900/20 text-slate-500 hover:text-red-400 border border-slate-800 hover:border-red-900/50 rounded-lg text-xs font-bold transition-colors"
-                                        >
-                                            Uninstall
-                                        </button>
-                                    </>
-                                ) : (
-                                    <button
-                                        onClick={() => handleInstall(app.id)}
-                                        disabled={installingId === app.id}
-                                        className="w-full bg-violet-600 hover:bg-violet-500 text-white py-2 rounded-lg text-xs font-bold transition-colors shadow-lg shadow-violet-900/20 flex items-center justify-center gap-2"
-                                    >
-                                        {installingId === app.id ? 'Installing...' : 'Install App'} <Download size={14} />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
 
-            {filteredApps.length === 0 && (
-                <div className="text-center py-24 opacity-50">
-                    <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600"><Search size={32} /></div>
-                    <p className="text-slate-400 text-lg">No apps found matching your criteria.</p>
+                                <div className="mt-4 flex flex-wrap gap-1.5 text-[10px] text-slate-500">
+                                    <span className="rounded-md border border-white/[0.07] px-2 py-1 capitalize">{item.category}</span>
+                                    {item.dependencies.slice(0, 2).map(dependency => <span key={dependency} className="rounded-md border border-white/[0.07] px-2 py-1">Needs {dependency}</span>)}
+                                </div>
+
+                                <div className="mt-auto flex items-end justify-between gap-3 border-t border-white/[0.07] pt-4">
+                                    <div>
+                                        <p className="text-[9px] font-bold uppercase text-slate-600">Access</p>
+                                        <p className={`mt-0.5 text-xs font-black ${entitlement.locked ? 'text-amber-200' : 'text-slate-300'}`}>{entitlement.locked ? priceLabel : accessLabel(entitlement)}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        {entitlement.active ? (
+                                            <>
+                                                <AtlasActionButton icon={ExternalLink} variant="primary" onClick={() => openItem(entitlement)}>Open</AtlasActionButton>
+                                                {item.canSelfActivate && <button type="button" aria-label={`Remove ${item.name}`} title={`Remove ${item.name}`} disabled={isWorking || !canManage} onClick={() => handleDeactivate(entitlement)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-500 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"><Unplug size={15} /></button>}
+                                            </>
+                                        ) : entitlement.entitled ? (
+                                            <AtlasActionButton icon={PackageCheck} variant="primary" disabled={isWorking || !canManage || !item.canSelfActivate} onClick={() => handleActivate(entitlement)}>{isWorking ? 'Adding...' : 'Add'}</AtlasActionButton>
+                                        ) : (
+                                            <AtlasActionButton icon={LockKeyhole} disabled={isWorking || requested || !canManage} onClick={() => handleRequest(entitlement)}>{requested ? 'Requested' : 'Request add-on'}</AtlasActionButton>
+                                        )}
+                                    </div>
+                                </div>
+                            </article>
+                        );
+                    })}
                 </div>
+            ) : (
+                <AtlasEmptyState title="No catalog items match" description="Adjust the search or filters to see other capabilities." icon={Search} action={<AtlasActionButton onClick={() => { setSearchQuery(''); setSelectedKind('all'); setSelectedCategory('all'); }}>Clear filters</AtlasActionButton>} />
             )}
         </div>
     );

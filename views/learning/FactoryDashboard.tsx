@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import { Plus, TrendingUp, Layers, GraduationCap, Sparkles } from 'lucide-react';
+import { Plus, TrendingUp, Layers, GraduationCap, Sparkles, Factory } from 'lucide-react';
 import { ProjectTemplate, StationType, Program } from '../../types';
 import { StationCard } from '../../components/StationCard';
 import { STATION_THEMES } from '../../utils/theme';
-import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard } from '../../components/atlas/AtlasSurface';
 
 interface FactoryDashboardProps {
     projectTemplates: ProjectTemplate[];
@@ -46,73 +46,26 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     const allStations: StationType[] = Object.keys(STATION_THEMES) as StationType[];
 
     return (
-        <div className={studioClass("min-h-screen p-8", STUDIO_THEME.background.main)}>
-            {/* Header */}
-            <div className="mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                        <Sparkles className="text-white" size={24} />
-                    </div>
-                    <div>
-                        <h1 className={studioClass("text-4xl font-bold", STUDIO_THEME.text.primary)}>
-                            The Factory
-                        </h1>
-                        <p className={STUDIO_THEME.text.secondary}>
-                            Build amazing learning experiences for your students
-                        </p>
-                    </div>
-                </div>
-            </div>
+        <div className="space-y-5 pb-8">
+            <AtlasCommandHeader
+                eyebrow="Curriculum factory"
+                title="Project templates"
+                description="Build reusable missions, connect them to stations, and keep grade coverage visible."
+                icon={Factory}
+                actions={<AtlasActionButton variant="primary" icon={Plus} onClick={() => onAddProject()}>Create project</AtlasActionButton>}
+            />
 
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                {/* Total Projects */}
-                <div className={studioClass(STUDIO_THEME.background.card, STUDIO_THEME.rounded.lg, "p-6 border", STUDIO_THEME.border.light, STUDIO_THEME.shadow.card)}>
-                    <div className="flex items-center justify-between mb-2">
-                        <TrendingUp className="text-indigo-600" size={24} />
-                        <span className="text-4xl font-bold text-indigo-600">{stats.total}</span>
-                    </div>
-                    <p className={studioClass("font-medium", STUDIO_THEME.text.secondary)}>Total Projects</p>
-                </div>
-
-                {/* Stations */}
-                <div className={studioClass(STUDIO_THEME.background.card, STUDIO_THEME.rounded.lg, "p-6 border border-blue-100 shadow-lg shadow-blue-100/50")}>
-                    <div className="flex items-center justify-between mb-2">
-                        <Layers className="text-blue-600" size={24} />
-                        <span className="text-4xl font-bold text-blue-600">{stats.stationCount}</span>
-                    </div>
-                    <p className={studioClass("font-medium", STUDIO_THEME.text.secondary)}>Active Stations</p>
-                </div>
-
-                {/* Grades */}
-                <div className={studioClass(STUDIO_THEME.background.card, STUDIO_THEME.rounded.lg, "p-6 border border-emerald-100 shadow-lg shadow-emerald-100/50")}>
-                    <div className="flex items-center justify-between mb-2">
-                        <GraduationCap className="text-emerald-600" size={24} />
-                        <span className="text-4xl font-bold text-emerald-600">{Object.keys(stats.byGrade).length}</span>
-                    </div>
-                    <p className={studioClass("font-medium", STUDIO_THEME.text.secondary)}>Grade Levels</p>
-                </div>
-
-                {/* Quick Add */}
-                <button
-                    onClick={() => onAddProject()}
-                    className={studioClass(
-                        "bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white",
-                        STUDIO_THEME.rounded.lg,
-                        "p-6 shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 flex flex-col items-center justify-center gap-2"
-                    )}
-                >
-                    <Plus size={32} />
-                    <p className="font-bold">Create Project</p>
-                </button>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AtlasSignalCard label="Templates" value={stats.total} detail="Reusable project missions" icon={TrendingUp} tone="teal" />
+                <AtlasSignalCard label="Active stations" value={stats.stationCount} detail={`${allStations.length} stations available`} icon={Layers} tone="blue" />
+                <AtlasSignalCard label="Grade coverage" value={Object.keys(stats.byGrade).length} detail="Levels with assigned projects" icon={GraduationCap} tone="emerald" />
+                <AtlasSignalCard label="Coverage gaps" value={Math.max(allStations.length - stats.stationCount, 0)} detail="Stations without templates" icon={Sparkles} tone={stats.stationCount < allStations.length ? 'amber' : 'slate'} />
             </div>
 
             {/* Station Cards */}
-            <div className="mb-8">
-                <h2 className={studioClass("text-2xl font-bold mb-4 flex items-center gap-2", STUDIO_THEME.text.primary)}>
-                    <Layers size={24} className="text-indigo-600" />
-                    By Station
-                </h2>
+            <section className="space-y-4">
+                <AtlasSectionHeader title="Station catalog" description="Open a station to review its curriculum or create a mission in context." icon={Layers} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {allStations.map(station => (
                         <StationCard
@@ -124,59 +77,32 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                         />
                     ))}
                 </div>
-            </div>
+            </section>
 
             {/* Grade Cards */}
             {Object.keys(stats.byGrade).length > 0 && (
-                <div>
-                    <h2 className={studioClass("text-2xl font-bold mb-4 flex items-center gap-2", STUDIO_THEME.text.primary)}>
-                        <GraduationCap size={24} className="text-indigo-600" />
-                        By Grade
-                    </h2>
+                <section className="space-y-4">
+                    <AtlasSectionHeader title="Grade coverage" description="Select a grade to start a project already targeted to that level." icon={GraduationCap} />
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
                         {Object.entries(stats.byGrade).map(([grade, count]) => (
                             <div
                                 key={grade}
-                                className={studioClass(
-                                    STUDIO_THEME.background.card,
-                                    STUDIO_THEME.rounded.md,
-                                    "p-4 border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer hover:scale-105"
-                                )}
+                                className="cursor-pointer rounded-lg border border-white/10 bg-slate-900/80 p-4 transition-colors hover:border-teal-300/40 hover:bg-slate-900"
                                 onClick={() => onAddProject(undefined, grade)}
                             >
                                 <div className="text-center">
-                                    <div className="text-2xl font-bold text-indigo-600 mb-1">{count}</div>
-                                    <div className="text-sm text-slate-600 font-medium">{grade}</div>
+                                    <div className="mb-1 font-mono text-2xl font-black text-teal-300">{count}</div>
+                                    <div className="truncate text-sm font-bold text-slate-300">{grade}</div>
                                 </div>
                             </div>
                         ))}
                     </div>
-                </div>
+                </section>
             )}
 
             {/* Empty State */}
             {stats.total === 0 && (
-                <div className={studioClass(STUDIO_THEME.glass.light, STUDIO_THEME.rounded.xl, "p-12 text-center border-2 border-dashed border-indigo-200")}>
-                    <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <Sparkles className="text-indigo-600" size={48} />
-                    </div>
-                    <h3 className={studioClass("text-2xl font-bold mb-2", STUDIO_THEME.text.primary)}>
-                        Start Building Your Curriculum
-                    </h3>
-                    <p className={studioClass("mb-6 max-w-md mx-auto", STUDIO_THEME.text.secondary)}>
-                        Create your first project template and bring amazing learning experiences to your students!
-                    </p>
-                    <button
-                        onClick={() => onAddProject()}
-                        className={studioClass(
-                            "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white",
-                            "px-8 py-3 rounded-full font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105 inline-flex items-center gap-2"
-                        )}
-                    >
-                        <Plus size={20} />
-                        Create Your First Project
-                    </button>
-                </div>
+                <AtlasEmptyState title="Build the first curriculum mission" description="Create a reusable project, choose its station, and connect it to the learners it serves." icon={Sparkles} action={<AtlasActionButton variant="primary" icon={Plus} onClick={() => onAddProject()}>Create first project</AtlasActionButton>} />
             )}
         </div>
     );

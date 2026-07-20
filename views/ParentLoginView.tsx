@@ -1,20 +1,17 @@
-
-import React, { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
-import { auth } from '../services/firebase';
-import { useAppContext } from '../context/AppContext';
-import { Lock, Mail, ArrowRight, Loader2, AlertCircle, CheckSquare, Square, ShieldCheck, Fingerprint, Baby, Rocket } from 'lucide-react';
-import { Logo } from '../components/Logo';
-import { authenticateBiometric, isBiometricEnabled } from '../utils/biometrics';
-
+import React, { useEffect, useState } from 'react';
+import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
+import { AlertCircle, ArrowRight, BookOpenCheck, Fingerprint, Loader2, Lock, Mail, Rocket, ShieldCheck, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Logo } from '../components/Logo';
+import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../maker-pro/src/context/AuthContext';
+import { auth } from '../services/firebase';
+import { authenticateBiometric, isBiometricEnabled } from '../utils/biometrics';
 
 export const ParentLoginView = () => {
     const { settings } = useAppContext();
     const navigate = useNavigate();
     const { user, userRole, loading: authLoading } = useAuth();
-    console.log("Rendering ParentLoginView");
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
@@ -33,8 +30,6 @@ export const ParentLoginView = () => {
             } else if (userRole === 'instructor') {
                 navigate('/instructor-dashboard');
             } else {
-                // If a non-parent attempts to login here, they might restrict them or just let them go to their dashboard
-                // For now, redirecting them to their respective dashboards is safe
                 navigate('/');
             }
         }
@@ -45,21 +40,21 @@ export const ParentLoginView = () => {
         setError('');
 
         try {
-            const email = await authenticateBiometric();
-            if (email) {
-                setEmail(email);
-                setError("Biometric verified! Please enter password to confirm session.");
+            const biometricEmail = await authenticateBiometric();
+            if (biometricEmail) {
+                setEmail(biometricEmail);
+                setError('Biometric verified. Enter your password to confirm this session.');
             }
-        } catch (e) {
-            console.error(e);
-            setError("Biometric login failed.");
+        } catch (error) {
+            console.error(error);
+            setError('Biometric login failed. Use your email and password instead.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         if (!auth) return;
         setError('');
         setLoading(true);
@@ -68,185 +63,114 @@ export const ParentLoginView = () => {
             const persistenceType = rememberMe ? browserLocalPersistence : browserSessionPersistence;
             await setPersistence(auth, persistenceType);
             await signInWithEmailAndPassword(auth, email, password);
-            // Success will trigger auth state change in App.tsx
-        } catch (err: any) {
-            console.error(err);
-            let msg = "Authentication failed.";
-            if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-                msg = "Invalid email or password.";
-            } else if (err.code === 'auth/too-many-requests') {
-                msg = "Too many failed attempts. Please try again later.";
-            } else if (err.code === 'auth/network-request-failed') {
-                msg = "Network error. Please check your internet connection.";
+        } catch (error: any) {
+            console.error(error);
+            let message = 'Authentication failed.';
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                message = 'Invalid email or password.';
+            } else if (error.code === 'auth/too-many-requests') {
+                message = 'Too many failed attempts. Please try again later.';
+            } else if (error.code === 'auth/network-request-failed') {
+                message = 'Network error. Please check your internet connection.';
             }
-            setError(msg);
+            setError(message);
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center md:p-4 overflow-hidden font-sans text-slate-800">
-            <div className="w-full max-w-5xl bg-white md:rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row border border-slate-200 min-h-[600px]">
-
-                {/* Left Side - Hero / Branding (Warmer Theme) */}
-                <div className="relative hidden md:flex w-1/2 bg-gradient-to-br from-indigo-600 to-purple-700 flex-col justify-between p-12 overflow-hidden">
-                    {/* Background Effects */}
-                    <div className="absolute top-0 left-0 w-full h-full bg-white/5 z-0"></div>
-                    <div className="absolute -top-24 -left-24 w-96 h-96 bg-indigo-400/30 rounded-full blur-[100px]"></div>
-                    <div className="absolute bottom-0 right-0 w-full h-1/2 bg-gradient-to-t from-purple-900/50 to-transparent opacity-60"></div>
-
-                    {/* Content */}
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-3 mb-8">
-                            <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
-                                {settings.logoUrl ? (
-                                    <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain p-1" />
-                                ) : (
-                                    <Logo className="w-6 h-6 text-white" />
-                                )}
+        <div className="min-h-screen bg-[#F7F1E4] p-4 font-sans text-slate-950 sm:p-6 lg:p-10">
+            <div className="mx-auto grid min-h-[calc(100vh-2rem)] w-full max-w-6xl overflow-hidden rounded-lg border border-slate-950/10 bg-white shadow-[0_24px_80px_rgba(8,17,31,0.14)] md:min-h-[680px] lg:grid-cols-[1.05fr_0.95fr]">
+                <section className="flex flex-col justify-between bg-[#08111F] p-7 text-white sm:p-10 lg:p-12">
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]">
+                                {settings.logoUrl ? <img src={settings.logoUrl} alt="" className="h-full w-full object-contain p-1.5" /> : <Logo className="h-6 w-6 text-teal-300" />}
                             </div>
-                            <span className="font-bold text-white tracking-wide">{settings.academyName}</span>
+                            <div>
+                                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-300">Family workspace</p>
+                                <p className="font-bold">{settings.academyName}</p>
+                            </div>
                         </div>
-                        <h2 className="text-4xl font-bold text-white leading-tight mb-4">
-                            Track your child's <br /> progress & growth.
-                        </h2>
-                        <p className="text-indigo-100 text-sm max-w-xs leading-relaxed">
-                            Stay connected with your child's learning journey, view projects, and manage enrollments seamlessly.
-                        </p>
+
+                        <div className="mt-14 max-w-lg lg:mt-24">
+                            <h1 className="text-3xl font-black leading-tight sm:text-4xl">Everything around your child, ready when you are.</h1>
+                            <p className="mt-4 max-w-md text-sm leading-6 text-slate-400">Follow learning progress, published work, billing, gallery moments, and pickup from one connected place.</p>
+                        </div>
+
+                        <div className="mt-10 grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-lg border border-white/10 bg-white/[0.04] p-4">
+                                <BookOpenCheck className="text-teal-300" size={19} />
+                                <p className="mt-3 text-sm font-bold">Learning at a glance</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">Projects, evidence, feedback, and next steps stay connected.</p>
+                            </div>
+                            <div className="rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-4">
+                                <Users className="text-amber-200" size={19} />
+                                <p className="mt-3 text-sm font-bold">Built for families</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">Fast access to the actions and updates that need attention.</p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="relative z-10 flex items-center gap-4 text-xs text-indigo-200 font-medium">
-                        <div className="flex items-center gap-1.5">
-                            <ShieldCheck className="w-4 h-4" /> Secure Portal
-                        </div>
-                        <div className="w-1 h-1 bg-indigo-300/50 rounded-full"></div>
-                        <div className="flex items-center gap-1.5">
-                            <Baby className="w-4 h-4" /> Student Focused
-                        </div>
+                    <div className="mt-10 flex flex-wrap items-center gap-4 text-xs font-medium text-slate-400">
+                        <span className="flex items-center gap-1.5"><ShieldCheck size={15} className="text-teal-300" /> Secure family access</span>
+                        <a href="https://sparkquest-makerlab.vercel.app" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-amber-200 transition-colors hover:text-amber-100"><Rocket size={15} /> Open student portal</a>
                     </div>
-                </div>
+                </section>
 
-                {/* Right Side - Form */}
-                <div className="w-full md:w-1/2 p-6 md:p-16 flex flex-col justify-center bg-white relative">
-                    <div className="max-w-sm mx-auto w-full">
-                        <div className="text-center md:text-left mb-8">
-                            <div className="md:hidden w-16 h-16 bg-indigo-50 rounded-2xl mx-auto flex items-center justify-center mb-4 border border-indigo-100">
-                                {settings.logoUrl ? (
-                                    <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
-                                ) : (
-                                    <Logo className="w-8 h-8 text-indigo-600" />
-                                )}
-                            </div>
-                            <h3 className="text-2xl font-bold text-slate-800 mb-2">Parent Portal Access</h3>
-                            <p className="text-slate-500 text-sm">
-                                Please sign in with your parent credentials.
-                            </p>
+                <section className="flex items-center p-7 sm:p-10 lg:p-14">
+                    <div className="mx-auto w-full max-w-sm">
+                        <div className="mb-8">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700">Welcome back</p>
+                            <h2 className="mt-2 text-2xl font-black text-[#08111F]">Sign in to your family workspace</h2>
+                            <p className="mt-2 text-sm leading-6 text-slate-500">Use the parent credentials provided by your academy.</p>
                         </div>
 
-                        {/* Biometric Button */}
-                        <div className="mb-6">
-                            <button
-                                onClick={handleBiometricLogin}
-                                disabled={loading}
-                                className="w-full py-3 bg-white hover:bg-slate-50 text-slate-700 rounded-xl border border-slate-200 font-bold flex items-center justify-center gap-2 transition-colors shadow-sm"
-                            >
-                                {loading ? <Loader2 size={20} className="animate-spin" /> : <Fingerprint size={20} className="text-purple-600" />}
-                                Sign in with Passkey
+                        {biometricAvailable && (
+                            <button onClick={handleBiometricLogin} disabled={loading} className="mb-5 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 transition-colors hover:border-teal-500/40 hover:bg-teal-50 disabled:opacity-60">
+                                {loading ? <Loader2 size={18} className="animate-spin" /> : <Fingerprint size={18} className="text-teal-600" />}
+                                Verify with passkey
                             </button>
+                        )}
 
-                            {/* SparkQuest Link */}
-                            <div className="mt-3 text-center">
-                                <a
-                                    href="https://sparkquest-makerlab.vercel.app"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition-colors"
-                                >
-                                    <Rocket size={14} /> Student Portal (SparkQuest)
-                                </a>
-                            </div>
-
-                            <div className="relative flex items-center py-4">
-                                <div className="flex-grow border-t border-slate-100"></div>
-                                <span className="flex-shrink-0 mx-4 text-slate-400 text-xs">OR</span>
-                                <div className="flex-grow border-t border-slate-100"></div>
-                            </div>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-5">
+                        <form onSubmit={handleSubmit} className="space-y-4">
                             {error && (
-                                <div className="bg-red-50 border border-red-100 p-3 rounded-lg flex flex-col gap-2 text-red-600 text-xs animate-in slide-in-from-top-1">
-                                    <div className="flex items-start gap-3">
-                                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                                        <span>{error}</span>
-                                    </div>
+                                <div role="alert" className={`flex items-start gap-3 rounded-lg border p-3 text-xs ${error.startsWith('Biometric verified') ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span className="leading-5">{error}</span>
                                 </div>
                             )}
 
-                            <div className="space-y-4">
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Mail className="h-5 w-5 text-slate-400 group-focus-within:text-purple-600 transition-colors" />
-                                    </div>
-                                    <input
-                                        type="email"
-                                        required
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-10 pr-4 text-slate-800 text-base focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-400"
-                                        placeholder="Parent Email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                    />
-                                </div>
+                            <label className="block">
+                                <span className="mb-1.5 block text-xs font-bold text-slate-600">Email address</span>
+                                <span className="relative block">
+                                    <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <input type="email" required autoComplete="email" className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15" placeholder="parent@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
+                                </span>
+                            </label>
 
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-purple-600 transition-colors" />
-                                    </div>
-                                    <input
-                                        type="password"
-                                        required
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 pl-10 pr-4 text-slate-800 text-base focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-400"
-                                        placeholder="Password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                    />
-                                </div>
-                            </div>
+                            <label className="block">
+                                <span className="mb-1.5 block text-xs font-bold text-slate-600">Password</span>
+                                <span className="relative block">
+                                    <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                                    <input type="password" required autoComplete="current-password" className="min-h-11 w-full rounded-lg border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15" placeholder="Your password" value={password} onChange={(event) => setPassword(event.target.value)} />
+                                </span>
+                            </label>
 
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setRememberMe(!rememberMe)}>
-                                    <button type="button" className={`text-purple-600 transition-colors`}>
-                                        {rememberMe ? <CheckSquare size={16} /> : <Square size={16} className="text-slate-400 group-hover:text-slate-600" />}
-                                    </button>
-                                    <span className="text-xs text-slate-500 group-hover:text-slate-700 select-none">Remember me</span>
-                                </div>
-                                <button type="button" className="text-xs text-slate-500 hover:text-purple-600 transition-colors font-medium">
-                                    Forgot password?
-                                </button>
-                            </div>
+                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-600">
+                                <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                Keep me signed in on this device
+                            </label>
 
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-200 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                            >
-                                {loading ? <Loader2 className="animate-spin w-5 h-5" /> : (
-                                    <>
-                                        Sign In <ArrowRight className="w-4 h-4" />
-                                    </>
-                                )}
+                            <button type="submit" disabled={loading} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-teal-700/20 bg-teal-500 px-4 py-2.5 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60">
+                                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Open family workspace <ArrowRight className="h-4 w-4" /></>}
                             </button>
                         </form>
-                    </div>
 
-                    {/* Footer for mobile/tablet */}
-                    <div className="mt-auto pt-8 text-center md:text-left">
-                        <p className="text-[10px] text-slate-400">
-                            © {new Date().getFullYear()} {settings.academyName}. All rights reserved.
-                        </p>
+                        <p className="mt-8 text-[10px] text-slate-400">Copyright {new Date().getFullYear()} {settings.academyName}. All rights reserved.</p>
                     </div>
-                </div>
+                </section>
             </div>
         </div>
     );

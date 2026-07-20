@@ -47,7 +47,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     processTemplates, handleSaveProject, handleStartBuilding, handleMoveStep,
     handleAddStep, handleDeleteStep, newStepTitle, setNewStepTitle, apiConfig, isWorkflowLocked, badges, handleSubmitForReview
 }) => {
-    const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
+    const INPUT_CLASS = "min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
 
     const { confirm } = useConfirm();
@@ -148,14 +148,14 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
         const steps = projectForm.steps?.filter((s) => s.status === status) || [];
 
         return (
-            <div className={`flex-1 flex flex-col ${bgClass} backdrop-blur-md border border-white/40 rounded-[2.5rem] min-h-[500px] transition-all duration-500 shadow-xl overflow-hidden`}>
-                <div className={`p-6 border-b border-white/20 font-black text-sm uppercase tracking-wider text-center flex items-center justify-center gap-2 ${colorClass}`}>
+            <div className={`flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/80 ${bgClass} backdrop-blur-md transition-colors`}>
+                <div className={`flex items-center justify-center gap-2 border-b border-slate-200/70 p-4 text-center text-xs font-black uppercase tracking-wider ${colorClass}`}>
                     <div className="p-2 bg-white/50 rounded-lg shadow-sm">{icon}</div>
                     {title}
                     <span className="bg-white/50 px-2 py-0.5 rounded-full text-[10px] font-bold">{steps.length}</span>
                 </div>
 
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 space-y-3 overflow-y-auto p-3 custom-scrollbar">
                     {steps.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400/50 text-sm font-bold italic gap-2">
                             <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center opacity-50">
@@ -168,7 +168,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                         <div
                             key={step.id}
                             style={{ animationDelay: `${idx * 100}ms` }}
-                            className="bg-white/80 hover:bg-white border-2 border-white p-5 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-300 group relative animate-in slide-in-from-bottom-2 fill-mode-backwards"
+                            className="group relative rounded-lg border border-white bg-white/90 p-4 shadow-sm transition-colors hover:border-teal-300 animate-in slide-in-from-bottom-2 fill-mode-backwards"
                         >
                             <p className="font-bold text-slate-700 mb-4 text-lg leading-tight">{step.title}</p>
 
@@ -182,7 +182,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                                     </>
                                 )}
                                 {status === 'todo' && (
-                                    <button onClick={() => handleMoveStep(step.id, 'doing')} className="w-full py-3 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95">
+                                    <button onClick={() => handleMoveStep(step.id, 'doing')} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400">
                                         Start Mission <ArrowRight size={16} />
                                     </button>
                                 )}
@@ -235,14 +235,14 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     return (
         <>
             <Modal isOpen={isOpen} onClose={onClose} title="" size="6xl">
-                <div className="flex flex-col h-[88vh] -m-6 font-sans">
+                <div className="-m-6 flex h-[88vh] flex-col overflow-hidden bg-slate-100 font-sans">
                     {/* 1. Top HUD (Head Up Display) */}
-                    <div className={studioClass("border-b sticky top-0 z-20 backdrop-blur-xl", STUDIO_THEME.background.card, STUDIO_THEME.border.light)}>
-                        <div className="px-8 py-6 flex flex-col gap-6">
-                            <div className="flex justify-between items-start">
+                    <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+                        <div className="flex flex-col gap-4 px-4 py-4 sm:px-6">
+                            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-4 mb-3">
-                                        <h2 className={studioClass("text-3xl md:text-4xl font-black tracking-tight", STUDIO_THEME.text.primary)}>
+                                        <h2 className="truncate text-2xl font-black tracking-normal text-slate-900 md:text-3xl">
                                             {projectForm.title || 'Untitled Project'}
                                         </h2>
                                         <span className={`text-xs px-3 py-1.5 rounded-full border uppercase font-black shadow-sm ${currentTheme.bgSoft} ${currentTheme.text} ${currentTheme.border}`}>
@@ -268,53 +268,47 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                                 </div>
 
                                 {/* BIG SAVE BUTTON */}
-                                <div className="hidden md:flex gap-3">
+                                <div className="flex gap-2 overflow-x-auto">
                                     <button
                                         onClick={() => setIsHistoryModalOpen(true)}
-                                        className={studioClass("flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all border-2 group", STUDIO_THEME.background.card, STUDIO_THEME.border.light, "hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10")}
+                                        className="group flex h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-700"
                                         title="View History"
                                     >
-                                        <div className="bg-indigo-50 group-hover:bg-indigo-100 p-2 rounded-full mb-1 transition-colors">
-                                            <History size={24} className="text-indigo-600" strokeWidth={3} />
-                                        </div>
-                                        <span className="text-[10px] font-black text-slate-400 group-hover:text-indigo-600 uppercase tracking-wider">History</span>
+                                        <History size={18} />
+                                        <span className="hidden text-xs font-black sm:inline">History</span>
                                     </button>
 
                                     <button
                                         onClick={() => setIsCommitModalOpen(true)}
-                                        className={studioClass("flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all border-2 group", STUDIO_THEME.background.card, STUDIO_THEME.border.light, "hover:border-indigo-500 hover:shadow-lg hover:shadow-indigo-500/10")}
+                                        className="group flex h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-600 transition-colors hover:border-teal-400 hover:text-teal-700"
                                         title="Save a version"
                                     >
-                                        <div className="bg-indigo-50 group-hover:bg-indigo-100 p-2 rounded-full mb-1 transition-colors">
-                                            <GitCommit size={24} className="text-indigo-600" strokeWidth={3} />
-                                        </div>
-                                        <span className="text-[10px] font-black text-slate-400 group-hover:text-indigo-600 uppercase tracking-wider">Commit</span>
+                                        <GitCommit size={18} />
+                                        <span className="hidden text-xs font-black sm:inline">Commit</span>
                                     </button>
 
                                     <button
                                         onClick={() => handleSaveProject(false)}
-                                        className={studioClass("flex flex-col items-center justify-center w-20 h-20 rounded-2xl transition-all border-2 group", STUDIO_THEME.background.card, STUDIO_THEME.border.light, "hover:border-emerald-500 hover:shadow-lg hover:shadow-emerald-500/10")}
+                                        className="group flex h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-teal-300/40 bg-teal-500 px-3 text-slate-950 transition-colors hover:bg-teal-400"
                                     >
-                                        <div className="bg-emerald-50 group-hover:bg-emerald-100 p-2 rounded-full mb-1 transition-colors">
-                                            <CheckSquare size={24} className="text-emerald-600" strokeWidth={3} />
-                                        </div>
-                                        <span className="text-[10px] font-black text-slate-400 group-hover:text-emerald-600 uppercase tracking-wider">Save</span>
+                                        <CheckSquare size={18} />
+                                        <span className="hidden text-xs font-black sm:inline">Save</span>
                                     </button>
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 shrink-0 bg-slate-100/50 p-1.5 rounded-xl self-start md:self-auto border border-slate-200/50">
-                                <button onClick={() => setWorkspaceTab('mission')} className={studioClass("flex-1 px-6 py-3 rounded-lg font-bold text-sm transition-all flex items-center gap-2", workspaceTab === 'mission' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-indigo-600 hover:bg-white/50")}>
+                            <div className="flex shrink-0 gap-1 self-start rounded-lg border border-slate-200 bg-slate-100 p-1 md:self-auto">
+                                <button onClick={() => setWorkspaceTab('mission')} className={studioClass("flex min-h-9 flex-1 items-center gap-2 rounded-md px-3 text-sm font-bold transition-colors", workspaceTab === 'mission' ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:bg-white/60 hover:text-slate-900")}>
                                     <ClipboardList size={18} /> Mission Control
                                 </button>
-                                <button onClick={() => setWorkspaceTab('resources')} className={studioClass("flex-1 px-6 py-3 rounded-lg font-bold text-sm transition-all flex items-center gap-2", workspaceTab === 'resources' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-indigo-600 hover:bg-white/50")}>
+                                <button onClick={() => setWorkspaceTab('resources')} className={studioClass("flex min-h-9 flex-1 items-center gap-2 rounded-md px-3 text-sm font-bold transition-colors", workspaceTab === 'resources' ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:bg-white/60 hover:text-slate-900")}>
                                     <Beaker size={18} /> Resources
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-hidden flex flex-col p-6 md:p-8 bg-slate-50 relative">
+                    <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-50 p-3 sm:p-5 md:p-6">
                         {/* Background Pattern */}
                         <div className="absolute inset-0 opacity-[0.02] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#2D2B6B 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
 
