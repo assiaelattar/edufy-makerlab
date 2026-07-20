@@ -80,6 +80,19 @@ export const buildProgramDuplicateDraft = (
     status: 'draft',
     academicPeriod: { ...targetPeriod },
     templateSourceProgramId: program.id,
+    campSetup: program.campSetup ? {
+      shifts: program.campSetup.shifts.map(shift => ({ ...shift })),
+      sessions: program.campSetup.sessions.map(session => ({
+        ...session,
+        startDate: shiftISODateByYears(session.startDate, yearShift),
+        endDate: shiftISODateByYears(session.endDate, yearShift),
+        weeks: session.weeks.map(week => ({
+          ...week,
+          startDate: shiftISODateByYears(week.startDate, yearShift),
+          endDate: shiftISODateByYears(week.endDate, yearShift)
+        }))
+      }))
+    } : undefined,
     runSetup: {
       name: sourceRun?.name ? shiftYearsInName(sourceRun.name, yearShift, targetPeriod.label) : `${nextName} / ${targetPeriod.label}`,
       startDate: rollingMembership ? targetPeriod.startDate : sourceRun?.startDate ? shiftISODateByYears(sourceRun.startDate, yearShift) : targetPeriod.startDate,

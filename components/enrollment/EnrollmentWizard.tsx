@@ -39,6 +39,9 @@ export interface EnrollmentProgramDraft {
   groupId: string;
   paymentPlan: string;
   secondGroupId: string;
+  campSessionId: string;
+  campShiftId: string;
+  moduleIds: string[];
 }
 
 export interface EnrollmentPaymentDraft {
@@ -223,6 +226,10 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
   const selectedGroupChoice = groupChoices.find(choice => choice.group.id === programForm.groupId);
   const selectedPack = selectedProgram?.packs.find(pack => pack.name === programForm.packName);
   const selectedSecondGroup = groupChoices.find(choice => choice.group.id === programForm.secondGroupId);
+  const isStructuredCamp = selectedProgram?.formatPreset === 'camp' && Boolean(selectedProgram.campSetup?.sessions.length);
+  const selectedCampSession = selectedProgram?.campSetup?.sessions.find(session => session.id === programForm.campSessionId);
+  const selectedCampShift = selectedProgram?.campSetup?.shifts.find(shift => shift.id === programForm.campShiftId);
+  const selectedCampWeeks = selectedCampSession?.weeks.filter(week => programForm.moduleIds.includes(week.id)) || [];
   const displayStudentName = selectedStudent?.name || studentForm.name || 'Learner not chosen';
   const paymentScheduleTotal = promises.reduce((sum, promise) => sum + Number(promise.amount || 0), 0);
 
@@ -254,7 +261,37 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
       gradeId: '',
       groupId: '',
       secondGroupId: '',
+      campSessionId: '',
+      campShiftId: '',
+      moduleIds: [],
     }));
+  };
+
+  const updateCampSelection = (patch: Partial<EnrollmentProgramDraft>) => {
+    if (!selectedProgram?.campSetup) return;
+    setProgramForm(previous => {
+      const next = { ...previous, ...patch };
+      const pack = selectedProgram.packs.find(item => item.name === next.packName);
+      const session = selectedProgram.campSetup?.sessions.find(item => item.id === next.campSessionId);
+      const includedWeeks = Math.max(1, Number(pack?.includedModuleCount || 1));
+      let moduleIds = next.moduleIds.filter(moduleId => session?.weeks.some(week => week.id === moduleId));
+      if (includedWeeks >= 2 && session) moduleIds = session.weeks.slice(0, includedWeeks).map(week => week.id);
+      if (includedWeeks === 1 && moduleIds.length > 1) moduleIds = moduleIds.slice(0, 1);
+
+      const grade = selectedProgram.grades.find(item => item.id === next.gradeId);
+      const matchingGroups = (grade?.groups || []).filter(group =>
+        group.campSessionId === next.campSessionId
+        && group.campShiftId === next.campShiftId
+        && moduleIds.includes(group.campWeekId || '')
+      );
+
+      return {
+        ...next,
+        moduleIds,
+        groupId: matchingGroups[0]?.id || '',
+        secondGroupId: matchingGroups[1]?.id || '',
+      };
+    });
   };
 
   const selectGroup = (gradeId: string, groupId: string) => {
@@ -272,6 +309,13 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
     if (step === 2) {
       if (!programForm.programId) return 'Choose a program to continue.';
       if (!programForm.packName) return 'Choose a fee option to continue.';
+      if (isStructuredCamp) {
+        if (!programForm.gradeId) return 'Choose the learner age group.';
+        if (!programForm.campSessionId) return 'Choose a camp session.';
+        if (!programForm.campShiftId) return 'Choose morning or afternoon.';
+        const requiredWeeks = Math.max(1, Number(selectedPack?.includedModuleCount || 1));
+        if (programForm.moduleIds.length !== requiredWeeks) return `Choose ${requiredWeeks === 1 ? 'one week' : 'both weeks'} for this camp pack.`;
+      }
       if (!programForm.groupId) return 'Choose a class time to continue.';
       if (selectedGroupChoice?.isFull) return 'This class is full. Choose another class time.';
     }
@@ -497,8 +541,8 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                           const price = Math.max(pack.priceAnnual || 0, pack.priceTrimester || 0, pack.price || 0, pack.promoPrice || 0);
                           const isSelected = pack.name === programForm.packName;
                           return (
-                            <button key={pack.name} type="button" onClick={() => setProgramForm(previous => ({ ...previous, packName: pack.name }))} aria-pressed={isSelected} className={`flex h-14 items-center justify-between rounded-lg border px-3 text-left transition ${isSelected ? 'border-teal-300/40 bg-teal-300/10' : 'border-white/10 hover:bg-white/[0.04]'}`}>
-                              <span className="truncate text-sm font-bold text-white">{pack.name}</span>
+                            <button key={pack.name} type="button" onClick={() => isStructuredCamp ? updateCampSelection({ packName: pack.name, moduleIds: [] }) : setProgramForm(previous => ({ ...previous, packName: pack.name }))} aria-pressed={isSelected} className={`flex min-h-14 items-center justify-between rounded-lg border px-3 py-2 text-left transition ${isSelected ? 'border-teal-300/40 bg-teal-300/10' : 'border-white/10 hover:bg-white/[0.04]'}`}>
+                              <span className="min-w-0"><span className="block truncate text-sm font-bold text-white">{pack.name}</span>{isStructuredCamp && <span className="mt-0.5 block text-[10px] font-bold text-slate-500">{pack.includedModuleCount === 2 ? 'Both weeks' : 'Choose one week'}</span>}</span>
                               <span className="ml-3 shrink-0 text-sm font-black text-teal-300">{formatCurrency(price)}</span>
                             </button>
                           );
@@ -506,6 +550,70 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                       </div>
                     </div>
 
+                    {isStructuredCamp ? (
+                    <div className="space-y-5 border-t border-white/10 pt-5">
+                      <div>
+                        <p className={labelClass}>Age group</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {selectedProgram.grades.map(grade => {
+                            const selected = programForm.gradeId === grade.id;
+                            return <button key={grade.id} type="button" onClick={() => updateCampSelection({ gradeId: grade.id })} className={`min-h-12 rounded-lg border px-3 text-left text-sm font-bold transition ${selected ? 'border-teal-300/40 bg-teal-300/10 text-white' : 'border-white/10 text-slate-300 hover:bg-white/[0.04]'}`}>{grade.name}</button>;
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className={labelClass}>Camp session</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {selectedProgram.campSetup!.sessions.map(session => {
+                            const selected = programForm.campSessionId === session.id;
+                            return (
+                              <button key={session.id} type="button" onClick={() => updateCampSelection({ campSessionId: session.id, moduleIds: [] })} className={`rounded-lg border p-3 text-left transition ${selected ? 'border-teal-300/40 bg-teal-300/10' : 'border-white/10 hover:bg-white/[0.04]'}`}>
+                                <span className="block text-sm font-black text-white">{session.name}</span>
+                                <span className="mt-1 block text-xs text-slate-500">{session.startDate} to {session.endDate}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className={labelClass}>Shift</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {selectedProgram.campSetup!.shifts.map(shift => {
+                            const selected = programForm.campShiftId === shift.id;
+                            return <button key={shift.id} type="button" onClick={() => updateCampSelection({ campShiftId: shift.id })} className={`flex min-h-12 items-center justify-between rounded-lg border px-3 text-left transition ${selected ? 'border-teal-300/40 bg-teal-300/10' : 'border-white/10 hover:bg-white/[0.04]'}`}><span className="text-sm font-black text-white">{shift.label}</span><span className="text-xs font-bold text-slate-500">{shift.startTime} - {shift.endTime}</span></button>;
+                          })}
+                        </div>
+                      </div>
+
+                      {selectedCampSession && selectedPack && (
+                        <div>
+                          <p className={labelClass}>{selectedPack.includedModuleCount === 2 ? 'Weeks included' : 'Choose a week'}</p>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            {selectedCampSession.weeks.map(week => {
+                              const selected = programForm.moduleIds.includes(week.id);
+                              const fixed = selectedPack.includedModuleCount === 2;
+                              return (
+                                <button key={week.id} type="button" disabled={fixed} onClick={() => updateCampSelection({ moduleIds: [week.id] })} className={`rounded-lg border p-3 text-left transition ${selected ? 'border-amber-300/35 bg-amber-300/10' : 'border-white/10 hover:bg-white/[0.04]'} disabled:cursor-default`}>
+                                  <span className="block text-sm font-black text-white">{week.label}</span>
+                                  <span className="mt-1 block text-xs text-slate-500">{week.startDate} to {week.endDate}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {programForm.groupId && (
+                        <div className="flex items-center gap-3 rounded-lg border border-teal-300/20 bg-teal-300/[0.07] p-3">
+                          <CheckCircle2 size={18} className="shrink-0 text-teal-300" />
+                          <p className="text-xs leading-5 text-teal-100">Atlas matched {selectedCampWeeks.map(week => week.label).join(' + ')}, {selectedCampShift?.label.toLowerCase()}, and {selectedProgram.grades.find(grade => grade.id === programForm.gradeId)?.name} to the correct attendance group{programForm.secondGroupId ? 's' : ''}.</p>
+                        </div>
+                      )}
+                    </div>
+                    ) : (
+                    <div className="space-y-4">
                     <div>
                       <p className={labelClass}>Weekly class</p>
                       <div className="divide-y divide-white/[0.07] border-y border-white/10">
@@ -534,6 +642,8 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                         {groupChoices.filter(choice => choice.group.id !== programForm.groupId && !choice.isFull).map(choice => <option key={choice.group.id} value={choice.group.id}>{choice.group.name} / {choice.group.day} {choice.group.time}</option>)}
                       </select>
                     </details>
+                    </div>
+                    )}
                   </>
                 )}
               </div>

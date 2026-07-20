@@ -263,7 +263,7 @@ const AppContent = () => {
 
     // --- ENROLLMENT FORM DATA ---
     const [enrollStudentForm, setEnrollStudentForm] = useState({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
-    const [enrollProgramForm, setEnrollProgramForm] = useState({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '' });
+    const [enrollProgramForm, setEnrollProgramForm] = useState({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '', campSessionId: '', campShiftId: '', moduleIds: [] as string[] });
     const [negotiatedPrice, setNegotiatedPrice] = useState<number>(0);
 
     // Multi-Payment State for Enrollment
@@ -312,7 +312,7 @@ const AppContent = () => {
             // Only reset forms if NOT explicitly preserved (e.g. coming from Lead or Prospect)
             if (!preserveEnrollmentFormRef.current) {
                 setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
-                setEnrollProgramForm({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '' });
+                setEnrollProgramForm({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '', campSessionId: '', campShiftId: '', moduleIds: [] });
             }
 
             // Always reset payments on new session
@@ -719,7 +719,10 @@ const AppContent = () => {
             groupId,
             packName: defaultPack,
             paymentPlan: 'full',
-            secondGroupId: ''
+            secondGroupId: '',
+            campSessionId: '',
+            campShiftId: '',
+            moduleIds: []
         });
 
         // Reset student form for fresh entry
@@ -945,7 +948,7 @@ const AppContent = () => {
                     secondGroupData = {
                         secondGroupId: diyGroup.id,
                         secondGroupName: diyGroup.name,
-                        secondGroupTime: `${diyGroup.day} ${diyGroup.time}`
+                secondGroupTime: `${diyGroup.day} ${diyGroup.time}`
                     };
                 }
             }
@@ -969,6 +972,11 @@ const AppContent = () => {
                 groupName: selectedGroup?.name,
                 groupTime: selectedGroup ? `${selectedGroup.day} ${selectedGroup.time}` : null,
                 ...secondGroupData,
+                moduleIds: enrollProgramForm.moduleIds,
+                moduleNames: selectedProgram.campSetup?.sessions
+                    .flatMap(session => session.weeks)
+                    .filter(week => enrollProgramForm.moduleIds.includes(week.id))
+                    .map(week => week.label) || [],
                 paymentPlan: enrollProgramForm.paymentPlan,
                 totalAmount: negotiatedPrice, // Use the Negotiated Price
                 discountAmount: discountAmount > 0 ? discountAmount : 0, // Store discount
@@ -1067,13 +1075,23 @@ const AppContent = () => {
             }
         }
 
+        const leadPrimaryGroup = lead.selectedGroupId
+            ? programs.flatMap(program => program.grades).flatMap(grade => grade.groups).find(group => group.id === lead.selectedGroupId)
+            : undefined;
+        const leadGrade = lead.selectedGradeId
+            ? programs.flatMap(program => program.grades).find(grade => grade.id === lead.selectedGradeId)
+            : undefined;
+
         setEnrollProgramForm({
             programId,
             packName,
-            gradeId,
-            groupId,
+            gradeId: leadGrade?.id || gradeId,
+            groupId: leadPrimaryGroup?.id || groupId,
             paymentPlan: 'full', // Default, or infer if lead has it
-            secondGroupId: ''
+            secondGroupId: lead.secondGroupId || '',
+            campSessionId: lead.campSessionId || '',
+            campShiftId: lead.campShiftId || '',
+            moduleIds: lead.moduleIds || []
         });
 
         // Reset ID to ensure creating NEW student

@@ -448,6 +448,7 @@ Left:
 
 ## Verification Log
 
+- 2026-07-20: `npm.cmd run build` passed after adding the reusable MakerLab Summer Camp template, session/week/shift/age-band enrollment routing, public QR registration choices, and year-safe duplication. The MakerLab 2026 draft was seeded idempotently without enrollments.
 - 2026-07-18: `npm.cmd run build` passed after landing/login visual coherence pass and Finance command header work. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
 - 2026-07-18: `npm.cmd run build` passed after extracting Atlas surface primitives and wiring Finance/Students headers to them. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
 - 2026-07-18: `npm.cmd run build` passed after applying Atlas command primitives to Programs and Workshops. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
@@ -462,6 +463,14 @@ Left:
 - 2026-07-17: `npm.cmd run build` passed after Programs and Enrollment Forms improvements. Targeted scan found no dynamic Tailwind or browser alert issues in `ProgramsView`, `ProgramDetailsView`, `PublicEnrollmentView`, or `EnrollmentFormsView`.
 
 ## Latest Completed Work
+
+### 2026-07-20 - Structured Summer Camp Template
+
+- Added a reusable MakerLab Summer Camp template with four two-week sessions, two shifts, two age bands, and one-week or full-session pricing.
+- Mapped each selectable camp week to its own capacity and attendance group while preserving the current enrollment model.
+- Added guided camp choices to staff enrollment and the public QR registration form.
+- Added year-safe duplication for camp session and week dates without copying enrollments.
+- Seeded `MakerLab Summer Camp 2026` as a draft for the `makerlab-academy` organization.
 
 ### 2026-07-17 - SaaS Tenant Foundation
 

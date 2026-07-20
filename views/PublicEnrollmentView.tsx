@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import {
     AlertCircle,
@@ -25,6 +25,10 @@ const emptyForm = {
     email: '',
     selectedPack: '',
     selectedSlot: '',
+    selectedGradeId: '',
+    selectedCampSessionId: '',
+    selectedCampShiftId: '',
+    selectedCampWeekId: '',
     paymentPlan: '',
     paymentMethod: '',
     comments: ''
@@ -44,6 +48,22 @@ export const PublicEnrollmentView = () => {
     const [submitError, setSubmitError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState(emptyForm);
+
+    const selectedPack = program?.packs.find(pack => pack.name === formData.selectedPack);
+    const selectedCampSession = program?.campSetup?.sessions.find(session => session.id === formData.selectedCampSessionId);
+    const selectedModuleIds = useMemo(() => {
+        if (!selectedCampSession || !selectedPack) return [];
+        if ((selectedPack.includedModuleCount || 1) >= 2) return selectedCampSession.weeks.map(week => week.id);
+        return formData.selectedCampWeekId ? [formData.selectedCampWeekId] : [];
+    }, [formData.selectedCampWeekId, selectedCampSession, selectedPack]);
+    const selectedCampGroups = useMemo(() => {
+        const grade = program?.grades.find(item => item.id === formData.selectedGradeId);
+        return (grade?.groups || []).filter(group =>
+            group.campSessionId === formData.selectedCampSessionId
+            && group.campShiftId === formData.selectedCampShiftId
+            && selectedModuleIds.includes(group.campWeekId || '')
+        );
+    }, [formData.selectedCampSessionId, formData.selectedCampShiftId, formData.selectedGradeId, program, selectedModuleIds]);
 
     useEffect(() => {
         const programId = new URLSearchParams(window.location.search).get('program');
@@ -82,7 +102,11 @@ export const PublicEnrollmentView = () => {
 
     const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value } = event.target;
-        setFormData(current => ({ ...current, [name]: value }));
+        setFormData(current => ({
+            ...current,
+            [name]: value,
+            ...(['selectedPack', 'selectedCampSessionId'].includes(name) ? { selectedCampWeekId: '' } : {})
+        }));
         if (submitError) setSubmitError('');
     };
 
@@ -107,14 +131,20 @@ export const PublicEnrollmentView = () => {
                 interests: [program.name],
                 programId: program.id,
                 selectedPack: formData.selectedPack,
-                selectedSlot: formData.selectedSlot,
+                selectedSlot: selectedCampGroups[0]?.name || formData.selectedSlot,
+                selectedGradeId: formData.selectedGradeId || null,
+                selectedGroupId: selectedCampGroups[0]?.id || null,
+                secondGroupId: selectedCampGroups[1]?.id || null,
+                campSessionId: formData.selectedCampSessionId || null,
+                campShiftId: formData.selectedCampShiftId || null,
+                moduleIds: selectedModuleIds,
                 preferredPaymentTerm: formData.paymentPlan,
                 paymentMethod: formData.paymentMethod,
                 notes: [
                     `Kiosk Enrollment Request for ${program.name}`,
                     `Pack: ${formData.selectedPack}`,
                     `Payment: ${formData.paymentPlan}`,
-                    `Slot: ${formData.selectedSlot}`,
+                    `Slot: ${selectedCampGroups.map(group => group.name).join(' + ') || formData.selectedSlot}`,
                     `School: ${formData.school}`,
                     `DOB: ${formData.birthDate}`,
                     `Comments: ${formData.comments}`
@@ -343,7 +373,7 @@ export const PublicEnrollmentView = () => {
                             <h3 className={sectionTitleClass}><span className="text-teal-700">{isAdult ? '02' : '03'}</span> Program preferences</h3>
                             <div>
                                 <label htmlFor="selectedPack" className={labelClass}>Program pack</label>
-                                <select id="selectedPack" name="selectedPack" value={formData.selectedPack} onChange={handleChange} className={fieldClass}>
+                                <select id="selectedPack" required name="selectedPack" value={formData.selectedPack} onChange={handleChange} className={fieldClass}>
                                     <option value="">Choose a pack</option>
                                     {program.packs?.map((pack: any) => <option key={pack.name} value={pack.name}>{pack.name}</option>)}
                                 </select>
@@ -408,7 +438,51 @@ export const PublicEnrollmentView = () => {
                                 </div>
                             </fieldset>
 
-                            <fieldset>
+                            {program.campSetup ? (
+                            <fieldset className="space-y-4 rounded-lg border border-teal-200 bg-teal-50/50 p-4">
+                                <legend className="px-1 text-sm font-black text-teal-900">Choose your camp place</legend>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label htmlFor="selectedGradeId" className={labelClass}>Age group</label>
+                                        <select required id="selectedGradeId" name="selectedGradeId" value={formData.selectedGradeId} onChange={handleChange} className={fieldClass}>
+                                            <option value="">Choose an age group</option>
+                                            {program.grades.map(grade => <option key={grade.id} value={grade.id}>{grade.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="selectedCampSessionId" className={labelClass}>Session</label>
+                                        <select required id="selectedCampSessionId" name="selectedCampSessionId" value={formData.selectedCampSessionId} onChange={handleChange} className={fieldClass}>
+                                            <option value="">Choose a session</option>
+                                            {program.campSetup.sessions.map(session => <option key={session.id} value={session.id}>{session.name} / {session.startDate} to {session.endDate}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <label htmlFor="selectedCampShiftId" className={labelClass}>Shift</label>
+                                        <select required id="selectedCampShiftId" name="selectedCampShiftId" value={formData.selectedCampShiftId} onChange={handleChange} className={fieldClass}>
+                                            <option value="">Choose a shift</option>
+                                            {program.campSetup.shifts.map(shift => <option key={shift.id} value={shift.id}>{shift.label} / {shift.startTime} to {shift.endTime}</option>)}
+                                        </select>
+                                    </div>
+                                </div>
+                                {selectedCampSession && selectedPack && (
+                                    <div>
+                                        <p className={labelClass}>{selectedPack.includedModuleCount === 2 ? 'Weeks included in this pack' : 'Choose one week'}</p>
+                                        <div className="grid gap-2 sm:grid-cols-2">
+                                            {selectedCampSession.weeks.map(week => {
+                                                const bothWeeks = selectedPack.includedModuleCount === 2;
+                                                const checked = bothWeeks || formData.selectedCampWeekId === week.id;
+                                                return (
+                                                    <label key={week.id} className={`${optionClass} ${bothWeeks ? 'cursor-default' : ''}`}>
+                                                        <input required={!bothWeeks} disabled={bothWeeks} type="radio" name="selectedCampWeekId" value={week.id} checked={checked} onChange={handleChange} className="accent-teal-600" />
+                                                        <span><span className="block font-black">{week.label}</span><span className="block text-xs font-medium text-slate-500">{week.startDate} to {week.endDate}</span></span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </fieldset>
+                            ) : <fieldset>
                                 <legend className={labelClass}>Preferred slot</legend>
                                 {availableSlots.length > 0 ? (
                                     <div className="grid gap-2 sm:grid-cols-2">
@@ -422,7 +496,7 @@ export const PublicEnrollmentView = () => {
                                 ) : (
                                     <input name="selectedSlot" value={formData.selectedSlot} onChange={handleChange} className={fieldClass} placeholder="For example, Wednesday 15:30" />
                                 )}
-                            </fieldset>
+                            </fieldset>}
 
                             <div>
                                 <label htmlFor="comments" className={labelClass}>Comments or questions <span className="font-medium text-slate-400">(optional)</span></label>

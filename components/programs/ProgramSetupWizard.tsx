@@ -35,6 +35,7 @@ import type {
   ProgramScheduleSlot,
 } from '../../types';
 import type { ProgramFormatPreset } from '../../types/programOperations';
+import { buildMakerLabSummerCampTemplate } from '../../utils/programTemplates';
 import { Modal } from '../Modal';
 
 interface ProgramSetupWizardProps {
@@ -344,6 +345,80 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
     setDraft(previous => ({ ...previous, formatPreset: preset.id, type: preset.type }));
   };
 
+  const applyMakerLabCampTemplate = () => {
+    const preferredYear = Number((draft.runSetup.startDate || '').slice(0, 4)) || new Date().getFullYear();
+    setDraft(createDraft(buildMakerLabSummerCampTemplate(organizationId, preferredYear), organizationId));
+    setStepError('');
+  };
+
+  const shiftCampDate = (value: string, days: number) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(date.getTime())) return value;
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const updateCampSession = (sessionIndex: number, patch: Partial<NonNullable<Program['campSetup']>['sessions'][number]>) => {
+    setDraft(previous => {
+      const currentSession = previous.campSetup?.sessions[sessionIndex];
+      if (!previous.campSetup || !currentSession) return previous;
+      return {
+      ...previous,
+      campSetup: {
+        ...previous.campSetup,
+        sessions: previous.campSetup.sessions.map((session, index) => {
+          if (index !== sessionIndex) return session;
+          if (!patch.startDate) return { ...session, ...patch };
+          return {
+            ...session,
+            ...patch,
+            endDate: shiftCampDate(patch.startDate, 11),
+            weeks: session.weeks.map((week, weekIndex) => {
+              const weekStart = shiftCampDate(patch.startDate!, weekIndex * 7);
+              return { ...week, startDate: weekStart, endDate: shiftCampDate(weekStart, 4) };
+            }),
+          };
+        }),
+      },
+      grades: patch.name ? previous.grades.map(grade => ({
+        ...grade,
+        groups: grade.groups.map(group => group.campSessionId === currentSession.id && group.name.startsWith(`${currentSession.name} / `)
+          ? { ...group, name: `${patch.name}${group.name.slice(currentSession.name.length)}` }
+          : group),
+      })) : previous.grades,
+    };
+    });
+  };
+
+  const updateCampShift = (shiftIndex: number, patch: Partial<NonNullable<Program['campSetup']>['shifts'][number]>) => {
+    setDraft(previous => {
+      const currentShift = previous.campSetup?.shifts[shiftIndex];
+      if (!previous.campSetup || !currentShift) return previous;
+      const nextShift = { ...currentShift, ...patch };
+      return {
+        ...previous,
+        campSetup: {
+          ...previous.campSetup,
+          shifts: previous.campSetup.shifts.map((shift, index) => index === shiftIndex ? nextShift : shift),
+        },
+        grades: previous.grades.map(grade => ({
+          ...grade,
+          groups: grade.groups.map(group => group.campShiftId !== currentShift.id ? group : {
+            ...group,
+            name: group.name.endsWith(` / ${currentShift.label}`) ? `${group.name.slice(0, -currentShift.label.length)}${nextShift.label}` : group.name,
+            time: nextShift.startTime,
+            scheduleBlocks: group.scheduleBlocks?.map(block => ({
+              ...block,
+              startTime: nextShift.startTime,
+              endTime: nextShift.endTime,
+              shiftLabel: nextShift.label,
+            })),
+          }),
+        })),
+      };
+    });
+  };
+
   const updateGrade = (gradeIndex: number, patch: Partial<Grade>) => {
     setDraft(previous => ({
       ...previous,
@@ -650,6 +725,21 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
 
             {step === 1 && (
               <div className="space-y-5">
+                {!isEditing && (
+                  <button
+                    type="button"
+                    onClick={applyMakerLabCampTemplate}
+                    className="flex w-full items-center gap-4 rounded-lg border border-teal-300/30 bg-teal-300/[0.08] p-4 text-left transition hover:border-teal-300/50 hover:bg-teal-300/[0.12]"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-teal-300 text-slate-950"><Sparkles size={20} /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-black uppercase tracking-wider text-teal-300">MakerLab ready template</span>
+                      <span className="mt-1 block text-sm font-black text-white">Summer Camp / sessions, shifts, weeks, and age groups</span>
+                      <span className="mt-1 block text-xs leading-5 text-slate-400">Loads four two-week sessions, morning and afternoon shifts, two age bands, and one-week or full-session pricing.</span>
+                    </span>
+                    <ChevronRight size={18} className="shrink-0 text-teal-300" />
+                  </button>
+                )}
                 <div className="grid gap-2 sm:grid-cols-2">
                   {PRESETS.map(preset => {
                     const Icon = preset.icon;
@@ -736,6 +826,36 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                   />
                 )}
 
+                {draft.formatPreset === 'camp' && draft.campSetup && (
+                  <div className="space-y-4 border-y border-white/10 py-5">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-300/10 text-amber-200"><CalendarDays size={17} /></span>
+                      <div>
+                        <p className="text-sm font-black text-white">Camp sessions</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Each session contains two selectable weeks. Change the dates here after duplicating the template for a new year.</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {draft.campSetup.sessions.map((session, sessionIndex) => (
+                        <div key={session.id} className="grid gap-2 rounded-lg border border-white/10 bg-slate-950/30 p-3 sm:grid-cols-[minmax(8rem,1fr)_9rem_9rem]">
+                          <div><label className={labelClass}>Session</label><input className={fieldClass} value={session.name} onChange={event => updateCampSession(sessionIndex, { name: event.target.value })} /></div>
+                          <div><label className={labelClass}>Starts</label><input type="date" className={fieldClass} value={session.startDate} onChange={event => updateCampSession(sessionIndex, { startDate: event.target.value })} /></div>
+                          <div><label className={labelClass}>Ends</label><input type="date" readOnly className={`${fieldClass} cursor-default opacity-70`} value={session.endDate} /></div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {draft.campSetup.shifts.map((shift, shiftIndex) => (
+                        <div key={shift.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] gap-2 rounded-lg border border-white/10 bg-slate-950/30 p-3">
+                          <div><label className={labelClass}>Shift</label><input className={fieldClass} value={shift.label} onChange={event => updateCampShift(shiftIndex, { label: event.target.value })} /></div>
+                          <div><label className={labelClass}>Starts</label><input type="time" className={fieldClass} value={shift.startTime} onChange={event => updateCampShift(shiftIndex, { startTime: event.target.value })} /></div>
+                          <div><label className={labelClass}>Ends</label><input type="time" className={fieldClass} value={shift.endTime} onChange={event => updateCampShift(shiftIndex, { endTime: event.target.value })} /></div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2"><label className={labelClass}>Run name <span className="font-medium text-slate-600">Optional</span></label><input className={fieldClass} value={draft.runSetup.name || ''} onChange={event => updateRun({ name: event.target.value })} placeholder="Spring 2027 / Week 1 / Cohort A" /></div>
                   <div><label className={labelClass}>{draft.enrollmentPolicy === 'rolling_membership' ? 'Program available from' : 'Starts'}</label><input type="date" className={fieldClass} value={draft.runSetup.startDate} onChange={event => updateRun({ startDate: event.target.value })} /></div>
@@ -813,7 +933,10 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                           <div><label className={labelClass}>Workshops per week <span className="font-medium text-slate-600">Optional</span></label><input type="number" min={1} className={fieldClass} value={pack.workshopsPerWeek ?? ''} onChange={event => updatePack(packIndex, { workshopsPerWeek: Number(event.target.value) })} /></div>
                         </>
                       ) : (
-                        <div><label className={labelClass}>One-time price</label><input type="number" min={0} className={fieldClass} value={pack.price ?? ''} onChange={event => updatePack(packIndex, { price: Number(event.target.value) })} placeholder="0" /></div>
+                        <>
+                          <div><label className={labelClass}>One-time price</label><input type="number" min={0} className={fieldClass} value={pack.price ?? ''} onChange={event => updatePack(packIndex, { price: Number(event.target.value) })} placeholder="0" /></div>
+                          {draft.enrollmentPolicy === 'modular' && <div><label className={labelClass}>{draft.moduleLabel || 'Module'}s included</label><input type="number" min={1} max={2} className={fieldClass} value={pack.includedModuleCount ?? 1} onChange={event => updatePack(packIndex, { includedModuleCount: Number(event.target.value) })} /></div>}
+                        </>
                       )}
                       <div><label className={labelClass}>Promotion price <span className="font-medium text-slate-600">Optional</span></label><input type="number" min={0} className={fieldClass} value={pack.promoPrice ?? ''} onChange={event => updatePack(packIndex, { promoPrice: Number(event.target.value) })} placeholder="No promotion" /></div>
                     </div>

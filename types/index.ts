@@ -17,6 +17,9 @@ export interface Group {
   time: string;
   capacity?: number;
   scheduleBlocks?: ProgramScheduleSlot[];
+  campSessionId?: string;
+  campWeekId?: string;
+  campShiftId?: string;
 }
 
 export interface Grade {
@@ -29,10 +32,38 @@ export interface Grade {
 export interface ProgramPack {
   name: string;
   workshopsPerWeek?: number;
+  includedModuleCount?: number;
   priceAnnual?: number;
   priceTrimester?: number;
   price?: number;
   promoPrice?: number; // Per-pack Discount Price
+}
+
+export interface ProgramCampWeek {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface ProgramCampSession {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  weeks: ProgramCampWeek[];
+}
+
+export interface ProgramCampShift {
+  id: string;
+  label: string;
+  startTime: string;
+  endTime: string;
+}
+
+export interface ProgramCampSetup {
+  sessions: ProgramCampSession[];
+  shifts: ProgramCampShift[];
 }
 
 export interface ProgramRunSetupDraft {
@@ -88,6 +119,7 @@ export interface Program {
   documentSetup?: ProgramDocumentSetupDraft;
   enrollmentPolicy?: ProgramEnrollmentPolicy;
   academicPeriod?: ProgramAcademicPeriod;
+  campSetup?: ProgramCampSetup;
   templateSourceProgramId?: string;
   packs: ProgramPack[];
   grades: Grade[];
@@ -321,6 +353,8 @@ export interface Enrollment {
   secondGroupId?: string;
   secondGroupName?: string;
   secondGroupTime?: string;
+  moduleIds?: string[];
+  moduleNames?: string[];
   paymentPlan: 'annual' | 'semestre' | 'trimester' | 'monthly' | 'full';
   totalAmount: number;
   paidAmount: number;
@@ -617,6 +651,12 @@ export interface Lead {
   programId?: string; // NEW
   selectedPack?: string; // NEW
   selectedSlot?: string; // NEW
+  selectedGradeId?: string;
+  selectedGroupId?: string;
+  secondGroupId?: string;
+  campSessionId?: string;
+  campShiftId?: string;
+  moduleIds?: string[];
   paymentPlan?: 'full' | 'trimester' | 'month'; // NEW
   tags?: string[];
   interests?: string[]; // Program Names or IDs
