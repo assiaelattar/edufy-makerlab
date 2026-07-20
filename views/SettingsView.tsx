@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Plus, Trash2, Mail, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, X, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer, Clock } from 'lucide-react';
+import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Trash2, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer, Clock, Calendar, Building2, CreditCard, Database, Plug, Boxes, HardDrive, BadgeCheck } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { setDoc, doc, addDoc, collection, serverTimestamp, onSnapshot, deleteDoc, updateDoc, writeBatch, getDocs, getDocsFromServer, query, where } from 'firebase/firestore';
+import { setDoc, doc, addDoc, collection, serverTimestamp, onSnapshot, deleteDoc, deleteField, updateDoc, writeBatch, getDocs, getDocsFromServer, query, where } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, sendPasswordResetEmail, updatePassword } from 'firebase/auth';
 import { db, firebaseConfig } from '../services/firebase';
@@ -12,18 +12,31 @@ import { AppSettings, UserProfile, RoleDefinition } from '../types';
 import { Modal } from '../components/Modal';
 import { compressImage } from '../utils/helpers';
 import { isBiometricAvailable, registerBiometric, isBiometricEnabled, clearBiometric } from '../utils/biometrics';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState } from '../components/atlas/AtlasSurface';
+import { SettingsField, SettingsMetric, SettingsNavigation, SettingsPanel, SettingsToggle, settingsInputClass, type SettingsNavigationItem } from '../components/settings/SettingsUI';
+
+type SettingsSection = 'general' | 'plan' | 'documents' | 'forms' | 'data' | 'api' | 'team' | 'maintenance';
 
 export const SettingsView = () => {
-    const { settings: globalSettings, teamMembers } = useAppContext();
+    const { settings: globalSettings, teamMembers, students, programs, enrollments, payments } = useAppContext();
     const { can, roles: authRoles, createSecondaryUser: createAuthUser, userProfile, user, currentOrganization, isSuperAdmin } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const [settings, setSettings] = useState<AppSettings>(globalSettings);
     const [isDirty, setIsDirty] = useState(false);
-    const [activeTab, setActiveTab] = useState<'general' | 'forms' | 'documents' | 'data' | 'team' | 'api' | 'maintenance'>('general');
+    const [activeTab, setActiveTab] = useState<SettingsSection>('general');
     const [isImporting, setIsImporting] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const justSaved = useRef(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(globalSettings.logoUrl || null);
+    const canManageSettings = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
+    const canManageTeam = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
+    const canManageIntegrations = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
+    const canAssignRole = (roleId: string) => {
+        if (['student', 'parent'].includes(roleId)) return false;
+        if (userProfile?.role === 'super_admin') return true;
+        if (userProfile?.role === 'owner') return !['super_admin', 'owner'].includes(roleId);
+        return !['super_admin', 'owner', 'admin'].includes(roleId);
+    };
 
     // Biometric State
     const [canUseBiometrics, setCanUseBiometrics] = useState(false);
@@ -36,7 +49,7 @@ export const SettingsView = () => {
 
     const handleToggleBiometric = async () => {
         if (isBiometricEnabled()) {
-            const isConfirmed = await confirm("Disable FaceID/TouchID login?");
+            const isConfirmed = await confirm({ title: 'Disable biometric login?', message: 'FaceID or TouchID will no longer be available on this device.', confirmText: 'Disable', cancelText: 'Cancel', variant: 'warning' });
             if (isConfirmed) {
                 clearBiometric();
                 setBiometricActive(false);
@@ -61,17 +74,38 @@ export const SettingsView = () => {
                 return;
             }
             setSettings(globalSettings);
-            setLogoPreview(globalSettings.logoUrl);
+            setLogoPreview(globalSettings.logoUrl || null);
         }
     }, [globalSettings, isDirty]);
 
+    useEffect(() => {
+        if (!db || !currentOrganization?.id || !canManageIntegrations) return;
+        return onSnapshot(doc(db, 'organizations', currentOrganization.id, 'integrations', 'secrets'), snapshot => {
+            if (!snapshot.exists()) return;
+            const data = snapshot.data() as Pick<AppSettings, 'apiConfig'>;
+            setSettings(current => ({ ...current, apiConfig: data.apiConfig || current.apiConfig }));
+        });
+    }, [canManageIntegrations, currentOrganization?.id]);
+
+    useEffect(() => {
+        if (!isDirty) return;
+        const preventAccidentalClose = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = '';
+        };
+        window.addEventListener('beforeunload', preventAccidentalClose);
+        return () => window.removeEventListener('beforeunload', preventAccidentalClose);
+    }, [isDirty]);
+
     const updateSettings = (newSettings: AppSettings) => {
+        if (!canManageSettings) return;
         setSettings(newSettings);
         setIsDirty(true);
     };
 
     // Team & Access State
     const [roles, setRoles] = useState<RoleDefinition[]>([]);
+    const [selectedRoleId, setSelectedRoleId] = useState('admission_officer');
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [isEditingUser, setIsEditingUser] = useState(false);
     const [isProcessingTeam, setIsProcessingTeam] = useState(false);
@@ -90,66 +124,93 @@ export const SettingsView = () => {
     const [migrationResult, setMigrationResult] = useState('');
     const [isRepairing, setIsRepairing] = useState(false);
 
+    const openCreateTeamMember = () => {
+        setIsEditingUser(false);
+        setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
+        setIsUserModalOpen(true);
+    };
+
 
     // --- STUDENT VIEW CHECK ---
     const isStudent = userProfile?.role === 'student';
 
     // Defined Permissions List for the Matrix
     const AVAILABLE_PERMISSIONS = [
-        { id: 'dashboard.view', label: 'View Dashboard' },
-        { id: 'finance.view', label: 'View Finance List' },
-        { id: 'finance.view_totals', label: 'View Financial Totals' },
-        { id: 'finance.record_payment', label: 'Record Payments' },
-        { id: 'expenses.view', label: 'View Expenses' },
-        { id: 'expenses.manage', label: 'Manage Expenses (Add/Edit)' },
-        { id: 'students.view', label: 'View Students' },
-        { id: 'students.edit', label: 'Edit Student Profiles' },
-        { id: 'students.enroll', label: 'Enroll Students' },
-        { id: 'students.delete', label: 'Delete Students' },
-        { id: 'classes.view', label: 'View Classes' },
-        { id: 'attendance.manage', label: 'Manage Attendance' },
-        { id: 'workshops.manage', label: 'Manage Workshops' },
-        { id: 'team.view', label: 'View Team & Tasks' },
-        { id: 'team.create', label: 'Create Tasks' },
-        { id: 'team.assign_others', label: 'Assign Tasks to Others' },
-        { id: 'marketing.view', label: 'View Marketing' },
-        { id: 'marketing.create', label: 'Create Content' },
-        { id: 'marketing.approve', label: 'Approve Content' },
-        { id: 'settings.view', label: 'View Settings' },
-        { id: 'settings.manage', label: 'Manage System' },
-        { id: 'settings.manage_team', label: 'Manage Team & Roles' },
+        { id: 'dashboard.view', label: 'View dashboard', group: 'Workspace' },
+        { id: 'students.view', label: 'View students', group: 'Students & programs' },
+        { id: 'students.edit', label: 'Edit student profiles', group: 'Students & programs' },
+        { id: 'students.enroll', label: 'Enroll students', group: 'Students & programs' },
+        { id: 'students.delete', label: 'Delete students', group: 'Students & programs' },
+        { id: 'programs.view', label: 'View programs', group: 'Students & programs' },
+        { id: 'programs.create', label: 'Create programs', group: 'Students & programs' },
+        { id: 'programs.edit', label: 'Edit programs', group: 'Students & programs' },
+        { id: 'classes.view', label: 'View classes', group: 'Classes & learning' },
+        { id: 'attendance.manage', label: 'Manage attendance', group: 'Classes & learning' },
+        { id: 'workshops.manage', label: 'Manage workshops', group: 'Classes & learning' },
+        { id: 'finance.view', label: 'View finance records', group: 'Finance' },
+        { id: 'finance.view_totals', label: 'View financial totals', group: 'Finance' },
+        { id: 'finance.record_payment', label: 'Record payments', group: 'Finance' },
+        { id: 'expenses.view', label: 'View expenses', group: 'Finance' },
+        { id: 'expenses.manage', label: 'Manage expenses', group: 'Finance' },
+        { id: 'team.view', label: 'View team and tasks', group: 'Organization' },
+        { id: 'team.create', label: 'Create tasks', group: 'Organization' },
+        { id: 'team.assign_others', label: 'Assign tasks', group: 'Organization' },
+        { id: 'marketing.view', label: 'View marketing', group: 'Marketing' },
+        { id: 'marketing.create', label: 'Create content', group: 'Marketing' },
+        { id: 'marketing.approve', label: 'Approve content', group: 'Marketing' },
+        { id: 'settings.view', label: 'View settings', group: 'Administration' },
+        { id: 'settings.manage', label: 'Manage workspace settings', group: 'Administration' },
+        { id: 'settings.manage_team', label: 'Manage team and roles', group: 'Administration' },
     ];
 
     useEffect(() => {
-        if (activeTab !== 'team' || !db || isStudent) return;
-        const unsubRoles = onSnapshot(collection(db, 'roles'), (snap) => {
-            setRoles(snap.docs.map(d => d.data() as RoleDefinition));
-        });
+        if (activeTab !== 'team' || !db || isStudent || !currentOrganization?.id) return;
+        const unsubRoles = onSnapshot(collection(db, 'organizations', currentOrganization.id, 'roles'), (snap) => {
+            const tenantOverrides = snap.docs.map(d => ({ ...d.data(), id: d.id } as RoleDefinition));
+            setRoles(authRoles.map(baseRole => tenantOverrides.find(role => role.id === baseRole.id) || baseRole));
+        }, () => setRoles(authRoles));
         return () => { unsubRoles(); };
-    }, [activeTab, isStudent]);
+    }, [activeTab, authRoles, currentOrganization?.id, isStudent]);
 
     const handleSaveSettings = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || !currentOrganization?.id || isSaving) return;
+        if (!db || !currentOrganization?.id || isSaving || !canManageSettings) return;
+
+        const academyName = settings.academyName.trim();
+        const academicYear = settings.academicYear.trim().replace('/', '-');
+        if (!academyName) {
+            await showAlert('Academy name required', 'Enter the name families and staff should see across the workspace.', 'warning');
+            return;
+        }
+        if (!/^\d{4}-\d{4}$/.test(academicYear)) {
+            await showAlert('Check the academic year', 'Use a year range such as 2026-2027.', 'warning');
+            return;
+        }
         
         setIsSaving(true);
         try {
-            // Explicitly save the current local state to the global doc, merging to avoid data loss
-            await setDoc(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), settings, { merge: true });
+            const normalizedSettings = { ...settings, academyName, academicYear };
+            const { apiConfig, ...workspaceSettings } = normalizedSettings;
+            const batch = writeBatch(db);
+            batch.set(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), { ...workspaceSettings, apiConfig: deleteField() }, { merge: true });
+            if (apiConfig) {
+                batch.set(doc(db, 'organizations', currentOrganization.id, 'integrations', 'secrets'), { apiConfig, updatedAt: serverTimestamp() }, { merge: true });
+            }
+            batch.set(doc(db, 'organizations', currentOrganization.id), {
+                name: academyName,
+                ...(settings.logoUrl ? { logoUrl: settings.logoUrl } : {}),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            await batch.commit();
             
-            // Mark that we just saved so the sync effect doesn't overwrite with stale data
             justSaved.current = true;
+            setSettings(normalizedSettings);
             setIsDirty(false);
-            
-            // Artificial delay to allow Firestore state to settle (optional but helpful for UX)
-            setTimeout(() => {
-                setIsSaving(false);
-            }, 1000);
-
-            showAlert('Success', 'Settings saved successfully!', 'success');
+            await showAlert('Workspace updated', 'Your organization settings are now active across Edufy.', 'success');
         } catch (err: any) {
             console.error(err);
-            showAlert('Error', `Failed to save settings: ${err.message}`, 'danger');
+            await showAlert('Settings not saved', err.message || 'Check your connection and organization access, then try again.', 'danger');
+        } finally {
             setIsSaving(false);
         }
     };
@@ -161,15 +222,7 @@ export const SettingsView = () => {
         try {
             const compressed = await compressImage(file, 500, 0.85); // Improved for High DPI
             setLogoPreview(compressed);
-
-            const newSettings = { ...settings, logoUrl: compressed };
-            setSettings(newSettings);
-
-            // Auto-save to DB
-            if (db) {
-                // FIXED: Using tenant-specific path
-                await setDoc(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), { logoUrl: compressed }, { merge: true });
-            }
+            updateSettings({ ...settings, logoUrl: compressed });
         } catch (err: any) {
 
             console.error(err);
@@ -183,15 +236,7 @@ export const SettingsView = () => {
 
         try {
             const compressed = await compressImage(file, 1500, 0.95); // High Res for Print
-
-            const newSettings = { ...settings, documentConfig: { ...settings.documentConfig, logoUrl: compressed } };
-            setSettings(newSettings);
-
-            // Auto-save to DB
-            if (db) {
-                // FIXED: Using tenant-specific path
-                await setDoc(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), { documentConfig: newSettings.documentConfig }, { merge: true });
-            }
+            updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, logoUrl: compressed } });
         } catch (err: any) {
             console.error(err);
             showAlert('Error', `Failed to process or save logo image: ${err.message}`, 'danger');
@@ -200,25 +245,27 @@ export const SettingsView = () => {
 
     const handleAddUser = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db) return;
+        if (!db || !currentOrganization?.id || !canManageTeam) return;
         setIsProcessingTeam(true);
 
         try {
+            if (!canAssignRole(newUser.role)) throw new Error('You cannot assign this organization role.');
             if (isEditingUser && newUser.uid) {
-                // UPDATE EXISTING
+                const existingMember = teamMembers.find(member => member.uid === newUser.uid && member.organizationId === currentOrganization.id);
+                if (!existingMember) throw new Error('This team member is not part of the active organization.');
                 await updateDoc(doc(db, 'users', newUser.uid), {
                     name: newUser.name,
                     role: newUser.role,
-                    // Note: Changing email in Firestore doesn't change Auth email automatically in this simple implementation
+                    workHours: (newUser.workHours?.start && newUser.workHours?.end) ? newUser.workHours : null,
                 });
-                showAlert("Success", "User profile updated successfully.", "success");
+                showAlert('Team member updated', `${newUser.name} now has the selected access.`, 'success');
             } else {
-                // CREATE NEW
                 const tempPassword = newUser.password || Math.random().toString(36).slice(-8);
                 const uid = await createAuthUser(newUser.email, tempPassword);
 
                 await setDoc(doc(db, 'users', uid), {
-                    uid: uid,
+                    uid,
+                    organizationId: currentOrganization.id,
                     email: newUser.email,
                     name: newUser.name,
                     role: newUser.role,
@@ -227,7 +274,6 @@ export const SettingsView = () => {
                     createdAt: serverTimestamp()
                 });
 
-                // Show Credentials to Admin
                 setShowCredentials({ email: newUser.email, password: tempPassword });
             }
             setIsUserModalOpen(false);
@@ -241,7 +287,17 @@ export const SettingsView = () => {
     };
 
     const handleDeleteUser = async (uid: string, email: string) => {
-        const isConfirmed = await confirm(`Are you sure you want to delete ${email}? \n\nNote: This deletes their profile data immediately. The login account requires manual deletion in Firebase Console.`);
+        if (!currentOrganization?.id || !canManageTeam) return;
+        if (uid === user?.uid) {
+            await showAlert('Your account stays active', 'Ask another organization owner to manage your access.', 'warning');
+            return;
+        }
+        const member = teamMembers.find(candidate => candidate.uid === uid && candidate.organizationId === currentOrganization.id);
+        if (!member) {
+            await showAlert('Team member unavailable', 'This profile does not belong to the active organization.', 'warning');
+            return;
+        }
+        const isConfirmed = await confirm({ title: `Delete ${email}?`, message: 'The profile data will be deleted immediately. The Firebase login account must still be removed manually.', confirmText: 'Delete profile', cancelText: 'Cancel', variant: 'danger' });
         if (!isConfirmed) return;
         if (!db) return;
         try {
@@ -254,7 +310,8 @@ export const SettingsView = () => {
     };
 
     const handleResetPassword = async (email: string) => {
-        const isConfirmed = await confirm(`Send a password reset email to ${email}?`);
+        if (!canManageTeam || !teamMembers.some(member => member.email === email && member.organizationId === currentOrganization?.id)) return;
+        const isConfirmed = await confirm({ title: 'Send password reset?', message: `Send a password reset email to ${email}.`, confirmText: 'Send email', cancelText: 'Cancel', variant: 'info' });
         if (!isConfirmed) return;
         
         const appName = `SecondaryReset_${Date.now()}`;
@@ -302,8 +359,8 @@ export const SettingsView = () => {
     };
 
     const handleSeedTeam = async () => {
-        if (!db) return;
-        const isConfirmed = await confirm("This will create 3 demo users (Instructor, Accountant, Admission Officer) with password 'stemflow123'. \n\nContinue?");
+        if (!db || !currentOrganization?.id || !canManageTeam) return;
+        const isConfirmed = await confirm({ title: 'Create demo team?', message: "Create three demo users with the temporary password 'stemflow123'.", confirmText: 'Create users', cancelText: 'Cancel', variant: 'warning' });
         if (!isConfirmed) return;
 
         setIsProcessingTeam(true);
@@ -328,7 +385,8 @@ export const SettingsView = () => {
 
                 if (uid) {
                     await setDoc(doc(db, 'users', uid), {
-                        uid: uid,
+                        uid,
+                        organizationId: currentOrganization.id,
                         email: u.email,
                         name: u.name,
                         role: u.role,
@@ -346,7 +404,7 @@ export const SettingsView = () => {
     };
 
     const togglePermission = async (roleId: string, permission: string) => {
-        if (!db) return;
+        if (!db || !currentOrganization?.id || !canManageTeam) return;
         const role = roles.find(r => r.id === roleId);
         if (!role) return;
 
@@ -358,7 +416,7 @@ export const SettingsView = () => {
         const updatedRoles = roles.map(r => r.id === roleId ? { ...r, permissions: newPermissions } : r);
         setRoles(updatedRoles);
 
-        await setDoc(doc(db, 'roles', roleId), { ...role, permissions: newPermissions }, { merge: true });
+        await setDoc(doc(db, 'organizations', currentOrganization.id, 'roles', roleId), { ...role, id: roleId, permissions: newPermissions, updatedAt: serverTimestamp() }, { merge: true });
     };
 
     const downloadCSVTemplate = () => {
@@ -374,9 +432,31 @@ export const SettingsView = () => {
         document.body.removeChild(link);
     };
 
+    const downloadWorkspaceExport = () => {
+        if (!currentOrganization?.id) return;
+        const payload = {
+            schemaVersion: 1,
+            exportedAt: new Date().toISOString(),
+            organization: { id: currentOrganization.id, name: currentOrganization.name, slug: currentOrganization.slug },
+            settings,
+            students,
+            programs,
+            enrollments,
+            payments
+        };
+        const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = `${currentOrganization.slug || 'edufy'}-workspace-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
+    };
+
     const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
+        if (!file || !currentOrganization?.id || !canManageSettings) return;
         setIsImporting(true);
         const reader = new FileReader();
         reader.onload = async (event) => {
@@ -394,7 +474,7 @@ export const SettingsView = () => {
                 if (!name || !parentPhone) { errorCount++; continue; }
                 try {
                     await addDoc(collection(db, 'students'), {
-                        name, parentPhone, email: email || '', parentName: parentName || '', address: address || '', school: school || '', birthDate: birthDate || '', medicalInfo: medicalInfo || '', status: 'active', organizationId: currentOrganization?.id || 'makerlab-academy', createdAt: serverTimestamp()
+                        name, parentPhone, email: email || '', parentName: parentName || '', address: address || '', school: school || '', birthDate: birthDate || '', medicalInfo: medicalInfo || '', status: 'active', organizationId: currentOrganization.id, createdAt: serverTimestamp()
                     });
                     successCount++;
                 } catch (err) { errorCount++; }
@@ -423,7 +503,7 @@ export const SettingsView = () => {
 
     const handleRecreateOrg = async () => {
         if (!db || !user) return;
-        const isConfirmed = await confirm("Recreate the default 'Makerlab Academy' organization document?\n\nOnly do this if the 'Organization ID' in Debug Info says N/A.");
+        const isConfirmed = await confirm({ title: 'Recreate the default organization?', message: "Only continue when Debug Info shows the Organization ID as N/A.", confirmText: 'Recreate', cancelText: 'Cancel', variant: 'warning' });
         if (!isConfirmed) return;
 
         try {
@@ -444,7 +524,8 @@ export const SettingsView = () => {
 
     const handleMigrateAcademicYear = async () => {
         if (!db) return;
-        if (!confirm("Are you sure you want to migrate all 2024-2025 records to 2025-2026? This cannot be undone.")) return;
+        const shouldMigrate = await confirm({ title: 'Migrate the academic year?', message: 'Move all 2024-2025 records to 2025-2026. This cannot be undone.', confirmText: 'Migrate records', cancelText: 'Cancel', variant: 'warning' });
+        if (!shouldMigrate) return;
 
         setIsMigrating(true);
         setMigrationResult('Starting Academic Year Migration...');
@@ -529,7 +610,7 @@ export const SettingsView = () => {
             });
 
             console.log(report);
-            const userWantsToMigrate = await confirm(`${report}\n\nDo you want to FORCE MIGRATE everything to 'makerlab-academy'?\nWARNING: This will steal data from all listed organizations.`);
+            const userWantsToMigrate = await confirm({ title: 'Force organization migration?', message: `${report}\n\nMove every listed record to makerlab-academy. This changes ownership across organizations.`, confirmText: 'Force migration', cancelText: 'Cancel', variant: 'danger' });
 
             if (!userWantsToMigrate) {
                 setMigrationResult('Migration Cancelled by User.');
@@ -553,7 +634,7 @@ export const SettingsView = () => {
                     const data = docSnap.data();
                     // MIGRATE EVERYTHING NOT ALREADY CORRECT
                     if (data.organizationId !== 'makerlab-academy') {
-                        batch.update(doc(db, colName, docSnap.id), { organizationId: 'makerlab-academy' });
+                        batch.update(doc(db!, colName, docSnap.id), { organizationId: 'makerlab-academy' });
                         operationCount++;
                         totalUpdated++;
                     }
@@ -571,57 +652,49 @@ export const SettingsView = () => {
             }
 
             setMigrationResult(`MIGRATION COMPLETE. Moved ${totalUpdated} records to 'makerlab-academy'.`);
-            alert(`Success! Moved ${totalUpdated} documents to your account.`);
+            showAlert('Migration complete', `Moved ${totalUpdated} documents to your account.`, 'success');
 
         } catch (err: any) {
             console.error("Migration/Analysis Failed:", err);
             setMigrationResult(`Error: ${err.message}`);
-            alert(`Error: ${err.message}`);
+            showAlert('Migration failed', err.message, 'danger');
         } finally {
             setIsMigrating(false);
         }
     };
 
     const handleRepairFinancials = async () => {
-        if (!db) return;
-        const isConfirmed = await confirm("Recalculate all enrollment financial totals based on Program Pricing and Payments?\n\nThis will fix 'NaN' errors.");
+        if (!db || !currentOrganization?.id || !isSuperAdmin) return;
+        const isConfirmed = await confirm({ title: 'Recalculate enrollment totals?', message: 'Rebuild financial totals from program pricing and payments to repair invalid balances.', confirmText: 'Recalculate', cancelText: 'Cancel', variant: 'warning' });
         if (!isConfirmed) return;
 
         setIsRepairing(true);
         setMigrationResult('Fetching Data...');
 
         try {
-            const orgId = currentOrganization?.id || 'makerlab-academy';
-
-            // 1. Fetch References
-            const progsSnap = await getDocsFromServer(collection(db, 'programs'));
+            const orgId = currentOrganization.id;
+            const progsSnap = await getDocsFromServer(query(collection(db, 'programs'), where('organizationId', '==', orgId)));
             const progs = progsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-            const paySnap = await getDocsFromServer(collection(db, 'payments'));
+            const paySnap = await getDocsFromServer(query(collection(db, 'payments'), where('organizationId', '==', orgId)));
             const payments = paySnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-
-            // 2. Scan Enrollments
-            const enrollSnap = await getDocsFromServer(collection(db, 'enrollments'));
+            const enrollSnap = await getDocsFromServer(query(collection(db, 'enrollments'), where('organizationId', '==', orgId)));
 
             let updatedCount = 0;
             let batch = writeBatch(db);
             let opCount = 0;
             const BATCH_LIMIT = 450;
 
-            enrollSnap.forEach(docSnap => {
+            for (const docSnap of enrollSnap.docs) {
                 const enr = docSnap.data();
-
-                // Recalculate Total
                 let totalAmount = enr.totalAmount;
-                // If total is missing or NaN, recalculate
                 if (!totalAmount || isNaN(totalAmount)) {
-                    const prog = progs.find((p: any) => p.id === enr.programId); // Use broad matching
+                    const prog = progs.find((p: any) => p.id === enr.programId);
                     if (prog) {
                         const pack = prog.packs?.find((p: any) => p.name === enr.packName);
                         if (pack) {
                             totalAmount = pack.priceAnnual || pack.price || 0;
                         } else {
-                            // Fallback to first pack or 0
                             totalAmount = prog.packs?.[0]?.price || 0;
                         }
                     } else {
@@ -629,15 +702,9 @@ export const SettingsView = () => {
                     }
                 }
 
-                // Recalculate Paid (Sum of payments)
-                // Filter payments for this enrollment
                 const enrPayments = payments.filter((p: any) => p.enrollmentId === docSnap.id);
                 const paidAmount = enrPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
-
-                // Recalculate Balance
                 const balance = totalAmount - paidAmount;
-
-                // Update if changed
                 if (enr.totalAmount !== totalAmount || enr.paidAmount !== paidAmount || enr.balance !== balance) {
                     batch.update(doc(db, 'enrollments', docSnap.id), {
                         totalAmount,
@@ -648,24 +715,23 @@ export const SettingsView = () => {
                     updatedCount++;
                 }
 
-                if (opCount >= BATCH_LIMIT) {
-                    // We can't await inside forEach efficiently without async loop, but batch handles sync add.
-                    // Actually batch.commit() is async.
-                    // For safety in this simpler implementation, we'll just let the batch grow or use a chunked loop if we expected > 500 updates.
-                    // Given this is a repair tool for ~100 records, single batch (500 limit) is okay-ish, or multiple batches.
+                if (opCount === BATCH_LIMIT) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    opCount = 0;
                 }
-            });
+            }
 
             if (opCount > 0) {
                 await batch.commit();
             }
 
             setMigrationResult(`Fixed ${updatedCount} enrollments.`);
-            alert(`Repair Complete: Updated ${updatedCount} records.`);
+            showAlert('Repair complete', `Updated ${updatedCount} enrollment records.`, 'success');
 
         } catch (err: any) {
             console.error(err);
-            alert("Repair Failed: " + err.message);
+            showAlert('Repair failed', err.message, 'danger');
         } finally {
             setIsRepairing(false);
         }
@@ -676,10 +742,12 @@ export const SettingsView = () => {
     if (isStudent) {
         return (
             <div className="max-w-2xl mx-auto space-y-6 pb-24 md:pb-8 h-full animate-in fade-in slide-in-from-bottom-4">
-                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><User size={24} className="text-indigo-500" /> My Account</h2>
-                    <p className="text-slate-500 text-sm">Manage your personal information.</p>
-                </div>
+                <AtlasCommandHeader
+                    eyebrow="Personal settings"
+                    title="My Account"
+                    description="Manage your sign-in, profile information, and account security."
+                    icon={User}
+                />
 
                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                     <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white text-sm">Profile Information</h3></div>
@@ -709,7 +777,7 @@ export const SettingsView = () => {
                             </div>
                             <button
                                 onClick={handleToggleBiometric}
-                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${biometricActive ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
+                                className={`min-h-10 px-4 py-2 rounded-lg text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${biometricActive ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-teal-500 hover:bg-teal-400 text-slate-950'}`}
                             >
                                 {biometricActive ? 'Disable' : 'Setup FaceID'}
                             </button>
@@ -729,7 +797,7 @@ export const SettingsView = () => {
                                 <input
                                     type="password"
                                     required
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 outline-none"
+                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-teal-400 outline-none"
                                     value={passwordForm.new}
                                     onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })}
                                     placeholder="At least 6 characters"
@@ -740,13 +808,13 @@ export const SettingsView = () => {
                                 <input
                                     type="password"
                                     required
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-indigo-500 outline-none"
+                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-teal-400 outline-none"
                                     value={passwordForm.confirm}
                                     onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
                                     placeholder="Repeat password"
                                 />
                             </div>
-                            <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold transition-colors">Update Password</button>
+                            <button type="submit" className="w-full min-h-10 py-3 bg-teal-500 hover:bg-teal-400 text-slate-950 rounded-lg font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">Update password</button>
                         </form>
                     </div>
                 </div>
@@ -754,62 +822,89 @@ export const SettingsView = () => {
         );
     }
 
+    const team = teamMembers.filter(member => !['student', 'parent'].includes(member.role));
+    const enabledModules = Object.entries(currentOrganization?.modules || {}).filter(([, enabled]) => enabled === true).length;
+    const planName = currentOrganization?.subscription?.planId || (currentOrganization?.status === 'trial' ? 'Trial' : 'Legacy');
+    const configurableRoles = roles.filter(role => !['super_admin', 'owner', 'admin', 'student', 'parent'].includes(role.id));
+    const assignableRoles = roles.filter(role => canAssignRole(role.id));
+    const selectedRole = configurableRoles.find(role => role.id === selectedRoleId) || configurableRoles[0];
+    const settingsSections: SettingsNavigationItem<SettingsSection>[] = [
+        { id: 'general', label: 'Workspace', description: 'Identity and operations', icon: Building2 },
+        { id: 'plan', label: 'Plan & apps', description: 'Subscription and limits', icon: CreditCard },
+        { id: 'documents', label: 'Documents', description: 'Invoices and certificates', icon: Printer },
+        { id: 'forms', label: 'Enrollment form', description: 'Family information', icon: FileText },
+        { id: 'data', label: 'Data', description: 'Import and portability', icon: Database },
+        { id: 'api', label: 'Integrations', description: 'Connected services', icon: Plug },
+        ...(canManageTeam ? [{ id: 'team' as const, label: 'Team & access', description: 'People and permissions', icon: Users, badge: `${team.length}` }] : []),
+        ...(isSuperAdmin ? [{ id: 'maintenance' as const, label: 'Platform tools', description: 'Diagnostics and repair', icon: AlertTriangle }] : [])
+    ];
+
     // --- RENDER: ADMIN SETTINGS ---
     return (
-        <div className="space-y-6 pb-24 md:pb-8 flex flex-col">
-            {/* Sticky Header & Tabs Wrapper */}
-            <div className="sticky top-0 z-40 bg-slate-950/95 backdrop-blur-sm space-y-4 pb-2 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 border-b border-slate-800/50 md:border-none">
-                {/* Header */}
-                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg shadow-black/20">
-                    <div>
-                        <h2 className="text-xl font-bold text-white">System Settings</h2>
-                        <p className="text-slate-500 text-sm">Configure academy parameters and access control.</p>
+        <div className="atlas-settings-workspace mx-auto flex w-full max-w-[1320px] min-w-0 flex-col gap-4 pb-24 md:pb-8">
+            <div className="atlas-settings-commandbar sticky top-0 z-20 flex min-w-0 flex-col gap-4 border-b px-1 py-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                    <span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"><Settings size={17} /></span>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="atlas-data-label atlas-text-accent">Workspace controls</span>
+                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold ${isDirty ? 'text-amber-200' : 'text-emerald-300'}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${isDirty ? 'bg-amber-300' : 'bg-emerald-400'}`} />
+                                {isDirty ? 'Unsaved changes' : 'Up to date'}
+                            </span>
+                        </div>
+                        <h2 className="atlas-text-strong mt-1 truncate text-lg font-black leading-tight">
+                            {settings.academyName || currentOrganization?.name || 'Academy workspace'}
+                        </h2>
+                        <p className="atlas-text-subtle mt-1 text-xs">Identity, operating defaults, documents, and access.</p>
                     </div>
-                    <button 
-                        onClick={handleSaveSettings} 
-                        disabled={isSaving}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all font-medium shadow-lg shadow-emerald-900/20 ${isSaving ? 'bg-emerald-900/50 text-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}
-                    >
-                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} 
-                        <span>{isSaving ? 'Saving...' : 'Save Global Changes'}</span>
-                    </button>
                 </div>
-
-                {/* Tab Navigation */}
-                <div className="flex gap-2 pb-2 border-b border-slate-800 flex-wrap md:flex-nowrap overflow-x-auto no-scrollbar">
-                    <button onClick={() => setActiveTab('general')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'general' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <Settings size={16} /> General
-                    </button>
-                    <button onClick={() => setActiveTab('documents')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'documents' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <Printer size={16} /> Documents
-                    </button>
-                    <button onClick={() => setActiveTab('forms')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'forms' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <FileText size={16} /> Forms
-                    </button>
-                    <button onClick={() => setActiveTab('data')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'data' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <FileSpreadsheet size={16} /> Data
-                    </button>
-                    <button onClick={() => setActiveTab('api')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'api' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <Zap size={16} /> API Integrations
-                    </button>
-                    {can('settings.manage_team') && (
-                        <button onClick={() => setActiveTab('team')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'team' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                            <Users size={16} /> Team & Access
-                        </button>
-                    )}
-                    {isSuperAdmin && (
-                        <button onClick={() => setActiveTab('maintenance')} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-2 ${activeTab === 'maintenance' ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                            <AlertTriangle size={16} /> Maintenance
-                        </button>
-                    )}
-                </div>
+                <AtlasActionButton
+                    icon={isSaving ? Loader2 : Save}
+                    variant="primary"
+                    onClick={handleSaveSettings}
+                    disabled={isSaving || !isDirty || !canManageSettings}
+                    className={`shrink-0 self-start sm:self-center ${isSaving ? '[&_svg]:animate-spin' : ''}`}
+                >
+                    {isSaving ? 'Saving...' : 'Save changes'}
+                </AtlasActionButton>
             </div>
 
-            {/* TAB CONTENT */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[400px]">
+            <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={setActiveTab} mode="mobile" />
+
+            <div className="flex min-h-[480px] min-w-0 items-start gap-5 xl:gap-7">
+                <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={setActiveTab} mode="desktop" />
+                <main className="min-w-0 flex-1">
 
                 {/* API TAB */}
                 {activeTab === 'api' && (
+                    <div className="space-y-4">
+                        <SettingsPanel title="Connected services" description="Organization credentials are stored separately from everyday workspace settings." icon={Plug} status={<span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">Admin only</span>}>
+                            <div className="space-y-3">
+                                <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="flex min-w-0 items-start gap-3">
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sky-300/20 bg-sky-300/10 text-sky-300"><Wand2 size={17} /></span>
+                                            <div><p className="atlas-text-strong text-sm font-bold">Google Gemini</p><p className="atlas-text-subtle mt-0.5 text-xs">Image and creative generation</p></div>
+                                        </div>
+                                        <span className={`flex items-center gap-1.5 text-xs font-bold ${settings.apiConfig?.googleApiKey ? 'text-emerald-300' : 'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${settings.apiConfig?.googleApiKey ? 'bg-emerald-400' : 'bg-slate-600'}`} />{settings.apiConfig?.googleApiKey ? 'Configured' : 'Not connected'}</span>
+                                    </div>
+                                    <div className="mt-4"><SettingsField label="API key" hint="Saved in the active organization integration vault."><input type="password" autoComplete="off" disabled={!canManageIntegrations} className={`${settingsInputClass} font-mono`} value={settings.apiConfig?.googleApiKey || ''} onChange={event => updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, googleApiKey: event.target.value } })} placeholder="AIza..." /></SettingsField></div>
+                                </div>
+                                <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                        <div className="flex min-w-0 items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-300/10 text-teal-300"><Zap size={17} /></span><div><p className="atlas-text-strong text-sm font-bold">OpenAI</p><p className="atlas-text-subtle mt-0.5 text-xs">Assistant and automation services</p></div></div>
+                                        <span className={`flex items-center gap-1.5 text-xs font-bold ${settings.apiConfig?.openaiApiKey ? 'text-emerald-300' : 'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${settings.apiConfig?.openaiApiKey ? 'bg-emerald-400' : 'bg-slate-600'}`} />{settings.apiConfig?.openaiApiKey ? 'Configured' : 'Optional'}</span>
+                                    </div>
+                                    <div className="mt-4"><SettingsField label="API key"><input type="password" autoComplete="off" disabled={!canManageIntegrations} className={`${settingsInputClass} font-mono`} value={settings.apiConfig?.openaiApiKey || ''} onChange={event => updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, openaiApiKey: event.target.value } })} placeholder="sk-..." /></SettingsField></div>
+                                </div>
+                            </div>
+                        </SettingsPanel>
+                        <div className="flex items-start gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100/80"><Shield size={16} className="mt-0.5 shrink-0 text-amber-300" /><span>Only organization owners and authorized administrators can load or change integration credentials.</span></div>
+                    </div>
+                )}
+
+                {false && activeTab === 'api' && (
                     <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">API Integrations</h3></div>
                         <div className="p-6 space-y-6">
@@ -849,14 +944,14 @@ export const SettingsView = () => {
                             {/* OpenAI */}
                             <div className="space-y-4 opacity-50 pointer-events-none grayscale">
                                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                    <Wand2 size={16} className="text-purple-500" /> OpenAI (Coming Soon)
+                                    <Wand2 size={16} className="text-teal-400" /> OpenAI (Coming Soon)
                                     <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-normal">For Chatbot Persona</span>
                                 </h4>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-400 mb-1">API Key</label>
                                     <input
                                         type="password"
-                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-purple-500 outline-none font-mono text-sm"
+                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-teal-400 outline-none font-mono text-sm"
                                         value={settings.apiConfig?.openaiApiKey || ''}
                                         onChange={e => setSettings({ ...settings, apiConfig: { ...settings.apiConfig, openaiApiKey: e.target.value } })}
                                         placeholder="sk-..."
@@ -867,18 +962,86 @@ export const SettingsView = () => {
                     </div>
                 )}
 
-                {/* GENERAL TAB */}
                 {activeTab === 'general' && (
+                    <div>
+                        {!canManageSettings && <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-xs text-amber-200">You can review workspace settings. An organization owner can make changes.</div>}
+                        <div className="atlas-settings-summary mb-5 grid grid-cols-2 overflow-hidden rounded-lg border md:grid-cols-4">
+                            <SettingsMetric label="Workspace" value={currentOrganization?.status || 'Active'} detail={currentOrganization?.slug} icon={BadgeCheck} />
+                            <SettingsMetric label="Academic year" value={settings.academicYear} detail="Operating year" icon={Calendar} />
+                            <SettingsMetric label="Team" value={team.length} detail="Staff accounts" icon={Users} />
+                            <SettingsMetric label="Apps" value={enabledModules} detail="Enabled modules" icon={Boxes} />
+                        </div>
+
+                        <SettingsPanel title="Workspace identity" description="The name and mark shown to staff and families." icon={Building2}>
+                            <div className="grid gap-5 sm:grid-cols-[112px_minmax(0,1fr)]">
+                                <div>
+                                    <span className="atlas-text-muted mb-1.5 block text-xs font-bold">Academy logo</span>
+                                    <label className={`group relative flex aspect-square w-28 items-center justify-center overflow-hidden rounded-lg border border-dashed border-white/15 bg-slate-950/55 transition-colors ${canManageSettings ? 'cursor-pointer hover:border-teal-300/45' : 'cursor-not-allowed opacity-60'}`}>
+                                        {logoPreview ? <img src={logoPreview} alt={`${settings.academyName} logo`} className="h-full w-full object-contain p-2" /> : <ImageIcon className="text-slate-600" size={28} />}
+                                        {canManageSettings && <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-slate-950/85 py-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition-opacity group-hover:opacity-100"><Upload size={11} /> Replace</span>}
+                                        <input type="file" accept="image/*" disabled={!canManageSettings} onChange={handleLogoUpload} className="hidden" />
+                                    </label>
+                                </div>
+                                <div className="grid content-start gap-x-4 gap-y-5 lg:grid-cols-2">
+                                    <SettingsField label="Academy name" required hint="Used across the workspace and family-facing documents.">
+                                        <input disabled={!canManageSettings} className={settingsInputClass} value={settings.academyName} onChange={event => updateSettings({ ...settings, academyName: event.target.value })} />
+                                    </SettingsField>
+                                    <SettingsField label="Academic year" required hint="Use a range such as 2026-2027.">
+                                        <input disabled={!canManageSettings} className={settingsInputClass} value={settings.academicYear} onChange={event => updateSettings({ ...settings, academicYear: event.target.value })} />
+                                    </SettingsField>
+                                </div>
+                            </div>
+                        </SettingsPanel>
+
+                        <SettingsPanel title="Regional operations" description="Defaults used by schedules, finance, and reports." icon={Globe}>
+                            <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
+                                <SettingsField label="Language">
+                                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-slate-950/55 p-1">
+                                        {([['en', 'English'], ['fr', 'Francais']] as const).map(([value, label]) => <button key={value} type="button" disabled={!canManageSettings} onClick={() => updateSettings({ ...settings, language: value })} className={`h-8 rounded-md text-xs font-bold transition-colors ${settings.language === value ? 'bg-teal-400 text-slate-950' : 'text-slate-500 hover:bg-white/[0.05] hover:text-white'}`}>{label}</button>)}
+                                    </div>
+                                </SettingsField>
+                                <SettingsField label="Currency">
+                                    <select disabled={!canManageSettings} className={settingsInputClass} value={settings.currency || 'MAD'} onChange={event => updateSettings({ ...settings, currency: event.target.value })}>
+                                        <option value="MAD">MAD - Moroccan dirham</option><option value="EUR">EUR - Euro</option><option value="USD">USD - US dollar</option>
+                                    </select>
+                                </SettingsField>
+                                <SettingsField label="Time zone">
+                                    <select disabled={!canManageSettings} className={settingsInputClass} value={settings.timezone || 'Africa/Casablanca'} onChange={event => updateSettings({ ...settings, timezone: event.target.value })}>
+                                        <option value="Africa/Casablanca">Casablanca</option><option value="Europe/Paris">Paris</option><option value="UTC">UTC</option>
+                                    </select>
+                                </SettingsField>
+                                <SettingsField label="Week starts on">
+                                    <select disabled={!canManageSettings} className={settingsInputClass} value={settings.weekStartsOn ?? 1} onChange={event => updateSettings({ ...settings, weekStartsOn: Number(event.target.value) as 0 | 1 | 6 })}>
+                                        <option value={1}>Monday</option><option value={6}>Saturday</option><option value={0}>Sunday</option>
+                                    </select>
+                                </SettingsField>
+                                <SettingsField label="Workday starts"><input type="time" disabled={!canManageSettings} className={settingsInputClass} value={settings.defaultWorkHours?.start || '09:00'} onChange={event => updateSettings({ ...settings, defaultWorkHours: { start: event.target.value, end: settings.defaultWorkHours?.end || '18:00' } })} /></SettingsField>
+                                <SettingsField label="Workday ends"><input type="time" disabled={!canManageSettings} className={settingsInputClass} value={settings.defaultWorkHours?.end || '18:00'} onChange={event => updateSettings({ ...settings, defaultWorkHours: { start: settings.defaultWorkHours?.start || '09:00', end: event.target.value } })} /></SettingsField>
+                            </div>
+                        </SettingsPanel>
+
+                        <SettingsPanel title="Family contact & sign-in" description="Receipt support details and security for this device." icon={Shield}>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <SettingsField label="Receipt contact" hint="Phone or email shown when a family needs help."><input disabled={!canManageSettings} className={settingsInputClass} value={settings.receiptContact || ''} onChange={event => updateSettings({ ...settings, receiptContact: event.target.value })} placeholder="finance@academy.com" /></SettingsField>
+                                <SettingsField label="Receipt footer"><textarea disabled={!canManageSettings} className={`${settingsInputClass} min-h-20 resize-y`} value={settings.receiptFooter || ''} onChange={event => updateSettings({ ...settings, receiptFooter: event.target.value })} /></SettingsField>
+                                {canUseBiometrics && <div className="md:col-span-2"><SettingsToggle checked={biometricActive} onChange={handleToggleBiometric} label="Biometric sign-in on this device" description="Use the device authenticator for your Edufy account." /></div>}
+                            </div>
+                        </SettingsPanel>
+                    </div>
+                )}
+
+                {/* Legacy general markup retained temporarily for data compatibility. */}
+                {false && activeTab === 'general' && (
                     <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">General Configuration</h3></div>
                         <div className="p-6 space-y-4">
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">System Language</label>
                                 <div className="flex gap-3">
-                                    <button onClick={() => updateSettings({ ...settings, language: 'en' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${settings.language === 'en' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
+                                    <button onClick={() => updateSettings({ ...settings, language: 'en' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-colors ${settings.language === 'en' ? 'bg-teal-500 border-teal-400 text-slate-950' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
                                         <span className="text-lg">🇺🇸</span> English
                                     </button>
-                                    <button onClick={() => updateSettings({ ...settings, language: 'fr' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${settings.language === 'fr' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
+                                    <button onClick={() => updateSettings({ ...settings, language: 'fr' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-colors ${settings.language === 'fr' ? 'bg-teal-500 border-teal-400 text-slate-950' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
                                         <span className="text-lg">🇫🇷</span> Français
                                     </button>
                                 </div>
@@ -912,7 +1075,7 @@ export const SettingsView = () => {
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Academy Logo</label>
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-16 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                                        {logoPreview ? <img src={logoPreview} alt="Preview" className="w-full h-full object-contain" /> : <ImageIcon className="text-slate-700" />}
+                                        {logoPreview ? <img src={logoPreview || undefined} alt="Preview" className="w-full h-full object-contain" /> : <ImageIcon className="text-slate-700" />}
                                     </div>
                                     <div className="flex-1">
                                         <label className="flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm border border-slate-700 transition-colors w-fit">
@@ -963,8 +1126,81 @@ export const SettingsView = () => {
                     </div>
                 )}
 
+                {activeTab === 'plan' && (
+                    <div className="space-y-4">
+                        <SettingsPanel
+                            title="Subscription"
+                            description="Your Edufy plan and workspace standing."
+                            icon={CreditCard}
+                            status={<span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-bold capitalize text-emerald-300">{currentOrganization?.subscription?.status || currentOrganization?.status || 'active'}</span>}
+                        >
+                            <div className="atlas-settings-summary atlas-settings-summary--two-column grid grid-cols-2 overflow-hidden rounded-lg border">
+                                <SettingsMetric label="Plan" value={planName} detail={currentOrganization?.subscription?.interval ? `Billed ${currentOrganization.subscription.interval}ly` : 'Workspace plan'} icon={BadgeCheck} />
+                                <SettingsMetric label="Students" value={currentOrganization?.limits?.students || 'Flexible'} detail="Plan allowance" icon={Users} />
+                                <SettingsMetric label="Storage" value={currentOrganization?.limits?.storage ? `${currentOrganization.limits.storage} GB` : 'Flexible'} detail="Plan allowance" icon={HardDrive} />
+                                <SettingsMetric label="Apps" value={enabledModules} detail="Currently enabled" icon={Boxes} />
+                            </div>
+                            {currentOrganization?.subscription?.nextBillingDate && <div className="atlas-text-muted mt-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-xs"><Calendar size={14} className="text-teal-300" /> Next billing date: {currentOrganization.subscription.nextBillingDate.toDate?.().toLocaleDateString() || 'Available in billing'}</div>}
+                        </SettingsPanel>
+
+                        <SettingsPanel title="Enabled apps" description="Products available inside this organization." icon={Boxes}>
+                            <div className="divide-y divide-white/10">
+                                {Object.entries(currentOrganization?.modules || {}).filter(([, enabled]) => enabled === true).map(([moduleId]) => (
+                                    <div key={moduleId} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><Boxes size={16} /></span>
+                                            <div className="min-w-0"><p className="atlas-text-strong truncate text-sm font-bold">{moduleId === 'erp' ? 'Edufy ERP' : moduleId === 'makerPro' ? 'Maker Pro' : moduleId === 'sparkQuest' ? 'SparkQuest' : moduleId.replace(/[-_]/g, ' ')}</p><p className="atlas-text-subtle text-xs">Available to this workspace</p></div>
+                                        </div>
+                                        <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-300"><CheckCircle2 size={14} /> Active</span>
+                                    </div>
+                                ))}
+                                {enabledModules === 0 && <AtlasEmptyState title="No apps enabled" description="The workspace owner can manage products from the Edufy app catalog." icon={Boxes} />}
+                            </div>
+                        </SettingsPanel>
+
+                        <SettingsPanel title="Workspace reference" description="Identifiers used for support and tenant isolation." icon={Shield}>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <SettingsField label="Organization ID"><input className={`${settingsInputClass} font-mono`} readOnly value={currentOrganization?.id || ''} /></SettingsField>
+                                <SettingsField label="Workspace slug"><input className={`${settingsInputClass} font-mono`} readOnly value={currentOrganization?.slug || ''} /></SettingsField>
+                            </div>
+                        </SettingsPanel>
+                    </div>
+                )}
+
                 {/* DOCUMENTS TAB */}
                 {activeTab === 'documents' && (
+                    <div className="space-y-4">
+                        <SettingsPanel title="Document identity" description="The legal identity used on invoices, receipts, attestations, and certificates." icon={Printer}>
+                            <div className="grid gap-5 md:grid-cols-[128px_minmax(0,1fr)]">
+                                <div>
+                                    <span className="atlas-text-muted mb-1.5 block text-xs font-bold">Print logo</span>
+                                    <label className={`group relative flex aspect-square w-28 items-center justify-center overflow-hidden rounded-lg border border-dashed border-white/15 bg-slate-950/55 ${canManageSettings ? 'cursor-pointer hover:border-teal-300/45' : 'cursor-not-allowed opacity-60'}`}>
+                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig.logoUrl} alt="Document logo" className="h-full w-full object-contain p-2" /> : <Printer className="text-slate-600" size={26} />}
+                                        {canManageSettings && <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-slate-950/85 py-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition-opacity group-hover:opacity-100"><Upload size={11} /> Replace</span>}
+                                        <input type="file" accept="image/*" disabled={!canManageSettings} onChange={handleDocumentLogoUpload} className="hidden" />
+                                    </label>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="sm:col-span-2"><SettingsField label="Legal organization name" hint={`Falls back to ${settings.academyName}.`}><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.headerName || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, headerName: event.target.value } })} /></SettingsField></div>
+                                    <SettingsField label="Document email"><input type="email" disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.email || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, email: event.target.value } })} /></SettingsField>
+                                    <SettingsField label="Document phone"><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.phone || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, phone: event.target.value } })} /></SettingsField>
+                                    <SettingsField label="Website"><input type="url" disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.website || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, website: event.target.value } })} /></SettingsField>
+                                    <SettingsField label="Address"><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.address || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, address: event.target.value } })} /></SettingsField>
+                                </div>
+                            </div>
+                        </SettingsPanel>
+                        <SettingsPanel title="Invoice identifiers" description="Official registration details printed on financial documents." icon={FileText}>
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <SettingsField label="ICE / Tax ID"><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.taxId || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, taxId: event.target.value } })} /></SettingsField>
+                                <SettingsField label="RC / Registration ID"><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.regId || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, regId: event.target.value } })} /></SettingsField>
+                                <SettingsField label="Patente"><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.patente || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, patente: event.target.value } })} /></SettingsField>
+                                <SettingsField label="CNSS"><input disabled={!canManageSettings} className={settingsInputClass} value={settings.documentConfig?.cnss || ''} onChange={event => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, cnss: event.target.value } })} /></SettingsField>
+                            </div>
+                        </SettingsPanel>
+                    </div>
+                )}
+
+                {false && activeTab === 'documents' && (
                     <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Document Settings</h3></div>
                         <div className="p-6 space-y-4">
@@ -985,7 +1221,7 @@ export const SettingsView = () => {
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Document Logo</label>
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-16 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig.logoUrl} alt="Doc Logo" className="w-full h-full object-contain" /> : <Printer className="text-slate-700" />}
+                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig?.logoUrl} alt="Doc Logo" className="w-full h-full object-contain" /> : <Printer className="text-slate-700" />}
                                     </div>
                                     <div className="flex-1">
                                         <label className="flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm border border-slate-700 transition-colors w-fit">
@@ -1043,6 +1279,31 @@ export const SettingsView = () => {
 
                 {/* FORMS TAB */}
                 {activeTab === 'forms' && (
+                    <SettingsPanel title="Enrollment form" description="Choose what families provide when registering a learner." icon={FileText}>
+                        <div className="space-y-3">
+                            {([
+                                ['parentName', 'Parent or guardian name', 'Connect the learner to their primary guardian.'],
+                                ['email', 'Email address', 'Used for confirmations and family communication.'],
+                                ['address', 'Home address', 'Collect the learner household address.'],
+                                ['school', 'Current school', 'Record the learner current school.'],
+                                ['birthDate', 'Date of birth', 'Supports age-aware groups and documents.'],
+                                ['medicalInfo', 'Medical notes', 'Collect allergies or other essential care information.']
+                            ] as const).map(([field, label, description]) => {
+                                const config = settings.studentFormConfig[field];
+                                return (
+                                    <div key={field} className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-[minmax(0,1fr)_150px_150px] sm:items-center">
+                                        <div><p className="atlas-text-strong text-sm font-bold">{label}</p><p className="atlas-text-subtle mt-0.5 text-xs leading-5">{description}</p></div>
+                                        <SettingsToggle checked={config.active} disabled={!canManageSettings} onChange={() => updateSettings({ ...settings, studentFormConfig: { ...settings.studentFormConfig, [field]: { active: !config.active, required: config.active ? false : config.required } } })} label="Visible" />
+                                        <SettingsToggle checked={config.required} disabled={!canManageSettings || !config.active} tone="amber" onChange={() => updateSettings({ ...settings, studentFormConfig: { ...settings.studentFormConfig, [field]: { ...config, required: !config.required } } })} label="Required" />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="mt-4 flex items-start gap-2 rounded-lg border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2.5 text-xs text-teal-100/80"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-teal-300" /><span>Name and parent phone remain part of the core registration flow so every learner can be identified and contacted.</span></div>
+                    </SettingsPanel>
+                )}
+
+                {false && activeTab === 'forms' && (
                     <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Admission Form Fields</h3></div>
                         <table className="w-full text-left text-sm">
@@ -1062,16 +1323,41 @@ export const SettingsView = () => {
 
                 {/* DATA TAB */}
                 {activeTab === 'data' && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                            <SettingsMetric label="Students" value={students.length} icon={Users} />
+                            <SettingsMetric label="Programs" value={programs.length} icon={Calendar} />
+                            <SettingsMetric label="Enrollments" value={enrollments.length} icon={FileText} />
+                            <SettingsMetric label="Payments" value={payments.length} icon={CreditCard} />
+                        </div>
+                        <SettingsPanel title="Import students" description="Add learner records to this organization from a structured CSV file." icon={Upload} actions={<AtlasActionButton icon={Download} onClick={downloadCSVTemplate}>CSV template</AtlasActionButton>}>
+                            <label className={`relative flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed border-white/15 bg-white/[0.02] p-6 text-center transition-colors ${canManageSettings ? 'cursor-pointer hover:border-teal-300/45 hover:bg-teal-300/[0.04]' : 'cursor-not-allowed opacity-60'}`}>
+                                <input type="file" accept=".csv" onChange={handleBulkImport} disabled={isImporting || !canManageSettings} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" />
+                                <span className="atlas-accent-well flex h-11 w-11 items-center justify-center rounded-lg border">{isImporting ? <Loader2 className="animate-spin" size={20} /> : <Upload size={20} />}</span>
+                                <span className="atlas-text-strong mt-3 text-sm font-bold">{isImporting ? 'Importing students...' : 'Choose a CSV file'}</span>
+                                <span className="atlas-text-subtle mt-1 text-xs">Name and parent phone are required.</span>
+                            </label>
+                        </SettingsPanel>
+                        <SettingsPanel title="Workspace export" description="Download the current tenant data for portability and controlled backups." icon={FileSpreadsheet} actions={<AtlasActionButton icon={Download} onClick={downloadWorkspaceExport}>Export JSON</AtlasActionButton>}>
+                            <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-4">
+                                <Shield size={18} className="mt-0.5 shrink-0 text-teal-300" />
+                                <div><p className="atlas-text-strong text-sm font-bold">Organization-scoped export</p><p className="atlas-text-subtle mt-1 text-xs leading-5">Includes workspace settings, students, programs, enrollments, and payments currently loaded for {settings.academyName}.</p></div>
+                            </div>
+                        </SettingsPanel>
+                    </div>
+                )}
+
+                {false && activeTab === 'data' && (
                     <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Data Management</h3></div>
                         <div className="p-6 space-y-4">
                             <div className="flex justify-between items-center">
                                 <div><h4 className="text-sm font-medium text-white mb-1">Bulk Student Upload</h4><p className="text-xs text-slate-500">Import students via CSV.</p></div>
-                                <button onClick={downloadCSVTemplate} className="text-xs flex items-center gap-1 text-blue-400 border border-slate-700 px-3 py-1.5 rounded bg-slate-800"><Download size={12} /> Template</button>
+                                <button onClick={downloadCSVTemplate} className="text-xs flex items-center gap-1 text-teal-300 border border-slate-700 px-3 py-1.5 rounded-lg bg-slate-800 hover:border-teal-400/40"><Download size={12} /> Download template</button>
                             </div>
-                            <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-blue-500 hover:bg-slate-800/30 transition-all cursor-pointer relative">
+                            <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-teal-400/60 hover:bg-slate-800/30 transition-colors cursor-pointer relative">
                                 <input type="file" accept=".csv" onChange={handleBulkImport} disabled={isImporting} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
-                                {isImporting ? <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" /> : <Upload className="w-8 h-8 text-slate-500" />}
+                                {isImporting ? <RefreshCw className="w-8 h-8 text-teal-400 animate-spin" /> : <Upload className="w-8 h-8 text-slate-500" />}
                                 <span className="text-sm font-medium text-slate-300 mt-2">{isImporting ? 'Importing...' : 'Upload CSV'}</span>
                             </div>
                             <div className="bg-amber-950/10 border border-amber-900/30 p-3 rounded flex gap-3 items-start"><AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" /><p className="text-xs text-amber-200/80">Ensure CSV matches template. Required: Name, ParentPhone.</p></div>
@@ -1081,6 +1367,61 @@ export const SettingsView = () => {
 
                 {/* TEAM TAB (RBAC) */}
                 {activeTab === 'team' && (
+                    <div className="space-y-4">
+                        <SettingsPanel title="Team members" description="Staff accounts with access to this organization." icon={Users} actions={<AtlasActionButton icon={UserPlus} variant="primary" onClick={openCreateTeamMember}>Add member</AtlasActionButton>}>
+                            {team.length === 0 ? (
+                                <AtlasEmptyState title="No staff accounts yet" description="Add the first team member and choose the role that matches their work." icon={Users} action={<AtlasActionButton icon={UserPlus} variant="primary" onClick={openCreateTeamMember}>Add member</AtlasActionButton>} />
+                            ) : (
+                                <div className="divide-y divide-white/10">
+                                    {team.map(member => (
+                                        <div key={member.uid || member.email} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="flex min-w-0 items-center gap-3">
+                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sm font-black text-teal-200">{member.name?.slice(0, 1).toUpperCase() || 'U'}</span>
+                                                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="atlas-text-strong truncate text-sm font-bold">{member.name}</p>{member.uid === user?.uid && <span className="rounded bg-teal-300/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-200">You</span>}</div><p className="atlas-text-subtle truncate text-xs">{member.email}</p></div>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-3 sm:justify-end">
+                                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold capitalize text-slate-300">{member.role.replace(/_/g, ' ')}</span>
+                                                <span className={`hidden items-center gap-1.5 text-xs font-bold md:flex ${member.status === 'active' ? 'text-emerald-300' : 'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${member.status === 'active' ? 'bg-emerald-400' : 'bg-slate-600'}`} />{member.status}</span>
+                                                <div className="flex items-center gap-1">
+                                                    {canAssignRole(member.role) && <button type="button" onClick={() => { setNewUser({ uid: member.uid || '', email: member.email, name: member.name, role: member.role, password: '', workHours: member.workHours || { start: '', end: '' } }); setIsEditingUser(true); setIsUserModalOpen(true); }} aria-label={`Edit ${member.name}`} title="Edit member" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"><Pencil size={15} /></button>}
+                                                    <button type="button" onClick={() => handleResetPassword(member.email)} aria-label={`Reset password for ${member.name}`} title="Send password reset" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-amber-300"><Key size={15} /></button>
+                                                    {!['owner', 'admin', 'super_admin'].includes(member.role) && member.uid !== user?.uid && <button type="button" onClick={() => handleDeleteUser(member.uid!, member.email)} aria-label={`Delete ${member.name}`} title="Delete member" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-500 transition-colors hover:border-rose-300/25 hover:bg-rose-300/10 hover:text-rose-300"><Trash2 size={15} /></button>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {isSuperAdmin && <div className="mt-4 border-t border-white/10 pt-4"><AtlasActionButton icon={Wand2} variant="quiet" disabled={isProcessingTeam} onClick={handleSeedTeam}>{isProcessingTeam ? 'Creating demo team...' : 'Create demo team'}</AtlasActionButton></div>}
+                        </SettingsPanel>
+
+                        <SettingsPanel title="Role permissions" description="Choose one role, then set only the access needed for that job." icon={Shield} status={<span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">Organization policy</span>}>
+                            {configurableRoles.length === 0 ? <AtlasEmptyState title="Roles are loading" icon={Loader2} /> : <>
+                                <div className="no-scrollbar flex gap-2 overflow-x-auto pb-2">
+                                    {configurableRoles.map(role => <button key={role.id} type="button" onClick={() => setSelectedRoleId(role.id)} className={`h-9 shrink-0 rounded-lg border px-3 text-xs font-bold transition-colors ${selectedRole?.id === role.id ? 'border-teal-300/30 bg-teal-300/10 text-teal-200' : 'border-white/10 bg-white/[0.025] text-slate-400 hover:text-white'}`}>{role.label}</button>)}
+                                </div>
+                                {selectedRole && <div className="mt-3">
+                                    <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5"><p className="atlas-text-strong text-sm font-bold">{selectedRole.label}</p><p className="atlas-text-subtle mt-0.5 text-xs">{selectedRole.description}</p></div>
+                                    <div className="space-y-4">
+                                        {Array.from(new Set(AVAILABLE_PERMISSIONS.map(permission => permission.group))).map(group => (
+                                            <div key={group}>
+                                                <p className="atlas-text-subtle mb-2 text-[10px] font-bold uppercase tracking-wider">{group}</p>
+                                                <div className="grid gap-2 md:grid-cols-2">
+                                                    {AVAILABLE_PERMISSIONS.filter(permission => permission.group === group).map(permission => {
+                                                        const isAllowed = selectedRole.permissions.includes('*') || selectedRole.permissions.includes(permission.id) || selectedRole.permissions.includes(`${permission.id.split('.')[0]}.*`);
+                                                        return <SettingsToggle key={permission.id} checked={isAllowed} disabled={!canManageTeam} onChange={() => togglePermission(selectedRole.id, permission.id)} label={permission.label} />;
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>}
+                            </>}
+                        </SettingsPanel>
+                    </div>
+                )}
+
+                {false && activeTab === 'team' && (
                     <div className="col-span-12 space-y-8">
                         {/* Team Members Section */}
                         <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -1091,7 +1432,7 @@ export const SettingsView = () => {
                                         {isProcessingTeam ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
                                         Seed Demo Team
                                     </button>
-                                    <button onClick={() => { setIsEditingUser(false); setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '' }); setIsUserModalOpen(true); }} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors shadow-lg shadow-blue-900/20">
+                                    <button onClick={() => { setIsEditingUser(false); setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } }); setIsUserModalOpen(true); }} className="bg-teal-500 hover:bg-teal-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors">
                                         <UserPlus size={14} /> Add User
                                     </button>
                                 </div>
@@ -1110,7 +1451,7 @@ export const SettingsView = () => {
                                                         <div className="text-xs text-slate-500">{u.email}</div>
                                                     </td>
                                                     <td className="p-4">
-                                                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-purple-950/50 text-purple-400 border border-purple-900' :
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-teal-950/50 text-teal-300 border border-teal-900' :
                                                             u.role === 'accountant' ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-900' :
                                                                 'bg-blue-950/50 text-blue-400 border border-blue-900'
                                                             }`}>{u.role.replace('_', ' ')}</span>
@@ -1187,6 +1528,25 @@ export const SettingsView = () => {
 
                 {/* SYSTEM MAINTENANCE TAB (SUPER ADMIN ONLY) */}
                 {activeTab === 'maintenance' && isSuperAdmin && (
+                    <div className="space-y-4">
+                        <SettingsPanel title="Workspace diagnostics" description="Connection and repair tools for the active organization." icon={Zap} status={<span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">Platform access</span>}>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <button type="button" onClick={handleTestConnection} className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-left transition-colors hover:border-teal-300/25 hover:bg-teal-300/[0.04]"><span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><RefreshCw size={16} /></span><span><span className="atlas-text-strong block text-sm font-bold">Test database</span><span className="atlas-text-subtle mt-0.5 block text-xs">Verify an authenticated tenant write.</span></span></button>
+                                <button type="button" disabled={isRepairing} onClick={handleRepairFinancials} className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-left transition-colors hover:border-teal-300/25 hover:bg-teal-300/[0.04] disabled:opacity-50"><span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border">{isRepairing ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}</span><span><span className="atlas-text-strong block text-sm font-bold">Recalculate financials</span><span className="atlas-text-subtle mt-0.5 block text-xs">Repair enrollment totals from tenant payments.</span></span></button>
+                            </div>
+                            <div className="mt-4 grid gap-2 rounded-lg border border-white/10 bg-slate-950/45 p-3 font-mono text-[11px] text-slate-400 sm:grid-cols-2"><span>User: {user?.uid || 'N/A'}</span><span>Organization: {currentOrganization?.id || 'N/A'}</span></div>
+                            {migrationResult && <div className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 font-mono text-xs text-emerald-300">{migrationResult}</div>}
+                        </SettingsPanel>
+                        <SettingsPanel title="Legacy recovery" description="One-time migration tools for pre-SaaS MakerLab data." icon={AlertTriangle}>
+                            <div className="flex flex-wrap gap-2">
+                                <AtlasActionButton icon={RefreshCw} disabled={isMigrating} onClick={handleMigrateData}>{isMigrating ? 'Migrating...' : 'Analyze legacy data'}</AtlasActionButton>
+                                <AtlasActionButton icon={Building2} onClick={handleRecreateOrg}>Recreate default organization</AtlasActionButton>
+                            </div>
+                        </SettingsPanel>
+                    </div>
+                )}
+
+                {false && activeTab === 'maintenance' && isSuperAdmin && (
                     <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex items-center justify-between">
                             <div>
@@ -1195,9 +1555,9 @@ export const SettingsView = () => {
                             </div>
                         </div>
                         <div className="p-6 space-y-6">
-                            <div className="bg-indigo-950/20 border border-indigo-900/50 p-5 rounded-lg">
-                                <h4 className="font-bold text-indigo-400 mb-2 flex items-center gap-2">Data Migration Tool</h4>
-                                <p className="text-sm text-indigo-200/70 mb-4">
+                            <div className="bg-amber-950/15 border border-amber-900/40 p-5 rounded-lg">
+                                <h4 className="font-bold text-amber-300 mb-2 flex items-center gap-2">Data migration tools</h4>
+                                <p className="text-sm text-slate-400 mb-4">
                                     Migrate legacy Single-Tenant data to the new 'Makerlab Academy' Organization.
                                     This will scan all collections and assign `organizationId: 'makerlab-academy'` to any orphaned documents.
                                 </p>
@@ -1206,7 +1566,7 @@ export const SettingsView = () => {
                                     <button
                                         onClick={handleMigrateData}
                                         disabled={isMigrating}
-                                        className="bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-lg shadow-indigo-900/20"
+                                        className="bg-teal-500 hover:bg-teal-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors"
                                     >
                                         {isMigrating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
                                         {isMigrating ? 'Migrating Data...' : 'Start Legacy Data Migration'}
@@ -1223,7 +1583,7 @@ export const SettingsView = () => {
                                         {isRepairing ? 'Fixing...' : 'Recalculate Financials'}
                                     </button>
 
-                                    <button onClick={handleMigrateAcademicYear} disabled={isMigrating} className="bg-purple-600 hover:bg-purple-500 disabled:bg-slate-800 disabled:text-slate-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-lg shadow-purple-900/20">
+                                    <button onClick={handleMigrateAcademicYear} disabled={isMigrating} className="bg-slate-800 hover:bg-slate-700 disabled:text-slate-600 text-slate-200 border border-white/10 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors">
                                         <Calendar size={16} /> Shift to 25/26
                                     </button>
 
@@ -1244,68 +1604,42 @@ export const SettingsView = () => {
                         </div>
                     </div>
                 )}
+                </main>
             </div>
 
 
             {/* Add/Edit User Modal */}
-            <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={isEditingUser ? "Edit User Profile" : "Add Team Member"}>
+            <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={isEditingUser ? "Edit team member" : "Add team member"}>
                 <form onSubmit={handleAddUser} className="space-y-4">
-                    {!isEditingUser && (
-                        <div className="flex justify-end">
-                            <button type="button" onClick={() => setNewUser({ ...newUser, name: 'Instructor', email: `inst${Math.floor(Math.random() * 1000)}@academy.com`, role: 'instructor', password: 'password123' })} className="text-xs text-blue-400 hover:text-white flex items-center gap-1"><Wand2 size={12} /> Auto-Fill</button>
-                        </div>
-                    )}
+                    <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3"><span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><Users size={16} /></span><div><p className="atlas-text-strong text-sm font-bold">{currentOrganization?.name}</p><p className="atlas-text-subtle mt-0.5 text-xs">This account will only access the active organization.</p></div></div>
 
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Full Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded text-white" value={newUser.name} onChange={e => setNewUser({ ...newUser, name: e.target.value })} placeholder="Jane Doe" /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Email Address</label><input required type="email" disabled={isEditingUser} className={`w-full p-3 bg-slate-950 border border-slate-800 rounded text-white ${isEditingUser ? 'opacity-50 cursor-not-allowed' : ''}`} value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })} placeholder="jane@academy.com" /></div>
+                    <SettingsField label="Full name" required><input required className={settingsInputClass} value={newUser.name} onChange={event => setNewUser({ ...newUser, name: event.target.value })} placeholder="Jane Doe" /></SettingsField>
+                    <SettingsField label="Email address" required><input required type="email" disabled={isEditingUser} className={settingsInputClass} value={newUser.email} onChange={event => setNewUser({ ...newUser, email: event.target.value })} placeholder="jane@academy.com" /></SettingsField>
 
                     {!isEditingUser && (
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Password (Auto-generated if empty)</label>
+                        <SettingsField label="Temporary password" hint="Leave empty and Edufy will generate one.">
                             <div className="relative">
-                                <input type="text" className="w-full p-3 bg-slate-950 border border-slate-800 rounded text-white font-mono" value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Leave empty to auto-generate" />
-                                <button type="button" onClick={() => setNewUser({ ...newUser, password: Math.random().toString(36).slice(-8) })} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-blue-400 hover:text-white">Generate</button>
+                                <input type="text" className={`${settingsInputClass} pr-12 font-mono`} value={newUser.password} onChange={event => setNewUser({ ...newUser, password: event.target.value })} placeholder="Auto-generated" />
+                                <button type="button" onClick={() => setNewUser({ ...newUser, password: Math.random().toString(36).slice(-8) })} aria-label="Generate temporary password" title="Generate password" className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-white/[0.06] hover:text-teal-200"><Wand2 size={15} /></button>
                             </div>
-                        </div>
+                        </SettingsField>
                     )}
 
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Role</label>
-                        <select className="w-full p-3 bg-slate-950 border border-slate-800 rounded text-white" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
-                            {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    <SettingsField label="Role" hint={assignableRoles.find(role => role.id === newUser.role)?.description}>
+                        <select className={settingsInputClass} value={newUser.role} onChange={event => setNewUser({ ...newUser, role: event.target.value })}>
+                            {assignableRoles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                         </select>
-                    </div>
+                    </SettingsField>
 
-                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
-                        <label className="block text-xs font-bold text-slate-400 flex items-center gap-2">
-                             <Clock size={14} /> Custom Work Hours (Optional)
-                        </label>
-                        <div className="flex gap-4">
-                            <div className="flex-1">
-                                <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">Start</label>
-                                <input 
-                                    type="time" 
-                                    className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" 
-                                    value={newUser.workHours?.start || ''} 
-                                    onChange={e => setNewUser({ ...newUser, workHours: { ...newUser.workHours, start: e.target.value, end: newUser.workHours?.end || '' } })} 
-                                />
-                            </div>
-                            <div className="flex-1">
-                                <label className="block text-[10px] text-slate-500 uppercase font-bold mb-1">End</label>
-                                <input 
-                                    type="time" 
-                                    className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white" 
-                                    value={newUser.workHours?.end || ''} 
-                                    onChange={e => setNewUser({ ...newUser, workHours: { ...newUser.workHours, start: newUser.workHours?.start || '', end: e.target.value } })} 
-                                />
-                            </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
+                        <div className="mb-3 flex items-center gap-2"><Clock size={14} className="text-teal-300" /><span className="atlas-text-strong text-xs font-bold">Custom work hours</span><span className="atlas-text-subtle text-[10px]">Optional</span></div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <SettingsField label="Starts"><input type="time" className={settingsInputClass} value={newUser.workHours?.start || ''} onChange={event => setNewUser({ ...newUser, workHours: { start: event.target.value, end: newUser.workHours?.end || '' } })} /></SettingsField>
+                            <SettingsField label="Ends"><input type="time" className={settingsInputClass} value={newUser.workHours?.end || ''} onChange={event => setNewUser({ ...newUser, workHours: { start: newUser.workHours?.start || '', end: event.target.value } })} /></SettingsField>
                         </div>
-                        <p className="text-[10px] text-slate-600">Overrides global defaults for this user.</p>
                     </div>
 
-                    <button type="submit" disabled={isProcessingTeam} className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold mt-2 flex items-center justify-center gap-2">
-                        {isProcessingTeam ? <Loader2 className="animate-spin w-4 h-4" /> : (isEditingUser ? 'Update Profile' : 'Create User')}
-                    </button>
+                    <div className="flex justify-end gap-2 border-t border-white/10 pt-4"><AtlasActionButton onClick={() => setIsUserModalOpen(false)}>Cancel</AtlasActionButton><AtlasActionButton type="submit" variant="primary" icon={isProcessingTeam ? Loader2 : isEditingUser ? Save : UserPlus} disabled={isProcessingTeam} className={isProcessingTeam ? '[&_svg]:animate-spin' : ''}>{isProcessingTeam ? 'Saving...' : isEditingUser ? 'Save member' : 'Create member'}</AtlasActionButton></div>
                 </form>
             </Modal>
 
@@ -1326,7 +1660,7 @@ export const SettingsView = () => {
                             <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Password</label>
                             <div className="flex items-center justify-between">
                                 <div className="font-mono text-emerald-400 text-lg font-bold select-all">{showCredentials?.password}</div>
-                                <button onClick={() => { navigator.clipboard.writeText(`Email: ${showCredentials?.email}\nPassword: ${showCredentials?.password}`); alert("Copied!"); }} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white"><Copy size={16} /></button>
+                                <button onClick={async () => { await navigator.clipboard.writeText(`Email: ${showCredentials?.email}\nPassword: ${showCredentials?.password}`); showAlert('Credentials copied', 'The email and temporary password are ready to share securely.', 'success'); }} aria-label="Copy credentials" title="Copy credentials" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><Copy size={16} /></button>
                             </div>
                         </div>
                     </div>

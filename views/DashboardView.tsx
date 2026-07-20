@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency, getDaysDifference, formatDate, getUpcomingBirthdays } from '../utils/helpers';
 import { db } from '../services/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 
 // --- HELPER: Safe Date Conversion ---
 const getDate = (date: any): Date => {
@@ -17,6 +18,103 @@ const getDate = (date: any): Date => {
     // Handle String or Number
     const d = new Date(date);
     return isNaN(d.getTime()) ? new Date() : d;
+};
+
+const iconTone = {
+    emerald: {
+        light: 'bg-emerald-50 text-emerald-600',
+        dark: 'bg-emerald-500/10 text-emerald-400'
+    },
+    blue: {
+        light: 'bg-sky-50 text-sky-600',
+        dark: 'bg-sky-500/10 text-sky-400'
+    },
+    pink: {
+        light: 'bg-pink-50 text-pink-600',
+        dark: 'bg-pink-500/10 text-pink-400'
+    },
+    purple: {
+        light: 'bg-violet-50 text-violet-600',
+        dark: 'bg-violet-500/10 text-violet-400'
+    },
+    slate: {
+        light: 'bg-slate-100 text-slate-600',
+        dark: 'bg-slate-800 text-slate-400'
+    }
+};
+
+const alertTone: Record<string, { row: string; icon: string; title: string; subtitle: string; action: string }> = {
+    finance: {
+        row: 'bg-rose-950/10 border-rose-900/30 hover:bg-rose-900/20',
+        icon: 'bg-rose-500/10 text-rose-400',
+        title: 'text-rose-300',
+        subtitle: 'text-rose-200/60',
+        action: 'bg-rose-500 text-rose-950'
+    },
+    rose: {
+        row: 'bg-rose-950/10 border-rose-900/30 hover:bg-rose-900/20',
+        icon: 'bg-rose-500/10 text-rose-400',
+        title: 'text-rose-300',
+        subtitle: 'text-rose-200/60',
+        action: 'bg-rose-500 text-rose-950'
+    },
+    red: {
+        row: 'bg-red-950/10 border-red-900/30 hover:bg-red-900/20',
+        icon: 'bg-red-500/10 text-red-400',
+        title: 'text-red-300',
+        subtitle: 'text-red-200/60',
+        action: 'bg-red-500 text-red-950'
+    },
+    purple: {
+        row: 'bg-amber-300/[0.04] border-amber-300/15 hover:bg-amber-300/[0.08]',
+        icon: 'bg-amber-300/10 text-amber-200',
+        title: 'text-amber-100',
+        subtitle: 'text-amber-200/60',
+        action: 'bg-amber-300 text-slate-950'
+    },
+    pink: {
+        row: 'bg-teal-300/[0.04] border-teal-300/15 hover:bg-teal-300/[0.08]',
+        icon: 'bg-teal-300/10 text-teal-200',
+        title: 'text-teal-100',
+        subtitle: 'text-teal-200/60',
+        action: 'bg-teal-400 text-slate-950'
+    },
+    orange: {
+        row: 'bg-amber-300/[0.04] border-amber-300/15 hover:bg-amber-300/[0.08]',
+        icon: 'bg-amber-300/10 text-amber-200',
+        title: 'text-amber-100',
+        subtitle: 'text-amber-200/60',
+        action: 'bg-amber-300 text-slate-950'
+    },
+    slate: {
+        row: 'bg-slate-950 border-slate-800 hover:bg-slate-900',
+        icon: 'bg-slate-800 text-slate-400',
+        title: 'text-slate-300',
+        subtitle: 'text-slate-500',
+        action: 'bg-slate-800 text-slate-300'
+    }
+};
+
+const badgeTone: Record<string, string> = {
+    blue: 'bg-blue-100 text-blue-600',
+    purple: 'bg-purple-100 text-purple-600',
+    amber: 'bg-amber-100 text-amber-700',
+    yellow: 'bg-yellow-100 text-yellow-700',
+    sky: 'bg-sky-100 text-sky-600',
+    violet: 'bg-violet-100 text-violet-600',
+    pink: 'bg-pink-100 text-pink-600',
+    emerald: 'bg-emerald-100 text-emerald-600',
+    slate: 'bg-slate-100 text-slate-600',
+    indigo: 'bg-indigo-100 text-indigo-600',
+    cyan: 'bg-cyan-100 text-cyan-600',
+    rose: 'bg-rose-100 text-rose-600',
+    green: 'bg-green-100 text-green-600',
+    teal: 'bg-teal-100 text-teal-600'
+};
+
+const getIconTone = (color: keyof typeof iconTone | string, mode: 'light' | 'dark') => {
+    const tone = iconTone[color as keyof typeof iconTone] || iconTone.slate;
+    return tone[mode];
 };
 
 // --- STUDENT DASHBOARD COMPONENT ---
@@ -80,28 +178,28 @@ const StudentDashboard = () => {
 
             {/* Announcements Ticker/Banner if any */}
             {recentAnnouncements.length > 0 && (
-                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+                <div className="relative overflow-hidden rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4 text-white">
                     <div className="flex items-center gap-3 relative z-10">
                         <div className="p-2 bg-white/20 rounded-full animate-pulse">
                             <Megaphone size={20} />
                         </div>
                         <div className="flex-1">
                             <h3 className="font-bold text-sm">Latest News: {recentAnnouncements[0].title}</h3>
-                            <p className="text-xs text-indigo-100 line-clamp-1">{recentAnnouncements[0].content}</p>
+                            <p className="line-clamp-1 text-xs text-amber-100/70">{recentAnnouncements[0].content}</p>
                         </div>
                     </div>
                 </div>
             )}
 
             {/* Student Hero */}
-            <div className="relative rounded-[2.5rem] overflow-hidden shadow-xl bg-white group">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-[#FFC107]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#2D2B6B]/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+            <div className="group relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
+                <div className="hidden"></div>
+                <div className="hidden"></div>
 
                 <div className="relative z-10 p-8 md:p-12 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
                     <div className="relative">
-                        <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-white p-1 shadow-2xl shadow-indigo-900/10">
-                            <div className="w-full h-full rounded-full bg-[#2D2B6B] flex items-center justify-center text-4xl font-black text-[#FFC107]">
+                        <div className="h-24 w-24 rounded-lg border border-white/10 bg-slate-950 p-1 md:h-28 md:w-28">
+                            <div className="flex h-full w-full items-center justify-center rounded-lg bg-slate-950 text-4xl font-black text-amber-200">
                                 {firstName.charAt(0)}
                             </div>
                         </div>
@@ -120,7 +218,7 @@ const StudentDashboard = () => {
                                 <span className="text-[#2D2B6B] font-bold text-sm">{xp} XP</span>
                             </div>
                             <div className="flex items-center gap-2 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
-                                <Rocket size={18} className="text-cyan-500" />
+                                <Rocket size={18} className="text-teal-500" />
                                 <span className="text-[#2D2B6B] font-bold text-sm">{publishedProjects.length} Shipped</span>
                             </div>
                         </div>
@@ -132,7 +230,7 @@ const StudentDashboard = () => {
                                 <span>{Math.round(progress)}%</span>
                             </div>
                             <div className="h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                                <div className="h-full bg-gradient-to-r from-[#FFC107] to-amber-500 transition-all duration-1000 shadow-[0_0_10px_rgba(255,193,7,0.5)]" style={{ width: `${progress}%` }}></div>
+                                <div className="h-full bg-amber-300 transition-[width] duration-500" style={{ width: `${progress}%` }}></div>
                             </div>
                         </div>
                     </div>
@@ -141,15 +239,15 @@ const StudentDashboard = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Up Next Card - Cyan Accent */}
-                <div className="bg-white p-6 rounded-[2rem] flex flex-col justify-between relative overflow-hidden group shadow-sm hover:shadow-xl transition-all border-2 border-cyan-100">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><CalendarCheck size={100} className="text-cyan-400" /></div>
+                <div className="group relative flex flex-col justify-between overflow-hidden rounded-lg border border-teal-300/20 bg-slate-900/80 p-5 transition-colors hover:border-teal-300/40">
+                    <div className="hidden"><CalendarCheck size={100} /></div>
                     <div>
-                        <h3 className="text-cyan-500 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><Clock size={14} /> Up Next</h3>
+                        <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-300"><Clock size={14} /> Up Next</h3>
                         {todaysClass ? (
                             <>
                                 <div className="text-2xl font-bold text-[#2D2B6B] mb-1">{todaysClass.programName}</div>
-                                <div className="text-cyan-600 font-medium text-sm">{todaysClass.gradeName}</div>
-                                <div className="mt-4 inline-block bg-cyan-50 text-cyan-700 px-3 py-1 rounded-lg text-xs font-bold">
+                                <div className="text-sm font-medium text-teal-300">{todaysClass.gradeName}</div>
+                                <div className="mt-4 inline-block rounded-lg border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-xs font-bold text-teal-200">
                                     Today @ {todaysClass.groupTime?.split(' ').slice(1).join(' ')}
                                 </div>
                             </>
@@ -160,12 +258,12 @@ const StudentDashboard = () => {
                             </>
                         )}
                     </div>
-                    <button onClick={() => navigateTo('learning')} className="mt-6 w-full py-3 bg-cyan-50 hover:bg-cyan-100 text-cyan-700 rounded-xl text-sm font-bold transition-colors border border-cyan-200">View Schedule</button>
+                    <button onClick={() => navigateTo('learning')} className="mt-6 w-full rounded-lg border border-teal-300/30 bg-teal-500 py-3 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400">View Schedule</button>
                 </div>
 
-                {/* My Studio Status - Pink Gradient */}
-                <div className="bg-gradient-to-br from-pink-500 to-pink-600 p-6 rounded-[2rem] flex flex-col justify-between relative overflow-hidden group shadow-xl shadow-pink-500/30 text-white">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><Target size={100} className="text-white" /></div>
+                {/* My Studio Status */}
+                <div className="group relative flex flex-col justify-between overflow-hidden rounded-lg border border-teal-300/20 bg-teal-300/[0.06] p-5 text-white transition-colors hover:bg-teal-300/[0.09]">
+                    <div className="hidden"><Target size={100} /></div>
                     <div>
                         <h3 className="text-white/80 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><BookOpen size={14} /> My Studio</h3>
                         <div className="text-3xl font-black text-white mb-1">{myProjects.length} Projects</div>
@@ -177,15 +275,15 @@ const StudentDashboard = () => {
                 </div>
 
                 {/* Toolkit Quick Link - Orange Accent */}
-                <div className="bg-white p-6 rounded-[2rem] flex flex-col justify-between relative overflow-hidden group cursor-pointer hover:shadow-xl transition-all border-2 border-orange-100" onClick={() => navigateTo('toolkit')}>
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Zap size={100} className="text-orange-400" /></div>
+                <div className="group relative flex cursor-pointer flex-col justify-between overflow-hidden rounded-lg border border-white/10 bg-slate-900/80 p-5 transition-colors hover:border-amber-300/30" onClick={() => navigateTo('toolkit')}>
+                    <div className="hidden"><Zap size={100} /></div>
                     <div>
-                        <h3 className="text-orange-500 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2"><Zap size={14} /> Resources</h3>
+                        <h3 className="mb-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-200"><Zap size={14} /> Resources</h3>
                         <div className="text-2xl font-bold text-[#2D2B6B] mb-1">Toolkit</div>
                         <div className="text-slate-500 text-sm">Software, guides & assets</div>
                     </div>
                     <div className="mt-6 flex justify-end">
-                        <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all border border-orange-200">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-amber-200 transition-colors group-hover:bg-amber-300 group-hover:text-slate-950">
                             <ArrowRight size={24} />
                         </div>
                     </div>
@@ -193,28 +291,28 @@ const StudentDashboard = () => {
             </div>
 
             {/* Up Next - Cyan Accent */}
-            <div className="bg-white p-8 rounded-[2.5rem] border-2 border-cyan-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-400/10 rounded-full blur-2xl"></div>
+            <div className="group rounded-lg border border-white/10 bg-slate-900/80 p-5 transition-colors hover:border-teal-300/30">
+                <div className="hidden"></div>
                 <h2 className="text-xl font-bold text-[#2D2B6B] mb-6 flex items-center gap-3 relative z-10">
-                    <div className="p-2 bg-cyan-50 rounded-xl border border-cyan-100">
-                        <Clock size={24} className="text-cyan-500" />
+                    <div className="rounded-lg border border-teal-300/20 bg-teal-300/10 p-2">
+                        <Clock size={24} className="text-teal-300" />
                     </div>
                     Up Next
                 </h2>
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-[#2D2B6B] text-xl">Recent Projects</h3>
-                    <button onClick={() => navigateTo('learning')} className="text-sm font-bold text-cyan-600 hover:text-cyan-500">View All</button>
+                    <button onClick={() => navigateTo('learning')} className="text-sm font-bold text-teal-300 hover:text-teal-200">View All</button>
                 </div>
                 {publishedProjects.length === 0 ? (
-                    <div className="text-center py-12 text-slate-400 text-sm bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                    <div className="rounded-lg border border-dashed border-white/10 bg-slate-950/50 py-12 text-center text-sm text-slate-400">
                         No published projects yet. Keep building! 🚀
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {publishedProjects.slice(0, 4).map(p => (
-                            <div key={p.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex gap-4 hover:shadow-md transition-all cursor-pointer group">
+                            <div key={p.id} className="group flex cursor-pointer gap-4 rounded-lg border border-white/10 bg-slate-950/50 p-4 transition-colors hover:border-teal-300/30">
                                 <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shrink-0 shadow-sm overflow-hidden">
-                                    {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt={p.title} /> : <BookOpen size={24} className="text-slate-300" />}
+                                    {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="h-full w-full object-cover" alt={p.title} /> : <BookOpen size={24} className="text-slate-300" />}
                                 </div>
                                 <div className="min-w-0 flex flex-col justify-center flex-1">
                                     <h4 className="font-bold text-[#2D2B6B] text-sm truncate">{p.title}</h4>
@@ -227,7 +325,7 @@ const StudentDashboard = () => {
                                                     const badge = badges.find(b => b.id === bid);
                                                     if (!badge) return null;
                                                     return (
-                                                        <div key={bid} className={`w-5 h-5 rounded-full bg-${badge.color}-100 border border-white flex items-center justify-center text-${badge.color}-600 text-[10px]`} title={badge.name}>
+                                                        <div key={bid} className={`w-5 h-5 rounded-full border border-white flex items-center justify-center text-[10px] ${badgeTone[badge.color] || badgeTone.slate}`} title={badge.name}>
                                                             <Award size={10} />
                                                         </div>
                                                     );
@@ -240,6 +338,110 @@ const StudentDashboard = () => {
                         ))}
                     </div>
                 )}
+            </div>
+        </div>
+    );
+};
+
+const AtlasStudentDashboard = () => {
+    const { students, enrollments, studentProjects, navigateTo, t } = useAppContext();
+    const { userProfile } = useAuth();
+    const firstName = userProfile?.name?.split(' ')[0] || 'Maker';
+    const currentHour = new Date().getHours();
+    const greeting = currentHour < 12 ? t('dash.welcome') : currentHour < 18 ? t('dash.welcome.afternoon') : t('dash.welcome.evening');
+    const currentStudent = useMemo(() => students.find(student => student.email === userProfile?.email || student.loginInfo?.email === userProfile?.email), [students, userProfile]);
+    const myEnrollments = useMemo(() => currentStudent ? enrollments.filter(enrollment => enrollment.studentId === currentStudent.id && enrollment.status === 'active') : [], [enrollments, currentStudent]);
+    const myProjects = useMemo(() => currentStudent ? studentProjects.filter(project => project.studentId === currentStudent.id) : [], [studentProjects, currentStudent]);
+    const publishedProjects = useMemo(() => myProjects.filter(project => project.status === 'published'), [myProjects]);
+    const activeProjectCount = myProjects.filter(project => ['planning', 'building', 'submitted'].includes(project.status)).length;
+    const xp = publishedProjects.length * 150 + myProjects.length * 50;
+    const level = Math.floor(xp / 500) + 1;
+    const progress = ((xp % 500) / 500) * 100;
+    const todaysClass = useMemo(() => {
+        const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+        return myEnrollments.find(enrollment => enrollment.groupTime?.includes(dayName) || enrollment.secondGroupTime?.includes(dayName));
+    }, [myEnrollments]);
+    const [announcements, setAnnouncements] = React.useState<any[]>([]);
+
+    React.useEffect(() => {
+        if (!db) return;
+        const fetchNews = async () => {
+            try {
+                const announcementQuery = query(collection(db as any, 'announcements'), orderBy('createdAt', 'desc'), limit(3));
+                const snapshot = await getDocs(announcementQuery);
+                setAnnouncements(snapshot.docs.map((announcement: any) => ({ id: announcement.id, ...announcement.data() })));
+            } catch (error) {
+                console.error(error);
+            }
+        };
+        void fetchNews();
+    }, []);
+
+    return (
+        <div className="space-y-5 pb-24 md:pb-8">
+            <AtlasCommandHeader
+                eyebrow="My learning desk"
+                title={`${greeting}, ${firstName}`}
+                description="Your next class, active builds, achievements, and maker tools are ready in one place."
+                icon={LayoutDashboard}
+                badges={<span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2.5 py-1 text-[10px] font-bold text-amber-200">Level {level}</span>}
+                actions={<><AtlasActionButton icon={BookOpen} variant="primary" onClick={() => navigateTo('learning')}>Open studio</AtlasActionButton><AtlasActionButton icon={Zap} onClick={() => navigateTo('toolkit')}>Toolkit</AtlasActionButton></>}
+            />
+
+            {announcements.length > 0 && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-amber-200"><Megaphone size={17} /></span>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-amber-200">Latest announcement</p>
+                        <h3 className="mt-0.5 truncate text-sm font-black text-white">{announcements[0].title}</h3>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{announcements[0].content}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AtlasSignalCard label="Maker level" value={level} detail={`${Math.round(progress)}% to level ${level + 1}`} icon={Star} tone="amber" />
+                <AtlasSignalCard label="Experience" value={`${xp} XP`} detail="Earned through project work" icon={Trophy} tone="teal" />
+                <AtlasSignalCard label="Active builds" value={activeProjectCount} detail={`${publishedProjects.length} projects shipped`} icon={Rocket} tone="blue" onClick={() => navigateTo('learning')} />
+                <AtlasSignalCard label="Today's class" value={todaysClass ? todaysClass.programName : 'Open studio'} detail={todaysClass?.gradeName || 'No scheduled class today'} icon={CalendarCheck} tone={todaysClass ? 'teal' : 'slate'} onClick={() => navigateTo('learning')} />
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(280px,0.7fr)]">
+                <section className="rounded-lg border border-white/10 bg-slate-900/80 p-4 md:p-5">
+                    <AtlasSectionHeader title="Recent projects" description="Pick up where you left off or revisit work you have shipped." icon={BookOpen} actions={<AtlasActionButton icon={ArrowRight} variant="quiet" onClick={() => navigateTo('learning')}>View all</AtlasActionButton>} />
+                    <div className="mt-4">
+                        {publishedProjects.length === 0 ? (
+                            <AtlasEmptyState title="Your showcase starts here" description="Open the studio, choose a project, and publish your first build when it is ready." icon={Rocket} action={<AtlasActionButton variant="primary" icon={BookOpen} onClick={() => navigateTo('learning')}>Start building</AtlasActionButton>} />
+                        ) : (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                {publishedProjects.slice(0, 4).map(project => (
+                                    <button key={project.id} onClick={() => navigateTo('learning')} className="group flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-slate-950/55 p-3 text-left transition-colors hover:border-teal-300/30 hover:bg-white/[0.05]">
+                                        <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-slate-500">{project.mediaUrls?.[0] ? <img src={project.mediaUrls[0]} className="h-full w-full object-cover" alt={project.title} /> : <BookOpen size={22} />}</span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate text-sm font-black text-white">{project.title}</span>
+                                            <span className="mt-1 flex items-center gap-2 text-xs text-slate-500"><span className="truncate">{formatDate(project.createdAt)}</span>{project.earnedBadgeIds?.length > 0 && <span className="shrink-0 text-amber-200">{project.earnedBadgeIds.length} badges</span>}</span>
+                                        </span>
+                                        <ChevronRight size={16} className="shrink-0 text-slate-600 transition-colors group-hover:text-teal-300" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </section>
+
+                <aside className="rounded-lg border border-white/10 bg-slate-900/80 p-4 md:p-5">
+                    <AtlasSectionHeader title="Your next move" description="A focused path into today's work." icon={Target} />
+                    <div className="mt-4 rounded-lg border border-teal-300/20 bg-teal-300/[0.06] p-4">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-teal-200">{todaysClass ? 'Scheduled today' : 'Available now'}</p>
+                        <h4 className="mt-1 text-lg font-black text-white">{todaysClass?.programName || 'Independent maker time'}</h4>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">{todaysClass ? `${todaysClass.gradeName} | ${todaysClass.groupTime?.split(' ').slice(1).join(' ')}` : 'Use the open studio to continue an active build or start something new.'}</p>
+                        <AtlasActionButton className="mt-4 w-full" variant="primary" icon={ArrowRight} onClick={() => navigateTo('learning')}>{todaysClass ? 'View schedule' : 'Open studio'}</AtlasActionButton>
+                    </div>
+                    <div className="mt-4">
+                        <div className="mb-2 flex items-center justify-between text-[10px] font-bold uppercase text-slate-500"><span>Progress to level {level + 1}</span><span>{Math.round(progress)}%</span></div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-950"><div className="h-full rounded-full bg-amber-300 transition-[width] duration-500" style={{ width: `${progress}%` }} /></div>
+                    </div>
+                </aside>
             </div>
         </div>
     );
@@ -289,13 +491,13 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
     // Theme Classes
     const theme = {
         card: isInstructor ? "bg-white border border-slate-200 shadow-sm" : "bg-slate-900 border border-slate-800",
-        cardHover: isInstructor ? "hover:shadow-md hover:border-slate-300" : "hover:border-slate-700",
+        cardHover: isInstructor ? "hover:border-slate-300" : "hover:border-slate-700",
         text: isInstructor ? "text-slate-800" : "text-white",
         textMuted: "text-slate-500", // Works for both usually
         textLabel: "text-slate-500",
         bgMuted: isInstructor ? "bg-slate-50 border border-slate-100" : "bg-slate-950/30 border-slate-800",
         divider: isInstructor ? "border-slate-100" : "border-slate-800",
-        iconBg: (color: string) => isInstructor ? `bg-${color}-50 text-${color}-600` : `bg-${color}-500/10 text-${color}-500`
+        iconBg: (color: string) => getIconTone(color, isInstructor ? 'light' : 'dark')
     };
 
     // Session Management
@@ -632,52 +834,46 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
 
     return (
         <div className="space-y-6 pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                <div>
-                    <h1 className={`text-2xl md:text-3xl font-bold tracking-tight ${theme.text}`}>
-                        {greeting}, <span className="text-blue-500">{firstName}</span>
-                    </h1>
-                    <p className="text-slate-400 text-sm mt-1">Here is what's happening at {settings.academyName} today.</p>
-                </div>
+            <AtlasCommandHeader
+                eyebrow="Home operations"
+                title={`${greeting}, ${firstName}`}
+                description={`Your live service desk for ${settings.academyName}: today's sessions, financial follow-up, families, and learning operations.`}
+                icon={LayoutDashboard}
+                badges={<><span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold text-slate-300">{selectedSession}</span><span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${totalActiveAlerts > 0 ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : 'border-teal-300/20 bg-teal-300/10 text-teal-200'}`}>{totalActiveAlerts} open actions</span></>}
+                actions={<><AtlasActionButton icon={CreditCard} variant="primary" onClick={() => onRecordPayment()}>Record payment</AtlasActionButton><AtlasActionButton icon={UserPlus} onClick={() => navigateTo('students')}>Add student</AtlasActionButton></>}
+            />
 
-                <div className="w-full md:w-auto flex flex-col sm:flex-row gap-3">
-                    {/* Session Filter */}
-                    <div className="relative">
-                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"><Filter size={14} /></div>
-                        <select
-                            value={selectedSession}
-                            onChange={(e) => setSelectedSession(e.target.value)}
-                            className={`w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none appearance-none cursor-pointer shadow-sm transition-all focus:border-blue-500 ${isInstructor ? 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300' : 'bg-slate-900 border border-slate-800 text-white hover:border-slate-700'}`}
-                        >
-                            {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
+            <AtlasToolbar
+                leading={
+                    <label className="relative block min-w-[170px]">
+                        <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <select value={selectedSession} onChange={event => setSelectedSession(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-9 pr-8 text-sm font-bold text-white outline-none focus:border-teal-400/60">
+                            {availableSessions.map(session => <option key={session} value={session}>{session}</option>)}
                         </select>
-                    </div>
-                </div>
-            </div>
+                    </label>
+                }
+                trailing={<><AtlasActionButton icon={Megaphone} variant="quiet" onClick={() => navigateTo('marketing')}>Add lead</AtlasActionButton><AtlasActionButton icon={CheckSquare} variant="quiet" onClick={() => navigateTo('team')}>New task</AtlasActionButton><AtlasActionButton icon={MessageCircle} variant="quiet" onClick={() => navigateTo('communications')}>Message</AtlasActionButton></>}
+            >
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-400"><ShieldCheck size={13} className="text-teal-300" /> Tenant scoped</span>
+                <span className="inline-flex items-center gap-1.5 text-xs text-slate-400"><Activity size={13} className="text-amber-200" /> {todaySchedule.length} sessions today</span>
+            </AtlasToolbar>
 
-            {/* MOBILE LAYOUT: ACTIONS FIRST */}
-            <div className="md:hidden grid grid-cols-2 gap-3">
-                <button onClick={() => onRecordPayment()} className="p-4 bg-emerald-600 rounded-xl text-white font-bold text-sm shadow-lg shadow-emerald-900/20 active:scale-95 transition-transform flex flex-col items-center justify-center gap-2">
-                    <CreditCard size={20} /> Record Pay
-                </button>
-                <button onClick={() => navigateTo('students')} className="p-4 bg-blue-600 rounded-xl text-white font-bold text-sm shadow-lg shadow-blue-900/20 active:scale-95 transition-transform flex flex-col items-center justify-center gap-2">
-                    <UserPlus size={20} /> Enroll Student
-                </button>
-                {checksToDeposit > 0 && (
-                    <button onClick={() => navigateTo('finance', { filter: 'check_received' })} className="col-span-2 p-3 bg-amber-500/10 border border-amber-500/50 rounded-xl flex items-center justify-center gap-2 text-amber-400 text-sm font-bold animate-pulse">
-                        <AlertTriangle size={16} /> {checksToDeposit} Checks to Deposit
-                    </button>
-                )}
-            </div>
+            {checksToDeposit > 0 && <button onClick={() => navigateTo('finance', { filter: 'check_received' })} className="flex w-full items-center justify-between rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-4 py-3 text-left text-sm font-bold text-amber-200 transition-colors hover:bg-amber-300/10"><span className="flex items-center gap-2"><AlertTriangle size={16} /> {checksToDeposit} checks are ready to deposit</span><ArrowRight size={15} /></button>}
 
             {/* WORKSHOP ACTION CENTER */}
             <WorkshopActionCenter />
 
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AtlasSignalCard label="Session revenue" value={formatCurrency(financialStats.totalRevenue)} detail="Paid and verified receipts" icon={DollarSign} tone="teal" onClick={() => navigateTo('finance')} />
+                <AtlasSignalCard label="Active students" value={activeStudentsCount} detail={`+${newStudentsThisMonth} this month`} icon={Users} tone="blue" onClick={() => navigateTo('students')} />
+                <AtlasSignalCard label="Attendance today" value={`${todaySchedule.length > 0 ? Math.round((attendanceRecords.filter(record => record.date === new Date().toISOString().split('T')[0]).length / (todaySchedule.reduce((total, item) => total + (item.type === 'class' ? 10 : item.count), 0) || 1)) * 100) : 0}%`} detail={`${todaySchedule.length} scheduled sessions`} icon={ClipboardCheck} tone="emerald" onClick={() => navigateTo('attendance')} />
+                <AtlasSignalCard label="Operations health" value={`${alertHealth}%`} detail={`${totalActiveAlerts} open actions`} icon={Activity} tone={alertHealth > 75 ? 'emerald' : alertHealth > 45 ? 'amber' : 'red'} />
+            </div>
+
             {/* KPI CARDS */}
-            <div className="flex overflow-x-auto pb-4 -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-2 lg:grid-cols-4 gap-4 snap-x snap-mandatory no-scrollbar">
+            <div className="hidden">
                 {/* Revenue */}
-                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center ${theme.card}`}>
+                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center ${theme.card}`}>
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
@@ -687,13 +883,13 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
                     <div className="mt-4 h-10 flex items-end gap-1">
                         {financialStats.chartData.map((d, i) => (
-                            <div key={i} className={`flex-1 rounded-t transition-colors ${isInstructor ? 'bg-emerald-100 hover:bg-emerald-200' : 'bg-slate-800 hover:bg-emerald-500/50'}`} style={{ height: `${(d.value / financialStats.maxRevenue) * 100}%` }} title={`${d.month}: ${formatCurrency(d.value)}`}></div>
+                            <div key={i} className={`flex-1 rounded-t transition-colors ${isInstructor ? 'bg-teal-100 hover:bg-teal-200' : 'bg-slate-800 hover:bg-teal-500/50'}`} style={{ height: `${(d.value / financialStats.maxRevenue) * 100}%` }} title={`${d.month}: ${formatCurrency(d.value)}`}></div>
                         ))}
                     </div>
                 </div>
 
                 {/* Active Students */}
-                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center ${theme.card}`}>
+                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center ${theme.card}`}>
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Students</p>
@@ -701,13 +897,13 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                         </div>
                         <div className={`p-2 rounded-lg ${theme.iconBg('blue')}`}><Users size={20} /></div>
                     </div>
-                    <div className={`mt-4 flex items-center text-xs px-2 py-1 rounded-lg w-fit ${isInstructor ? 'bg-emerald-100 text-emerald-700' : 'text-emerald-400 bg-emerald-950/30'}`}>
+                    <div className={`mt-4 flex w-fit items-center rounded-lg px-2 py-1 text-xs ${isInstructor ? 'bg-teal-100 text-teal-700' : 'bg-teal-950/30 text-teal-300'}`}>
                         <ArrowUpRight size={12} className="mr-1" /> +{newStudentsThisMonth} this month
                     </div>
                 </div>
 
                 {/* Attendance Rate */}
-                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center ${theme.card}`}>
+                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center ${theme.card}`}>
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attendance</p>
@@ -721,10 +917,10 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                 </div>
 
                 {/* Leads */}
-                <div onClick={() => navigateTo('marketing')} className={`min-w-[260px] md:min-w-0 p-5 rounded-2xl flex flex-col justify-between snap-center cursor-pointer transition-colors group ${theme.card} ${theme.cardHover}`}>
+                <div onClick={() => navigateTo('marketing')} className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center cursor-pointer transition-colors group ${theme.card} ${theme.cardHover}`}>
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-purple-500 transition-colors">New Leads</p>
+                            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-amber-200">New Leads</p>
                             <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{newLeads}</h3>
                         </div>
                         <div className={`p-2 rounded-lg ${theme.iconBg('purple')}`}><Megaphone size={20} /></div>
@@ -737,35 +933,29 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
             </div>
 
             {/* DESKTOP GRID LAYOUT */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
 
                 {/* LEFT COLUMN: SCHEDULE & FINANCE */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="space-y-5 lg:col-span-2">
 
                     {/* Today's Schedule */}
-                    <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
-                        <div className={`p-5 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
-                            <h3 className={`font-bold flex items-center gap-2 ${theme.text}`}><Clock size={18} className="text-blue-500" /> Today's Schedule</h3>
-                            <button onClick={() => navigateTo('attendance')} className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition-colors">Manage Attendance</button>
-                        </div>
+                    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
+                        <div className="p-4 md:p-5"><AtlasSectionHeader title="Today's schedule" description="Classes and workshops that need the team today." icon={Clock} actions={<AtlasActionButton variant="quiet" icon={ArrowRight} onClick={() => navigateTo('attendance')}>Manage attendance</AtlasActionButton>} /></div>
                         <div className="p-4">
                             {todaySchedule.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center py-10 text-slate-500">
-                                    <Calendar size={32} className="mb-2 opacity-50" />
-                                    <p className="text-sm">No classes or workshops scheduled today.</p>
-                                </div>
+                                <AtlasEmptyState title="The schedule is clear" description="No classes or workshops are scheduled today." icon={Calendar} />
                             ) : (
                                 <div className="space-y-3">
                                     {todaySchedule.map((item, idx) => (
-                                        <div key={idx} className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${theme.bgMuted} ${isInstructor ? 'hover:border-slate-300' : 'hover:border-slate-700'}`}>
+                                        <div key={idx} className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3 transition-colors hover:border-teal-300/20">
                                             <div className="w-16 text-center">
                                                 <span className={`block text-sm font-bold ${theme.text}`}>{item.time}</span>
                                             </div>
-                                            <div className={`w-1 h-8 rounded-full ${isInstructor ? 'bg-slate-200' : 'bg-slate-800'}`}></div>
+                                            <div className="h-8 w-1 rounded-full bg-teal-400/40"></div>
                                             <div className="flex-1">
                                                 <h4 className={`text-sm font-bold ${isInstructor ? 'text-slate-700' : 'text-slate-200'}`}>{item.title}</h4>
                                                 <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${item.type === 'class' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-pink-500/10 text-pink-500 border-pink-500/20'}`}>{item.type}</span>
+                                                    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${item.type === 'class' ? 'border-teal-300/20 bg-teal-300/10 text-teal-200' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>{item.type}</span>
                                                     <span className="text-xs text-slate-500">{item.count} Students</span>
                                                 </div>
                                             </div>
@@ -778,9 +968,9 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     </div>
 
                     {/* Program Distribution (Mini) */}
-                    <div className={`rounded-2xl p-5 ${theme.card}`}>
-                        <h3 className={`font-bold mb-4 text-sm ${theme.text}`}>Student Distribution</h3>
-                        <div className="space-y-3">
+                    <div className="rounded-lg border border-white/10 bg-slate-900/80 p-4 md:p-5">
+                        <AtlasSectionHeader title="Student distribution" description="Active enrollment across the academy's programs." icon={BarChart3} />
+                        <div className="mt-4 space-y-3">
                             {programs.slice(0, 4).map(prog => {
                                 const count = students.filter(s => enrollments.some(e => e.studentId === s.id && e.programId === prog.id && e.status === 'active')).length;
                                 const pct = (count / (activeStudentsCount || 1)) * 100;
@@ -791,7 +981,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                             <span>{count}</span>
                                         </div>
                                         <div className={`h-2 rounded-full overflow-hidden ${isInstructor ? 'bg-slate-100' : 'bg-slate-950'}`}>
-                                            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${pct}%` }}></div>
+                                            <div className="h-full rounded-full bg-teal-400" style={{ width: `${pct}%` }}></div>
                                         </div>
                                     </div>
                                 )
@@ -802,26 +992,25 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
 
                     {/* Upcoming Birthdays Widget */}
                     {upcomingBirthdays.length > 0 && (
-                        <div className={`rounded-2xl p-5 ${theme.card} border-2 border-pink-500/10`}>
-                            <h3 className={`font-bold mb-4 text-sm flex items-center gap-2 ${theme.text}`}>
-                                <Users size={16} className="text-pink-500" /> Upcoming Birthdays
-                            </h3>
-                            <div className="space-y-3">
+                        <div className="rounded-lg border border-white/10 bg-slate-900/80 p-4 md:p-5">
+                            <AtlasSectionHeader title="Upcoming birthdays" description="Small moments for thoughtful family care." icon={Users} />
+                            <div className="mt-4 space-y-2">
                                 {upcomingBirthdays.map(s => (
-                                    <div key={s.id} onClick={() => navigateTo('student-details', { studentId: s.id })} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer ${theme.bgMuted} ${theme.cardHover}`}>
-                                        <div className="w-10 h-10 rounded-full bg-pink-100 flex items-center justify-center text-pink-500 font-bold text-xs shrink-0">
+                                    <button key={s.id} onClick={() => navigateTo('student-details', { studentId: s.id })} className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3 text-left transition-colors hover:border-amber-300/20">
+                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-xs font-bold text-amber-200">
                                             {s.name.charAt(0)}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className={`text-sm font-bold truncate ${theme.text}`}>{s.name}</p>
-                                            <p className="text-xs text-pink-500 font-medium">
+                                            <p className="text-xs font-medium text-amber-200">{s.daysUntilBirthday === 0 ? 'Today' : `${s.daysUntilBirthday} days left`}</p>
+                                            <p className="hidden">
                                                 {s.daysUntilBirthday === 0 ? "🎉 Today!" : `${s.daysUntilBirthday} days left`}
                                             </p>
                                         </div>
-                                        <div className="text-xs text-slate-400 font-medium bg-white px-2 py-1 rounded border border-slate-100 dark:bg-slate-800 dark:border-slate-700">
+                                        <div className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-medium text-slate-400">
                                             {new Date(s.birthDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
                         </div>
@@ -829,29 +1018,29 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                 </div>
 
                 {/* RIGHT COLUMN: ACTIONS & ALERTS */}
-                <div className="space-y-6">
+                <div className="space-y-5">
 
                     {/* Review Queue (Instructor Only) */}
                     {isInstructor && (
-                        <div className={`rounded-2xl overflow-hidden ${theme.card} border-2 border-indigo-500/20`}>
-                            <div className={`p-4 border-b flex justify-between items-center ${theme.divider} bg-indigo-500/5`}>
-                                <h3 className={`font-bold text-sm flex items-center gap-2 ${theme.text}`}><Rocket size={16} className="text-indigo-500" /> Mission Control</h3>
+                        <div className={`overflow-hidden rounded-lg ${theme.card} border border-teal-300/20`}>
+                            <div className={`flex items-center justify-between border-b bg-teal-300/[0.04] p-4 ${theme.divider}`}>
+                                <h3 className={`flex items-center gap-2 text-sm font-bold ${theme.text}`}><Rocket size={16} className="text-teal-300" /> Mission Control</h3>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[10px] uppercase font-bold text-indigo-400 animate-pulse">Live</span>
-                                    <button onClick={() => navigateTo('review')} className="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">Open Queue</button>
+                                    <span className="text-[10px] font-bold uppercase text-teal-300">Live</span>
+                                    <button onClick={() => navigateTo('review')} className="rounded border border-teal-300/30 bg-teal-500 px-2 py-1 text-xs text-slate-950 transition-colors hover:bg-teal-400">Open Queue</button>
                                 </div>
                             </div>
                             <div className="p-4">
                                 {pendingReviews.length === 0 ? (
                                     <div className="text-center py-6 text-slate-400">
-                                        <CheckCircle2 size={32} className="mx-auto mb-2 opacity-50 text-indigo-300" />
+                                        <CheckCircle2 size={32} className="mx-auto mb-2 text-teal-300/50" />
                                         <p className="text-xs">No pending submissions.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-3">
                                         {pendingReviews.slice(0, 3).map((item, i) => (
-                                            <div key={i} className="flex gap-3 items-start p-3 bg-slate-50 border border-slate-100 rounded-xl hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigateTo('review', { projectId: item.projectId })}>
-                                                <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0 text-xs">
+                                            <div key={i} className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3 transition-colors hover:border-teal-300/30" onClick={() => navigateTo('review', { projectId: item.projectId })}>
+                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-300/10 text-xs font-bold text-teal-300">
                                                     {item.studentName.charAt(0)}
                                                 </div>
                                                 <div className="min-w-0 flex-1">
@@ -863,7 +1052,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
 
                                                     {isInstructor && (
                                                         <div className="mt-2 flex gap-2">
-                                                            <button className="flex-1 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded hover:bg-green-200">Approve</button>
+                                                            <button className="flex-1 rounded bg-teal-300/10 py-1 text-[10px] font-bold text-teal-300 hover:bg-teal-300/15">Approve</button>
                                                             <button className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded hover:bg-slate-200">View</button>
                                                         </div>
                                                     )}
@@ -871,7 +1060,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                             </div>
                                         ))}
                                         {pendingReviews.length > 3 && (
-                                            <button onClick={() => navigateTo('review')} className="w-full py-2 text-xs text-indigo-500 font-bold hover:bg-indigo-50 rounded-lg transition-colors">
+                                            <button onClick={() => navigateTo('review')} className="w-full rounded-lg py-2 text-xs font-bold text-teal-300 transition-colors hover:bg-teal-300/10">
                                                 View {pendingReviews.length - 3} more
                                             </button>
                                         )}
@@ -882,12 +1071,12 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     )}
 
                     {/* Quick Actions Grid (Desktop) */}
-                    <div className="hidden md:grid grid-cols-2 gap-3">
-                        <button onClick={() => onRecordPayment()} className="p-4 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-white text-center transition-all shadow-lg shadow-emerald-900/20 active:scale-[0.98]">
+                    <div className="hidden">
+                        <button onClick={() => onRecordPayment()} className="rounded-lg border border-teal-300/30 bg-teal-500 p-4 text-center text-slate-950 transition-colors hover:bg-teal-400">
                             <CreditCard size={24} className="mx-auto mb-2" />
                             <span className="text-xs font-bold">Record Pay</span>
                         </button>
-                        <button onClick={() => navigateTo('students')} className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-white text-center transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]">
+                        <button onClick={() => navigateTo('students')} className="rounded-lg border border-white/10 bg-white/[0.05] p-4 text-center text-slate-200 transition-colors hover:bg-white/[0.08]">
                             <UserPlus size={24} className="mx-auto mb-2" />
                             <span className="text-xs font-bold">New Student</span>
                         </button>
@@ -899,18 +1088,15 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                             <CheckSquare size={24} className="mx-auto mb-2" />
                             <span className="text-xs font-bold">New Task</span>
                         </button>
-                        <button onClick={() => navigateTo('communications')} className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl text-white text-center transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98] col-span-2 md:col-span-1">
+                        <button onClick={() => navigateTo('communications')} className="col-span-2 rounded-lg border border-white/10 bg-white/[0.05] p-4 text-center text-slate-200 transition-colors hover:bg-white/[0.08] md:col-span-1">
                             <MessageCircle size={24} className="mx-auto mb-2" />
                             <span className="text-xs font-bold">Send Message</span>
                         </button>
                     </div>
 
                     {/* Action Center (Alerts) */}
-                    <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
-                        <div className={`p-4 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
-                            <h3 className={`font-bold text-sm flex items-center gap-2 ${theme.text}`}><Activity size={16} className="text-orange-500" /> Action Center</h3>
-                            {totalPendingActions > 0 && <span className="bg-red-500/10 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded border border-red-500/20">{totalPendingActions} Pending</span>}
-                        </div>
+                    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
+                        <div className="p-4"><AtlasSectionHeader title="Action center" description="Follow-ups that need a decision or a handoff." icon={Activity} meta={totalActiveAlerts > 0 ? <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{totalActiveAlerts} open</span> : undefined} /></div>
 
                         <div className="p-5">
                             <div className="flex items-center gap-6 mb-6">
@@ -947,15 +1133,15 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                     </div>
                                 )}
                                 {pendingTransfers > 0 && (
-                                    <div onClick={() => navigateTo('finance', { filter: 'pending_verification' })} className="group flex items-center justify-between p-3 bg-purple-950/10 border border-purple-900/30 rounded-xl cursor-pointer hover:bg-purple-900/20 transition-colors">
+                                    <div onClick={() => navigateTo('finance', { filter: 'pending_verification' })} className="group flex cursor-pointer items-center justify-between rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-3 transition-colors hover:bg-amber-300/[0.08]">
                                         <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500"><Building size={16} /></div>
+                                            <div className="rounded-lg bg-amber-300/10 p-2 text-amber-200"><Building size={16} /></div>
                                             <div>
-                                                <p className="text-sm font-bold text-purple-400">{pendingTransfers} Transfers</p>
-                                                <p className="text-[10px] text-purple-300/70">Verification needed</p>
+                                                <p className="text-sm font-bold text-amber-100">{pendingTransfers} Transfers</p>
+                                                <p className="text-[10px] text-amber-200/60">Verification needed</p>
                                             </div>
                                         </div>
-                                        <div className="bg-purple-500 text-purple-950 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight size={12} /></div>
+                                        <div className="rounded bg-amber-300 p-1 text-slate-950 opacity-0 transition-opacity group-hover:opacity-100"><ArrowRight size={12} /></div>
                                     </div>
                                 )}
                                 {myTasks.slice(0, 3).map(task => (
@@ -972,33 +1158,30 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                 ))}
 
                                 {/* DYNAMIC ALERTS */}
-                                {actionAlerts.map((alert: any, idx) => (
-                                    <div key={idx} onClick={() => navigateTo(alert.route, alert.params)} className={`group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors bg-${alert.color}-950/10 border-${alert.color}-900/30 hover:bg-${alert.color}-900/20`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`p-2 rounded-lg bg-${alert.color}-500/10 text-${alert.color}-500`}><alert.icon size={16} /></div>
-                                            <div>
-                                                <p className={`text-sm font-bold text-${alert.color}-400`}>{alert.count} {alert.label}</p>
-                                                <p className={`text-[10px] text-${alert.color}-300/70`}>{alert.subLabel}</p>
+                                {actionAlerts.map((alert: any, idx) => {
+                                    const tone = alertTone[alert.color] || alertTone[alert.type] || alertTone.slate;
+                                    const AlertIcon = alert.icon;
+                                    return (
+                                        <div key={idx} onClick={() => navigateTo(alert.route, alert.params)} className={`group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${tone.row}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2 rounded-lg ${tone.icon}`}><AlertIcon size={16} /></div>
+                                                <div>
+                                                    <p className={`text-sm font-bold ${tone.title}`}>{alert.count} {alert.label}</p>
+                                                    <p className={`text-[10px] ${tone.subtitle}`}>{alert.subLabel}</p>
+                                                </div>
                                             </div>
+                                            <div className={`${tone.action} p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity`}><ArrowRight size={12} /></div>
                                         </div>
-                                        <div className={`bg-${alert.color}-500 text-${alert.color}-950 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity`}><ArrowRight size={12} /></div>
-                                    </div>
-                                ))}
-                                {totalPendingActions === 0 && (
-                                    <div className="text-center py-4">
-                                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-900/20 text-emerald-500 mb-2">
-                                            <CheckCircle2 size={20} />
-                                        </div>
-                                        <p className="text-xs text-slate-500">All caught up!</p>
-                                    </div>
-                                )}
+                                    );
+                                })}
+                                {totalActiveAlerts === 0 && <AtlasEmptyState title="All caught up" description="There are no operational follow-ups waiting right now." icon={CheckCircle2} />}
                             </div>
                         </div>
                     </div>
 
                     {/* DATA QUALITY PANEL */}
                     {incompleteStudents.length > 0 && (
-                        <div className={`rounded-2xl overflow-hidden border-2 ${
+                        <div className={`overflow-hidden rounded-lg border ${
                             dataQualityScore < 70
                                 ? 'border-red-500/30 bg-red-950/10'
                                 : 'border-amber-500/30 bg-amber-950/10'
@@ -1038,7 +1221,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                                 {incompleteStudents.slice(0, 8).map(({ student, issues, ageDays }) => (
                                     <div
                                         key={student.id}
-                                        className="group flex items-start gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800 hover:border-amber-700/40 cursor-pointer transition-all"
+                                        className="group flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-slate-950/60 p-3 transition-colors hover:border-amber-300/30"
                                         onClick={() => navigateTo('student-details', { studentId: student.id })}
                                     >
                                         {/* Avatar */}
@@ -1106,11 +1289,8 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                     )}
 
 
-                    <div className={`rounded-2xl overflow-hidden ${theme.card}`}>
-                        <div className={`p-4 border-b flex justify-between items-center ${theme.divider} ${isInstructor ? 'bg-slate-50/50' : 'bg-slate-950/30'}`}>
-                            <h3 className={`font-bold text-sm ${theme.text}`}>New Leads</h3>
-                            <button onClick={() => navigateTo('marketing')} className={`text-[10px] px-2 py-1 rounded border transition-colors ${isInstructor ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200' : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'}`}>View Pipeline</button>
-                        </div>
+                    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
+                        <div className="p-4"><AtlasSectionHeader title="Admissions pipeline" description="New interest and current conversion pace." icon={Megaphone} actions={<AtlasActionButton variant="quiet" icon={ArrowRight} onClick={() => navigateTo('marketing')}>View pipeline</AtlasActionButton>} /></div>
 
                         <div className="p-5">
                             <div className="flex items-end justify-between mb-4">
@@ -1130,27 +1310,15 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                             {/* Sparkline Graph */}
                             <div className="h-16 w-full relative">
                                 <svg className="w-full h-full overflow-visible" preserveAspectRatio="none">
-                                    <defs>
-                                        <linearGradient id="sparklineGradient" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.5" />
-                                            <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-                                        </linearGradient>
-                                    </defs>
                                     {/* Line Path */}
                                     <path
                                         d={`M0,${64 - (leadTrendData[0] || 0) * 10} ${leadTrendData.map((val, i) => `L${(i / (leadTrendData.length - 1)) * 100}%,${64 - val * 10}`).join(' ')}`}
                                         fill="none"
-                                        stroke="#8b5cf6"
+                                        stroke="#2dd4bf"
                                         strokeWidth="2"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                         className="drop-shadow-lg"
-                                    />
-                                    {/* Area Fill (Optional aesthetic) */}
-                                    <path
-                                        d={`M0,${64 - (leadTrendData[0] || 0) * 10} ${leadTrendData.map((val, i) => `L${(i / (leadTrendData.length - 1)) * 100}%,${64 - val * 10}`).join(' ')} V64 H0 Z`}
-                                        fill="url(#sparklineGradient)"
-                                        opacity="0.3"
                                     />
                                 </svg>
                             </div>
@@ -1171,7 +1339,7 @@ export const DashboardView = ({ onRecordPayment }: { onRecordPayment: (studentId
     const isInstructor = userProfile?.role === 'instructor';
 
     if (isStudent) {
-        return <StudentDashboard />;
+        return <AtlasStudentDashboard />;
     }
 
     if (isInstructor) {

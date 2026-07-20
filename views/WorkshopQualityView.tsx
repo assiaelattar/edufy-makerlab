@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { 
     Award, Activity, Microscope, MessageSquare, AlertTriangle, Play,
-    CheckCircle, Target, TrendingUp, X, Save, Zap, Mic
+    CheckCircle, Target, TrendingUp, X, Save, Zap, Mic, CalendarDays, ShieldCheck
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -10,23 +10,33 @@ import { formatDate } from '../utils/helpers';
 import { evaluateWorkshopSession } from '../services/workshopEvaluator';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useConfirm } from '../context/ConfirmContext';
+import {
+    AtlasActionButton,
+    AtlasCommandHeader,
+    AtlasEmptyState,
+    AtlasSectionHeader,
+    AtlasSignalCard
+} from '../components/atlas/AtlasSurface';
 
 export const WorkshopQualityView = () => {
-    const { teamMembers } = useAppContext();
+    const { teamMembers, workshopEvaluations = [], classSessions } = useAppContext();
     const { currentOrganization } = useAuth();
-    
-    // The AppContext already listens to 'workshop_evaluations'
-    const { workshopEvaluations = [] } = useAppContext() as any;
+    const { alert: showAlert, confirm } = useConfirm();
+    const evaluatorAvailable = Boolean(import.meta.env.VITE_GOOGLE_API_KEY);
 
     const stats = useMemo(() => {
-        if (workshopEvaluations.length === 0) return { avg: 0, count: 0, latest: 0 };
-        const total = workshopEvaluations.reduce((acc: number, val: WorkshopEvaluation) => acc + val.totalScore, 0);
+        const scoredEvaluations = workshopEvaluations.filter(item => Number.isFinite(Number(item.totalScore)));
+        if (scoredEvaluations.length === 0) return { avg: 0, count: 0, latest: 0 };
+        const total = scoredEvaluations.reduce((acc: number, val: WorkshopEvaluation) => acc + Number(val.totalScore), 0);
         return {
-            avg: Math.round(total / workshopEvaluations.length),
-            count: workshopEvaluations.length,
-            latest: workshopEvaluations[0]?.totalScore || 0
+            avg: Math.round(total / scoredEvaluations.length),
+            count: scoredEvaluations.length,
+            latest: scoredEvaluations[0]?.totalScore || 0
         };
     }, [workshopEvaluations]);
+
+    const qualityGap = Math.max(0, 90 - stats.avg);
 
     const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
     
@@ -34,8 +44,8 @@ export const WorkshopQualityView = () => {
     const [auditTab, setAuditTab] = useState<'pre-flight' | 'execution'>('pre-flight');
     const [isEvaluating, setIsEvaluating] = useState(false);
     
-    const { classSessions } = useAppContext();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const todaysSessions = useMemo(() => {
         return classSessions.filter(c => c.date === todayStr);
     }, [classSessions, todayStr]);
@@ -44,39 +54,77 @@ export const WorkshopQualityView = () => {
     
     // Franchise Input State
     const [predictiveWarned, setPredictiveWarned] = useState(false);
-    
-    const [techReady, setTechReady] = useState(true);
+
+    const [techReady, setTechReady] = useState<boolean | null>(null);
     const [materialStock, setMaterialStock] = useState(3);
-    const [safetyZoned, setSafetyZoned] = useState(true);
+    const [safetyZoned, setSafetyZoned] = useState<boolean | null>(null);
     
     const [instructionTime, setInstructionTime] = useState<'< 10 mins' | '10-20 mins' | '> 20 mins'>('10-20 mins');
     const [autonomyLevel, setAutonomyLevel] = useState<'fixed_it' | 'pointed_error' | 'asked_questions'>('asked_questions');
     const [struggleMetric, setStruggleMetric] = useState(3);
     const [deliveryFocus, setDeliveryFocus] = useState<'Final Polish' | 'Iteration & Effort'>('Iteration & Effort');
-    const [labRespect, setLabRespect] = useState(true);
+    const [labRespect, setLabRespect] = useState<boolean | null>(null);
     
     const [voiceTranscript, setVoiceTranscript] = useState('');
+    const auditChecksComplete = Boolean(selectedSessionId && techReady !== null && safetyZoned !== null && labRespect !== null && voiceTranscript.trim().length >= 10);
 
     const openAuditModal = () => {
+        if (!evaluatorAvailable || todaysSessions.length === 0) return;
         setIsAuditModalOpen(true);
         setAuditTab('pre-flight');
-        setPredictiveWarned(Math.random() > 0.7); // Mock predictive flag
+        setSelectedSessionId('');
+        setPredictiveWarned(false);
+        setTechReady(null);
+        setMaterialStock(3);
+        setSafetyZoned(null);
+        setInstructionTime('10-20 mins');
+        setAutonomyLevel('asked_questions');
+        setStruggleMetric(3);
+        setDeliveryFocus('Iteration & Effort');
+        setLabRespect(null);
+        setVoiceTranscript('');
     };
 
     const submitAudit = async () => {
         if (!selectedSessionId) {
-            alert('Please select a session to audit.');
+            await showAlert('Select a session', 'Choose one of today\'s sessions before starting the quality audit.', 'warning');
             return;
         }
 
         const session = todaysSessions.find(s => s.id === selectedSessionId);
         if (!session) {
-            alert('Session not found.');
+            await showAlert('Session unavailable', 'This session is no longer available. Refresh the page and choose another session.', 'warning');
             return;
         }
 
         const orgId = currentOrganization?.id;
-        if (!orgId) return;
+        if (!orgId) {
+            await showAlert('Organization required', 'Select an organization before submitting a quality audit.', 'warning');
+            return;
+        }
+        if (!evaluatorAvailable) {
+            await showAlert('Quality evaluator unavailable', 'The AI evaluator is not configured for this environment.', 'warning');
+            return;
+        }
+        if (techReady === null || safetyZoned === null || labRespect === null) {
+            await showAlert('Audit checks incomplete', 'Record the tech, safety, and cleanup checks before submitting.', 'warning');
+            return;
+        }
+        if (voiceTranscript.trim().length < 10) {
+            await showAlert('Observation required', 'Add one specific observation of at least 10 characters.', 'warning');
+            return;
+        }
+        const existingAudit = workshopEvaluations.find(item => item.sessionId === session.id && item.date === todayStr);
+        if (existingAudit) {
+            const approved = await confirm({
+                title: 'Add another audit?',
+                message: 'This session already has a quality audit today. A new submission will be kept as an additional observation.',
+                confirmText: 'Add audit',
+                cancelText: 'Review existing',
+                variant: 'warning'
+            });
+            if (!approved) return;
+        }
 
         setIsEvaluating(true);
         
@@ -89,21 +137,25 @@ export const WorkshopQualityView = () => {
             };
 
             const result = await evaluateWorkshopSession(inputs);
+            const score = Number(result?.Health_Score);
+            if (!Number.isFinite(score) || score < 0 || score > 100) {
+                throw new Error('The evaluator returned an invalid quality score.');
+            }
 
-            const instructorName = teamMembers.find(t => t.uid === instructorId)?.name || 'Unknown Officer';
+            const instructorName = teamMembers.find(t => t.uid === session.instructorId)?.name || session.instructorName || 'Unknown Officer';
 
             const newEvaluation: Omit<WorkshopEvaluation, 'id'> = {
                 organizationId: orgId,
                 sessionId: session.id,
                 workshopTitle: `${session.title} ${session.subTitle}`,
                 instructorId: session.instructorId || '',
-                instructorName: session.instructorName || 'Unassigned',
+                instructorName,
                 date: todayStr,
                 predictiveFlags: inputs.predictiveFlags,
                 preFlight: inputs.preFlight,
                 execution: inputs.execution,
-                voiceTranscript,
-                totalScore: result.Health_Score,
+                voiceTranscript: voiceTranscript.trim(),
+                totalScore: Math.round(score),
                 breakdown: {
                     setup: result.Phase_Breakdown?.setup || '',
                     instruction: result.Phase_Breakdown?.instruction || '',
@@ -119,106 +171,81 @@ export const WorkshopQualityView = () => {
             setIsAuditModalOpen(false);
             setSelectedSessionId('');
             setVoiceTranscript('');
-            
+            await showAlert('Quality audit saved', `${session.title} scored ${Math.round(score)}/100 and the coaching action is now recorded.`, 'success');
         } catch (error) {
             console.error('Error submitting audit:', error);
-            alert('The Sentinel AI failed to evaluate. Check your API key.');
+            await showAlert('Audit could not be completed', error instanceof Error ? error.message : 'The evaluation service did not return a valid result.', 'danger');
         } finally {
             setIsEvaluating(false);
         }
     };
 
     return (
-        <div className="space-y-8 pb-20 animate-in fade-in slide-in-from-bottom-4">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                <div>
-                    <div className="flex items-center gap-2 text-indigo-500 text-sm font-bold uppercase tracking-wider mb-1">
-                        <Award size={16} /> Sentinel HQ
-                    </div>
-                    <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">
-                        Quality <span className="text-indigo-600">Assessor</span>
-                    </h1>
-                    <p className="text-slate-500 font-medium">Franchise execution tracking and pedagogical AI auditing.</p>
-                </div>
-                <button 
-                    onClick={openAuditModal}
-                    className="flex justify-center items-center gap-2 px-6 py-3 bg-slate-900 border-2 border-slate-800 hover:border-indigo-400 text-white rounded-xl font-bold shadow-lg transition-all hover:scale-105 group"
-                >
-                    <Mic className="text-indigo-400 group-hover:animate-pulse" size={20} />
-                    Execute Audit
-                </button>
+        <div className="space-y-5 pb-20 animate-in fade-in duration-200">
+            <AtlasCommandHeader
+                eyebrow="Academic quality"
+                title="Workshop quality"
+                description="Review today's delivery, capture evidence, and turn each observation into a clear coaching action."
+                icon={Award}
+                badges={<span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${evaluatorAvailable ? 'border-teal-300/20 bg-teal-300/10 text-teal-200' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>{evaluatorAvailable ? 'Evaluator ready' : 'Evaluator offline'}</span>}
+                actions={<AtlasActionButton icon={Mic} variant="primary" onClick={openAuditModal} disabled={!evaluatorAvailable || todaysSessions.length === 0} title={!evaluatorAvailable ? 'Configure the Google AI key to enable quality audits' : todaysSessions.length === 0 ? 'No sessions are scheduled today' : 'Run quality audit'}>Run quality audit</AtlasActionButton>}
+            />
+
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <AtlasSignalCard label="Quality health" value={stats.avg || '--'} detail="Average score out of 100" icon={ShieldCheck} tone={stats.avg >= 80 ? 'emerald' : 'amber'} />
+                <AtlasSignalCard label="Audits complete" value={stats.count} detail="Recorded quality reviews" icon={Microscope} tone="teal" />
+                <AtlasSignalCard label="Today's sessions" value={todaysSessions.length} detail="Available for review" icon={CalendarDays} tone="blue" />
+                <AtlasSignalCard label="Target gap" value={stats.count ? qualityGap : '--'} detail={stats.count ? 'Points to the 90 target' : 'Complete the first audit'} icon={Target} tone={qualityGap === 0 && stats.count ? 'emerald' : 'amber'} />
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm">
-                    <h3 className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Franchise Quality</h3>
-                    <div className="text-4xl font-black text-indigo-600">{stats.avg}</div>
-                    <p className="text-xs text-slate-400 mt-2">Overall Health Score (0-100)</p>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm">
-                    <h3 className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Sessions Audited</h3>
-                    <div className="text-4xl font-black text-slate-800">{stats.count}</div>
-                    <p className="text-xs text-slate-400 mt-2">Total sentinel patrols</p>
-                </div>
-                <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm">
-                    <h3 className="text-slate-500 font-bold text-xs uppercase tracking-wider mb-1">Latest Operation</h3>
-                    <div className="text-4xl font-black text-emerald-500">{stats.latest}</div>
-                    <p className="text-xs text-slate-400 mt-2">Score of most recent audit</p>
-                </div>
-                <div className="bg-slate-900 p-6 rounded-[2rem] text-white shadow-xl">
-                    <h3 className="text-slate-400 font-bold text-xs uppercase tracking-wider mb-1">Integrity Goal</h3>
-                    <div className="text-4xl font-black text-indigo-400">90+</div>
-                    <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500" style={{ width: `\${Math.min(stats.avg, 100)}%` }}></div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Recent Feed */}
-            <div className="space-y-6">
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                    <Microscope className="text-indigo-600" /> Recent Operations Log
-                </h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="space-y-4">
+                <AtlasSectionHeader
+                    title="Recent quality reviews"
+                    description="Latest evidence, root causes, and coaching mandates from workshop delivery."
+                    icon={Microscope}
+                    meta={stats.count > 0 ? <span className="rounded-full bg-white/[0.05] px-2 py-0.5 text-[10px] font-bold text-slate-400">{stats.count}</span> : undefined}
+                />
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                     {workshopEvaluations.length === 0 ? (
-                        <div className="col-span-full bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 p-12 text-center">
-                            <MessageSquare size={48} className="text-slate-300 mx-auto mb-4" />
-                            <h3 className="font-bold text-slate-700">No audits yet</h3>
-                            <p className="text-sm text-slate-400">Patrols will appear here once submitted.</p>
+                        <div className="col-span-full">
+                            <AtlasEmptyState
+                                icon={MessageSquare}
+                                title="No quality reviews yet"
+                                description="Run the first audit to establish a baseline and create a coaching action."
+                                action={<AtlasActionButton icon={Mic} variant="primary" onClick={openAuditModal} disabled={!evaluatorAvailable || todaysSessions.length === 0}>Run first audit</AtlasActionButton>}
+                            />
                         </div>
                     ) : (
                         workshopEvaluations.map((evalItem: WorkshopEvaluation) => (
-                            <div key={evalItem.id} className="bg-white p-6 rounded-[1.5rem] border border-slate-100 shadow-sm hover:border-indigo-200 transition-all">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div>
-                                        <h4 className="font-black text-slate-800 text-lg leading-tight">{evalItem.workshopTitle}</h4>
-                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-1">OFFICER {evalItem.instructorName} • {formatDate(evalItem.date)}</p>
+                            <article key={evalItem.id} className="rounded-lg border border-white/10 bg-slate-900/70 p-5 transition-colors hover:border-teal-300/25">
+                                <div className="mb-4 flex items-start justify-between gap-4">
+                                    <div className="min-w-0">
+                                        <h4 className="truncate text-base font-black text-white">{evalItem.workshopTitle}</h4>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mt-1">OFFICER {evalItem.instructorName} | {formatDate(evalItem.date)}</p>
                                     </div>
-                                    <div className={`px-4 py-2 rounded-xl text-xl font-black flex items-center gap-1 \${evalItem.totalScore >= 80 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                                        <Activity size={20} />
+                                    <div className={`flex shrink-0 items-center gap-1 rounded-lg border px-3 py-2 text-lg font-black ${evalItem.totalScore >= 80 ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>
+                                        <Activity size={16} />
                                         {evalItem.totalScore}
                                     </div>
                                 </div>
                                 
-                                <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                    <p className="text-sm font-bold text-slate-800 mb-1">Root Cause</p>
-                                    <p className="text-sm text-slate-600 italic">
-                                        "{evalItem.rootCause || 'No root cause identified.'}"
+                                <div className="mb-3 border-l-2 border-slate-700 pl-3">
+                                    <p className="mb-1 text-[10px] font-black uppercase text-slate-500">Root cause</p>
+                                    <p className="text-sm leading-6 text-slate-300">
+                                        {evalItem.rootCause || 'No root cause identified.'}
                                     </p>
                                 </div>
 
-                                <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex items-start gap-3">
-                                    <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                                <div className="flex items-start gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] p-3">
+                                    <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-200" />
                                     <div>
-                                        <p className="text-xs font-black uppercase text-amber-700 tracking-wider">Actionable Mandate</p>
-                                        <p className="text-sm text-amber-900 font-medium">
+                                        <p className="text-[10px] font-black uppercase text-amber-200">Coaching action</p>
+                                        <p className="mt-1 text-sm font-medium leading-5 text-slate-200">
                                             {evalItem.actionableMandate || 'No mandate issued.'}
                                         </p>
                                     </div>
                                 </div>
-                            </div>
+                            </article>
                         ))
                     )}
                 </div>
@@ -226,28 +253,29 @@ export const WorkshopQualityView = () => {
 
             {/* AUDIT MODAL (TABLET UI) */}
             {isAuditModalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                    <div className="bg-slate-50 rounded-[2rem] shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border-2 border-slate-800 animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-3 sm:p-5">
+                    <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-950 shadow-2xl animate-in zoom-in-95 duration-200">
                         {/* Header */}
-                        <div className="bg-slate-900 p-5 pl-8 flex justify-between items-center shrink-0">
+                        <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-slate-950 p-4 sm:px-6">
                             <h3 className="text-xl font-black text-white flex items-center gap-3">
-                                <Activity className="text-indigo-400" /> 
-                                The Universal Tablet
+                                <Activity className="text-teal-300" />
+                                Workshop quality audit
                             </h3>
-                            <button onClick={() => setIsAuditModalOpen(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+                            <button aria-label="Close audit" onClick={() => !isEvaluating && setIsAuditModalOpen(false)} disabled={isEvaluating} className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40">
                                 <X size={24} />
                             </button>
                         </div>
 
                         {/* Setup Row */}
-                        <div className="bg-slate-800 p-4 px-8 border-b border-slate-700 flex gap-4 shrink-0 items-center">
-                            <span className="text-white font-bold opacity-80 uppercase text-sm tracking-wider">Select Active Session:</span>
+                        <div className="flex shrink-0 flex-col gap-2 border-b border-white/10 bg-slate-900/60 p-4 sm:flex-row sm:items-center sm:px-6">
+                            <label htmlFor="quality-session" className="text-[10px] font-black uppercase text-slate-400">Today's session</label>
                             <select 
-                                className="flex-1 bg-slate-900 text-white border-2 border-slate-700 rounded-xl px-4 py-2 font-bold outline-none focus:border-indigo-500 transition-colors"
+                                id="quality-session"
+                                className="min-h-10 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-bold text-white outline-none transition-colors focus:border-teal-400/60"
                                 value={selectedSessionId}
                                 onChange={(e) => setSelectedSessionId(e.target.value)}
                             >
-                                <option value="">-- Choose Today's Patrol --</option>
+                                <option value="">Choose a session</option>
                                 {todaysSessions.map(session => (
                                     <option key={session.id} value={session.id}>
                                         {session.startTime} - {session.title} {session.subTitle} (Officer: {session.instructorName || 'Unassigned'})
@@ -257,66 +285,63 @@ export const WorkshopQualityView = () => {
                         </div>
 
                         {/* Tabs */}
-                        <div className="flex bg-white border-b border-slate-200 shrink-0">
+                        <div className="flex shrink-0 border-b border-white/10 bg-slate-950 px-4 sm:px-6">
                             <button 
                                 onClick={() => setAuditTab('pre-flight')}
-                                className={`flex-1 py-4 font-black uppercase text-sm tracking-wider flex justify-center items-center gap-2 border-b-4 transition-colors \${auditTab === 'pre-flight' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-400 hover:text-slate-600 bg-slate-50'}`}
+                                className={`flex min-h-12 flex-1 items-center justify-center gap-2 border-b-2 text-xs font-black uppercase transition-colors ${auditTab === 'pre-flight' ? 'border-teal-400 text-teal-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
                             >
                                 <CheckCircle size={18} /> Pre-Flight Check
                             </button>
                             <button 
                                 onClick={() => setAuditTab('execution')}
-                                className={`flex-1 py-4 font-black uppercase text-sm tracking-wider flex justify-center items-center gap-2 border-b-4 transition-colors \${auditTab === 'execution' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-400 hover:text-slate-600 bg-slate-50'}`}
+                                className={`flex min-h-12 flex-1 items-center justify-center gap-2 border-b-2 text-xs font-black uppercase transition-colors ${auditTab === 'execution' ? 'border-teal-400 text-teal-300' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
                             >
                                 <Play size={18} /> Execution Audit
                             </button>
                         </div>
 
                         {/* Modal Body */}
-                        <div className="flex-1 overflow-y-auto p-8 pb-32">
+                        <div className="flex-1 overflow-y-auto p-4 pb-28 sm:p-6 sm:pb-28">
                             {auditTab === 'pre-flight' ? (
                                 <div className="space-y-8 animate-in slide-in-from-right-8 fade-in">
-                                    {/* Mock Predictive Warning */}
-                                    {predictiveWarned && (
-                                        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 flex items-center gap-4">
-                                            <div className="bg-red-500 p-2 rounded-lg text-white">
-                                                <AlertTriangle size={24} />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-red-900">Predictive Hub Warning</h4>
-                                                <p className="text-sm text-red-700 font-medium">Headquarters warned this location 7 days ago about low material stock.</p>
-                                            </div>
-                                        </div>
-                                    )}
+                                    <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${predictiveWarned ? 'border-amber-300/30 bg-amber-300/10' : 'border-white/10 bg-slate-900/70'}`}>
+                                        <input type="checkbox" checked={predictiveWarned} onChange={event => setPredictiveWarned(event.target.checked)} className="mt-0.5 h-5 w-5 rounded border-slate-600 text-amber-500 focus:ring-amber-500" />
+                                        <span>
+                                            <span className="block text-xs font-black uppercase text-slate-200">Earlier inventory warning</span>
+                                            <span className="mt-1 block text-xs leading-5 text-slate-500">Enable only when the team received a low-stock warning before this session.</span>
+                                        </span>
+                                    </label>
 
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                                        <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs mb-4">Tech Status</h3>
+                                    <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
+                                        <h3 className="mb-4 text-xs font-black uppercase text-slate-300">Tech status</h3>
                                         <div className="flex gap-4">
                                             <button 
                                                 onClick={() => setTechReady(true)}
-                                                className={`flex-1 py-4 rounded-xl font-black uppercase tracking-wider text-sm border-2 transition-all \${techReady ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-400'}`}
+                                                aria-pressed={techReady === true}
+                                                className={`min-h-11 flex-1 rounded-lg border px-3 text-sm font-black transition-colors ${techReady === true ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-slate-700 text-slate-400'}`}
                                             >
                                                 Ready
                                             </button>
                                             <button 
                                                 onClick={() => setTechReady(false)}
-                                                className={`flex-1 py-4 rounded-xl font-black uppercase tracking-wider text-sm border-2 transition-all \${!techReady ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200 text-slate-400'}`}
+                                                aria-pressed={techReady === false}
+                                                className={`min-h-11 flex-1 rounded-lg border px-3 text-sm font-black transition-colors ${techReady === false ? 'border-rose-400/40 bg-rose-400/10 text-rose-300' : 'border-slate-700 text-slate-400'}`}
                                             >
                                                 Missing / Uncharged
                                             </button>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                                    <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
                                         <div className="flex justify-between items-end mb-4">
-                                            <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs">Material Stock</h3>
-                                            <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md">{materialStock}/5</span>
+                                            <h3 className="text-xs font-black uppercase text-slate-300">Material stock</h3>
+                                            <span className="rounded-md bg-teal-400/10 px-2 py-1 text-xs font-bold text-teal-300">{materialStock}/5</span>
                                         </div>
                                         <input 
                                             type="range" min="1" max="5" 
                                             value={materialStock} 
                                             onChange={(e) => setMaterialStock(parseInt(e.target.value))}
-                                            className="w-full accent-indigo-600 mb-2"
+                                            className="mb-2 w-full accent-teal-500"
                                         />
                                         <div className="flex justify-between text-[10px] uppercase font-black tracking-wider text-slate-400">
                                             <span>1: Missing Items</span>
@@ -325,39 +350,34 @@ export const WorkshopQualityView = () => {
                                         </div>
                                     </div>
 
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                                        <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs mb-4">Safety Zoning</h3>
-                                        <label className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={safetyZoned}
-                                                onChange={(e) => setSafetyZoned(e.target.checked)}
-                                                className="w-6 h-6 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
-                                            />
-                                            <span className="font-bold text-slate-700">Safety gear placed & zones firmly established (Clean vs Dirty)</span>
-                                        </label>
+                                    <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
+                                        <h3 className="mb-4 text-xs font-black uppercase text-slate-300">Safety zoning</h3>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button type="button" aria-pressed={safetyZoned === true} onClick={() => setSafetyZoned(true)} className={`min-h-11 rounded-lg border px-3 text-sm font-black ${safetyZoned === true ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-slate-700 text-slate-400'}`}>Ready</button>
+                                            <button type="button" aria-pressed={safetyZoned === false} onClick={() => setSafetyZoned(false)} className={`min-h-11 rounded-lg border px-3 text-sm font-black ${safetyZoned === false ? 'border-rose-400/40 bg-rose-400/10 text-rose-300' : 'border-slate-700 text-slate-400'}`}>Not ready</button>
+                                        </div>
                                     </div>
                                 </div>
                             ) : (
                                 <div className="space-y-8 animate-in slide-in-from-right-8 fade-in">
-                                    <div className="grid grid-cols-2 gap-6">
-                                        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                                            <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs mb-4">The Spark (Instruction Time)</h3>
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                        <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
+                                            <h3 className="mb-4 text-xs font-black uppercase text-slate-300">Instruction time</h3>
                                             <div className="flex flex-col gap-2">
                                                 {['< 10 mins', '10-20 mins', '> 20 mins'].map(opt => (
-                                                    <label key={opt} className={`flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors \${instructionTime === opt ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 hover:bg-slate-50'}`}>
+                                                    <label key={opt} className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${instructionTime === opt ? 'border-teal-400/50 bg-teal-400/10' : 'border-slate-700 hover:bg-white/[0.03]'}`}>
                                                         <input type="radio" value={opt} checked={instructionTime === opt} onChange={() => setInstructionTime(opt as any)} className="hidden" />
-                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center \${instructionTime === opt ? 'border-indigo-500' : 'border-slate-300'}`}>
-                                                            {instructionTime === opt && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></div>}
+                                                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${instructionTime === opt ? 'border-teal-400' : 'border-slate-600'}`}>
+                                                            {instructionTime === opt && <div className="h-2.5 w-2.5 rounded-full bg-teal-400"></div>}
                                                         </div>
-                                                        <span className={`font-bold \${instructionTime === opt ? 'text-indigo-900' : 'text-slate-600'}`}>{opt}</span>
+                                                        <span className={`font-bold ${instructionTime === opt ? 'text-white' : 'text-slate-400'}`}>{opt}</span>
                                                     </label>
                                                 ))}
                                             </div>
                                         </div>
 
-                                        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                                            <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs mb-4">The "Zero Lego" Autonomy</h3>
+                                        <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
+                                            <h3 className="mb-4 text-xs font-black uppercase text-slate-300">Learner autonomy</h3>
                                             <p className="text-xs text-slate-500 mb-3 italic">When kids got stuck, instructors...</p>
                                             <div className="flex flex-col gap-2">
                                                 {[
@@ -365,28 +385,28 @@ export const WorkshopQualityView = () => {
                                                     { id: 'pointed_error', label: 'Pointed out the exact error' },
                                                     { id: 'asked_questions', label: 'Asked guiding questions' },
                                                 ].map(opt => (
-                                                    <label key={opt.id} className={`flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-colors \${autonomyLevel === opt.id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100 hover:bg-slate-50'}`}>
+                                                    <label key={opt.id} className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${autonomyLevel === opt.id ? 'border-teal-400/50 bg-teal-400/10' : 'border-slate-700 hover:bg-white/[0.03]'}`}>
                                                         <input type="radio" value={opt.id} checked={autonomyLevel === opt.id} onChange={() => setAutonomyLevel(opt.id as any)} className="hidden" />
-                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center \${autonomyLevel === opt.id ? 'border-indigo-500' : 'border-slate-300'}`}>
-                                                            {autonomyLevel === opt.id && <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full"></div>}
+                                                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${autonomyLevel === opt.id ? 'border-teal-400' : 'border-slate-600'}`}>
+                                                            {autonomyLevel === opt.id && <div className="h-2.5 w-2.5 rounded-full bg-teal-400"></div>}
                                                         </div>
-                                                        <span className={`font-bold text-sm \${autonomyLevel === opt.id ? 'text-indigo-900' : 'text-slate-600'}`}>{opt.label}</span>
+                                                        <span className={`text-sm font-bold ${autonomyLevel === opt.id ? 'text-white' : 'text-slate-400'}`}>{opt.label}</span>
                                                     </label>
                                                 ))}
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                                    <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
                                         <div className="flex justify-between items-end mb-4">
-                                            <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs">The Struggle Metric</h3>
-                                            <span className="text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md">{struggleMetric}/5</span>
+                                            <h3 className="text-xs font-black uppercase text-slate-300">Challenge level</h3>
+                                            <span className="rounded-md bg-teal-400/10 px-2 py-1 text-xs font-bold text-teal-300">{struggleMetric}/5</span>
                                         </div>
                                         <input 
                                             type="range" min="1" max="5" 
                                             value={struggleMetric} 
                                             onChange={(e) => setStruggleMetric(parseInt(e.target.value))}
-                                            className="w-full accent-indigo-600 mb-2"
+                                            className="mb-2 w-full accent-teal-500"
                                         />
                                         <div className="flex justify-between text-[10px] uppercase font-black tracking-wider text-slate-400">
                                             <span>1: Too Easy</span>
@@ -395,48 +415,42 @@ export const WorkshopQualityView = () => {
                                         </div>
                                     </div>
 
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                                        <h3 className="font-black text-slate-800 uppercase tracking-wider text-xs mb-4">Praise Delivery Focused On</h3>
+                                    <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
+                                        <h3 className="mb-4 text-xs font-black uppercase text-slate-300">Praise focused on</h3>
                                         <div className="flex gap-4">
                                             <button 
                                                 onClick={() => setDeliveryFocus('Final Polish')}
-                                                className={`flex-1 py-4 rounded-xl font-bold text-sm border-2 transition-all \${deliveryFocus === 'Final Polish' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-400'}`}
+                                                className={`min-h-11 flex-1 rounded-lg border px-3 text-sm font-bold transition-colors ${deliveryFocus === 'Final Polish' ? 'border-teal-400/50 bg-teal-400/10 text-teal-200' : 'border-slate-700 text-slate-400'}`}
                                             >
                                                 Final Polish
                                             </button>
                                             <button 
                                                 onClick={() => setDeliveryFocus('Iteration & Effort')}
-                                                className={`flex-1 py-4 rounded-xl font-bold text-sm border-2 transition-all \${deliveryFocus === 'Iteration & Effort' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-400'}`}
+                                                className={`min-h-11 flex-1 rounded-lg border px-3 text-sm font-bold transition-colors ${deliveryFocus === 'Iteration & Effort' ? 'border-teal-400/50 bg-teal-400/10 text-teal-200' : 'border-slate-700 text-slate-400'}`}
                                             >
                                                 Iteration & Effort
                                             </button>
                                         </div>
                                     </div>
 
-                                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                                        <label className="flex items-center gap-3 cursor-pointer group">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={labRespect}
-                                                onChange={(e) => setLabRespect(e.target.checked)}
-                                                className="w-6 h-6 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
-                                            />
-                                            <div className="group-hover:text-amber-800 transition-colors">
-                                                <h4 className="font-black text-slate-700 uppercase tracking-wider text-xs">Lab Respect</h4>
-                                                <p className="text-sm font-medium text-slate-500">Instructors ensured kids cleaned and sorted their own stations.</p>
-                                            </div>
-                                        </label>
+                                    <div className="rounded-lg border border-white/10 bg-slate-900/70 p-5">
+                                        <h4 className="text-xs font-black uppercase text-slate-200">Learner cleanup</h4>
+                                        <p className="mt-1 text-sm font-medium text-slate-500">Did learners clean and sort their own stations?</p>
+                                        <div className="mt-4 grid grid-cols-2 gap-3">
+                                            <button type="button" aria-pressed={labRespect === true} onClick={() => setLabRespect(true)} className={`min-h-11 rounded-lg border px-3 text-sm font-black ${labRespect === true ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300' : 'border-slate-700 text-slate-400'}`}>Completed</button>
+                                            <button type="button" aria-pressed={labRespect === false} onClick={() => setLabRespect(false)} className={`min-h-11 rounded-lg border px-3 text-sm font-black ${labRespect === false ? 'border-amber-300/40 bg-amber-300/10 text-amber-200' : 'border-slate-700 text-slate-400'}`}>Not completed</button>
+                                        </div>
                                     </div>
 
                                     {/* The Context Layer (Voice) */}
                                     <div>
-                                        <h3 className="font-black text-slate-800 flex items-center gap-2 mb-2">
-                                            <Mic className="text-indigo-500" size={20} /> The Context Layer 
+                                        <h3 className="mb-2 flex items-center gap-2 font-black text-white">
+                                            <Mic className="text-teal-300" size={20} /> Observation notes
                                         </h3>
-                                        <p className="text-xs text-slate-500 mb-3 font-medium tracking-wide">(Simulated Voice-to-Text Transcription)</p>
+                                        <p className="text-xs text-slate-500 mb-3 font-medium">Record a specific moment, blocker, or learner response.</p>
                                         <textarea 
                                             placeholder="Record one specific observation about a student overcoming a challenge or a logistical blocker..."
-                                            className="w-full p-6 text-xl font-bold text-slate-700 bg-indigo-50 border-2 border-indigo-100 rounded-3xl outline-none focus:border-indigo-400 focus:bg-white transition-colors min-h-[160px] resize-none"
+                                            className="min-h-[150px] w-full resize-none rounded-lg border border-white/10 bg-slate-900 p-4 text-base font-medium text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60"
                                             value={voiceTranscript}
                                             onChange={(e) => setVoiceTranscript(e.target.value)}
                                         />
@@ -446,22 +460,22 @@ export const WorkshopQualityView = () => {
                         </div>
 
                         {/* Footer */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex justify-between items-center z-10 rounded-b-[2rem]">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Edufy Sentinel AI Engine</p>
+                        <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-3 border-t border-white/10 bg-slate-950 p-4 sm:px-6">
+                            <p className="hidden text-xs font-bold text-slate-500 sm:block">Sentinel evaluates the evidence after submission.</p>
                             <button 
                                 onClick={submitAudit}
-                                disabled={isEvaluating}
-                                className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-indigo-800 hover:from-indigo-500 hover:to-indigo-700 text-white rounded-xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/30 transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-3"
+                                disabled={isEvaluating || !auditChecksComplete || !evaluatorAvailable}
+                                className="ml-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2.5 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
                             >
                                 {isEvaluating ? (
                                     <>
-                                        <Zap className="animate-pulse" size={20} />
-                                        Analyzing Data...
+                                        <Zap size={20} />
+                                        Evaluating...
                                     </>
                                 ) : (
                                     <>
                                         <Save size={20} />
-                                        Submit for AI Audit
+                                        Submit audit
                                     </>
                                 )}
                             </button>

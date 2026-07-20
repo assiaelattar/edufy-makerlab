@@ -5,6 +5,7 @@ import { Brain, Plus, Target, Star, Upload, ExternalLink, CheckCircle2, Clock, A
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
 import { SuccessModal } from '../components/SuccessModal';
 import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp, deleteDoc, doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
@@ -27,6 +28,7 @@ import { FactoryDashboard } from './learning/FactoryDashboard';
 import { ToastContainer, ToastMessage } from '../components/Toast';
 import { Confetti } from '../components/Confetti';
 import { ProjectSelector } from '../sparkquest/components/ProjectSelector';
+import { AtlasActionButton, AtlasCommandHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 
 // Helper to recursively remove undefined values for Firestore
 const cleanData = (obj: any): any => {
@@ -46,9 +48,11 @@ const cleanData = (obj: any): any => {
 
 export const LearningView = () => {
     const { projectTemplates, studentProjects, students, settings, programs, sendNotification, teamMembers, processTemplates, stations, badges } = useAppContext();
-    const { userProfile, can } = useAuth();
+    const { userProfile, currentOrganization, can } = useAuth();
+    const { confirm: confirmAction, alert: showAlert } = useConfirm();
 
     if (!userProfile) return null;
+    const tenantOrgId = userProfile.organizationId || currentOrganization?.id || 'makerlab-academy';
 
     // Debug logging
     console.log('🔍 LearningView Debug:', {
@@ -67,9 +71,9 @@ export const LearningView = () => {
         text: isStudioTheme ? "text-slate-900" : "text-white",
         textMuted: "text-slate-500",
         bgMuted: isStudioTheme ? "bg-slate-50 border-slate-100" : "bg-slate-950 border-slate-800",
-        tabContainer: isStudioTheme ? "bg-slate-100 border-slate-200" : "bg-slate-950 border-slate-800",
-        tabActive: isStudioTheme ? "bg-white text-indigo-600 shadow-sm ring-1 ring-black/5" : "bg-slate-800 text-white shadow-sm",
-        tabInactive: isStudioTheme ? "text-slate-500 hover:text-slate-900" : "text-slate-500 hover:text-slate-300"
+        tabContainer: "bg-slate-950 border-white/10",
+        tabActive: "bg-teal-500 text-slate-950 shadow-sm",
+        tabInactive: "text-slate-400 hover:bg-white/[0.05] hover:text-white"
     };
 
     // --- SHARED STATE ---
@@ -150,7 +154,7 @@ export const LearningView = () => {
         if (!db) return;
         if (currentStatus === 'archived') return; // Already archived
 
-        if (!confirm("Move this project to Trash? It will be hidden from students.")) return;
+        if (!await confirmAction({ title: 'Archive project?', message: 'This project will move to Trash and be hidden from students.', variant: 'warning', confirmText: 'Move to Trash' })) return;
 
         try {
             await updateDoc(doc(db, 'project_templates', id), {
@@ -219,6 +223,7 @@ export const LearningView = () => {
             } else {
                 await addDoc(collection(db, 'badges'), {
                     ...badgeForm,
+                    organizationId: tenantOrgId,
                     createdAt: serverTimestamp()
                 });
             }
@@ -231,7 +236,7 @@ export const LearningView = () => {
     };
 
     const handleDeleteBadge = async (id: string) => {
-        if (!db || !window.confirm('Are you sure you want to delete this badge?')) return;
+        if (!db || !await confirmAction({ title: 'Delete badge?', message: 'This badge will be permanently removed from the learning catalog.', variant: 'danger', confirmText: 'Delete badge' })) return;
         try {
             await deleteDoc(doc(db, 'badges', id));
         } catch (e) {
@@ -313,6 +318,7 @@ export const LearningView = () => {
 
         const data = cleanData({
             ...templateForm,
+            organizationId: tenantOrgId,
             skills: skillsArray,
             defaultSteps: stepsArray,
             updatedAt: serverTimestamp()
@@ -384,7 +390,7 @@ export const LearningView = () => {
 
     const handleDeleteTemplate = async (id: string) => {
         if (!db) return;
-        if (!confirm("⚠️ DANGER ZONE ⚠️\n\nDeleting this assignment will PERMANENTLY DELETE ALL student submissions and data associated with it.\n\nAre you sure you want to proceed?")) return;
+        if (!await confirmAction({ title: 'Delete assignment and submissions?', message: 'This permanently deletes the assignment and every student submission connected to it. This cannot be undone.', variant: 'danger', confirmText: 'Delete everything' })) return;
 
         try {
             const batch = writeBatch(db);
@@ -415,6 +421,7 @@ export const LearningView = () => {
             for (const t of MOCK_PROJECT_TEMPLATES) {
                 await addDoc(collection(db, 'project_templates'), {
                     ...t,
+                    organizationId: tenantOrgId,
                     createdAt: serverTimestamp()
                 });
             }
@@ -431,6 +438,7 @@ export const LearningView = () => {
         try {
             const defaultWorkflows: Omit<ProcessTemplate, 'id'>[] = [
                 {
+                    organizationId: tenantOrgId,
                     name: 'Engineering Design Process',
                     description: 'Standard engineering workflow: Ask, Imagine, Plan, Create, Test, Improve',
                     isDefault: true,
@@ -445,6 +453,7 @@ export const LearningView = () => {
                     createdAt: serverTimestamp() as any
                 },
                 {
+                    organizationId: tenantOrgId,
                     name: 'Scientific Method',
                     description: 'Classic scientific inquiry process',
                     isDefault: false,
@@ -459,6 +468,7 @@ export const LearningView = () => {
                     createdAt: serverTimestamp() as any
                 },
                 {
+                    organizationId: tenantOrgId,
                     name: 'Design Thinking',
                     description: 'Human-centered design approach',
                     isDefault: false,
@@ -495,7 +505,7 @@ export const LearningView = () => {
     };
 
     const handleDeleteWorkflow = async (id: string) => {
-        if (!db || !confirm('Delete this workflow? Projects using it will need to be reassigned.')) return;
+        if (!db || !await confirmAction({ title: 'Delete workflow?', message: 'Projects using this workflow will need to be reassigned.', variant: 'danger', confirmText: 'Delete workflow' })) return;
         try {
             await deleteDoc(doc(db, 'process_templates', id));
         } catch (e) {
@@ -539,6 +549,7 @@ export const LearningView = () => {
             for (const station of stationEntries) {
                 await addDoc(collection(db, 'stations'), {
                     ...station,
+                    organizationId: tenantOrgId,
                     createdAt: serverTimestamp()
                 });
             }
@@ -591,6 +602,7 @@ export const LearningView = () => {
             for (const badge of defaultBadges) {
                 await addDoc(collection(db, 'badges'), {
                     ...badge,
+                    organizationId: tenantOrgId,
                     createdAt: serverTimestamp()
                 });
             }
@@ -617,7 +629,7 @@ export const LearningView = () => {
     };
 
     const handleDeleteStation = async (id: string) => {
-        if (!db || !confirm('Delete this station? Projects using it will need to be reassigned.')) return;
+        if (!db || !await confirmAction({ title: 'Delete station?', message: 'Projects using this station will need to be reassigned.', variant: 'danger', confirmText: 'Delete station' })) return;
         try {
             await deleteDoc(doc(db, 'stations', id));
         } catch (e) {
@@ -756,7 +768,7 @@ export const LearningView = () => {
             }
         } catch (error) {
             console.error("Error processing review:", error);
-            alert("There was an error updating the project status. Please try again.");
+            await showAlert('Project status not updated', 'The review could not be saved. Check your connection and try again.', 'danger');
         } finally {
             setReviewModalOpen(false);
             setFeedback('');
@@ -800,6 +812,7 @@ export const LearningView = () => {
         }
 
         const projectData = {
+            organizationId: tenantOrgId,
             title: template ? template.title : 'My New Project',
             description: template ? template.description : 'A verified mission started in SparkQuest',
             externalLink: '',
@@ -882,6 +895,7 @@ export const LearningView = () => {
 
         const rawData = {
             ...projectForm,
+            organizationId: tenantOrgId,
             studentId: studentIdToUse,
             studentName: userProfile.name,
             updatedAt: serverTimestamp()
@@ -919,6 +933,7 @@ export const LearningView = () => {
                 console.log("📤 Adding document to Firestore...");
                 const ref = await addDoc(collection(db, 'student_projects'), {
                     ...data,
+                    organizationId: tenantOrgId,
                     status: 'planning', // Force planning on create
                     createdAt: serverTimestamp()
                 });
@@ -928,6 +943,7 @@ export const LearningView = () => {
                 // --- NOTIFY INSTRUCTORS ---
                 try {
                     await addDoc(collection(db, 'notifications'), {
+                        organizationId: tenantOrgId,
                         userId: 'all', // Broadcaster to all instructors
                         type: 'info',
                         title: 'New Mission Started',
@@ -1030,7 +1046,10 @@ export const LearningView = () => {
 
     const handleStartBuilding = async () => {
         if (!db) return;
-        if ((projectForm.steps?.length || 0) < 1) return alert("Plan at least one step!");
+        if ((projectForm.steps?.length || 0) < 1) {
+            await showAlert('Add a project step', 'Plan at least one step before starting the build.', 'warning');
+            return;
+        }
 
         let projectId = activeProject?.id;
         if (!projectId) {
@@ -1053,7 +1072,7 @@ export const LearningView = () => {
         if (!db || !activeProject) return;
         const allDone = projectForm.steps?.every(s => s.status === 'done');
         if (!allDone) {
-            alert("Mission Incomplete: Finish all tasks before submitting!");
+            await showAlert('Mission incomplete', 'Finish every project step before submitting the mission for review.', 'warning');
             return;
         }
 
@@ -1099,19 +1118,30 @@ export const LearningView = () => {
 
     if (isInstructor) {
         return (
-            <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-right-4">
+            <div className="flex h-full flex-col space-y-5 pb-24 md:pb-8 animate-in fade-in duration-200">
                 {showConfetti && <Confetti duration={4000} />}
-                {/* Header */}
-                <div className={`flex flex-col md:flex-row justify-between items-start md:items-center p-4 rounded-xl border gap-4 ${theme.card}`}>
-                    <div>
-                        <h2 className={`text-xl font-bold flex items-center gap-2 ${theme.text}`}><Brain className="w-6 h-6 text-cyan-500" /> Learning Management</h2>
-                        <p className="text-slate-500 text-sm">Manage curriculum, review student work, and build portfolios.</p>
-                    </div>
-                    <div className={`flex p-1 rounded-lg border overflow-x-auto ${theme.tabContainer}`}>
+                <AtlasCommandHeader
+                    eyebrow="Learning operations"
+                    title="Learning studio"
+                    description="Build curriculum, follow project momentum, review learner evidence, and keep portfolios connected."
+                    icon={Brain}
+                    badges={<span className="rounded-md border border-teal-300/20 bg-teal-300/10 px-2 py-1 text-[10px] font-bold text-teal-200">{projectTemplates.length} templates</span>}
+                    actions={<AtlasActionButton icon={Plus} variant="primary" onClick={() => { setTemplateForm({ title: '', description: '', difficulty: 'beginner', skills: [], defaultSteps: [], station: 'general', resources: [], status: 'draft', targetAudience: { grades: [], groups: [] } }); setEditingTemplateId(null); setActiveModalTab('details'); setIsTemplateModalOpen(true); }}>Create project</AtlasActionButton>}
+                />
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <AtlasSignalCard label="Curriculum" value={projectTemplates.length} detail="Project templates" icon={BookOpen} tone="teal" onClick={() => setActiveTab('curriculum')} />
+                    <AtlasSignalCard label="Review queue" value={pendingReviews.length} detail="Submitted projects" icon={CheckCircle2} tone={pendingReviews.length > 0 ? 'amber' : 'slate'} onClick={() => setActiveTab('review')} />
+                    <AtlasSignalCard label="Learner projects" value={studentProjects.length} detail="Across the studio" icon={Rocket} tone="blue" onClick={() => setActiveTab('studio')} />
+                    <AtlasSignalCard label="Published work" value={studentProjects.filter(project => project.status === 'published').length} detail="Portfolio-ready projects" icon={Award} tone="emerald" onClick={() => setActiveTab('portfolios')} />
+                </div>
+
+                <AtlasToolbar>
+                    <div className="flex w-full gap-1 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/70 p-1">
                         <button onClick={() => setActiveTab('curriculum')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'curriculum' ? theme.tabActive : theme.tabInactive}`}>
                             <Brain size={16} /> Curriculum
                         </button>
-                        <button onClick={() => setActiveTab('studio')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'studio' ? (isStudioTheme ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-600 text-white shadow-sm') : theme.tabInactive}`}>
+                        <button onClick={() => setActiveTab('studio')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'studio' ? theme.tabActive : theme.tabInactive}`}>
                             <Rocket size={16} /> Studio
                         </button>
                         <button onClick={() => setActiveTab('review')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'review' ? theme.tabActive : theme.tabInactive}`}>
@@ -1121,7 +1151,7 @@ export const LearningView = () => {
                         <button onClick={() => setActiveTab('portfolios')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'portfolios' ? theme.tabActive : theme.tabInactive}`}><Award size={16} /> Portfolios</button>
                         <button onClick={() => setActiveTab('setup')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'setup' ? theme.tabActive : theme.tabInactive}`}><Beaker size={16} /> Setup</button>
                     </div>
-                </div>
+                </AtlasToolbar>
 
                 {/* CURRICULUM TAB */}
                 {/* CURRICULUM TAB - The Factory */}
@@ -1173,7 +1203,10 @@ export const LearningView = () => {
                                         <div>
                                             <h2 className="text-3xl font-black text-white flex items-center gap-3">
                                                 {selectedStation && (
-                                                    <span className={`w-3 h-8 rounded-full bg-${getTheme(selectedStation).color}-500 block`}></span>
+                                                    <span
+                                                        className="block h-8 w-3 rounded-full"
+                                                        style={{ backgroundColor: getTheme(selectedStation).colorHex }}
+                                                    />
                                                 )}
                                                 {selectedStation && getTheme(selectedStation).label} Projects
                                             </h2>
@@ -1398,26 +1431,26 @@ export const LearningView = () => {
                             {/* Status Overview Cards */}
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                                 {[
-                                    { status: 'all', label: 'All Projects', count: studentProjects.length, color: 'slate', icon: LayoutGrid },
-                                    { status: 'planning', label: 'Planning', count: studentProjects.filter(p => p.status === 'planning').length, color: 'amber', icon: ClipboardList },
-                                    { status: 'building', label: 'Building', count: studentProjects.filter(p => p.status === 'building').length, color: 'cyan', icon: Zap },
-                                    { status: 'testing', label: 'Testing', count: studentProjects.filter(p => p.status === 'testing').length, color: 'blue', icon: CheckCircle2 },
-                                    { status: 'delivered', label: 'Delivered', count: studentProjects.filter(p => p.status === 'delivered').length, color: 'purple', icon: Send },
-                                    { status: 'submitted', label: 'Submitted', count: studentProjects.filter(p => p.status === 'submitted').length, color: 'indigo', icon: Send },
-                                    { status: 'changes_requested', label: 'Changes Needed', count: studentProjects.filter(p => p.status === 'changes_requested').length, color: 'orange', icon: AlertCircle },
-                                    { status: 'published', label: 'Published', count: studentProjects.filter(p => p.status === 'published').length, color: 'emerald', icon: CheckCircle2 }
-                                ].map(({ status, label, count, color, icon: Icon }) => (
+                                    { status: 'all', label: 'All Projects', count: studentProjects.length, activeClass: 'bg-slate-950/30 border-slate-500/50', activeTextClass: 'text-slate-300', icon: LayoutGrid },
+                                    { status: 'planning', label: 'Planning', count: studentProjects.filter(p => p.status === 'planning').length, activeClass: 'bg-amber-950/30 border-amber-500/50', activeTextClass: 'text-amber-400', icon: ClipboardList },
+                                    { status: 'building', label: 'Building', count: studentProjects.filter(p => p.status === 'building').length, activeClass: 'bg-cyan-950/30 border-cyan-500/50', activeTextClass: 'text-cyan-400', icon: Zap },
+                                    { status: 'testing', label: 'Testing', count: studentProjects.filter(p => p.status === 'testing').length, activeClass: 'bg-blue-950/30 border-blue-500/50', activeTextClass: 'text-blue-400', icon: CheckCircle2 },
+                                    { status: 'delivered', label: 'Delivered', count: studentProjects.filter(p => p.status === 'delivered').length, activeClass: 'bg-purple-950/30 border-purple-500/50', activeTextClass: 'text-purple-400', icon: Send },
+                                    { status: 'submitted', label: 'Submitted', count: studentProjects.filter(p => p.status === 'submitted').length, activeClass: 'bg-indigo-950/30 border-indigo-500/50', activeTextClass: 'text-indigo-400', icon: Send },
+                                    { status: 'changes_requested', label: 'Changes Needed', count: studentProjects.filter(p => p.status === 'changes_requested').length, activeClass: 'bg-orange-950/30 border-orange-500/50', activeTextClass: 'text-orange-400', icon: AlertCircle },
+                                    { status: 'published', label: 'Published', count: studentProjects.filter(p => p.status === 'published').length, activeClass: 'bg-emerald-950/30 border-emerald-500/50', activeTextClass: 'text-emerald-400', icon: CheckCircle2 }
+                                ].map(({ status, label, count, activeClass, activeTextClass, icon: Icon }) => (
                                     <button
                                         key={status}
                                         onClick={() => setStatusFilter(status as any)}
                                         className={`p-4 rounded-xl border-2 transition-all text-left ${statusFilter === status
-                                            ? `bg-${color}-950/30 border-${color}-500/50`
+                                            ? activeClass
                                             : 'bg-slate-900 border-slate-800 hover:border-slate-700'
                                             }`}
                                     >
                                         <div className="flex items-center gap-2 mb-2">
-                                            <Icon size={16} className={statusFilter === status ? `text-${color}-400` : 'text-slate-500'} />
-                                            <span className={`text-xs font-bold uppercase tracking-wider ${statusFilter === status ? `text-${color}-400` : 'text-slate-500'}`}>
+                                            <Icon size={16} className={statusFilter === status ? activeTextClass : 'text-slate-500'} />
+                                            <span className={`text-xs font-bold uppercase tracking-wider ${statusFilter === status ? activeTextClass : 'text-slate-500'}`}>
                                                 {label}
                                             </span>
                                         </div>
@@ -2063,6 +2096,7 @@ export const LearningView = () => {
                                                                     // Create new workflow
                                                                     await addDoc(collection(db, 'process_templates'), {
                                                                         ...workflowForm,
+                                                                        organizationId: tenantOrgId,
                                                                         createdAt: serverTimestamp()
                                                                     });
                                                                 }
@@ -2257,6 +2291,7 @@ export const LearningView = () => {
                                                                 // Create new station
                                                                 await addDoc(collection(db, 'stations'), {
                                                                     ...stationForm,
+                                                                    organizationId: tenantOrgId,
                                                                     order: stations.length + 1,
                                                                     createdAt: serverTimestamp()
                                                                 });

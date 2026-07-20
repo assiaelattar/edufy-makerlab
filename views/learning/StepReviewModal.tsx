@@ -4,6 +4,8 @@ import { ProjectStep, StudentProject } from '../../types';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
 import { Modal } from '../../components/Modal';
 import { formatDate } from '../../utils/helpers';
+import { useConfirm } from '../../context/ConfirmContext';
+import { AtlasActionButton, AtlasSectionHeader } from '../../components/atlas/AtlasSurface';
 
 interface StepReviewModalProps {
     isOpen: boolean;
@@ -28,6 +30,7 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [reviewNotes, setReviewNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const { alert: showAlert } = useConfirm();
 
     if (!step || !project) return null;
 
@@ -41,7 +44,7 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
             onClose();
         } catch (error) {
             console.error('Error approving step:', error);
-            alert('Failed to approve step');
+            await showAlert('Step not approved', 'The review could not be saved. Check your connection and try again.', 'danger');
         } finally {
             setIsSubmitting(false);
         }
@@ -49,7 +52,7 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
 
     const handleReject = async () => {
         if (!reviewNotes.trim()) {
-            alert('Please provide feedback for rejection');
+            await showAlert('Feedback required', 'Add a clear note explaining what the learner should change.', 'warning');
             return;
         }
         setIsSubmitting(true);
@@ -59,7 +62,7 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
             onClose();
         } catch (error) {
             console.error('Error rejecting step:', error);
-            alert('Failed to reject step');
+            await showAlert('Changes not requested', 'The review could not be saved. Check your connection and try again.', 'danger');
         } finally {
             setIsSubmitting(false);
         }
@@ -90,15 +93,13 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
     return (
         <>
             <Modal isOpen={isOpen} onClose={onClose} title="">
-                <div className="max-w-3xl">
+                <div className="max-w-3xl space-y-5 text-slate-200">
                     {/* Header */}
-                    <div className="mb-6">
+                    <div>
                         <div className="flex items-start justify-between mb-4">
                             <div>
-                                <h2 className={studioClass(STUDIO_THEME.text.primary, 'text-2xl font-bold mb-2')}>
-                                    Review Step
-                                </h2>
-                                <div className="flex items-center gap-2 text-sm">
+                                <AtlasSectionHeader title="Review project step" description={`${studentName} · ${project.title}`} icon={CheckCircle} />
+                                <div className="mt-3 flex items-center gap-2 text-sm">
                                     <User size={16} className={STUDIO_THEME.text.secondary} />
                                     <span className={STUDIO_THEME.text.secondary}>
                                         {studentName}
@@ -116,10 +117,7 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
                     {/* Step Details */}
                     <div className={
                         studioClass(
-                            STUDIO_THEME.background.card,
-                            STUDIO_THEME.border.light,
-                            STUDIO_THEME.rounded.lg,
-                            'border p-6 mb-6'
+                            'rounded-lg border border-white/10 bg-slate-950/55 p-5'
                         )
                     }>
                         <h3 className={studioClass(STUDIO_THEME.text.primary, 'text-lg font-semibold mb-4')}>
@@ -204,61 +202,34 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
                             onChange={(e) => setReviewNotes(e.target.value)}
                             placeholder="Provide feedback to the student..."
                             rows={4}
-                            className={studioClass(
-                                STUDIO_THEME.border.light,
-                                STUDIO_THEME.rounded.md,
-                                'w-full px-4 py-3 border focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none'
-                            )}
+                            className="w-full resize-none rounded-lg border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
                         />
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center justify-end gap-3">
-                        <button
-                            onClick={onClose}
-                            disabled={isSubmitting}
-                            className={studioClass(
-                                STUDIO_THEME.border.light,
-                                STUDIO_THEME.rounded.md,
-                                STUDIO_THEME.transition.default,
-                                'px-6 py-2 border hover:bg-slate-50 disabled:opacity-50'
-                            )}
-                        >
-                            Cancel
-                        </button>
+                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <AtlasActionButton onClick={onClose} disabled={isSubmitting}>Cancel</AtlasActionButton>
 
                         {step.approvalStatus !== 'rejected' && (
-                            <button
+                            <AtlasActionButton
                                 onClick={handleReject}
                                 disabled={isSubmitting}
-                                className={studioClass(
-                                    STUDIO_THEME.colors.danger,
-                                    STUDIO_THEME.rounded.md,
-                                    STUDIO_THEME.shadow.button,
-                                    STUDIO_THEME.transition.default,
-                                    'px-6 py-2 text-white hover:bg-rose-600 disabled:opacity-50 flex items-center gap-2'
-                                )}
+                                variant="danger"
+                                icon={X}
                             >
-                                <X size={16} />
                                 Request Changes
-                            </button>
+                            </AtlasActionButton>
                         )}
 
                         {step.approvalStatus !== 'approved' && (
-                            <button
+                            <AtlasActionButton
                                 onClick={handleApprove}
                                 disabled={isSubmitting}
-                                className={studioClass(
-                                    STUDIO_THEME.colors.success,
-                                    STUDIO_THEME.rounded.md,
-                                    STUDIO_THEME.shadow.button,
-                                    STUDIO_THEME.transition.default,
-                                    'px-6 py-2 text-white hover:bg-emerald-600 disabled:opacity-50 flex items-center gap-2'
-                                )}
+                                variant="primary"
+                                icon={CheckCircle}
                             >
-                                <CheckCircle size={16} />
                                 {isLastStep ? 'Approve & Publish' : 'Approve Step'}
-                            </button>
+                            </AtlasActionButton>
                         )}
                     </div>
                 </div>

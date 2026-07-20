@@ -2,52 +2,56 @@
 import React, { useState } from 'react';
 import { Download, ExternalLink, CheckCircle2, ChevronLeft, Star, MonitorPlay, MessageSquare, ShieldCheck, ArrowRight, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { useAuth } from '../context/AuthContext';
+import { useModuleContext } from '../context/ModuleContext';
 import { getAppById } from '../services/appRegistry';
-import { formatCurrency } from '../utils/helpers';
-import { updateDoc, doc, arrayUnion } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { useConfirm } from '../context/ConfirmContext';
+import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader } from '../components/atlas/AtlasSurface';
 
 export const AppDetailsView = () => {
     const { navigateTo, viewParams } = useAppContext();
-    const { currentOrganization } = useAuth();
+    const { getEntitlement, activateItem, requestAddOn } = useModuleContext();
+    const { alert: showAlert } = useConfirm();
     const [installing, setInstalling] = useState(false);
     const [activeScreenshot, setActiveScreenshot] = useState(0);
 
     const appId = viewParams?.appId;
     const app = appId ? getAppById(appId) : null;
-    const isInstalled = currentOrganization?.installedApps?.includes(appId || '');
+    const entitlement = appId ? getEntitlement(appId) : undefined;
+    const isInstalled = Boolean(entitlement?.active);
 
-    if (!app) return <div className="p-8 text-center text-slate-400">App not found</div>;
+    if (!app) return <AtlasEmptyState title="App not found" description="Return to the marketplace and choose an available app." icon={MonitorPlay} action={<AtlasActionButton icon={ChevronLeft} onClick={() => navigateTo('app-store')}>Back to marketplace</AtlasActionButton>} />;
 
     const handleInstall = async () => {
-        if (!currentOrganization || !db) return;
+        if (!app || !entitlement) return;
         setInstalling(true);
         try {
-            await updateDoc(doc(db, 'organizations', currentOrganization.id), {
-                installedApps: arrayUnion(app.id)
-            });
-            // Show success ?
+            if (!entitlement.entitled) {
+                await requestAddOn(app.id);
+                showAlert('Request sent', `${app.name} was sent to your Atlas account manager for approval.`, 'success');
+                return;
+            }
+
+            const activated = await activateItem(app.id);
+            if (!activated) throw new Error('Activation is not available for this app.');
+            showAlert('App activated', `${app.name} is now available in this workspace.`, 'success');
         } catch (error) {
             console.error(error);
-            alert("Installation failed");
+            showAlert('Installation failed', `${app.name} could not be installed. Check your access and try again.`, 'danger');
         } finally {
             setInstalling(false);
         }
     };
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 flex flex-col h-full animate-in fade-in slide-in-from-right-4 relative">
+        <div className="relative flex h-full flex-col space-y-6 pb-24 md:pb-8">
 
             {/* Back Button */}
-            <button onClick={() => navigateTo('app-store')} className="absolute top-0 left-0 z-10 flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-full border border-slate-700">
-                <ChevronLeft size={16} /> <span className="text-xs font-bold">Back to Store</span>
-            </button>
+            <AtlasActionButton variant="quiet" icon={ChevronLeft} onClick={() => navigateTo('app-store')} className="w-fit">Back to marketplace</AtlasActionButton>
 
             {/* Hero Section */}
-            <div className="relative rounded-2xl overflow-hidden min-h-[400px] flex items-end">
+            <div className="relative flex items-end overflow-hidden rounded-xl border border-white/10 bg-slate-950/80">
                 {/* Background Image / Blur */}
-                <div className="absolute inset-0 bg-slate-900">
+                <div className="hidden">
                     {app.screenshots?.[0] && (
                         <img
                             src={app.screenshots[0]}
@@ -59,9 +63,9 @@ export const AppDetailsView = () => {
                 </div>
 
                 {/* Content */}
-                <div className="relative z-10 p-8 w-full max-w-4xl mx-auto flex flex-col md:flex-row gap-8 items-start md:items-end">
-                    <div className={`w-32 h-32 rounded-3xl flex items-center justify-center text-white shadow-2xl ${app.category === 'marketing' ? 'bg-gradient-to-br from-pink-500 to-rose-600' : 'bg-gradient-to-br from-blue-500 to-indigo-600'} border-4 border-slate-950`}>
-                        <app.icon size={64} />
+                <div className="relative z-10 mx-auto flex w-full flex-col items-start gap-5 p-5 md:flex-row md:items-center">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-teal-300/20 bg-teal-400/10 text-teal-200">
+                        <app.icon size={32} />
                     </div>
 
                     <div className="flex-1 space-y-2 mb-2">
@@ -69,15 +73,15 @@ export const AppDetailsView = () => {
                             <span className="bg-slate-800 text-slate-300 text-[10px] uppercase font-bold px-2 py-1 rounded border border-slate-700">{app.category}</span>
                             {app.isPremium && <span className="bg-amber-950/50 text-amber-400 text-[10px] uppercase font-bold px-2 py-1 rounded border border-amber-900/50 flex items-center gap-1"><Star size={10} fill="currentColor" /> Premium App</span>}
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-black text-white">{app.name}</h1>
-                        <p className="text-lg text-slate-300 max-w-xl">{app.description}</p>
+                        <h1 className="text-2xl font-black text-white md:text-3xl">{app.name}</h1>
+                        <p className="max-w-xl text-sm leading-6 text-slate-400">{app.description}</p>
                     </div>
 
                     <div className="w-full md:w-auto flex flex-col gap-3 min-w-[200px]">
                         {isInstalled ? (
                             <button
                                 onClick={() => navigateTo('saas-app', { appId: app.id })}
-                                className="w-full py-4 bg-white text-slate-900 font-bold rounded-xl shadow-lg hover:bg-slate-200 transition-all flex items-center justify-center gap-2 text-lg"
+                                className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400"
                             >
                                 <ExternalLink size={20} /> Open App
                             </button>
@@ -85,14 +89,14 @@ export const AppDetailsView = () => {
                             <button
                                 onClick={handleInstall}
                                 disabled={installing}
-                                className="w-full py-4 bg-violet-600 text-white font-bold rounded-xl shadow-lg shadow-violet-900/50 hover:bg-violet-500 transition-all flex items-center justify-center gap-2 text-lg active:scale-95"
+                                className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
                             >
-                                {installing ? 'Installing...' : `Install for ${app.pricing?.isFree ? 'Free' : formatCurrency(app.pricing?.price || 0)}`}
+                                {installing ? 'Working...' : entitlement?.entitled ? 'Add to workspace' : 'Request add-on'}
                             </button>
                         )}
-                        {!isInstalled && app.pricing && (
+                        {!isInstalled && entitlement?.locked && app.pricing && (
                             <div className="text-center text-xs text-slate-500 font-medium">
-                                {app.pricing.interval === 'one-time' ? 'One-time purchase' : `Billed ${app.pricing.interval}`} · Cancel anytime
+                                {app.pricing.interval === 'one-time' ? 'One-time purchase' : `Billed ${app.pricing.interval}`} / Cancel anytime
                             </div>
                         )}
                     </div>
@@ -108,8 +112,8 @@ export const AppDetailsView = () => {
                     {/* Screenshots */}
                     {app.screenshots && app.screenshots.length > 0 && (
                         <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Preview</h3>
-                            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden aspect-video relative group">
+                            <AtlasSectionHeader title="Preview" description="See how this app fits into the Atlas workspace." icon={MonitorPlay} />
+                            <div className="group relative aspect-video overflow-hidden rounded-lg border border-slate-800 bg-slate-900">
                                 <img src={app.screenshots[activeScreenshot]} className="w-full h-full object-cover" alt="App Preview" />
 
                                 {/* Navigation (Mock) */}
@@ -130,7 +134,7 @@ export const AppDetailsView = () => {
 
                     {/* About */}
                     <div className="space-y-4">
-                        <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">About this App</h3>
+                        <AtlasSectionHeader title="About this app" icon={MessageSquare} />
                         <div className="prose prose-invert max-w-none text-slate-300 leading-relaxed">
                             <p>{app.fullDescription || app.description}</p>
                         </div>
@@ -140,8 +144,8 @@ export const AppDetailsView = () => {
                     {app.features && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {app.features.map((feature, i) => (
-                                <div key={i} className="bg-slate-900/50 border border-slate-800/50 p-4 rounded-lg flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-violet-500/10 flex items-center justify-center text-violet-500">
+                                <div key={i} className="flex items-center gap-3 rounded-lg border border-slate-800/50 bg-slate-900/50 p-4">
+                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500/10 text-teal-300">
                                         <CheckCircle2 size={16} />
                                     </div>
                                     <span className="text-sm font-medium text-slate-200">{feature}</span>
@@ -184,13 +188,10 @@ export const AppDetailsView = () => {
                         </div>
                     </div>
 
-                    <div className="bg-gradient-to-br from-violet-900 to-indigo-900 rounded-xl p-6 text-white relative overflow-hidden">
-                        <div className="relative z-10">
-                            <h3 className="font-bold text-lg mb-2">Need help?</h3>
-                            <p className="text-sm text-violet-200 mb-4">Contact our support team for setup assistance.</p>
-                            <button className="text-xs font-bold bg-white text-violet-900 px-4 py-2 rounded-lg hover:bg-violet-50 transition-colors">Contact Support</button>
-                        </div>
-                        <MessageSquare className="absolute -bottom-4 -right-4 w-32 h-32 text-indigo-500/30 rotate-12" />
+                    <div className="rounded-lg border border-teal-300/20 bg-teal-400/[0.06] p-5 text-white">
+                        <h3 className="mb-2 font-bold">Need setup help?</h3>
+                        <p className="mb-4 text-sm text-slate-400">Contact the Edufy team for installation and workspace guidance.</p>
+                        <AtlasActionButton icon={MessageSquare}>Contact support</AtlasActionButton>
                     </div>
                 </div>
             </div>

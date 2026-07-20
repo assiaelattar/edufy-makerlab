@@ -5,6 +5,8 @@ import { STATION_THEMES } from '../../utils/theme';
 import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
 import { Database, Play, ExternalLink, List, Trash2, Lock, Star, Rocket, Plus, X, Check, Upload, FileJson } from 'lucide-react';
 import { Timestamp } from 'firebase/firestore';
+import { useConfirm } from '../../context/ConfirmContext';
+import { AtlasActionButton } from '../../components/atlas/AtlasSurface';
 
 interface ProjectFactoryModalProps {
     isOpen: boolean;
@@ -27,8 +29,8 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     isOpen, onClose, editingTemplateId, templateForm, setTemplateForm, handleSaveTemplate,
     activeModalTab, setActiveModalTab, availableGrades, availableGroups, processTemplates, wizardStep, WIZARD_STEPS, onArchive
 }) => {
-
-    const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
+    const { alert: showAlert } = useConfirm();
+    const INPUT_CLASS = "min-h-10 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm font-bold text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20";
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
 
     // Debug logging
@@ -77,17 +79,17 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "✏️ Edit Project" : "✨ Create New Project"} size="xl">
+        <Modal isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "Edit project" : "Create project"} size="xl">
             <form onSubmit={handleSaveTemplate} className="flex flex-col h-[80vh] md:h-auto">
                 {/* Header with Import */}
-                <div className="flex items-center justify-between border-b border-slate-200 shrink-0 px-6 pt-2">
+                <div className="flex shrink-0 flex-col gap-2 border-b border-white/10 bg-slate-950/80 px-4 pt-2 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                     <div className="flex overflow-x-auto no-scrollbar">
                         {tabs.map(tab => (
                             <button
                                 key={tab}
                                 type="button"
                                 onClick={() => setActiveModalTab(tab as any)}
-                                className={`px-6 py-4 text-sm font-bold capitalize transition-all border-b-2 whitespace-nowrap ${activeModalTab === tab ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
+                                className={`min-h-10 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2 text-sm font-bold capitalize transition-colors ${activeModalTab === tab ? 'border-teal-400 bg-teal-400/10 text-teal-200' : 'border-transparent text-slate-500 hover:bg-white/[0.05] hover:text-white'}`}
                             >
                                 {tab}
                             </button>
@@ -103,42 +105,35 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                 const file = e.target.files?.[0];
                                 if (file) {
                                     const reader = new FileReader();
-                                    reader.onload = (event) => {
+                                    reader.onload = async (event) => {
                                         try {
                                             const json = JSON.parse(event.target?.result as string);
                                             if (json.title && json.description) {
                                                 setTemplateForm({ ...templateForm, ...json });
-                                                alert("Mission imported successfully!");
+                                                await showAlert('Mission imported', 'The project details are ready to review before saving.', 'success');
                                             } else {
-                                                alert("Invalid mission JSON format.");
+                                                await showAlert('Mission file not recognized', 'Choose a mission JSON file containing a title and description.', 'warning');
                                             }
                                         } catch (err) {
                                             console.error(err);
-                                            alert("Failed to parse JSON.");
+                                            await showAlert('Mission import failed', 'The selected file is not valid JSON.', 'danger');
                                         }
                                     };
                                     reader.readAsText(file);
                                 }
                             }}
                         />
-                        <button
-                            type="button"
-                            onClick={() => document.getElementById('import-json')?.click()}
-                            className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2 border border-indigo-200"
-                            title="Import Mission from JSON"
-                        >
-                            <Upload size={16} /> <span className="hidden sm:inline">Import</span>
-                        </button>
+                        <AtlasActionButton type="button" icon={Upload} onClick={() => document.getElementById('import-json')?.click()} title="Import mission from JSON"><span className="hidden sm:inline">Import</span></AtlasActionButton>
                         <button
                             type="submit"
                             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
                         >
-                            💾 Save Draft
+                            Save draft
                         </button>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto bg-slate-900 p-4 custom-scrollbar sm:p-6">
                     {/* DETAILS TAB */}
                     {activeModalTab === 'details' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
@@ -538,7 +533,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                     )}
                 </div>
 
-                <div className="p-6 border-t border-slate-200 flex justify-between gap-4 shrink-0 bg-white/80 backdrop-blur-sm rounded-b-2xl">
+                <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 bg-slate-950/90 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
                     <div className="flex gap-2">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold transition-colors">Cancel</button>
                         {editingTemplateId && onArchive && (
@@ -551,8 +546,8 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                             </button>
                         )}
                     </div>
-                    <button type="submit" className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 hover:shadow-emerald-900/40 transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2">
-                        {templateForm.status === 'assigned' ? '🚀 Assign Project' : templateForm.status === 'featured' ? '🌟 Publish as Featured' : '✅ Finish & Save'}
+                    <button type="submit" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400">
+                        {templateForm.status === 'assigned' ? 'Assign project' : templateForm.status === 'featured' ? 'Publish as featured' : 'Finish and save'}
                     </button>
                 </div>
             </form>

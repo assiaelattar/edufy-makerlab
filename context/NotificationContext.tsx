@@ -26,17 +26,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [projectNotifications, setProjectNotifications] = useState<AppNotification[]>([]);
   const isInitialLoad = useRef(true);
   const isProjectNotifInitialLoad = useRef(true);
-  const { userProfile } = useAuth();
+  const { user, userProfile, currentOrganization } = useAuth();
 
   // Audio for notification sound
   const notificationSound = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     notificationSound.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-    // Request permission silently on mount if not already denied
-    if ('Notification' in window && Notification.permission !== 'denied') {
-      Notification.requestPermission();
-    }
   }, []);
 
 
@@ -112,10 +108,13 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Real-time Listener for New Bookings
   useEffect(() => {
-    if (!db) return;
+    if (!db || !user?.uid || !userProfile?.uid || !currentOrganization?.id) return;
+
+    isInitialLoad.current = true;
 
     const q = query(
       collection(db, 'bookings'),
+      where('organizationId', '==', currentOrganization.id),
       orderBy('bookedAt', 'desc'),
       limit(10)
     );
@@ -142,11 +141,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [currentOrganization?.id, user?.uid, userProfile?.uid]);
 
   // Real-time Listener for Project Notifications
   useEffect(() => {
-    if (!db || !userProfile?.uid) return;
+    if (!db || !user?.uid || !userProfile?.uid) return;
 
     // Calculate 7 days ago
     const sevenDaysAgo = new Date();
@@ -193,7 +192,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
 
     return () => unsubscribe();
-  }, [userProfile?.uid]);
+  }, [user?.uid, userProfile?.uid]);
 
   const unreadCount = projectNotifications.filter(n => !n.read).length;
 

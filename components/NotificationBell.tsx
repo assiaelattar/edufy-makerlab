@@ -1,18 +1,36 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Bell, X, CheckCheck } from 'lucide-react';
-import { useNotifications } from '../context/NotificationContext';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, AlertTriangle, Bell, CheckCheck, CheckCircle2, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useNotifications } from '../context/NotificationContext';
 
 interface NotificationBellProps {
     onNotificationClick?: (projectId?: string) => void;
 }
+
+const notificationStyles: Record<string, { icon: React.ReactNode; surface: string }> = {
+    success: {
+        icon: <CheckCircle2 className="h-4 w-4 text-[#2DD4BF]" />,
+        surface: 'bg-[#14B8A6]/10',
+    },
+    warning: {
+        icon: <AlertTriangle className="h-4 w-4 text-[#F2C766]" />,
+        surface: 'bg-[#F2C766]/10',
+    },
+    error: {
+        icon: <AlertCircle className="h-4 w-4 text-[#FB7185]" />,
+        surface: 'bg-[#FB7185]/10',
+    },
+    info: {
+        icon: <Info className="h-4 w-4 text-[#2DD4BF]" />,
+        surface: 'bg-[#14B8A6]/10',
+    },
+};
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificationClick }) => {
     const { projectNotifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Close dropdown when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -33,7 +51,6 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
         await markAsRead(notificationId);
 
         if (link && onNotificationClick) {
-            // Extract project ID from link if present
             const projectId = link.split('/').pop();
             onNotificationClick(projectId);
         }
@@ -41,103 +58,107 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNotificati
         setIsOpen(false);
     };
 
-    const getNotificationIcon = (type: string) => {
-        switch (type) {
-            case 'success':
-                return '✅';
-            case 'warning':
-                return '⚠️';
-            case 'error':
-                return '❌';
-            default:
-                return '📢';
-        }
-    };
+    const getNotificationStyle = (type: string) => notificationStyles[type] ?? notificationStyles.info;
 
     return (
         <div className="relative" ref={dropdownRef}>
-            {/* Bell Button */}
             <button
+                type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 hover:bg-slate-800 rounded-full transition-colors"
+                className="relative flex h-10 w-10 items-center justify-center rounded-lg text-slate-300 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+                aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+                aria-expanded={isOpen}
+                aria-haspopup="dialog"
+                title="Notifications"
             >
-                <Bell size={22} className="text-slate-300" />
-
-                {/* Badge */}
+                <Bell className="h-5 w-5" />
                 {unreadCount > 0 && (
-                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-red-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg animate-pulse">
-                        <span className="text-[10px] font-black text-white">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
-                    </div>
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-[#08111F] bg-[#FB7185] px-1 text-[10px] font-black leading-none text-[#08111F]">
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
                 )}
             </button>
 
-            {/* Dropdown Panel */}
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-80 md:w-96 bg-slate-900 border-2 border-slate-800 rounded-2xl shadow-2xl z-50 max-h-[500px] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                    {/* Header */}
-                    <div className="p-4 border-b-2 border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-800">
-                        <div>
-                            <h3 className="font-black text-white flex items-center gap-2">
-                                <Bell size={18} className="text-cyan-400" />
+                <div
+                    className="absolute right-0 z-50 mt-2 flex max-h-[min(32rem,calc(100vh-5rem))] w-[calc(100vw-1.5rem)] max-w-96 flex-col overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D] shadow-2xl animate-in fade-in slide-in-from-top-1 duration-200"
+                    role="dialog"
+                    aria-label="Notifications"
+                >
+                    <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+                        <div className="min-w-0">
+                            <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+                                <Bell className="h-4 w-4 shrink-0 text-[#2DD4BF]" />
                                 Notifications
                             </h3>
-                            <p className="text-xs text-slate-400 mt-0.5">
-                                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
+                            <p className="mt-0.5 text-xs text-slate-400">
+                                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
                             </p>
                         </div>
                         {unreadCount > 0 && (
                             <button
+                                type="button"
                                 onClick={() => markAllAsRead()}
-                                className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 px-3 py-1.5 bg-cyan-900/20 rounded-lg border border-cyan-500/30 hover:bg-cyan-900/30 transition-colors"
+                                className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-[#14B8A6]/30 bg-[#14B8A6]/10 px-3 text-xs font-bold text-[#2DD4BF] transition-colors hover:bg-[#14B8A6]/20 focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
                             >
-                                <CheckCheck size={14} />
-                                Mark all read
+                                <CheckCheck className="h-4 w-4" />
+                                <span className="hidden sm:inline">Mark all read</span>
+                                <span className="sm:hidden">Read all</span>
                             </button>
                         )}
                     </div>
 
-                    {/* Notifications List */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <div className="custom-scrollbar flex-1 overflow-y-auto overscroll-contain">
                         {projectNotifications.length === 0 ? (
-                            <div className="p-8 text-center">
-                                <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <Bell size={28} className="text-slate-600" />
+                            <div className="px-5 py-10 text-center">
+                                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-white/5">
+                                    <Bell className="h-5 w-5 text-slate-500" />
                                 </div>
-                                <p className="text-slate-400 text-sm font-medium">No notifications yet</p>
-                                <p className="text-slate-500 text-xs mt-1">We'll notify you when something happens</p>
+                                <p className="mt-3 text-sm font-semibold text-slate-300">No notifications yet</p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">Updates about your work will appear here.</p>
                             </div>
                         ) : (
-                            <div className="divide-y divide-slate-800">
-                                {projectNotifications.map((notification) => (
-                                    <button
-                                        key={notification.id}
-                                        onClick={() => handleNotificationClick(notification.id, notification.link)}
-                                        className={`w-full p-4 text-left hover:bg-slate-800/50 transition-colors ${!notification.read ? 'bg-slate-800/30' : ''
+                            <div className="divide-y divide-white/10">
+                                {projectNotifications.map((notification) => {
+                                    const styles = getNotificationStyle(notification.type);
+
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={notification.id}
+                                            onClick={() => handleNotificationClick(notification.id, notification.link)}
+                                            className={`w-full px-4 py-3 text-left transition-colors hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#14B8A6] ${
+                                                !notification.read ? 'bg-[#14B8A6]/5' : ''
                                             }`}
-                                    >
-                                        <div className="flex gap-3">
-                                            <div className="text-2xl shrink-0">{getNotificationIcon(notification.type)}</div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2 mb-1">
-                                                    <h4 className={`text-sm font-bold ${!notification.read ? 'text-white' : 'text-slate-300'}`}>
-                                                        {notification.title}
-                                                    </h4>
-                                                    {!notification.read && (
-                                                        <div className="w-2 h-2 bg-cyan-400 rounded-full shrink-0 mt-1"></div>
+                                        >
+                                            <div className="flex gap-3">
+                                                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${styles.surface}`}>
+                                                    {styles.icon}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start gap-2">
+                                                        <h4 className={`min-w-0 flex-1 break-words text-sm font-bold leading-5 ${
+                                                            !notification.read ? 'text-white' : 'text-slate-300'
+                                                        }`}>
+                                                            {notification.title}
+                                                        </h4>
+                                                        {!notification.read && (
+                                                            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#14B8A6]" aria-label="Unread" />
+                                                        )}
+                                                    </div>
+                                                    <p className="mt-1 break-words text-xs leading-5 text-slate-400">
+                                                        {notification.message}
+                                                    </p>
+                                                    {notification.createdAt && (
+                                                        <p className="mt-1.5 font-mono text-[10px] leading-4 text-slate-500">
+                                                            {formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}
+                                                        </p>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-slate-400 leading-relaxed mb-2">
-                                                    {notification.message}
-                                                </p>
-                                                <p className="text-[10px] text-slate-500 font-medium">
-                                                    {notification.createdAt && formatDistanceToNow(notification.createdAt.toDate(), { addSuffix: true })}
-                                                </p>
                                             </div>
-                                        </div>
-                                    </button>
-                                ))}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

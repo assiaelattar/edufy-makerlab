@@ -1,134 +1,177 @@
-
 import React, { useState } from 'react';
-import { Menu, LogOut, X, Home, BookOpen, Box, Camera, Settings, Users, CalendarCheck, FileText, LayoutGrid, Gamepad2 } from 'lucide-react';
+import {
+    BookOpen,
+    Box,
+    CalendarCheck,
+    Camera,
+    Gamepad2,
+    Home,
+    LogOut,
+    Menu,
+    Users,
+    X
+} from 'lucide-react';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
-import { NotificationDropdown } from '../NotificationDropdown';
-import { Logo } from '../Logo';
-import { STUDIO_THEME, studioClass } from '../../utils/studioTheme';
 import { ViewState } from '../../types';
-import { config } from '../../utils/config';
+import { Logo } from '../Logo';
+import { NotificationDropdown } from '../NotificationDropdown';
 
 interface InstructorLayoutProps {
     children: React.ReactNode;
 }
+
+const menuItems = [
+    { id: 'dashboard', icon: Home, label: 'Dashboard' },
+    { id: 'learning', icon: BookOpen, label: 'Studio Manager' },
+    { id: 'students', icon: Users, label: 'Students' },
+    { id: 'attendance', icon: CalendarCheck, label: 'Attendance' },
+    { id: 'tools', icon: Box, label: 'Inventory' },
+    { id: 'media', icon: Camera, label: 'Gallery' },
+    { id: 'arcade-mgr', icon: Gamepad2, label: 'Arcade Manager' }
+] as const;
 
 export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) => {
     const { currentView, navigateTo, settings } = useAppContext();
     const { userProfile, signOut } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-    const menuItems = [
-        { id: 'dashboard', icon: Home, label: 'Dashboard' },
-        { id: 'learning', icon: BookOpen, label: 'Studio Manager' },
-        { id: 'students', icon: Users, label: 'Students' },
-        { id: 'attendance', icon: CalendarCheck, label: 'Attendance' },
-        { id: 'tools', icon: Box, label: 'Inventory' },
-        { id: 'media', icon: Camera, label: 'Gallery' },
-        { id: 'arcade-mgr', icon: Gamepad2, label: 'Arcade Manager' },
-
-    ];
-
-    // Import LayoutDashboard icon specifically as it was missing in lucide import above
-    const DashboardIcon = Home;
+    const academyName = settings.academyName || 'MakerLab Academy';
+    const instructorName = userProfile?.name || 'Instructor';
+    const instructorInitial = instructorName.charAt(0).toUpperCase() || 'I';
+    const activeItem = menuItems.find(item => item.id === currentView);
+    const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
     return (
-        <div className={`flex min-h-[100dvh] ${STUDIO_THEME.background.main} text-slate-800 font-sans`}>
-            {/* Mobile Overlay */}
+        <div className="flex min-h-[100dvh] bg-[#08111f] font-sans text-slate-200">
             {isMobileMenuOpen && (
-                <div
-                    className="fixed inset-0 bg-slate-900/50 z-40 md:hidden backdrop-blur-sm"
-                    onClick={() => setIsMobileMenuOpen(false)}
+                <button
+                    type="button"
+                    aria-label="Close navigation overlay"
+                    className="fixed inset-0 z-40 bg-[#08111f]/85 md:hidden"
+                    onClick={closeMobileMenu}
                 />
             )}
 
-            {/* Sidebar */}
-            <aside className={`
-                fixed inset-y-0 left-0 z-50 w-72 
-                bg-white/80 backdrop-blur-xl border-r border-indigo-50/50 shadow-2xl md:shadow-none
-                transform transition-transform duration-300 ease-out 
-                ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:relative md:translate-x-0'}
-            `}>
-                <div className="flex flex-col h-full">
-                    {/* Header */}
-                    <div className="p-6 border-b border-indigo-50 flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-200 overflow-hidden">
-                            {settings.logoUrl ? <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" /> : <Logo className="w-6 h-6 text-white" />}
+            <aside
+                id="instructor-navigation"
+                className={`fixed inset-y-0 left-0 z-50 w-[18rem] transform border-r border-white/10 bg-[#0f1b2d] text-slate-200 shadow-2xl transition-transform duration-200 ease-out md:sticky md:translate-x-0 md:shadow-none ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}
+            >
+                <div className="flex h-full flex-col">
+                    <div className="border-b border-white/10 px-4 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-white">
+                                {settings.logoUrl ? (
+                                    <img src={settings.logoUrl} alt={`${academyName} logo`} className="h-8 w-8 object-contain" />
+                                ) : (
+                                    <Logo className="h-7 w-7" />
+                                )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-black text-white">Atlas</span>
+                                    <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[9px] font-black uppercase text-amber-200">
+                                        Instructor
+                                    </span>
+                                </div>
+                                <p className="truncate text-xs font-medium text-slate-400">{academyName}</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeMobileMenu}
+                                aria-label="Close navigation"
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 md:hidden"
+                            >
+                                <X size={20} />
+                            </button>
                         </div>
-                        <div>
-                            <h1 className="font-bold text-slate-800 leading-tight truncate max-w-[160px]">{settings.academyName}</h1>
-                            <p className="text-[10px] text-indigo-500 uppercase tracking-wider font-bold">Instructor Studio</p>
-                        </div>
-                        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden ml-auto text-slate-400 hover:text-slate-600">
-                            <X size={24} />
-                        </button>
                     </div>
 
-                    {/* Navigation */}
-                    <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-                        {menuItems.map(item => {
+                    <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4 custom-scrollbar" aria-label="Instructor navigation">
+                        <p className="mb-2 px-3 text-[10px] font-black uppercase text-slate-500">Workspace</p>
+                        <div className="space-y-1">
+                            {menuItems.map(item => {
+                                const isActive = currentView === item.id;
+                                const Icon = item.icon;
 
-                            const isActive = currentView === item.id;
-                            const Icon = item.icon;
-                            return (
-                                <button
-                                    key={item.id}
-                                    onClick={() => { navigateTo(item.id as ViewState); setIsMobileMenuOpen(false); }}
-                                    className={`
-                                        w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group
-                                        ${isActive
-                                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 translate-x-1'
-                                            : 'text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 hover:pl-5'
-                                        }
-                                    `}
-                                >
-                                    <Icon size={20} className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-indigo-500'} strokeWidth={isActive ? 2.5 : 2} />
-                                    {item.label}
-                                </button>
-                            )
-                        })}
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() => {
+                                            navigateTo(item.id as ViewState);
+                                            closeMobileMenu();
+                                        }}
+                                        aria-current={isActive ? 'page' : undefined}
+                                        className={`group flex min-h-10 w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 ${isActive
+                                            ? 'bg-teal-300 text-[#08111f]'
+                                            : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'
+                                            }`}
+                                    >
+                                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${isActive ? 'bg-[#08111f]/10 text-[#08111f]' : 'bg-white/[0.04] text-slate-500 group-hover:text-teal-200'}`}>
+                                            <Icon size={16} strokeWidth={2.3} />
+                                        </span>
+                                        <span className="min-w-0 flex-1 truncate font-semibold">{item.label}</span>
+                                        {isActive && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#08111f]" />}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </nav>
 
-                    {/* User Profile & Footer */}
-                    <div className="p-4 border-t border-indigo-50 bg-white/50">
-                        <div className="flex justify-end mb-2 px-2"><NotificationDropdown /></div>
-
-                        <div className="bg-white rounded-xl p-3 shadow-sm border border-indigo-50 mb-3 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold border-2 border-white shadow-sm">
-                                {userProfile?.name?.charAt(0) || 'I'}
+                    <div className="border-t border-white/10 px-3 py-3">
+                        <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-sm font-black text-amber-200">
+                                    {instructorInitial}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold text-white">{instructorName}</p>
+                                    <p className="text-[10px] font-bold uppercase text-amber-200">Instructor service</p>
+                                </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="font-bold text-slate-800 text-sm truncate">{userProfile?.name}</div>
-                                <div className="text-xs text-indigo-500 font-medium">Instructor</div>
+                            <div className="shrink-0">
+                                <NotificationDropdown />
                             </div>
                         </div>
-
                         <button
+                            type="button"
                             onClick={signOut}
-                            className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-colors text-sm font-medium"
+                            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 text-xs font-bold text-slate-400 transition-colors hover:border-rose-300/30 hover:bg-rose-400/10 hover:text-rose-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
                         >
-                            <LogOut size={16} /> Sign Out
+                            <LogOut size={15} />
+                            Sign out
                         </button>
                     </div>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 min-w-0 flex flex-col h-[100dvh] overflow-hidden relative z-0">
-                {/* Mobile Header */}
-                <header className="md:hidden bg-white/80 backdrop-blur-md border-b border-indigo-50 p-4 flex items-center justify-between shrink-0 sticky top-0 z-30">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-600 p-1">
-                            <Menu size={24} />
-                        </button>
-                        <span className="font-bold text-slate-800 text-lg">My Studio</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <NotificationDropdown />
+            <main className="flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden bg-[#08111f]">
+                <header className="shrink-0 border-b border-white/10 bg-[#0f1b2d] px-3 py-2 md:hidden">
+                    <div className="flex min-h-12 items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setIsMobileMenuOpen(true)}
+                                aria-label="Open instructor navigation"
+                                aria-controls="instructor-navigation"
+                                aria-expanded={isMobileMenuOpen}
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 text-slate-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300"
+                            >
+                                <Menu size={20} />
+                            </button>
+                            <div className="min-w-0">
+                                <p className="truncate text-[10px] font-bold uppercase text-amber-200">Instructor workspace</p>
+                                <h1 className="truncate text-base font-black text-white">{activeItem?.label || 'My Studio'}</h1>
+                            </div>
+                        </div>
+                        <div className="shrink-0">
+                            <NotificationDropdown />
+                        </div>
                     </div>
                 </header>
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-0 md:p-8 relative scroll-smooth pb-24 md:pb-8">
+                <div className="min-h-0 flex-1 overflow-y-auto p-0 pb-24 scroll-smooth custom-scrollbar md:p-6 md:pb-6 lg:p-8">
                     {children}
                 </div>
             </main>

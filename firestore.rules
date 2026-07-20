@@ -2,273 +2,633 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- HELPER FUNCTIONS ---
-    // Check if user is authenticated
+    // --- Identity helpers ---
     function isSignedIn() {
       return request.auth != null;
     }
-    
-    // Check if user has an elevated role (Admin, Instructor, etc.)
-    function isAdmin() {
-      return isSignedIn() && 
-        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'instructor', 'admission_officer', 'accountant'];
-    }
 
-    // Check if the user is accessing their own document
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // --- 1. CORE IDENTITY & ACCESS (Unified) ---
-    
-    // STUDENTS: Unified Rule
-    // - READ: Allow public 'true' to support Kiosk Login (search by name/keycard without auth)
-    // - WRITE: Allow Admin (management) or Owner (self-update)
-    match /students/{studentId} {
-      allow read: if true; 
-      allow write: if isAdmin() || isOwner(studentId);
+    function hasUserProfile() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function currentUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function currentRole() {
+      return currentUser().data.role;
+    }
+
+    function currentOrgId() {
+      return currentUser().data.organizationId;
+    }
+
+    function platformBootstrapComplete() {
+      return exists(/databases/$(database)/documents/platformSettings/core) &&
+        get(/databases/$(database)/documents/platformSettings/core).data.bootstrapComplete == true;
+    }
+
+    function isLegacyPlatformBootstrapAdmin() {
+      return hasUserProfile() &&
+        currentRole() == 'admin' &&
+        currentOrgId() == 'makerlab-academy' &&
+        !platformBootstrapComplete();
+    }
+
+    function isPlatformAdmin() {
+      return (hasUserProfile() && currentRole() in ['super_admin']) || isLegacyPlatformBootstrapAdmin();
+    }
+
+    function isTenantAdmin() {
+      return hasUserProfile() && currentRole() in ['owner', 'admin'];
+    }
+
+    function isElevatedUser() {
+      return isPlatformAdmin() ||
+        (hasUserProfile() && currentRole() in [
+          'owner',
+          'admin',
+          'instructor',
+          'admission_officer',
+          'accountant',
+          'content_manager'
+        ]);
+    }
+
+    function isSameOrg(orgId) {
+      return isPlatformAdmin() || (hasUserProfile() && orgId == currentOrgId());
+    }
+
+    function resourceHasOrg() {
+      return resource.data.organizationId is string;
+    }
+
+    function requestHasOrg() {
+      return request.resource.data.organizationId is string;
+    }
+
+    function canReadTenantDoc() {
+      return resourceHasOrg() && isSameOrg(resource.data.organizationId);
+    }
+
+    function canCreateTenantDoc() {
+      return isElevatedUser() && requestHasOrg() && isSameOrg(request.resource.data.organizationId);
+    }
+
+    function canUpdateTenantDoc() {
+      return isElevatedUser() &&
+        resourceHasOrg() &&
+        requestHasOrg() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        isSameOrg(resource.data.organizationId);
+    }
+
+    function canDeleteTenantDoc() {
+      return isElevatedUser() && canReadTenantDoc();
+    }
+
+    function canManageTenantOrg(orgId) {
+      return isPlatformAdmin() || (isTenantAdmin() && orgId == currentOrgId());
+    }
+
+    function canCreateTenantUser() {
+      return isPlatformAdmin() || (
+        isTenantAdmin() &&
+        requestHasOrg() &&
+        isSameOrg(request.resource.data.organizationId) &&
+        (
+          (currentRole() == 'owner' && !(request.resource.data.role in ['super_admin', 'owner'])) ||
+          (currentRole() == 'admin' && !(request.resource.data.role in ['super_admin', 'owner', 'admin']))
+        )
+      );
+    }
+
+    function canUpdateTenantUser() {
+      return isPlatformAdmin() || (
+        isTenantAdmin() &&
+        resourceHasOrg() &&
+        requestHasOrg() &&
+        resource.data.organizationId == currentOrgId() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        (
+          (currentRole() == 'owner' && !(resource.data.role in ['super_admin', 'owner']) && !(request.resource.data.role in ['super_admin', 'owner'])) ||
+          (currentRole() == 'admin' && !(resource.data.role in ['super_admin', 'owner', 'admin']) && !(request.resource.data.role in ['super_admin', 'owner', 'admin']))
+        )
+      );
+    }
+
+    function canDeleteTenantUser(userId) {
+      return isPlatformAdmin() || (
+        isTenantAdmin() &&
+        resourceHasOrg() &&
+        resource.data.organizationId == currentOrgId() &&
+        request.auth.uid != userId &&
+        (
+          (currentRole() == 'owner' && !(resource.data.role in ['super_admin', 'owner'])) ||
+          (currentRole() == 'admin' && !(resource.data.role in ['super_admin', 'owner', 'admin']))
+        )
+      );
+    }
+
+    function programMatchesOrg(programId, orgId) {
+      return exists(/databases/$(database)/documents/programs/$(programId)) &&
+        get(/databases/$(database)/documents/programs/$(programId)).data.organizationId == orgId;
+    }
+
+    function workshopTemplateMatchesOrg(templateId, orgId) {
+      return exists(/databases/$(database)/documents/workshop_templates/$(templateId)) &&
+        get(/databases/$(database)/documents/workshop_templates/$(templateId)).data.organizationId == orgId;
+    }
+
+    function workshopSlotMatchesOrg(slotId, orgId, templateId) {
+      return exists(/databases/$(database)/documents/workshop_slots/$(slotId)) &&
+        get(/databases/$(database)/documents/workshop_slots/$(slotId)).data.organizationId == orgId &&
+        get(/databases/$(database)/documents/workshop_slots/$(slotId)).data.workshopTemplateId == templateId;
+    }
+
+    function organizationOwnedByRequester(orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/organizations/$(orgId)) &&
+        get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerUid == request.auth.uid;
+    }
+
+    function studentLinkedToRequester(studentId, orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/students/$(studentId)) &&
+        get(/databases/$(database)/documents/students/$(studentId)).data.organizationId == orgId &&
+        (
+          (
+            get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['loginInfo']) &&
+            get(/databases/$(database)/documents/students/$(studentId)).data.loginInfo.uid == request.auth.uid
+          ) ||
+          (
+            get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['parentLoginInfo']) &&
+            get(/databases/$(database)/documents/students/$(studentId)).data.parentLoginInfo.uid == request.auth.uid
+          )
+        );
+    }
+
+    function validOwnUserCreate(userId) {
+      return isOwner(userId) &&
+        requestHasOrg() &&
+        request.resource.data.role in ['guest', 'parent', 'student', 'owner', 'admin'] &&
+        (
+          request.resource.data.role in ['guest', 'parent', 'student'] ||
+          organizationOwnedByRequester(request.resource.data.organizationId)
+        );
+    }
+
+    function validOwnUserUpdate(userId) {
+      return isOwner(userId) &&
+        resourceHasOrg() &&
+        requestHasOrg() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        request.resource.data.role == resource.data.role;
+    }
+
+    // --- Narrow public entry points ---
+    function validPublicLeadCreate() {
+      return requestHasOrg() &&
+        request.resource.data.keys().hasOnly([
+          'organizationId',
+          'name',
+          'parentName',
+          'phone',
+          'email',
+          'source',
+          'status',
+          'interests',
+          'programId',
+          'selectedPack',
+          'selectedSlot',
+          'preferredPaymentTerm',
+          'paymentMethod',
+          'notes',
+          'tags',
+          'timeline',
+          'createdAt'
+        ]) &&
+        request.resource.data.programId is string &&
+        programMatchesOrg(request.resource.data.programId, request.resource.data.organizationId) &&
+        request.resource.data.status == 'new' &&
+        request.resource.data.createdAt == request.time;
+    }
+
+    function validPublicWorkshopSlotCreate() {
+      return requestHasOrg() &&
+        request.resource.data.keys().hasOnly([
+          'organizationId',
+          'workshopTemplateId',
+          'date',
+          'startTime',
+          'endTime',
+          'capacity',
+          'bookedCount',
+          'status'
+        ]) &&
+        request.resource.data.workshopTemplateId is string &&
+        workshopTemplateMatchesOrg(request.resource.data.workshopTemplateId, request.resource.data.organizationId) &&
+        request.resource.data.bookedCount == 0 &&
+        request.resource.data.capacity is int &&
+        request.resource.data.capacity > 0 &&
+        request.resource.data.status == 'available';
+    }
+
+    function validPublicWorkshopSlotIncrement() {
+      return resourceHasOrg() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        request.resource.data.workshopTemplateId == resource.data.workshopTemplateId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookedCount']) &&
+        request.resource.data.bookedCount == resource.data.bookedCount + 1 &&
+        request.resource.data.bookedCount <= resource.data.capacity;
+    }
+
+    function validPublicBookingCreate() {
+      return requestHasOrg() &&
+        request.resource.data.keys().hasOnly([
+          'organizationId',
+          'workshopSlotId',
+          'workshopTemplateId',
+          'parentName',
+          'phoneNumber',
+          'kidName',
+          'kidAge',
+          'kidInterests',
+          'status',
+          'bookedAt',
+          'notes',
+          'feedbackNotes',
+          'programInterest'
+        ]) &&
+        request.resource.data.workshopTemplateId is string &&
+        request.resource.data.workshopSlotId is string &&
+        workshopTemplateMatchesOrg(request.resource.data.workshopTemplateId, request.resource.data.organizationId) &&
+        workshopSlotMatchesOrg(request.resource.data.workshopSlotId, request.resource.data.organizationId, request.resource.data.workshopTemplateId) &&
+        request.resource.data.status == 'confirmed' &&
+        request.resource.data.bookedAt == request.time;
+    }
+
+    function validLinkedPickupCreate() {
+      return hasUserProfile() &&
+        currentRole() in ['parent', 'student'] &&
+        requestHasOrg() &&
+        isSameOrg(request.resource.data.organizationId) &&
+        request.resource.data.status == 'on_the_way' &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.notifiedAt == request.time &&
+        request.resource.data.keys().hasOnly([
+          'organizationId',
+          'studentId',
+          'studentName',
+          'parentName',
+          'pickerName',
+          'pickerRelation',
+          'status',
+          'notifiedAt',
+          'createdAt'
+        ]) &&
+        studentLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId);
+    }
+
+    function validLinkedPickupUpdate() {
+      return hasUserProfile() &&
+        currentRole() in ['parent', 'student'] &&
+        resourceHasOrg() &&
+        requestHasOrg() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        isSameOrg(resource.data.organizationId) &&
+        request.resource.data.studentId == resource.data.studentId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'arrivedAt', 'confirmedAt']) &&
+        request.resource.data.status in ['arrived', 'confirmed'] &&
+        studentLinkedToRequester(resource.data.studentId, resource.data.organizationId);
+    }
+
+    // --- Identity and tenancy ---
     match /users/{userId} {
-      allow read: if true; // Profile lookups
-      allow write: if isAdmin() || isOwner(userId);
-    }
+      allow read: if isOwner(userId) ||
+        isPlatformAdmin() ||
+        (isSignedIn() && resource.data.email == request.auth.token.email) ||
+        (resourceHasOrg() && isSameOrg(resource.data.organizationId));
 
-    // --- 2. PUBLIC CONTENT & ASSETS (Kiosk/Store Friendly) ---
-    
-    match /project_templates/{templateId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /process_templates/{workflowId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    match /stations/{stationId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    match /badges/{badgeId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-    
-    match /contests/{contestId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /programs/{programId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // --- 3. STUDENT WORK & ENGAGEMENT ---
-
-    // Student Projects: Permissive for Kiosk
-    match /student_projects/{projectId} {
-      allow read: if true; // Gallery/Showcase access
-      allow write: if true; // Kiosk Mode: Students upload anonymously or via simple auth. 
-                            // kept as 'true' to prevent "Mission" or "Upload" blockers.
-    }
-
-    match /enrollments/{enrollmentId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    // --- 4. ERP & SAAS BUSINESS MODULES ---
-    // Critical Data Protection
-
-    // Payments: Users see their own history, Admins see all
-    match /payments/{paymentId} {
-      allow read: if isSignedIn(); 
-      allow write: if isAdmin();
+      allow create: if validOwnUserCreate(userId) || canCreateTenantUser();
+      allow update: if validOwnUserUpdate(userId) || canUpdateTenantUser();
+      allow delete: if canDeleteTenantUser(userId);
     }
 
     match /organizations/{orgId} {
-      allow read: if true; // Organization lookup for login
-      allow write: if isAdmin();
-      
-      // Explicitly allow settings as before
+      allow read: if isPlatformAdmin() || isSameOrg(orgId);
+      allow create: if isPlatformAdmin() || (isSignedIn() && request.resource.data.ownerUid == request.auth.uid);
+      allow update, delete: if canManageTenantOrg(orgId);
+
       match /settings/{settingId} {
-        allow read: if true;
-        allow write: if isAdmin();
+        allow read: if isPlatformAdmin() || isSameOrg(orgId);
+        allow write: if canManageTenantOrg(orgId);
       }
 
-      // Other subcollections
+      match /roles/{roleId} {
+        allow read: if isPlatformAdmin() || isSameOrg(orgId);
+        allow write: if canManageTenantOrg(orgId);
+      }
+
       match /{allSubcollections=**} {
-        allow read, write: if isAdmin();
+        allow read, write: if canManageTenantOrg(orgId);
       }
     }
 
     match /subscriptionPlans/{planId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isPlatformAdmin();
+    }
+
+    match /moduleCatalog/{itemId} {
+      allow read: if isSignedIn();
+      allow write: if isPlatformAdmin();
+    }
+
+    match /platformSettings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isPlatformAdmin();
     }
 
     match /roles/{roleId} {
       allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow write: if isPlatformAdmin();
     }
-    
-    match /courses/{courseId} {
+
+    // --- Core Edufy tenant data ---
+    match /students/{studentId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /programs/{programId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /registrations/{regId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isSignedIn();
+    match /enrollments/{enrollmentId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /attendance/{recordId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    match /staff_attendance/{recordId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+    match /payments/{paymentId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /expenses/{expenseId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
-    
+
     match /expense_templates/{templateId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
-    }
-    
-    match /purchase_requests/{reqId} {
-      allow read: if isAdmin();
-      allow write: if isSignedIn();
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /inventory/{itemId} {
-      allow read: if true; // View available stock
-      allow write: if isAdmin();
+    match /attendance/{recordId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /gadgets/{gadgetId} {
+    match /staff_attendance/{recordId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    // --- Learning and LMS shared collections ---
+    match /project_templates/{templateId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /assets/{assetId} {
+    match /student_projects/{projectId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /process_templates/{workflowId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
+    match /stations/{stationId} {
+      allow read: if true;
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /badges/{badgeId} {
+      allow read: if true;
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    // --- Workshops and public booking ---
     match /workshop_templates/{templateId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /workshop_slots/{slotId} {
       allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /class_sessions/{sessionId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateTenantDoc() || validPublicWorkshopSlotCreate();
+      allow update: if canUpdateTenantDoc() || validPublicWorkshopSlotIncrement();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /bookings/{bookingId} {
-      allow read: if isSignedIn();
-      allow write: if true; // Public/User bookings
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc() || validPublicBookingCreate();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /workshop_evaluations/{evalId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin() || (isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'instructor');
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /tasks/{taskId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
-    match /projects/{projectId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
-    match /messages/{messageId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
-    }
-
-    match /announcements/{announcementId} {
-      allow read: if true;
-      allow write: if isAdmin();
+    // --- CRM, communications, and operations ---
+    match /leads/{leadId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc() || validPublicLeadCreate();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /marketing_posts/{postId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /campaigns/{campaignId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
-    match /leads/{leadId} {
-      allow read: if isAdmin();
-      allow create: if true; // Public enrollment forms
-      allow update, delete: if isAdmin();
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /projects/{projectId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /messages/{messageId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /tool_links/{linkId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /archive_links/{linkId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /gallery_items/{itemId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /assets/{assetId} {
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /pickup_queue/{entryId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin() || isSignedIn();
+      allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc() || validLinkedPickupCreate();
+      allow update: if canUpdateTenantDoc() || validLinkedPickupUpdate();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /notifications/{notifId} {
-      allow read: if isSignedIn(); // Filtered by userId in app
-      allow write: if true; // System-wide notifications
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isElevatedUser());
+      allow delete: if isElevatedUser();
+    }
+
+    // --- Legacy and support collections ---
+    match /courses/{courseId} {
+      allow read: if true;
+      allow write: if isElevatedUser();
+    }
+
+    match /registrations/{regId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isElevatedUser();
+    }
+
+    match /purchase_requests/{reqId} {
+      allow read: if canReadTenantDoc();
+      allow create: if requestHasOrg() && isSameOrg(request.resource.data.organizationId);
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
+    }
+
+    match /inventory/{itemId} {
+      allow read: if true;
+      allow write: if isElevatedUser();
+    }
+
+    match /gadgets/{gadgetId} {
+      allow read: if true;
+      allow write: if isElevatedUser();
+    }
+
+    match /contests/{contestId} {
+      allow read: if true;
+      allow write: if isElevatedUser();
     }
 
     match /_connection_test/{testId} {
       allow write: if isSignedIn();
     }
 
-    match /gallery_items/{itemId} {
-      allow read: if true;
-      allow write: if true; // Public access for Emergency Migration
+    match /agent_audit_logs/{logId} {
+      allow read: if isPlatformAdmin();
+      allow create: if true;
+      allow update, delete: if false;
     }
 
-    // --- 5. SYSTEM & LOGGING ---
     match /system_logs/{logId} {
-      allow read: if isAdmin();
-      allow write: if true; // Client-side error logging
+      allow read: if isPlatformAdmin();
+      allow create: if true;
+      allow update, delete: if false;
     }
-
 
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isElevatedUser();
     }
 
-    // --- DEFAULT DENY ---
+    // --- Default deny ---
     match /{document=**} {
       allow read, write: if false;
     }

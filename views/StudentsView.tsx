@@ -1,13 +1,16 @@
 
 import React, { useState, useMemo } from 'react';
-import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, MoreHorizontal, FileDown, AlertTriangle, Users } from 'lucide-react';
+import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, FileDown, AlertTriangle, Users, ShieldCheck, Wallet, Link as LinkIcon } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { updateDoc, doc } from 'firebase/firestore';
+import { updateDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
-import { normalizePhone, generateParentStatementPrint } from '../utils/helpers';
+import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
+import StudentDirectoryHealth, { type StudentDirectoryFilter } from '../components/students/StudentDirectoryHealth';
+import { normalizePhone, generateParentStatementPrint, formatCurrency } from '../utils/helpers';
+import { buildStudentDirectoryHealth, STUDENT_DIRECTORY_ISSUE_LABELS } from '../utils/studentIdentity';
 
 export const StudentsView = ({
     onAddStudent,
@@ -21,14 +24,15 @@ export const StudentsView = ({
     onViewProfile: (id: string) => void
 }) => {
     const { students, enrollments, programs, navigateTo, settings } = useAppContext();
-    const { can } = useAuth();
-    const { confirm } = useConfirm();
+    const { can, currentOrganization } = useAuth();
+    const { confirm, alert: showAlert } = useConfirm();
     const [searchQuery, setSearchQuery] = useState('');
     const [filterProgramId, setFilterProgramId] = useState('');
     const [filterGradeName, setFilterGradeName] = useState('');
     const [filterDay, setFilterDay] = useState('');
     const [filterAudience, setFilterAudience] = useState<'all' | 'kids' | 'adults'>('all');
     const [showArchived, setShowArchived] = useState(false);
+    const [directoryFilter, setDirectoryFilter] = useState<StudentDirectoryFilter>('all');
 
     // Selection state
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -73,29 +77,72 @@ export const StudentsView = ({
 
     const handleBulkLinkParents = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || selectedIds.length === 0) return;
+        const firestore = db;
+        if (!firestore || selectedIds.length === 0) return;
+        const selectedStudents = students.filter(student => selectedIds.includes(student.id));
+        if (!currentOrganization) {
+            await showAlert('Organization required', 'Select an active organization before updating student records.', 'warning');
+            return;
+        }
+        if (selectedStudents.length === 0) {
+            await showAlert('No student records selected', 'The selected records are no longer available. Refresh the directory and try again.', 'warning');
+            return;
+        }
+        const hasTenantMismatch = selectedStudents.some(student => student.organizationId !== currentOrganization.id);
+        if (hasTenantMismatch) {
+            await showAlert('Selection could not be updated', 'One or more selected records belong to another organization. Refresh the directory and try again.', 'danger');
+            return;
+        }
+
+        const normalizedPhoneVal = normalizePhone(parentForm.phone);
+        if (!normalizedPhoneVal) {
+            await showAlert('Parent phone required', 'Enter a valid parent phone number before linking these records.', 'warning');
+            return;
+        }
+
+        const shouldContinue = await confirm({
+            title: 'Link parent information',
+            message: `Apply ${parentForm.name.trim()} and ${normalizedPhoneVal} to ${selectedStudents.length} student record${selectedStudents.length === 1 ? '' : 's'}? Existing parent information will be replaced.`,
+            variant: 'warning',
+            confirmText: 'Link records'
+        });
+        if (!shouldContinue) return;
+
         setIsLinking(true);
         try {
-            const normalizedPhoneVal = normalizePhone(parentForm.phone);
-            for (const id of selectedIds) {
-                await updateDoc(doc(db, 'students', id), {
-                    parentName: parentForm.name,
-                    parentPhone: normalizedPhoneVal
+            for (let index = 0; index < selectedStudents.length; index += 450) {
+                const batch = writeBatch(firestore);
+                selectedStudents.slice(index, index + 450).forEach(student => {
+                    batch.update(doc(firestore, 'students', student.id), {
+                        parentName: parentForm.name.trim(),
+                        parentPhone: normalizedPhoneVal
+                    });
                 });
+                await batch.commit();
             }
             setIsLinkModalOpen(false);
             setParentForm({ name: '', phone: '' });
             setSelectedIds([]);
+            await showAlert('Parent information linked', `${selectedStudents.length} student record${selectedStudents.length === 1 ? '' : 's'} updated.`, 'success');
         } catch (err) {
             console.error("Failed to link parents:", err);
-            alert("Error linking students: " + (err as Error).message);
+            await showAlert('Could not link parent info', (err as Error).message, 'danger');
         } finally {
             setIsLinking(false);
         }
     };
 
     const toggleStudentStatus = async (student: any) => {
-        if (!db) return;
+        const firestore = db;
+        if (!firestore) return;
+        if (!currentOrganization) {
+            await showAlert('Organization required', 'Select an active organization before updating student records.', 'warning');
+            return;
+        }
+        if (student.organizationId !== currentOrganization.id) {
+            await showAlert('Student status could not be updated', 'This record does not belong to the active organization. Refresh the directory and try again.', 'danger');
+            return;
+        }
         const newStatus = student.status === 'inactive' ? 'active' : 'inactive';
         const confirmMsg = newStatus === 'inactive'
             ? "Deactivate this student? They will be hidden from active lists but data is preserved."
@@ -107,9 +154,46 @@ export const StudentsView = ({
             variant: newStatus === 'inactive' ? 'danger' : 'success',
             confirmText: newStatus === 'inactive' ? 'Deactivate' : 'Reactivate'
         })) {
-            await updateDoc(doc(db, 'students', student.id), { status: newStatus });
+            try {
+                await updateDoc(doc(firestore, 'students', student.id), { status: newStatus });
+                setSelectedIds(previous => previous.filter(id => id !== student.id));
+                await showAlert(
+                    newStatus === 'inactive' ? 'Student deactivated' : 'Student reactivated',
+                    `${student.name} is now ${newStatus}.`,
+                    'success'
+                );
+            } catch (error) {
+                console.error('Could not update student status:', error);
+                await showAlert('Status was not updated', 'The student record could not be changed. Refresh and try again.', 'danger');
+            }
         }
     };
+
+    const directoryHealth = useMemo(
+        () => buildStudentDirectoryHealth(students, enrollments),
+        [students, enrollments]
+    );
+
+    const directorySummary = useMemo(() => {
+        const activeRecords = students.filter(student => student.status === 'active');
+        const countIssue = (issue: keyof typeof STUDENT_DIRECTORY_ISSUE_LABELS) => activeRecords.filter(student =>
+            directoryHealth.records.get(student.id)?.issues.includes(issue)
+        ).length;
+        const healthyRecords = activeRecords.filter(student => {
+            const issues = directoryHealth.records.get(student.id)?.issues || [];
+            return !issues.some(issue => issue !== 'missing_profile');
+        }).length;
+
+        return {
+            totalRecords: activeRecords.length,
+            healthyRecords,
+            missingContacts: countIssue('missing_contact'),
+            missingProfile: countIssue('missing_profile'),
+            noEnrollment: countIssue('no_enrollment'),
+            unassignedGroup: countIssue('unassigned_group'),
+            duplicateGroups: directoryHealth.duplicateGroups.length
+        };
+    }, [students, directoryHealth]);
 
     // Stats calculation
     const stats = useMemo(() => {
@@ -124,8 +208,10 @@ export const StudentsView = ({
             const now = new Date();
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         }).length;
-        return { total, active, inactive, newThisMonth };
-    }, [students]);
+        const enrolled = students.filter(s => s.status === 'active' && enrollments.some(e => e.studentId === s.id && e.status === 'active')).length;
+        const dataHealth = active === 0 ? 100 : Math.round((directorySummary.healthyRecords / active) * 100);
+        return { total, active, inactive, newThisMonth, enrolled, dataHealth };
+    }, [students, enrollments, directorySummary.healthyRecords]);
 
     // Parent Accounts calculation for "Parents" view
     const parentAccounts = useMemo(() => {
@@ -177,13 +263,33 @@ export const StudentsView = ({
         return result.sort((a, b) => b.totalBalance - a.totalBalance);
     }, [students, enrollments, searchQuery]);
 
+    const parentLedger = useMemo(() => {
+        const totalBalance = parentAccounts.reduce((sum, parent) => sum + parent.totalBalance, 0);
+        const familiesWithBalance = parentAccounts.filter(parent => parent.totalBalance > 0).length;
+        return { totalBalance, familiesWithBalance };
+    }, [parentAccounts]);
+
     const filteredStudents = useMemo(() => {
         let result = students.filter(student => {
             // Strict Visibility: Only show 'active' unless showArchived is true
             if (!showArchived && student.status === 'inactive') return false;
             if (showArchived && student.status !== 'inactive') return false; // When toggle ON, show ONLY archived
 
-            if (searchQuery && !(student.name || '').toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            if (searchQuery) {
+                const query = searchQuery.trim().toLowerCase();
+                const searchable = [student.name, student.email, student.parentName, student.parentPhone, student.school]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase();
+                if (!searchable.includes(query)) return false;
+            }
+
+            const directoryIssues = directoryHealth.records.get(student.id)?.issues || [];
+            if (directoryFilter === 'contact' && !directoryIssues.includes('missing_contact')) return false;
+            if (directoryFilter === 'profile' && !directoryIssues.includes('missing_profile')) return false;
+            if (directoryFilter === 'enrollment' && !directoryIssues.includes('no_enrollment')) return false;
+            if (directoryFilter === 'placement' && !directoryIssues.includes('unassigned_group')) return false;
+            if (directoryFilter === 'duplicates' && !directoryIssues.includes('possible_duplicate')) return false;
 
             const studentEnrollments = enrollments.filter(e => e.studentId === student.id && e.status === 'active');
 
@@ -219,7 +325,29 @@ export const StudentsView = ({
             };
             return getMillis(b.createdAt) - getMillis(a.createdAt);
         });
-    }, [students, enrollments, searchQuery, filterProgramId, filterGradeName, filterDay, showArchived]);
+    }, [students, enrollments, programs, searchQuery, filterProgramId, filterGradeName, filterDay, filterAudience, showArchived, directoryFilter, directoryHealth]);
+
+    const selectedProgram = useMemo(
+        () => programs.find(program => program.id === filterProgramId),
+        [programs, filterProgramId]
+    );
+
+    const availableDays = useMemo(() => {
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const configuredDays = selectedProgram?.grades.flatMap(grade => grade.groups.map(group => group.day).filter(Boolean)) || [];
+        return dayNames.filter(day => configuredDays.some(configuredDay => day.toLowerCase().includes(configuredDay.toLowerCase())));
+    }, [selectedProgram]);
+
+    const clearFilters = () => {
+        setSearchQuery('');
+        setFilterProgramId('');
+        setFilterGradeName('');
+        setFilterDay('');
+        setFilterAudience('all');
+        setDirectoryFilter('all');
+    };
+
+    const hasActiveFilters = Boolean(searchQuery || filterProgramId || filterGradeName || filterDay || filterAudience !== 'all' || directoryFilter !== 'all');
 
     const allFilteredSelected = filteredStudents.length > 0 && filteredStudents.every(s => selectedIds.includes(s.id));
     const toggleSelectAll = () => {
@@ -238,96 +366,151 @@ export const StudentsView = ({
     };
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 flex flex-col animate-in fade-in slide-in-from-right-4">
+        <div className="atlas-module atlas-students-module flex flex-col space-y-6 pb-24 md:pb-8">
             {/* Header with Actions */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-white">Directory</h2>
-                    <p className="text-slate-400 text-sm">Manage student profiles and parent accounts</p>
-                </div>
-                <div className="flex gap-3 w-full md:w-auto">
-                    <div className="bg-slate-900 border border-slate-800 rounded-lg p-1 flex mr-2">
-                        <button 
-                            onClick={() => setViewMode('students')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'students' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                        >
-                            Students
-                        </button>
-                        <button 
-                            onClick={() => setViewMode('parents')}
-                            className={`px-4 py-1.5 text-xs font-bold rounded-md transition-colors ${viewMode === 'parents' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
-                        >
-                            Parents (Solde)
-                        </button>
+            <AtlasCommandHeader
+                eyebrow="Core directory"
+                title="Students and parent accounts"
+                description="Manage learner profiles, household balances, enrollment readiness, and contact quality from one tenant-scoped command surface."
+                icon={Users}
+                badges={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">{stats.total} total records</span>}
+                actions={
+                    <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+                        <div className="grid h-11 grid-cols-2 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('students')}
+                                className={`rounded-lg px-4 text-xs font-black transition ${viewMode === 'students' ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Students
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setViewMode('parents')}
+                                className={`rounded-lg px-4 text-xs font-black transition ${viewMode === 'parents' ? 'bg-white text-slate-950 shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Parents
+                            </button>
+                        </div>
+                        {can('students.enroll') && (
+                            <button onClick={() => onQuickEnroll()} className="flex h-11 items-center justify-center gap-2 rounded-xl border border-amber-300/20 bg-amber-300/10 px-4 text-sm font-black text-amber-200 transition hover:bg-amber-300/15 active:scale-[0.98]">
+                                <Zap size={16} /> Quick enroll
+                            </button>
+                        )}
+                        {can('students.edit') && (
+                            <button onClick={onAddStudent} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-teal-300 px-4 text-sm font-black text-slate-950 shadow-lg shadow-teal-950/20 transition hover:bg-teal-200 active:scale-[0.98]">
+                                <Plus size={18} /> Add student
+                            </button>
+                        )}
                     </div>
-                    {can('students.enroll') && (
-                        <button onClick={() => onQuickEnroll()} className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-700 transition-all active:scale-95">
-                            <Zap size={16} className="text-amber-400" /> <span>Quick Enroll</span>
-                        </button>
-                    )}
-                    {can('students.edit') && (
-                        <button onClick={onAddStudent} className="flex-1 md:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg shadow-blue-900/20 transition-all active:scale-95">
-                            <Plus size={18} /> <span>Add Student</span>
-                        </button>
-                    )}
-                </div>
-            </div>
+                }
+            />
 
             {/* Quick Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Total Active</div>
-                    <div className="text-2xl font-bold text-white">{stats.active}</div>
-                    <UserCheck className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
+            <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] font-black uppercase text-slate-500">Active students</div>
+                    <div className="mt-2 text-3xl font-black text-white">{stats.active}</div>
+                    <UserCheck className="absolute right-3 top-3 h-8 w-8 text-teal-300/18" />
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">New This Month</div>
-                    <div className="text-2xl font-bold text-emerald-400">+{stats.newThisMonth}</div>
-                    <TrendingUp className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] font-black uppercase text-slate-500">New this month</div>
+                    <div className="mt-2 text-3xl font-black text-emerald-300">+{stats.newThisMonth}</div>
+                    <TrendingUp className="absolute right-3 top-3 h-8 w-8 text-emerald-300/18" />
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Inactive</div>
-                    <div className="text-2xl font-bold text-slate-400">{stats.inactive}</div>
-                    <UserX className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] font-black uppercase text-slate-500">With enrollment</div>
+                    <div className="mt-2 text-3xl font-black text-sky-300">{stats.enrolled}</div>
+                    <ShieldCheck className="absolute right-3 top-3 h-8 w-8 text-sky-300/18" />
                 </div>
-                {can('settings.manage') && (
-                    <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden group cursor-pointer hover:border-blue-500/50 transition-colors" onClick={() => navigateTo('tools')}>
-                        <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Actions</div>
-                        <div className="text-sm font-medium text-blue-400 mt-1 flex items-center gap-1">Bulk Import <FileDown size={14} /></div>
+                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="text-[11px] font-black uppercase text-slate-500">Directory health</div>
+                    <div className={`mt-2 text-3xl font-black ${stats.dataHealth > 85 ? 'text-emerald-300' : stats.dataHealth > 65 ? 'text-amber-300' : 'text-red-300'}`}>{stats.dataHealth}%</div>
+                    <LinkIcon className="absolute right-3 top-3 h-8 w-8 text-amber-300/18" />
+                </div>
+                <button
+                    type="button"
+                    onClick={() => { setShowArchived(previous => !previous); setDirectoryFilter('all'); }}
+                    className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition hover:border-teal-300/30 hover:bg-white/[0.07]"
+                >
+                    <div className="text-[11px] font-black uppercase text-slate-500">Inactive records</div>
+                    <div className="mt-2 flex items-center gap-2 text-sm font-black text-teal-200">
+                        {stats.inactive} student{stats.inactive === 1 ? '' : 's'} <UserX size={14} />
                     </div>
-                )}
+                    <Archive className="absolute right-3 top-3 h-8 w-8 text-teal-300/18" />
+                </button>
             </div>
 
+            {viewMode === 'students' && (
+                <StudentDirectoryHealth
+                    {...directorySummary}
+                    activeFilter={directoryFilter}
+                    onFilter={(filter) => {
+                        setDirectoryFilter(filter);
+                        setShowArchived(false);
+                    }}
+                />
+            )}
+
             {/* Filters & Search - Only show filters in Students mode */}
-            <div className="flex flex-col md:flex-row gap-3 bg-slate-900/50 p-2 rounded-xl border border-slate-800/50">
+            <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/55 p-3 shadow-lg shadow-black/10 md:flex-row">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                    <input type="text" placeholder={viewMode === 'students' ? "Search by student name..." : "Search by parent name or phone..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-600 transition-all" />
+                    <input type="search" placeholder={viewMode === 'students' ? "Search students, parents, phone, email, or school..." : "Search by parent name or phone..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950/80 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/15" />
                 </div>
                 {viewMode === 'students' && (
-                    <div className="flex gap-2">
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
                     <div className="relative min-w-[140px]">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5" />
-                        <select value={filterProgramId} onChange={(e) => { setFilterProgramId(e.target.value); setFilterGradeName(''); setFilterDay(''); }} className="w-full pl-9 pr-8 py-2.5 bg-slate-900 border border-slate-800 text-slate-300 text-xs font-medium rounded-lg appearance-none focus:border-blue-500 outline-none cursor-pointer">
+                        <select value={filterProgramId} onChange={(e) => { setFilterProgramId(e.target.value); setFilterGradeName(''); setFilterDay(''); }} className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-slate-950/80 pl-9 pr-8 text-xs font-bold text-slate-300 outline-none transition focus:border-teal-400/60">
                             <option value="">All Programs</option>
                             {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>
                     </div>
                     <div className="relative min-w-[140px]">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5" />
-                        <select value={filterAudience} onChange={(e) => setFilterAudience(e.target.value as any)} className="w-full pl-9 pr-8 py-2.5 bg-slate-900 border border-slate-800 text-slate-300 text-xs font-medium rounded-lg appearance-none focus:border-blue-500 outline-none cursor-pointer">
+                        <select value={filterAudience} onChange={(e) => setFilterAudience(e.target.value as any)} className="h-11 w-full cursor-pointer appearance-none rounded-xl border border-white/10 bg-slate-950/80 pl-9 pr-8 text-xs font-bold text-slate-300 outline-none transition focus:border-teal-400/60">
                             <option value="all">All Ages</option>
                             <option value="kids">Kids & Teens</option>
-                            <option value="adults">Adults (MakerPro)</option>
+                            <option value="adults">Adult learners</option>
+                        </select>
+                    </div>
+                    <div className="relative min-w-[140px]">
+                        <select value={filterGradeName} disabled={!selectedProgram} onChange={(e) => setFilterGradeName(e.target.value)} className="h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-slate-950/80 px-3 text-xs font-bold text-slate-300 outline-none transition focus:border-teal-400/60 disabled:cursor-not-allowed disabled:opacity-45">
+                            <option value="">All levels</option>
+                            {selectedProgram?.grades.map(grade => <option key={grade.id} value={grade.name}>{grade.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="relative min-w-[140px]">
+                        <select value={filterDay} disabled={availableDays.length === 0} onChange={(e) => setFilterDay(e.target.value)} className="h-11 w-full cursor-pointer rounded-lg border border-white/10 bg-slate-950/80 px-3 text-xs font-bold text-slate-300 outline-none transition focus:border-teal-400/60 disabled:cursor-not-allowed disabled:opacity-45">
+                            <option value="">All days</option>
+                            {availableDays.map(day => <option key={day} value={day}>{day}</option>)}
                         </select>
                     </div>
                     <button
-                        onClick={() => setShowArchived(!showArchived)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-bold transition-all ${showArchived ? 'bg-red-950/30 text-red-400 border-red-900/50' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+                        onClick={() => { setShowArchived(previous => !previous); setDirectoryFilter('all'); }}
+                        className={`flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition-all ${showArchived ? 'bg-red-950/30 text-red-300 border-red-400/30' : 'bg-slate-950/80 text-slate-400 border-white/10 hover:border-white/20'}`}
                     >
                         <Archive size={14} /> {showArchived ? 'Hide Archived' : 'Archived'}
                     </button>
                 </div>
+                )}
+                {viewMode === 'students' && hasActiveFilters && (
+                    <button type="button" onClick={clearFilters} className="h-11 shrink-0 rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-400 transition-colors hover:bg-white/[0.05] hover:text-white">
+                        Clear filters
+                    </button>
+                )}
+                {viewMode === 'parents' && (
+                    <div className="grid grid-cols-2 gap-2 sm:min-w-[360px]">
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2">
+                            <div className="text-[10px] font-black uppercase text-slate-500">Family balance</div>
+                            <div className={`mt-0.5 text-sm font-black ${parentLedger.totalBalance > 0 ? 'text-red-300' : 'text-emerald-300'}`}>{formatCurrency(parentLedger.totalBalance)}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2">
+                            <div className="text-[10px] font-black uppercase text-slate-500">Families due</div>
+                            <div className="mt-0.5 text-sm font-black text-white">{parentLedger.familiesWithBalance}</div>
+                        </div>
+                    </div>
                 )}
             </div>
 
@@ -358,26 +541,17 @@ export const StudentsView = ({
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {filteredStudents.length === 0 ? (
-                                <tr><td colSpan={7} className="p-12 text-center text-slate-500">No students found matching your criteria.</td></tr>
+                                <tr><td colSpan={7} className="p-12 text-center text-slate-500">{hasActiveFilters ? 'No students match these filters.' : 'No student records yet.'}{hasActiveFilters && <button type="button" onClick={clearFilters} className="mx-auto mt-3 block text-xs font-bold text-teal-300 hover:text-teal-200">Clear filters</button>}</td></tr>
                             ) : filteredStudents.map((student, idx) => {
-                                const activeEnrollments = enrollments.filter(e => e.studentId === student.id);
+                                const activeEnrollments = enrollments.filter(e => e.studentId === student.id && e.status === 'active');
                                 const isInactive = student.status === 'inactive';
                                 const initials = (student.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
                                 const created = student.createdAt as any;
                                 const joinDate = created && created.toDate ? created.toDate() : new Date(created);
 
                                 return (() => {
-                                    // Compute quality issues for this student
-                                    const now = new Date();
-                                    const ageDays = Math.floor((now.getTime() - (joinDate?.getTime?.() || 0)) / 86400000);
-                                    const qIssues: string[] = [];
-                                    if (!student.parentPhone) qIssues.push('No phone');
-                                    if (ageDays >= 7 && activeEnrollments.length === 0) qIssues.push('No enrollment');
-                                    const anyNoPayment = activeEnrollments.some(e => {
-                                        const eAge = Math.floor((now.getTime() - (e.createdAt?.toDate?.()?.getTime?.() || new Date((e.createdAt as any) || 0).getTime())) / 86400000);
-                                        return eAge >= 7 && (e.paidAmount || 0) === 0 && (e.totalAmount || 0) > 0;
-                                    });
-                                    if (anyNoPayment) qIssues.push('No payment');
+                                    const qIssues = (directoryHealth.records.get(student.id)?.issues || [])
+                                        .map(issue => STUDENT_DIRECTORY_ISSUE_LABELS[issue]);
 
                                     return (
                                     <tr key={student.id} onClick={() => onViewProfile(student.id)} className={`group hover:bg-slate-800/40 transition-colors cursor-pointer ${isInactive ? 'opacity-60' : ''} ${qIssues.length > 0 && !isInactive ? 'border-l-2 border-amber-600/50' : ''}`}>
@@ -449,12 +623,20 @@ export const StudentsView = ({
 
                 {/* Mobile List View */}
                 <div className="md:hidden p-4 space-y-3 pb-4">
+                    {filteredStudents.length === 0 && (
+                        <div className="rounded-lg border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
+                            {hasActiveFilters ? 'No students match these filters.' : 'No student records yet.'}
+                            {hasActiveFilters && <button type="button" onClick={clearFilters} className="mx-auto mt-3 block text-xs font-bold text-teal-300">Clear filters</button>}
+                        </div>
+                    )}
                     {filteredStudents.map(student => {
-                        const activeEnrollments = enrollments.filter(e => e.studentId === student.id);
+                        const activeEnrollments = enrollments.filter(e => e.studentId === student.id && e.status === 'active');
                         const isInactive = student.status === 'inactive';
                         const initials = (student.name || '').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+                        const qIssues = (directoryHealth.records.get(student.id)?.issues || [])
+                            .map(issue => STUDENT_DIRECTORY_ISSUE_LABELS[issue]);
                         return (
-                            <div key={student.id} onClick={() => onViewProfile(student.id)} className={`bg-slate-950 border border-slate-800 rounded-xl p-4 active:scale-[0.98] transition-all relative overflow-hidden ${isInactive ? 'opacity-60' : ''}`}>
+                            <div key={student.id} onClick={() => onViewProfile(student.id)} className={`bg-slate-950 border border-slate-800 rounded-xl p-4 active:scale-[0.98] transition-all relative overflow-hidden ${isInactive ? 'opacity-60' : ''} ${qIssues.length > 0 && !isInactive ? 'border-l-2 border-l-amber-500/60' : ''}`}>
                                 <div className="flex items-start gap-3 mb-3">
                                     <div className="flex items-center mt-2.5" onClick={(e) => e.stopPropagation()}>
                                         <input 
@@ -473,10 +655,20 @@ export const StudentsView = ({
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-bold text-white text-base truncate">{student.name}</h3>
-                                        <p className="text-xs text-slate-500 truncate">{student.parentPhone || <span className="text-amber-500">No phone ⚠</span>} • {student.parentName}</p>
+                                        <p className="text-xs text-slate-500 truncate">{student.parentPhone || 'No phone'} / {student.parentName || 'No parent name'}</p>
                                     </div>
                                     {isInactive && <span className="text-[10px] uppercase bg-red-950 text-red-400 px-2 py-1 rounded border border-red-900">Inactive</span>}
                                 </div>
+
+                                {qIssues.length > 0 && !isInactive && (
+                                    <div className="mb-3 flex flex-wrap gap-1.5 pl-20">
+                                        {qIssues.map(issue => (
+                                            <span key={issue} className="flex items-center gap-1 rounded border border-amber-400/20 bg-amber-400/10 px-2 py-1 text-[10px] font-bold text-amber-300">
+                                                <AlertTriangle size={10} /> {issue}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
 
                                 <div className="flex flex-wrap gap-2 mb-4 pl-20">
                                     {activeEnrollments.map(e => (
@@ -488,11 +680,11 @@ export const StudentsView = ({
                                 </div>
 
                                 <div className="flex border-t border-slate-900 pt-3 gap-2">
-                                    {!isInactive && <button onClick={(e) => { e.stopPropagation(); onQuickEnroll(student.id); }} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-emerald-500 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"><Zap size={12} /> Enroll</button>}
-                                    <button onClick={(e) => { e.stopPropagation(); onEditStudent(student); }} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"><Pencil size={12} /> Edit</button>
-                                    <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className="w-10 flex items-center justify-center bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 border border-slate-800">
+                                    {!isInactive && can('students.enroll') && <button onClick={(e) => { e.stopPropagation(); onQuickEnroll(student.id); }} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-emerald-500 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"><Zap size={12} /> Enroll</button>}
+                                    {can('students.edit') && <button onClick={(e) => { e.stopPropagation(); onEditStudent(student); }} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"><Pencil size={12} /> Edit</button>}
+                                    {can('students.delete') && <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className="w-10 flex items-center justify-center bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 border border-slate-800" title={isInactive ? 'Reactivate student' : 'Deactivate student'} aria-label={isInactive ? 'Reactivate student' : 'Deactivate student'}>
                                         {isInactive ? <RefreshCw size={14} /> : <Archive size={14} />}
-                                    </button>
+                                    </button>}
                                 </div>
                             </div>
                         )
@@ -540,10 +732,10 @@ export const StudentsView = ({
                                                     ))}
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-right font-mono text-slate-300">{parent.totalExpected}</td>
-                                            <td className="p-4 text-right font-mono text-emerald-400">{parent.totalPaid}</td>
+                                            <td className="p-4 text-right font-mono text-slate-300">{formatCurrency(parent.totalExpected)}</td>
+                                            <td className="p-4 text-right font-mono text-emerald-400">{formatCurrency(parent.totalPaid)}</td>
                                             <td className="p-4 text-right font-mono font-bold text-lg">
-                                                <span className={parent.totalBalance > 0 ? 'text-red-400' : 'text-slate-300'}>{parent.totalBalance}</span>
+                                                <span className={parent.totalBalance > 0 ? 'text-red-400' : 'text-slate-300'}>{formatCurrency(parent.totalBalance)}</span>
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -556,11 +748,45 @@ export const StudentsView = ({
                             </tbody>
                         </table>
                     </div>
+                    <div className="space-y-3 p-4 md:hidden">
+                        {parentAccounts.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">No parents found matching your criteria.</div>
+                        ) : parentAccounts.map(parent => {
+                            const initials = (parent.parentName || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+                            return (
+                                <button
+                                    key={parent.phone}
+                                    type="button"
+                                    onClick={() => setSelectedParentStatement(parent)}
+                                    className="w-full rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left transition active:scale-[0.98]"
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-xs font-black text-slate-300">{initials}</div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate font-black text-white">{parent.parentName}</div>
+                                            <div className="mt-0.5 text-xs font-mono text-slate-500">{parent.phone}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-[10px] font-black uppercase text-slate-500">Balance</div>
+                                            <div className={`text-sm font-black ${parent.totalBalance > 0 ? 'text-red-300' : 'text-emerald-300'}`}>{formatCurrency(parent.totalBalance)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-3 flex flex-wrap gap-1.5">
+                                        {parent.children.map(c => (
+                                            <span key={c.student.id} className="rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] font-bold text-slate-300">
+                                                {c.student.name.split(' ')[0]}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
             {/* Bulk Actions Bar */}
             {selectedIds.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-slate-800 px-6 py-4 rounded-xl shadow-2xl shadow-black/80 flex items-center gap-6 z-40 animate-in fade-in slide-in-from-bottom-6 backdrop-blur">
+                <div className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 shadow-2xl shadow-black/80">
                     <div className="text-sm text-slate-300 font-medium animate-pulse">
                         <span className="font-bold text-white bg-blue-600/30 px-2.5 py-1 rounded-full border border-blue-500/20 text-xs mr-2">{selectedIds.length}</span> 
                         student{selectedIds.length > 1 ? 's' : ''} selected
@@ -689,7 +915,7 @@ export const StudentsView = ({
                             <div className="text-right">
                                 <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Balance Due</p>
                                 <p className={`text-3xl font-bold font-mono ${selectedParentStatement.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {selectedParentStatement.totalBalance} <span className="text-sm text-slate-500 font-normal">MAD</span>
+                                    {formatCurrency(selectedParentStatement.totalBalance)}
                                 </p>
                             </div>
                         </div>
@@ -720,9 +946,9 @@ export const StudentsView = ({
                                                     <div key={e.id} className="flex justify-between items-center text-sm">
                                                         <span className="text-slate-300">{e.programName}</span>
                                                         <div className="flex gap-4 font-mono text-xs">
-                                                            <span className="text-slate-500">Exp: {e.totalAmount || 0}</span>
-                                                            <span className="text-emerald-500">Paid: {e.paidAmount || 0}</span>
-                                                            <span className={`font-bold w-16 text-right ${bal > 0 ? 'text-red-400' : 'text-slate-300'}`}>Bal: {bal}</span>
+                                                            <span className="text-slate-500">Exp: {formatCurrency(e.totalAmount || 0)}</span>
+                                                            <span className="text-emerald-500">Paid: {formatCurrency(e.paidAmount || 0)}</span>
+                                                            <span className={`font-bold min-w-24 text-right ${bal > 0 ? 'text-red-400' : 'text-slate-300'}`}>Bal: {formatCurrency(bal)}</span>
                                                         </div>
                                                     </div>
                                                 );

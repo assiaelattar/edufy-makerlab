@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles, Rocket } from 'lucide-react';
+import { LayoutDashboard, Users, School, BookOpen, Wallet, CalendarCheck, Wrench, Settings, Search, X, LogOut, Menu, Bell, CheckCircle2, ChevronRight, ChevronDown, ArrowLeft, Upload, Image as ImageIcon, Trash2, Plus, TrendingDown, Home, Box, Hammer, Camera, Car, Trophy, Sparkles, Rocket, UserRound, Banknote, FileText, Landmark, CalendarDays } from 'lucide-react';
 import { AppProvider, useAppContext } from './context/AppContext';
 import { ThemeProvider } from './sparkquest/context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ConfirmProvider, useConfirm } from './context/ConfirmContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
-import { getEnabledModules } from './services/moduleRegistry';
+import { getModuleById } from './services/moduleRegistry';
+import { ModuleProvider, useModuleContext } from './context/ModuleContext';
 import { Lead } from './types'; // Import Lead type
 import { DashboardView } from './views/DashboardView';
 import { StudentsView } from './views/StudentsView';
@@ -50,18 +51,20 @@ import { getAppById } from './services/appRegistry';
 import { Modal } from './components/Modal';
 import { Logo } from './components/Logo';
 import { NotificationDropdown } from './components/NotificationDropdown';
+import { EnrollmentWizard, type EnrollmentLearnerMode } from './components/enrollment/EnrollmentWizard';
+import { AtlasBootScreen } from './components/AtlasBootScreen';
 
 import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'firebase/firestore';
 import { db } from './services/firebase';
-import { formatCurrency, compressImage, calculateAge, normalizePhone } from './utils/helpers';
-import { getStudentTheme } from './utils/theme';
+import { formatCurrency, compressImage, normalizePhone } from './utils/helpers';
+import { resolveEnrollmentServicePeriod } from './utils/programLifecycle';
 import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
 import { InstructorLayout } from './components/layouts/InstructorLayout';
 
 
 
-const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfile }: { currentView: string, navigateTo: any, theme: any, signOut: any, userProfile: any }) => {
+const StudentNavigation = ({ currentView, navigateTo }: { currentView: string, navigateTo: any }) => {
     const menuItems = [
         { id: 'dashboard', icon: Home, label: 'Lobby' },
         { id: 'learning', icon: BookOpen, label: 'Studio' },
@@ -71,32 +74,28 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfil
     ];
 
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-md">
-            <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-2 shadow-2xl flex justify-between items-center border border-white/20 ring-1 ring-black/5">
-                {menuItems.slice(0, 5).map(item => { // Show first 5 + Quest logic
+        <div className="fixed bottom-3 left-1/2 z-50 w-[calc(100%-1rem)] max-w-lg -translate-x-1/2">
+            <div className="grid h-16 grid-cols-6 items-stretch rounded-lg border border-white/10 bg-[#08111F] p-1.5 shadow-[0_18px_48px_rgba(8,17,31,0.24)]">
+                {menuItems.map(item => {
                     const isActive = currentView === item.id;
                     const Icon = item.icon;
                     return (
                         <button
                             key={item.id}
                             onClick={() => navigateTo(item.id)}
-                            className={`
-                                flex flex-col items-center justify-center py-2 rounded-2xl transition-all duration-300 w-full
-                                ${isActive
-                                    ? 'text-blue-600 bg-blue-50 scale-105 shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-                                }
-                            `}
+                            className={`flex min-w-0 flex-col items-center justify-center rounded-md px-1 transition-colors ${isActive ? 'bg-teal-400/15 text-teal-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                            aria-current={isActive ? 'page' : undefined}
                         >
-                            <Icon size={isActive ? 24 : 22} strokeWidth={isActive ? 2.5 : 2} className={isActive ? "animate-pulse" : ""} />
-                            {isActive && <span className="text-[9px] font-black mt-1 uppercase tracking-wider">{item.label}</span>}
+                            <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
+                            <span className="mt-1 w-full truncate text-center text-[9px] font-bold">{item.label}</span>
                         </button>
                     )
                 })}
 
                 {/* Settings */}
-                <button onClick={() => navigateTo('settings')} className="flex flex-col items-center justify-center py-2 rounded-2xl text-slate-400 hover:text-slate-600 w-full">
-                    <Settings size={22} />
+                <button onClick={() => navigateTo('settings')} className={`flex min-w-0 flex-col items-center justify-center rounded-md px-1 transition-colors ${currentView === 'settings' ? 'bg-teal-400/15 text-teal-200' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`} aria-label="Settings" aria-current={currentView === 'settings' ? 'page' : undefined}>
+                    <Settings size={20} />
+                    <span className="mt-1 text-[9px] font-bold">Settings</span>
                 </button>
             </div>
         </div>
@@ -106,8 +105,9 @@ const StudentNavigation = ({ currentView, navigateTo, theme, signOut, userProfil
 const AppContent = () => {
     const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, payments, t } = useAppContext();
     const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser, currentOrganization, isSuperAdmin } = useAuth();
+    const { isModuleEnabled, getEntitlement } = useModuleContext();
     const { requestPermission } = useNotifications();
-    const { alert: showAlert } = useConfirm();
+    const { alert: showAlert, confirm } = useConfirm();
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -129,22 +129,14 @@ const AppContent = () => {
     }, []);
 
 
-    // --- STUDENT THEME LOGIC ---
     const isStudent = userProfile?.role === 'student';
     const isParent = userProfile?.role === 'parent';
     const isInstructor = userProfile?.role === 'instructor';
 
-    const currentStudent = useMemo(() => {
-        if (!isStudent || !userProfile) return null;
-        return students.find(s => s.email === userProfile.email || s.loginInfo?.email === userProfile.email);
-    }, [students, userProfile, isStudent]);
-
-    const studentAge = useMemo(() => currentStudent ? calculateAge(currentStudent.birthDate) : 12, [currentStudent]);
-    const studentTheme = getStudentTheme(studentAge);
-
     // --- ENROLLMENT WIZARD STATE ---
     const [isEnrollmentModalOpen, setIsEnrollmentModalOpen] = useState(false);
     const [quickEnrollStudentId, setQuickEnrollStudentId] = useState<string | null>(null);
+    const [enrollmentLearnerMode, setEnrollmentLearnerMode] = useState<EnrollmentLearnerMode>('existing');
     const [enrollmentStep, setEnrollmentStep] = useState(1);
     const [isSubmittingEnrollment, setIsSubmittingEnrollment] = useState(false);
 
@@ -166,6 +158,7 @@ const AppContent = () => {
     const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
     const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [showPaymentDetails, setShowPaymentDetails] = useState(false);
 
     // Parent Bulk Payment States
     const [paymentMode, setPaymentMode] = useState<'individual' | 'parent'>('individual');
@@ -212,6 +205,13 @@ const AppContent = () => {
         return Array.from(map.values()).sort((a, b) => b.totalBalance - a.totalBalance);
     }, [enrollments, students]);
 
+    const selectedPaymentEnrollment = paymentForm.enrollmentId
+        ? enrollments.find(enrollment => enrollment.id === paymentForm.enrollmentId)
+        : undefined;
+    const hasSelectedPaymentTarget = paymentMode === 'parent'
+        ? Boolean(selectedParentAccount)
+        : Boolean(paymentForm.studentId && selectedPaymentEnrollment);
+
     // --- SAAS ROUTE GUARD ---
     // Fixes issue where logging out from Super Admin (on saas-admin view) 
     // and logging in as Org Admin keeps the restricted view active.
@@ -221,9 +221,11 @@ const AppContent = () => {
             if (currentView === 'saas-admin' && !isSuperAdmin) {
                 console.warn("Unauthorized access to SaaS Admin. Redirecting to Dashboard.");
                 navigateTo('dashboard');
+            } else if (currentView === 'dashboard' && isSuperAdmin && (userProfile.role !== 'super_admin' || currentOrganization?.id === 'atlas-platform')) {
+                navigateTo('saas-admin');
             }
         }
-    }, [currentView, isSuperAdmin, authLoading, appLoading, userProfile]);
+    }, [currentView, isSuperAdmin, authLoading, appLoading, userProfile, currentOrganization?.id]);
 
     // --- ONE-TIME AUTO-REPAIR FOR MISMATCHED PAYMENT DOCUMENTS ---
     useEffect(() => {
@@ -286,7 +288,12 @@ const AppContent = () => {
 
     const standardTuition = useMemo(() => {
         if (!selectedProgram || !selectedPack) return 0;
-        return selectedProgram.type === 'Regular Program' ? (selectedPack.priceAnnual || 0) : (selectedPack.price || 0);
+        return Math.max(
+            selectedPack.priceAnnual || 0,
+            selectedPack.priceTrimester || 0,
+            selectedPack.price || 0,
+            selectedPack.promoPrice || 0
+        );
     }, [selectedProgram, selectedPack]);
 
     // Sync negotiated price with standard price when pack changes
@@ -321,8 +328,13 @@ const AppContent = () => {
 
     // Calculate totals from added payments list
     const totalPayingNow = useMemo(() => enrollPayments.reduce((sum, p) => sum + Number(p.amount), 0), [enrollPayments]);
+    const clearedPayingNow = useMemo(() => enrollPayments
+        .filter(payment => payment.method === 'cash')
+        .reduce((sum, payment) => sum + Number(payment.amount), 0), [enrollPayments]);
+    const pendingPayingNow = totalPayingNow - clearedPayingNow;
 
-    const remainingBalance = negotiatedPrice - totalPayingNow;
+    const remainingBalance = negotiatedPrice - clearedPayingNow;
+    const remainingToSchedule = negotiatedPrice - totalPayingNow;
     const discountAmount = standardTuition - negotiatedPrice;
     const discountPercent = standardTuition > 0 ? Math.round((discountAmount / standardTuition) * 100) : 0;
 
@@ -356,6 +368,7 @@ const AppContent = () => {
             setPaymentSearchQuery('');
         }
 
+        setShowPaymentDetails(false);
         setIsPaymentModalOpen(true);
     };
 
@@ -712,27 +725,137 @@ const AppContent = () => {
         // Reset student form for fresh entry
         setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
         setQuickEnrollStudentId(null);
+        setEnrollmentLearnerMode('new');
         preserveEnrollmentFormRef.current = true; // Preserve the program form we just set
         setIsEnrollmentModalOpen(true);
     };
 
     const handleFinishEnrollment = async () => {
-        if (!db) return;
+        if (!db || !currentOrganization) {
+            await showAlert('Organization required', 'Select an organization before creating an enrollment.', 'warning');
+            return;
+        }
+
+        const enrollmentGroup = selectedGrade?.groups.find(group => group.id === enrollProgramForm.groupId);
+        if (!selectedProgram || !selectedPack || !selectedGrade || !enrollmentGroup) {
+            await showAlert('Enrollment details incomplete', 'Choose a program, pricing pack, grade, and group before finishing enrollment.', 'warning');
+            return;
+        }
+
+        if (selectedProgram.status !== 'active') {
+            await showAlert('Program unavailable', `This program is ${selectedProgram.status} and cannot accept a new enrollment.`, 'warning');
+            return;
+        }
+
+        if (!quickEnrollStudentId && (!enrollStudentForm.name.trim() || !enrollStudentForm.parentPhone.trim())) {
+            await showAlert('Student details incomplete', 'Add the student name and family phone number before finishing enrollment.', 'warning');
+            return;
+        }
+
+        if (!quickEnrollStudentId && settings.studentFormConfig.parentName.required && !enrollStudentForm.parentName.trim()) {
+            await showAlert('Parent details incomplete', 'Add the parent or guardian name before finishing enrollment.', 'warning');
+            return;
+        }
+
+        if (!quickEnrollStudentId && settings.studentFormConfig.birthDate.required && !enrollStudentForm.birthDate) {
+            await showAlert('Birth date required', 'Add the learner birth date before finishing enrollment.', 'warning');
+            return;
+        }
+
+        if (!Number.isFinite(negotiatedPrice) || negotiatedPrice <= 0) {
+            await showAlert('Fee agreement required', 'Enter a valid tuition fee before finishing enrollment.', 'warning');
+            return;
+        }
+
+        if (totalPayingNow > negotiatedPrice) {
+            await showAlert('Payment is too high', 'Payments received today cannot be higher than the agreed tuition fee.', 'warning');
+            return;
+        }
+
+        const scheduledPaymentTotal = enrollPaymentPromises.reduce((sum, promise) => sum + Number(promise.amount || 0), 0);
+        if (scheduledPaymentTotal > remainingToSchedule) {
+            await showAlert('Payment schedule is too high', 'Scheduled payments cannot be higher than the remaining balance.', 'warning');
+            return;
+        }
+
+        const selectedStudentRecord = quickEnrollStudentId
+            ? students.find(student => student.id === quickEnrollStudentId)
+            : undefined;
+        if (quickEnrollStudentId && (!selectedStudentRecord || selectedStudentRecord.organizationId !== currentOrganization.id)) {
+            await showAlert('Learner unavailable', 'The selected learner does not belong to the active organization. Choose the learner again.', 'danger');
+            return;
+        }
+
+        if (quickEnrollStudentId) {
+            const duplicateClassEnrollment = enrollments.find(enrollment =>
+                enrollment.status === 'active'
+                && enrollment.studentId === quickEnrollStudentId
+                && enrollment.programId === selectedProgram.id
+                && enrollment.groupId === enrollmentGroup.id
+            );
+            if (duplicateClassEnrollment) {
+                await showAlert('Already in this class', `${selectedStudentRecord?.name || 'This learner'} already has an active enrollment in ${enrollmentGroup.name}.`, 'warning');
+                return;
+            }
+
+            const existingProgramEnrollment = enrollments.find(enrollment =>
+                enrollment.status === 'active'
+                && enrollment.studentId === quickEnrollStudentId
+                && enrollment.programId === selectedProgram.id
+            );
+            if (existingProgramEnrollment) {
+                const continueWithSecondEnrollment = await confirm({
+                    title: 'Another enrollment in this program',
+                    message: `${selectedStudentRecord?.name || 'This learner'} is already enrolled in ${selectedProgram.name}. Add a separate enrollment for ${enrollmentGroup.name}?`,
+                    confirmText: 'Add enrollment',
+                    cancelText: 'Review learner',
+                    variant: 'warning'
+                });
+                if (!continueWithSecondEnrollment) return;
+            }
+        }
+
+        const groupRosterSize = enrollments.filter(enrollment =>
+            enrollment.status === 'active'
+            && enrollment.programId === selectedProgram.id
+            && enrollment.groupId === enrollmentGroup.id
+        ).length;
+        if (enrollmentGroup.capacity && groupRosterSize >= enrollmentGroup.capacity) {
+            await showAlert('Class is full', `${enrollmentGroup.name} has reached its ${enrollmentGroup.capacity}-learner capacity. Choose another class time.`, 'warning');
+            return;
+        }
+
         setIsSubmittingEnrollment(true);
         try {
             let finalStudentId = quickEnrollStudentId;
             let studentName = enrollStudentForm.name;
+            const existingStudentRecord = quickEnrollStudentId ? students.find(student => student.id === quickEnrollStudentId) : undefined;
+            let studentAccessCreated = Boolean(existingStudentRecord?.loginInfo?.uid);
+            let parentAccessCreated = Boolean(existingStudentRecord?.parentLoginInfo?.uid);
+            let parentAccessFailed = false;
 
             // 1. Create Student if New
             if (!finalStudentId) {
                 // DUPLICATE CHECK
-                const isDuplicate = students.some(s =>
-                    s.name.trim().toLowerCase() === studentName.trim().toLowerCase() ||
-                    (s.parentPhone && enrollStudentForm.parentPhone && s.parentPhone.replace(/\D/g, '') === enrollStudentForm.parentPhone.replace(/\D/g, ''))
-                );
+                const normalizedCandidateName = studentName.trim().toLowerCase().replace(/\s+/g, ' ');
+                const normalizedCandidatePhone = normalizePhone(enrollStudentForm.parentPhone);
+                const normalizedCandidateEmail = enrollStudentForm.email.trim().toLowerCase();
+                const duplicateStudent = students.find(student => {
+                    const sameName = student.name.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedCandidateName;
+                    const samePhone = Boolean(normalizedCandidatePhone && normalizePhone(student.parentPhone) === normalizedCandidatePhone);
+                    const sameBirthDate = Boolean(enrollStudentForm.birthDate && student.birthDate === enrollStudentForm.birthDate);
+                    const sameEmail = Boolean(normalizedCandidateEmail && student.email?.trim().toLowerCase() === normalizedCandidateEmail);
+                    return sameEmail || (sameName && (samePhone || sameBirthDate));
+                });
 
-                if (isDuplicate) {
-                    const confirmDuplicate = window.confirm("A student with this Name or Phone Number already exists. Are you sure you want to create a duplicate?");
+                if (duplicateStudent) {
+                    const confirmDuplicate = await confirm({
+                        title: 'Possible duplicate student',
+                        message: `${duplicateStudent.name} has matching identity details. Create another learner record anyway?`,
+                        confirmText: 'Create duplicate',
+                        cancelText: 'Review records',
+                        variant: 'warning'
+                    });
                     if (!confirmDuplicate) {
                         setIsSubmittingEnrollment(false);
                         return;
@@ -741,9 +864,8 @@ const AppContent = () => {
 
                 const sRef = await addDoc(collection(db, 'students'), {
                     ...enrollStudentForm,
-                    ...enrollStudentForm,
                     status: 'active',
-                    organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
+                    organizationId: currentOrganization.id,
                     createdAt: serverTimestamp()
                 });
                 finalStudentId = sRef.id;
@@ -754,83 +876,65 @@ const AppContent = () => {
             }
 
             // 1.5 Generate Student Account (Auto-Provisioning)
-            try {
-                // NAME PARSING LOGIC FOR CUSTOM EMAIL
-                const names = (studentName || '').trim().split(' ');
-                const firstNameChar = names[0].charAt(0).toLowerCase();
-                const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
+            if (!studentAccessCreated) {
+                try {
+                    const names = (studentName || '').trim().split(' ');
+                    const firstNameChar = names[0].charAt(0).toLowerCase();
+                    const lastName = names.length > 1 ? names[names.length - 1].toLowerCase() : names[0].toLowerCase();
+                    const domain = currentOrganization.slug ? `${currentOrganization.slug}.edu` : 'makerlab.academy';
+                    const username = `${firstNameChar}.${lastName}`;
+                    const email = `${username}@${domain}`;
+                    const password = Math.random().toString(36).slice(-6);
+                    const uid = await createSecondaryUser(email, password);
 
-                // Format: w.fakir@slug.edu
-                const domain = currentOrganization?.slug ? `${currentOrganization.slug}.edu` : 'makerlab.academy';
-                const username = `${firstNameChar}.${lastName}`;
-                const email = `${username}@${domain}`;
-                const password = Math.random().toString(36).slice(-6);
-
-                // Create Auth User
-                const uid = await createSecondaryUser(email, password);
-
-                // Create User Profile Doc
-                await setDoc(doc(db, 'users', uid), {
-                    uid,
-                    email,
-                    name: studentName,
-                    role: 'student',
-                    status: 'active',
-                    organizationId: currentOrganization?.id || null, // FIX: Ensure SaaS Access
-                    createdAt: serverTimestamp()
-                });
-
-                // Link credentials to Student Doc
-                await updateDoc(doc(db, 'students', finalStudentId), {
-                    loginInfo: {
-                        username,
+                    await setDoc(doc(db, 'users', uid), {
+                        uid,
                         email,
-                        initialPassword: password, // Store initially for printing cards
-                        uid
-                    }
-                });
+                        name: studentName,
+                        role: 'student',
+                        status: 'active',
+                        organizationId: currentOrganization.id,
+                        createdAt: serverTimestamp()
+                    });
 
-                // 1.6 Generate Parent Account
-                if (enrollStudentForm.email) {
-                    try {
-                        const parentEmail = enrollStudentForm.email;
-                        const parentPassword = Math.random().toString(36).slice(-8);
-
-                        // Create Auth User
-                        const parentUid = await createSecondaryUser(parentEmail, parentPassword);
-
-                        // Create User Profile
-                        await setDoc(doc(db, 'users', parentUid), {
-                            uid: parentUid,
-                            email: parentEmail,
-                            name: enrollStudentForm.parentName || 'Parent',
-                            role: 'parent',
-                            status: 'active',
-                            organizationId: currentOrganization?.id || null, // FIX: Ensure SaaS Access
-                            createdAt: serverTimestamp()
-                        });
-
-                        // Link to Student
-                        await updateDoc(doc(db, 'students', finalStudentId), {
-                            parentLoginInfo: {
-                                email: parentEmail,
-                                initialPassword: parentPassword,
-                                uid: parentUid
-                            }
-                        });
-                    } catch (parentErr) {
-                        console.error("Failed to generate parent account:", parentErr);
-                        // If email exists, we effectively skip auto-creation (manual linking required later)
-                    }
+                    await updateDoc(doc(db, 'students', finalStudentId), {
+                        loginInfo: { username, email, initialPassword: password, uid }
+                    });
+                    studentAccessCreated = true;
+                } catch (error) {
+                    console.error('Failed to auto-generate student account:', error);
                 }
+            }
 
-            } catch (e) {
-                console.error("Failed to auto-generate student account:", e);
-                // Proceed with enrollment even if account gen fails
+            // 1.6 Generate Parent Account independently so an existing student login cannot block it.
+            if (enrollStudentForm.email && !parentAccessCreated) {
+                try {
+                    const parentEmail = enrollStudentForm.email;
+                    const parentPassword = Math.random().toString(36).slice(-8);
+                    const parentUid = await createSecondaryUser(parentEmail, parentPassword);
+
+                    await setDoc(doc(db, 'users', parentUid), {
+                        uid: parentUid,
+                        email: parentEmail,
+                        name: enrollStudentForm.parentName || 'Parent',
+                        role: 'parent',
+                        status: 'active',
+                        organizationId: currentOrganization.id,
+                        createdAt: serverTimestamp()
+                    });
+
+                    await updateDoc(doc(db, 'students', finalStudentId), {
+                        parentLoginInfo: { email: parentEmail, initialPassword: parentPassword, uid: parentUid }
+                    });
+                    parentAccessCreated = true;
+                } catch (error) {
+                    console.error('Failed to generate parent account:', error);
+                    parentAccessFailed = true;
+                }
             }
 
             // 2. Create Enrollment
-            const selectedGroup = selectedGrade?.groups.find(g => g.id === enrollProgramForm.groupId);
+            const selectedGroup = enrollmentGroup;
 
             // Handle Second Group (DIY)
             let secondGroupData = {};
@@ -851,6 +955,8 @@ const AppContent = () => {
                 .filter(p => p.method === 'cash')
                 .reduce((sum, p) => sum + Number(p.amount), 0);
 
+            const joinedAt = new Date().toISOString();
+            const servicePeriod = resolveEnrollmentServicePeriod(selectedProgram, joinedAt);
             const enrollmentRef = await addDoc(collection(db, 'enrollments'), {
                 studentId: finalStudentId,
                 studentName: studentName,
@@ -870,10 +976,13 @@ const AppContent = () => {
                 balance: negotiatedPrice - initialCleared,
                 paymentPromises: enrollPaymentPromises.map(p => ({ month: p.month, amount: Number(p.amount) })),
                 status: 'active',
-                startDate: new Date().toISOString(),
+                startDate: joinedAt,
+                serviceStartDate: servicePeriod.startDate,
+                ...(servicePeriod.endDate ? { endDate: servicePeriod.endDate, serviceEndDate: servicePeriod.endDate } : {}),
+                enrollmentMode: servicePeriod.mode,
                 // Auto-detect session from enrollment date (Sept-June rule)
                 session: computeAcademicYear(new Date()),
-                organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
+                organizationId: currentOrganization.id,
                 createdAt: serverTimestamp()
             });
 
@@ -891,16 +1000,23 @@ const AppContent = () => {
                     status: p.method === 'cash' ? 'paid' : p.method === 'virement' ? 'pending_verification' : 'check_received',
                     // Use payment date to determine session, not the admin's current setting
                     session: computeAcademicYear(new Date(p.date || new Date().toISOString())),
-                    organizationId: currentOrganization?.id || 'makerlab-academy', // SaaS Fix
+                    organizationId: currentOrganization.id,
                     createdAt: serverTimestamp()
                 });
             }
 
             setIsEnrollmentModalOpen(false);
-            showAlert("Success", "Enrollment Successful! Student account created.", "success");
+            const accessSummary = studentAccessCreated
+                ? parentAccessCreated
+                    ? 'Student and parent access were created.'
+                    : parentAccessFailed
+                        ? 'Student access was created. Parent access still needs attention in the student record.'
+                        : 'Student access was created.'
+                : 'Enrollment was saved. Student access still needs to be created from the student record.';
+            await showAlert('Enrollment created', accessSummary, 'success');
         } catch (err) {
             console.error(err);
-            showAlert("Error", "Error processing enrollment.", "danger");
+            await showAlert('Enrollment not completed', 'The enrollment could not be processed. No success was recorded; review the details and try again.', 'danger');
         } finally {
             setIsSubmittingEnrollment(false);
         }
@@ -962,21 +1078,27 @@ const AppContent = () => {
 
         // Reset ID to ensure creating NEW student
         setQuickEnrollStudentId(null);
+        setEnrollmentLearnerMode('new');
 
         // Open Modal (Preserving the data we just set)
         preserveEnrollmentFormRef.current = true;
         setIsEnrollmentModalOpen(true);
     };
 
-    // Permission-based Module Filtering
-    const modules = getEnabledModules().filter(m => !m.requiredPermission || can(m.requiredPermission));
-
     // Routing
     if (locationPath.includes('mode=booking') || window.location.search.includes('mode=booking')) return <PublicBookingView />;
     if (locationPath === '/enroll') return <PublicEnrollmentView />;
     if (locationPath === '/parent-portal' || locationHash === '#parent') return <ParentLoginView />;
 
-    if (authLoading || appLoading || (user && !userProfile)) return <div className="min-h-screen bg-slate-950 flex items-center justify-center"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+    if (authLoading || appLoading || (user && !userProfile)) {
+        const loadingMessage = authLoading
+            ? 'Securing your Atlas session'
+            : user && !userProfile
+                ? 'Connecting your academy'
+                : 'Preparing your academy workspace';
+
+        return <AtlasBootScreen message={loadingMessage} />;
+    }
 
     if (!user) {
         if (locationHash === '#login' || locationPath === '/login') return <LoginView />;
@@ -985,18 +1107,23 @@ const AppContent = () => {
     }
 
     const renderView = () => {
+        const registeredModule = getModuleById(currentView);
+        if (registeredModule && !isModuleEnabled(registeredModule.id)) {
+            return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
+        }
+
         switch (currentView) {
             case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
-            case 'students': return <StudentsView onAddStudent={() => { setQuickEnrollStudentId(null); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setQuickEnrollStudentId(id || null); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
+            case 'students': return <StudentsView onAddStudent={() => { setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setQuickEnrollStudentId(id || null); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
             case 'classes': return <ClassesView onEnroll={handleEnrollFromGroup} />;
             case 'programs': return <ProgramsView onEnrollLead={handleEnrollLead} />;
             case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;
             case 'expenses': return <ExpensesView />;
             case 'tools': return <ToolsView />;
             case 'settings': return <SettingsView />;
-            case 'student-details': return <StudentDetailsView onEditStudent={() => { }} onQuickEnroll={(id) => { setQuickEnrollStudentId(id); setIsEnrollmentModalOpen(true); }} onRecordPayment={(id) => handleOpenPaymentModal(id)} />;
+            case 'student-details': return <StudentDetailsView onEditStudent={() => { }} onQuickEnroll={(id) => { setQuickEnrollStudentId(id); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onRecordPayment={(id) => handleOpenPaymentModal(id)} />;
             case 'activity-details': return <ActivityDetailsView />;
-            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); preserveEnrollmentFormRef.current = true; setIsEnrollmentModalOpen(true); }} />;
+            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); preserveEnrollmentFormRef.current = true; setIsEnrollmentModalOpen(true); }} />;
             case 'attendance': return <AbsenceView />;
             case 'team': return <TeamView />;
             case 'staff-attendance': return <StaffAbsenceView />;
@@ -1004,7 +1131,7 @@ const AppContent = () => {
             case 'schedule': return <CalendarView />; // NEW
 
             // SAAS GUARDED ROUTES
-            case 'learning': return userProfile?.role === 'student' || currentOrganization?.modules?.makerPro ? <LearningView /> : <DashboardView onRecordPayment={handleOpenPaymentModal} />; // Fallback to Dashboard if disabled
+            case 'learning': return <LearningView />;
             case 'toolkit': return <ToolkitView />;
             case 'archive': return <ArchiveView />;
             case 'media': return <MediaView />;
@@ -1026,6 +1153,7 @@ const AppContent = () => {
                 if (!appId) return <div>App ID missing</div>;
                 const app = getAppById(appId);
                 if (!app) return <div>App not found</div>;
+                if (!getEntitlement(appId)?.active) return <AppStoreView />;
                 const Component = app.component;
                 return <Component />;
             }
@@ -1036,7 +1164,7 @@ const AppContent = () => {
     // --- PARENT LAYOUT ---
     if (isParent) {
         return (
-            <div className="min-h-[100dvh] bg-slate-50 text-slate-800 font-sans selection:bg-indigo-500/30">
+            <div className="min-h-[100dvh] bg-[#F7F1E4] text-slate-800 font-sans selection:bg-teal-500/25">
                 <ParentDashboardView />
             </div>
         );
@@ -1045,41 +1173,43 @@ const AppContent = () => {
     // --- STUDENT LAYOUT ---
     if (isStudent) {
         return (
-            <div className="flex h-[100dvh] bg-slate-100 font-spark overflow-hidden selection:bg-blue-200 selection:text-blue-900">
+            <div className="flex h-[100dvh] overflow-hidden bg-[#F7F1E4] font-spark selection:bg-teal-400/25 selection:text-[#08111F]">
                 {/* Desktop Sidebar (SparkQuest Themed) */}
-                <aside className="hidden md:flex w-72 bg-white flex-col text-slate-600 shrink-0 m-4 rounded-[2.5rem] relative z-20 shadow-xl border-b-[8px] border-slate-200 overflow-hidden">
+                <aside className="relative z-20 hidden w-64 shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#08111F] text-slate-300 md:flex">
                     {/* Brand / Profile */}
-                    <div className="p-8 pb-4 flex flex-col items-center">
-                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-400 to-indigo-600 p-1 mb-4 shadow-lg animate-float">
-                            <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-3xl font-black text-indigo-600 border-4 border-white/50">
+                    <div className="flex items-center gap-3 border-b border-white/10 p-5">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-teal-300/25 bg-teal-400/15 text-lg font-black text-teal-200">
                                 {userProfile?.name?.charAt(0) || 'S'}
-                            </div>
                         </div>
-                        <h2 className="text-xl font-black text-slate-800 text-center">{userProfile?.name}</h2>
-                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Student Explorer</span>
+                        <div className="min-w-0">
+                            <h2 className="truncate text-sm font-black text-white">{userProfile?.name || 'Student'}</h2>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-[#F2C766]">Student workspace</span>
+                        </div>
                     </div>
 
                     {/* Navigation */}
-                    <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto no-scrollbar">
+                    <nav className="flex-1 space-y-1 overflow-y-auto p-3 no-scrollbar">
                         {[
                             { id: 'dashboard', icon: Home, label: 'Lobby' },
                             { id: 'learning', icon: BookOpen, label: 'Studio' },
                             { id: 'portfolio', icon: Trophy, label: 'Portfolio' },
                             { id: 'media', icon: Camera, label: 'Gallery' },
-                            { id: 'test-wizard', icon: Sparkles, label: 'New Project (Test)' },
+                            { id: 'test-wizard', icon: Sparkles, label: 'New Project' },
                         ].map(item => {
                             const isActive = currentView === item.id;
                             return (
                                 <button
                                     key={item.id}
                                     onClick={() => navigateTo(item.id as ViewState)}
-                                    className={`w-full flex items-center gap-4 px-6 py-4 rounded-xl transition-all relative group font-bold ${isActive
-                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 scale-105 btn-3d'
-                                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                                    className={`relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold transition-colors ${isActive
+                                        ? 'bg-teal-400/15 text-teal-100'
+                                        : 'text-slate-400 hover:bg-white/5 hover:text-white'
                                         }`}
+                                    aria-current={isActive ? 'page' : undefined}
                                 >
-                                    <item.icon size={24} strokeWidth={isActive ? 3 : 2.5} className="shrink-0" />
-                                    <span className="truncate text-lg">{item.label}</span>
+                                    {isActive && <span className="absolute inset-y-2 left-0 w-0.5 rounded-r bg-teal-300" />}
+                                    <item.icon size={19} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
+                                    <span className="truncate">{item.label}</span>
                                 </button>
                             );
                         })}
@@ -1087,11 +1217,11 @@ const AppContent = () => {
                     </nav>
 
                     {/* Bottom Actions */}
-                    <div className="p-6 mt-auto space-y-2">
-                        <button onClick={() => navigateTo('settings')} className="w-full flex items-center gap-3 px-6 py-3 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors text-sm font-bold">
+                    <div className="mt-auto space-y-1 border-t border-white/10 p-3">
+                        <button onClick={() => navigateTo('settings')} className="flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold text-slate-400 transition-colors hover:bg-white/5 hover:text-white">
                             <Settings size={20} /> Settings
                         </button>
-                        <button onClick={signOut} className="w-full flex items-center gap-3 px-6 py-3 rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm font-bold">
+                        <button onClick={signOut} className="flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-bold text-slate-400 transition-colors hover:bg-rose-400/10 hover:text-rose-200">
                             <LogOut size={20} /> Sign Out
                         </button>
                     </div>
@@ -1100,23 +1230,23 @@ const AppContent = () => {
                 {/* Main Content Area */}
                 <main className="flex-1 flex flex-col h-full overflow-hidden relative">
                     {/* Mobile Header (SparkQuest Themed) */}
-                    <header className="md:hidden p-4 flex justify-between items-center bg-white text-slate-800 shrink-0 z-30 shadow-sm mx-4 mt-4 rounded-2xl border-b-4 border-slate-100">
+                    <header className="z-30 mx-3 mt-3 flex min-h-14 shrink-0 items-center justify-between rounded-lg border border-[#D8D2C5] bg-white px-3 text-[#08111F] shadow-sm md:hidden">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-black shadow-md">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#08111F] font-black text-[#F2C766]">
                                 {settings.academyName.charAt(0)}
                             </div>
-                            <span className="font-black text-lg tracking-tight">{settings.academyName}</span>
+                            <span className="max-w-[12rem] truncate text-sm font-black">{settings.academyName}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <NotificationDropdown />
-                            <button onClick={signOut} className="p-2 text-slate-400 hover:text-red-500"><LogOut size={24} /></button>
+                            <button onClick={signOut} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-rose-50 hover:text-rose-600" aria-label="Sign out"><LogOut size={20} /></button>
                         </div>
                     </header>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 pb-32 md:pb-8">
+                    <div className="flex-1 overflow-y-auto p-3 pb-24 custom-scrollbar md:p-6 md:pb-6">
                         <div className="max-w-7xl mx-auto h-full flex flex-col">
                             {/* View Container with SparkQuest Style */}
-                            <div className="bg-white/50 backdrop-blur-xl rounded-[2.5rem] p-6 md:p-8 flex-1 border-white border shadow-sm">
+                            <div className="flex-1">
                                 {renderView()}
                             </div>
                         </div>
@@ -1124,7 +1254,7 @@ const AppContent = () => {
 
                     {/* Mobile Bottom Dock (Hidden on Desktop) */}
                     <div className="md:hidden">
-                        <StudentNavigation currentView={currentView} navigateTo={navigateTo} theme={studentTheme} signOut={signOut} userProfile={userProfile} />
+                        <StudentNavigation currentView={currentView} navigateTo={navigateTo} />
                     </div>
                 </main>
             </div>
@@ -1140,68 +1270,99 @@ const AppContent = () => {
             {renderView()}
 
             {/* --- GLOBAL PAYMENT MODAL --- */}
-            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record Payment" size="md">
-                {/* ... (Payment Modal Content - No Changes) ... */}
-                <form onSubmit={handleSubmitPayment} className="space-y-5">
+            <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record a payment" size="lg">
+                <form onSubmit={handleSubmitPayment} className="mx-auto w-full max-w-xl space-y-5">
+                    <div>
+                        <p className="text-sm font-semibold text-white">Who is this payment for?</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">Choose one student or pay for several children in the same family.</p>
+                    </div>
 
-                    {/* Payment Mode Selector */}
-                    <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-[#08111F] p-1" role="group" aria-label="Payment for">
                         <button
                             type="button"
+                            aria-pressed={paymentMode === 'individual'}
                             onClick={() => {
                                 setPaymentMode('individual');
                                 setPaymentForm(prev => ({ ...prev, studentId: '', enrollmentId: '', amount: 0 }));
                                 setSelectedParentAccount(null);
+                                setShowPaymentDetails(false);
                             }}
-                            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${paymentMode === 'individual' ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+                            className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${paymentMode === 'individual' ? 'bg-white text-[#08111F] shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                         >
-                            Individual Student
+                            <UserRound className="h-4 w-4" aria-hidden="true" />
+                            Student
                         </button>
                         <button
                             type="button"
+                            aria-pressed={paymentMode === 'parent'}
                             onClick={() => {
                                 setPaymentMode('parent');
                                 setPaymentForm(prev => ({ ...prev, studentId: '', enrollmentId: '', amount: 0 }));
                                 setSelectedParentAccount(null);
+                                setShowPaymentDetails(false);
                             }}
-                            className={`flex-1 py-1.5 rounded-md text-xs font-medium transition-all ${paymentMode === 'parent' ? 'bg-slate-800 text-white font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+                            className={`flex min-h-12 items-center justify-center gap-2 rounded-md px-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${paymentMode === 'parent' ? 'bg-white text-[#08111F] shadow-sm' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                         >
-                            Parent Account (Family)
+                            <Users className="h-4 w-4" aria-hidden="true" />
+                            Family
                         </button>
                     </div>
 
-                    {/* Student Selector (Combobox) */}
                     {paymentMode === 'individual' && (
                         <div className="relative">
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Select Student & Program</label>
-                            {paymentForm.studentId && paymentForm.enrollmentId ? (
-                                <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                    <div>
-                                        <div className="text-white font-bold text-sm">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.studentName}</div>
-                                        <div className="text-xs text-slate-400">{enrollments.find(e => e.id === paymentForm.enrollmentId)?.programName}</div>
+                            {selectedPaymentEnrollment ? (
+                                <div className="overflow-hidden rounded-lg border border-teal-300/25 bg-teal-400/10" aria-live="polite">
+                                    <div className="flex items-start justify-between gap-3 p-4">
+                                        <div className="flex min-w-0 gap-3">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-300/15 text-teal-200">
+                                                <UserRound className="h-5 w-5" aria-hidden="true" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-bold text-white">{selectedPaymentEnrollment.studentName}</p>
+                                                <p className="mt-0.5 truncate text-xs text-slate-400">{selectedPaymentEnrollment.programName}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setPaymentForm({ ...paymentForm, studentId: '', enrollmentId: '' });
+                                                setShowPaymentDetails(false);
+                                            }}
+                                            className="shrink-0 rounded-md px-2 py-1 text-xs font-bold text-teal-200 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+                                        >
+                                            Change
+                                        </button>
                                     </div>
-                                    <button type="button" onClick={() => setPaymentForm({ ...paymentForm, studentId: '', enrollmentId: '' })} className="text-xs text-blue-400 hover:text-blue-300 font-medium">Change</button>
+                                    <div className="flex items-center justify-between gap-3 border-t border-teal-300/15 bg-[#08111F]/30 px-4 py-3">
+                                        <span className="text-xs font-medium text-slate-300">Remaining balance</span>
+                                        <span className="text-base font-black tabular-nums text-[#F2C766]">{formatCurrency(selectedPaymentEnrollment.balance)}</span>
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                                    <input
-                                        type="text"
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none"
-                                        placeholder="Search active student..."
-                                        value={paymentSearchQuery}
-                                        onChange={(e) => { setPaymentSearchQuery(e.target.value); setIsDropdownOpen(true); }}
-                                        onFocus={() => setIsDropdownOpen(true)}
-                                    />
-                                    {isDropdownOpen && paymentSearchQuery && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 custom-scrollbar">
-                                            {enrollments
-                                                .filter(e => {
-                                                    if (e.status !== 'active') return false;
-                                                    const student = students.find(s => s.id === e.studentId);
+                                <div>
+                                    <label htmlFor="payment-student-search" className="mb-2 block text-sm font-semibold text-white">Find the student</label>
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                                        <input
+                                            id="payment-student-search"
+                                            type="search"
+                                            autoComplete="off"
+                                            className="min-h-12 w-full rounded-lg border border-white/10 bg-[#08111F] py-2.5 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                                            placeholder="Type a student name"
+                                            value={paymentSearchQuery}
+                                            onInput={(event) => { setPaymentSearchQuery((event.target as HTMLInputElement).value); setIsDropdownOpen(true); }}
+                                            onFocus={() => setIsDropdownOpen(true)}
+                                            aria-expanded={Boolean(isDropdownOpen && paymentSearchQuery)}
+                                            aria-controls="payment-student-results"
+                                        />
+                                        {isDropdownOpen && paymentSearchQuery && (
+                                            <div id="payment-student-results" className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-lg border border-white/10 bg-[#08111F] p-1 shadow-2xl custom-scrollbar">
+                                                {enrollments
+                                                    .filter(enrollment => {
+                                                    if (enrollment.status !== 'active') return false;
+                                                    const student = students.find(item => item.id === enrollment.studentId);
                                                     if (!student || student.status === 'inactive') return false;
-
-                                                    return e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase());
+                                                    return (enrollment.studentName || student.name || '').toLowerCase().includes(paymentSearchQuery.toLowerCase());
                                                 })
                                                 .map(enrollment => (
                                                     <button
@@ -1212,85 +1373,95 @@ const AppContent = () => {
                                                             setIsDropdownOpen(false);
                                                             setPaymentSearchQuery('');
                                                         }}
-                                                        className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-none"
+                                                        className="flex min-h-14 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                                                     >
-                                                        <div className="font-bold text-white text-sm">{enrollment.studentName}</div>
-                                                        <div className="flex justify-between text-xs text-slate-400">
-                                                            <span>{enrollment.programName}</span>
-                                                            <span className={enrollment.balance > 0 ? 'text-amber-400' : 'text-emerald-400'}>Due: {formatCurrency(enrollment.balance)}</span>
-                                                        </div>
+                                                        <span className="min-w-0">
+                                                            <span className="block truncate text-sm font-bold text-white">{enrollment.studentName}</span>
+                                                            <span className="block truncate text-xs text-slate-400">{enrollment.programName}</span>
+                                                        </span>
+                                                        <span className="shrink-0 text-right">
+                                                            <span className="block text-[10px] font-bold uppercase text-slate-500">Remaining</span>
+                                                            <span className={`block text-xs font-bold tabular-nums ${enrollment.balance > 0 ? 'text-[#F2C766]' : 'text-teal-300'}`}>{formatCurrency(enrollment.balance)}</span>
+                                                        </span>
                                                     </button>
                                                 ))}
-                                            {enrollments.filter(e => e.status === 'active' && e.studentName.toLowerCase().includes(paymentSearchQuery.toLowerCase())).length === 0 && (
-                                                <div className="p-3 text-slate-500 text-xs text-center">No active enrollments found.</div>
+                                            {enrollments.filter(enrollment => enrollment.status === 'active' && (enrollment.studentName || students.find(student => student.id === enrollment.studentId)?.name || '').toLowerCase().includes(paymentSearchQuery.toLowerCase())).length === 0 && (
+                                                <div className="px-3 py-6 text-center text-sm text-slate-400">No active enrollment matches this name.</div>
                                             )}
                                         </div>
                                     )}
+                                    </div>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* Parent Account Selector */}
                     {paymentMode === 'parent' && (
                         <div className="relative">
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Select Parent Account</label>
                             {selectedParentAccount ? (
-                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <div className="text-white font-bold text-sm flex items-center gap-1.5">
-                                                <Users size={16} className="text-blue-450" />
-                                                {selectedParentAccount.parentName || 'Parent Account'}
+                                <div className="overflow-hidden rounded-lg border border-teal-300/25 bg-teal-400/10" aria-live="polite">
+                                    <div className="flex items-start justify-between gap-3 p-4">
+                                        <div className="flex min-w-0 gap-3">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-300/15 text-teal-200">
+                                                <Users className="h-5 w-5" aria-hidden="true" />
                                             </div>
-                                            <div className="text-xs text-slate-400 mt-1">Phone: {selectedParentAccount.phone || 'No phone'}</div>
+                                            <div className="min-w-0">
+                                                <p className="truncate text-sm font-bold text-white">{selectedParentAccount.parentName || 'Family account'}</p>
+                                                <p className="mt-0.5 text-xs text-slate-400">{selectedParentAccount.children.length} {selectedParentAccount.children.length === 1 ? 'child' : 'children'} &middot; {selectedParentAccount.phone || 'No phone'}</p>
+                                            </div>
                                         </div>
-                                        <button 
-                                            type="button" 
+                                        <button
+                                            type="button"
                                             onClick={() => {
                                                 setSelectedParentAccount(null);
                                                 setPaymentForm(prev => ({ ...prev, amount: 0 }));
-                                            }} 
-                                            className="text-xs text-blue-400 hover:text-blue-300 font-medium"
+                                                setShowPaymentDetails(false);
+                                            }}
+                                            className="shrink-0 rounded-md px-2 py-1 text-xs font-bold text-teal-200 hover:bg-teal-300/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                                         >
                                             Change
                                         </button>
                                     </div>
-                                    
-                                    <div className="border-t border-slate-900 pt-2 space-y-1.5">
-                                        {selectedParentAccount.children.map((c: any, i: number) => (
-                                            <div key={i} className="flex justify-between text-xs">
-                                                <span className="text-slate-400 font-medium">{c.student.name} <span className="text-[10px] text-slate-650">({c.enrollment.programName})</span></span>
-                                                <span className={`font-mono ${c.enrollment.balance > 0 ? 'text-amber-400' : 'text-slate-500'}`}>{formatCurrency(c.enrollment.balance)}</span>
+                                    <div className="space-y-2 border-t border-teal-300/15 bg-[#08111F]/30 px-4 py-3">
+                                        {selectedParentAccount.children.map((child: any, index: number) => (
+                                            <div key={index} className="flex items-center justify-between gap-3 text-xs">
+                                                <span className="min-w-0 truncate text-slate-300">{child.student.name} <span className="text-slate-500">&middot; {child.enrollment.programName}</span></span>
+                                                <span className="shrink-0 font-bold tabular-nums text-slate-300">{formatCurrency(child.enrollment.balance)}</span>
                                             </div>
                                         ))}
-                                        <div className="flex justify-between text-xs font-bold border-t border-dashed border-slate-850 pt-2 mt-2">
-                                            <span className="text-white">Family Solde Balance</span>
-                                            <span className={`font-mono ${selectedParentAccount.totalBalance > 0 ? 'text-red-405' : 'text-emerald-450'}`}>{formatCurrency(selectedParentAccount.totalBalance)}</span>
+                                        <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
+                                            <span className="text-xs font-medium text-slate-300">Family balance</span>
+                                            <span className="text-base font-black tabular-nums text-[#F2C766]">{formatCurrency(selectedParentAccount.totalBalance)}</span>
                                         </div>
                                     </div>
                                 </div>
                             ) : (
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                                    <input
-                                        type="text"
-                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-10 pr-4 text-white text-sm focus:border-blue-500 outline-none"
-                                        placeholder="Search parent name or phone..."
-                                        value={parentPaymentSearchQuery}
-                                        onChange={(e) => { setParentPaymentSearchQuery(e.target.value); setIsParentDropdownOpen(true); }}
-                                        onFocus={() => setIsParentDropdownOpen(true)}
-                                    />
-                                    {isParentDropdownOpen && parentPaymentSearchQuery && (
-                                        <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-800 rounded-lg shadow-xl max-h-48 overflow-y-auto z-50 custom-scrollbar">
-                                            {parentAccounts
-                                                .filter(p => 
-                                                    (p.parentName || '').toLowerCase().includes(parentPaymentSearchQuery.toLowerCase()) ||
-                                                    (p.phone || '').includes(parentPaymentSearchQuery)
+                                <div>
+                                    <label htmlFor="payment-family-search" className="mb-2 block text-sm font-semibold text-white">Find the family</label>
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden="true" />
+                                        <input
+                                            id="payment-family-search"
+                                            type="search"
+                                            autoComplete="off"
+                                            className="min-h-12 w-full rounded-lg border border-white/10 bg-[#08111F] py-2.5 pl-10 pr-4 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                                            placeholder="Type a parent name or phone"
+                                            value={parentPaymentSearchQuery}
+                                            onInput={(event) => { setParentPaymentSearchQuery((event.target as HTMLInputElement).value); setIsParentDropdownOpen(true); }}
+                                            onFocus={() => setIsParentDropdownOpen(true)}
+                                            aria-expanded={Boolean(isParentDropdownOpen && parentPaymentSearchQuery)}
+                                            aria-controls="payment-family-results"
+                                        />
+                                        {isParentDropdownOpen && parentPaymentSearchQuery && (
+                                            <div id="payment-family-results" className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-lg border border-white/10 bg-[#08111F] p-1 shadow-2xl custom-scrollbar">
+                                                {parentAccounts
+                                                    .filter(account =>
+                                                    (account.parentName || '').toLowerCase().includes(parentPaymentSearchQuery.toLowerCase()) ||
+                                                    (account.phone || '').includes(parentPaymentSearchQuery)
                                                 )
-                                                .map((account, idx) => (
+                                                .map((account, index) => (
                                                     <button
-                                                        key={idx}
+                                                        key={index}
                                                         type="button"
                                                         onClick={() => {
                                                             setSelectedParentAccount(account);
@@ -1298,357 +1469,234 @@ const AppContent = () => {
                                                             setIsParentDropdownOpen(false);
                                                             setParentPaymentSearchQuery('');
                                                         }}
-                                                        className="w-full text-left p-3 hover:bg-slate-800 border-b border-slate-800/50 last:border-none"
+                                                        className="flex min-h-14 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
                                                     >
-                                                        <div className="font-bold text-white text-sm flex items-center gap-1.5"><Users size={14} className="text-blue-400" /> {account.parentName}</div>
-                                                        <div className="flex justify-between text-xs text-slate-400 mt-0.5">
-                                                            <span>{account.children.length} child(ren) &middot; {account.phone || 'No phone'}</span>
-                                                            <span className={account.totalBalance > 0 ? 'text-amber-400' : 'text-emerald-450'}>Solde: {formatCurrency(account.totalBalance)}</span>
-                                                        </div>
+                                                        <span className="min-w-0">
+                                                            <span className="block truncate text-sm font-bold text-white">{account.parentName}</span>
+                                                            <span className="block truncate text-xs text-slate-400">{account.children.length} {account.children.length === 1 ? 'child' : 'children'} &middot; {account.phone || 'No phone'}</span>
+                                                        </span>
+                                                        <span className="shrink-0 text-right">
+                                                            <span className="block text-[10px] font-bold uppercase text-slate-500">Balance</span>
+                                                            <span className={`block text-xs font-bold tabular-nums ${account.totalBalance > 0 ? 'text-[#F2C766]' : 'text-teal-300'}`}>{formatCurrency(account.totalBalance)}</span>
+                                                        </span>
                                                     </button>
                                                 ))}
                                             {parentAccounts.filter(p => (p.parentName || '').toLowerCase().includes(parentPaymentSearchQuery.toLowerCase()) || (p.phone || '').includes(parentPaymentSearchQuery)).length === 0 && (
-                                                <div className="p-3 text-slate-500 text-xs text-center">No parent accounts found.</div>
+                                                <div className="px-3 py-6 text-center text-sm text-slate-400">No family matches this search.</div>
                                             )}
                                         </div>
                                     )}
+                                    </div>
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* Payment Details */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {hasSelectedPaymentTarget && (
+                    <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2">
                         <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Amount (MAD)</label>
-                            <input required type="number" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={paymentForm.amount} onChange={e => setPaymentForm({ ...paymentForm, amount: Number(e.target.value) })} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
-                            <input required type="date" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={paymentForm.date} onChange={e => setPaymentForm({ ...paymentForm, date: e.target.value })} />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Payment Method</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            {['cash', 'check', 'virement'].map(m => (
-                                <button
-                                    key={m}
-                                    type="button"
-                                    onClick={() => setPaymentForm({ ...paymentForm, method: m as any })}
-                                    className={`py-2 rounded-lg text-xs font-bold capitalize border transition-all ${paymentForm.method === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'}`}
-                                >
-                                    {m === 'virement' ? 'Transfer' : m}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Method Specific Fields */}
-                    {paymentForm.method === 'check' && (
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={paymentForm.checkNumber} onChange={e => setPaymentForm({ ...paymentForm, checkNumber: e.target.value })} placeholder="e.g. 739201" /></div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={paymentForm.bankName} onChange={e => setPaymentForm({ ...paymentForm, bankName: e.target.value })} placeholder="e.g. BMCE" /></div>
+                            <div className="mb-2 flex items-end justify-between gap-3">
+                                <label htmlFor="payment-amount" className="text-sm font-semibold text-white">Amount received</label>
+                                <span className="text-xs text-slate-500">Moroccan dirham</span>
                             </div>
-                            <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Deposit Date (Encaissement)</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={paymentForm.depositDate} onChange={e => setPaymentForm({ ...paymentForm, depositDate: e.target.value })} /></div>
+                            <div className="relative">
+                                <input
+                                    id="payment-amount"
+                                    required
+                                    type="number"
+                                    inputMode="decimal"
+                                    className="min-h-16 w-full rounded-lg border border-white/10 bg-[#08111F] px-4 pr-16 text-2xl font-black tabular-nums text-white outline-none transition-colors focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                                    value={paymentForm.amount}
+                                    onChange={event => setPaymentForm({ ...paymentForm, amount: Number(event.target.value) })}
+                                />
+                                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-500">MAD</span>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-3 sm:flex-row sm:items-center sm:justify-between">
+                            <label htmlFor="payment-date" className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                                <CalendarDays className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                                Payment date
+                            </label>
+                            <input
+                                id="payment-date"
+                                required
+                                type="date"
+                                className="min-h-10 rounded-lg border border-white/10 bg-[#08111F] px-3 text-sm text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
+                                value={paymentForm.date}
+                                onChange={event => setPaymentForm({ ...paymentForm, date: event.target.value })}
+                            />
+                        </div>
+
+                        <fieldset>
+                            <legend className="mb-2 text-sm font-semibold text-white">How did they pay?</legend>
+                            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Payment method">
+                                {([
+                                    { value: 'cash', label: 'Cash', icon: Banknote },
+                                    { value: 'check', label: 'Check', icon: FileText },
+                                    { value: 'virement', label: 'Transfer', icon: Landmark }
+                                ] as const).map(method => {
+                                    const MethodIcon = method.icon;
+                                    const isSelected = paymentForm.method === method.value;
+                                    return (
+                                        <button
+                                            key={method.value}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={isSelected}
+                                            onClick={() => {
+                                                setPaymentForm({ ...paymentForm, method: method.value });
+                                                setShowPaymentDetails(false);
+                                            }}
+                                            className={`group flex min-h-20 flex-col items-center justify-center gap-2 rounded-lg border px-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 ${isSelected ? 'border-teal-300/60 bg-teal-400/15 text-teal-100' : 'border-white/10 bg-[#08111F] text-slate-400 hover:border-white/20 hover:text-white'}`}
+                                        >
+                                            <MethodIcon className={`h-5 w-5 transition-transform motion-reduce:transition-none ${isSelected ? 'text-teal-300' : 'text-slate-500 group-hover:-translate-y-0.5 group-hover:text-slate-300 motion-reduce:transform-none'}`} aria-hidden="true" />
+                                            {method.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </fieldset>
+
+                        <div className="flex gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-teal-300" aria-hidden="true" />
+                            <p className="text-xs leading-5 text-slate-300">
+                                {paymentForm.method === 'cash'
+                                    ? "Cash is confirmed now and the remaining balance updates immediately."
+                                    : paymentForm.method === 'check'
+                                        ? "The check is saved as received. The balance updates after it clears."
+                                        : "The transfer is saved for verification. The balance updates after approval."
+                                }
+                            </p>
+                        </div>
+
+                        {paymentForm.method !== 'cash' && (
+                        <div className="rounded-lg border border-white/10 bg-[#08111F]">
+                            <button
+                                type="button"
+                                onClick={() => setShowPaymentDetails(current => !current)}
+                                aria-expanded={showPaymentDetails}
+                                aria-controls="payment-extra-details"
+                                className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg px-4 text-left text-sm font-bold text-slate-200 transition-colors hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400"
+                            >
+                                <span className="flex items-center gap-2">
+                                    {paymentForm.method === 'check'
+                                        ? <FileText className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                                        : <Landmark className="h-4 w-4 text-slate-400" aria-hidden="true" />
+                                    }
+                                    {paymentForm.method === 'check' ? 'Add check details' : 'Attach transfer proof'}
+                                </span>
+                                <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform motion-reduce:transition-none ${showPaymentDetails ? 'rotate-180' : ''}`} aria-hidden="true" />
+                            </button>
+
+                            {showPaymentDetails && (
+                                <div id="payment-extra-details" className="space-y-4 border-t border-white/10 p-4 animate-in fade-in slide-in-from-top-1">
+                    {paymentForm.method === 'check' && (
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label htmlFor="payment-check-number" className="mb-1.5 block text-xs font-semibold text-slate-300">Check number</label>
+                                <input id="payment-check-number" className="min-h-11 w-full rounded-lg border border-white/10 bg-[#0F1B2D] px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20" value={paymentForm.checkNumber} onChange={event => setPaymentForm({ ...paymentForm, checkNumber: event.target.value })} placeholder="Example: 739201" />
+                            </div>
+                            <div>
+                                <label htmlFor="payment-bank-name" className="mb-1.5 block text-xs font-semibold text-slate-300">Bank</label>
+                                <input id="payment-bank-name" className="min-h-11 w-full rounded-lg border border-white/10 bg-[#0F1B2D] px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20" value={paymentForm.bankName} onChange={event => setPaymentForm({ ...paymentForm, bankName: event.target.value })} placeholder="Bank name" />
+                            </div>
+                            <div className="sm:col-span-2">
+                                <label htmlFor="payment-deposit-date" className="mb-1.5 block text-xs font-semibold text-slate-300">Expected deposit date</label>
+                                <input id="payment-deposit-date" type="date" className="min-h-11 w-full rounded-lg border border-white/10 bg-[#0F1B2D] px-3 text-sm text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20" value={paymentForm.depositDate} onChange={event => setPaymentForm({ ...paymentForm, depositDate: event.target.value })} />
+                            </div>
                         </div>
                     )}
 
                     {paymentForm.method === 'virement' && (
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
-                            <div>
-                                <label className="text-[10px] uppercase font-bold text-slate-500 block mb-2">Proof of Transfer (Screenshot)</label>
-                                <div className="flex items-center gap-3">
-                                    <label className="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors">
-                                        <Upload size={14} /> Upload Image
-                                        <input type="file" accept="image/*" className="hidden" onChange={handleProofUpload} />
-                                    </label>
-                                    {paymentForm.proofUrl && (
-                                        <div className="text-emerald-400 text-xs flex items-center gap-1"><ImageIcon size={14} /> Image Attached</div>
-                                    )}
-                                </div>
+                        <div>
+                            <span className="mb-2 block text-xs font-semibold text-slate-300">Transfer proof</span>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-[#0F1B2D] px-3 text-xs font-bold text-slate-200 transition-colors hover:border-white/20 hover:bg-white/5 focus-within:ring-2 focus-within:ring-teal-400">
+                                    <Upload className="h-4 w-4" aria-hidden="true" />
+                                    Choose image
+                                    <input type="file" accept="image/*" className="sr-only" onChange={handleProofUpload} />
+                                </label>
                                 {paymentForm.proofUrl && (
-                                    <div className="mt-2 w-full h-24 bg-slate-900 rounded border border-slate-800 overflow-hidden">
-                                        <img src={paymentForm.proofUrl} className="w-full h-full object-cover" alt="Proof" />
-                                    </div>
+                                    <span className="flex items-center gap-1.5 text-xs font-bold text-teal-300"><ImageIcon className="h-4 w-4" aria-hidden="true" /> Image attached</span>
                                 )}
                             </div>
+                            {paymentForm.proofUrl && (
+                                <div className="mt-3 h-28 w-full overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D]">
+                                    <img src={paymentForm.proofUrl} className="h-full w-full object-cover" alt="Transfer proof preview" />
+                                </div>
+                            )}
                         </div>
                     )}
 
-                    {/* Disclaimer */}
-                    <div className="bg-blue-950/20 p-3 rounded-lg border border-blue-900/30 flex gap-3 items-start">
-                        <CheckCircle2 className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                        <p className="text-xs text-blue-200/80">
-                            {paymentForm.method === 'cash'
-                                ? "Cash payments are immediately marked as PAID and will update the student's balance."
-                                : paymentForm.method === 'check'
-                                    ? "Checks are recorded as RECEIVED. Balance updates only after the check clears (Encaissé)."
-                                    : "Transfers are recorded as PENDING. Verify the transfer in dashboard to update balance."
-                            }
-                        </p>
-                    </div>
+                                </div>
+                            )}
+                        </div>
+                        )}
 
-                    <button type="submit" disabled={isSubmittingPayment} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                        {isSubmittingPayment ? 'Processing...' : 'Confirm Payment'}
-                    </button>
+                        <button
+                            type="submit"
+                            disabled={isSubmittingPayment}
+                            className="flex min-h-13 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-3 text-sm font-black text-[#04111B] shadow-lg shadow-black/20 transition-colors hover:bg-teal-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0F1B2D] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            <Wallet className="h-5 w-5" aria-hidden="true" />
+                            {isSubmittingPayment ? 'Recording payment...' : 'Record payment'}
+                        </button>
+                    </div>
+                    )}
                 </form>
             </Modal>
 
-            {/* --- ENROLLMENT WIZARD MODAL (Enhanced) --- */}
-            <Modal isOpen={isEnrollmentModalOpen} onClose={() => setIsEnrollmentModalOpen(false)} title="Student Enrollment" size="lg">
-                {/* ... (Enrollment Modal Content - No Changes) ... */}
-                <div className="flex flex-col h-full">
-                    {/* Wizard Steps Header */}
-                    <div className="flex items-center justify-between mb-6 px-4">
-                        <div className={`flex-1 text-center border-b-2 pb-2 ${enrollmentStep >= 1 ? 'border-blue-500 text-blue-400 font-bold' : 'border-slate-800 text-slate-600'}`}>1. Student</div>
-                        <div className={`flex-1 text-center border-b-2 pb-2 ${enrollmentStep >= 2 ? 'border-blue-500 text-blue-400 font-bold' : 'border-slate-800 text-slate-600'}`}>2. Program</div>
-                        <div className={`flex-1 text-center border-b-2 pb-2 ${enrollmentStep >= 3 ? 'border-blue-500 text-blue-400 font-bold' : 'border-slate-800 text-slate-600'}`}>3. Payments</div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-1">
-                        {/* STEP 1: STUDENT INFO */}
-                        {enrollmentStep === 1 && (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">Full Name *</label><input className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.name} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, name: e.target.value })} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">Parent Phone *</label><input className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.parentPhone} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, parentPhone: e.target.value })} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">Date of Birth</label><input type="date" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.birthDate} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, birthDate: e.target.value })} /></div>
-                                    <div><label className="text-xs text-slate-400 block mb-1 font-semibold">School</label><input className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollStudentForm.school} onChange={e => setEnrollStudentForm({ ...enrollStudentForm, school: e.target.value })} /></div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* STEP 2: PROGRAM SELECTION */}
-                        {enrollmentStep === 2 && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-xs text-slate-400 block mb-1 font-semibold">Select Program</label>
-                                    <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.programId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, programId: e.target.value, packName: '', gradeId: '', groupId: '' })}>
-                                        <option value="">-- Choose Program --</option>
-                                        {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                    </select>
-                                </div>
-
-                                {selectedProgram && (
-                                    <>
-                                        <div>
-                                            <label className="text-xs text-slate-400 block mb-1 font-semibold">Select Pack</label>
-                                            <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.packName} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, packName: e.target.value })}>
-                                                <option value="">-- Choose Pack --</option>
-                                                {selectedProgram.packs.map(p => <option key={p.name} value={p.name}>{p.name} - {formatCurrency(p.price || p.priceAnnual || 0)}</option>)}
-                                            </select>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="text-xs text-slate-400 block mb-1 font-semibold">Level / Grade</label>
-                                                <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.gradeId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, gradeId: e.target.value, groupId: '' })}>
-                                                    <option value="">-- Choose Level --</option>
-                                                    {selectedProgram.grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                                                </select>
-                                            </div>
-                                            <div>
-                                                <label className="text-xs text-slate-400 block mb-1 font-semibold">Group / Time</label>
-                                                <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.groupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, groupId: e.target.value })}>
-                                                    <option value="">-- Choose Group --</option>
-                                                    {selectedGrade?.groups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.day} {g.time})</option>)}
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        {/* Secondary / DIY Slot Selection */}
-                                        <div className="pt-4 border-t border-slate-800 mt-2">
-                                            <label className="text-xs text-slate-400 block mb-1 font-semibold">Secondary Workshop (DIY) - Optional</label>
-                                            <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" value={enrollProgramForm.secondGroupId} onChange={e => setEnrollProgramForm({ ...enrollProgramForm, secondGroupId: e.target.value })}>
-                                                <option value="">-- None --</option>
-                                                {selectedProgram.grades.flatMap(g => g.groups).map(g => (
-                                                    <option key={g.id} value={g.id}>{g.name} ({g.day} {g.time})</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-
-                        {/* STEP 3: PAYMENT (Multi-Entry + Negotiated Price) */}
-                        {enrollmentStep === 3 && (
-                            <div className="space-y-4">
-                                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl mb-4 space-y-3">
-                                    {/* Payment Plan Selection */}
-                                    <div>
-                                        <label className="text-[10px] text-slate-500 font-bold uppercase mb-2 block">Payment Format / Plan</label>
-                                        <div className="grid grid-cols-5 gap-2 mb-4">
-                                            {[
-                                                { id: 'full', label: 'Full' },
-                                                { id: 'monthly', label: 'Month' },
-                                                { id: 'trimester', label: 'Tri' },
-                                                { id: 'semestre', label: 'Sem' },
-                                                { id: 'annual', label: 'Year' }
-                                            ].map(plan => (
-                                                <button
-                                                    key={plan.id}
-                                                    type="button"
-                                                    onClick={() => setEnrollProgramForm({ ...enrollProgramForm, paymentPlan: plan.id as any })}
-                                                    className={`py-2 rounded-lg text-[10px] font-bold uppercase border transition-all ${enrollProgramForm.paymentPlan === plan.id ? 'bg-blue-600 text-white border-blue-600 shadow-lg shadow-blue-900/20' : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-700'}`}
-                                                >
-                                                    {plan.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Price Negotiation Field */}
-                                    <div>
-                                        <div className="flex justify-between items-center mb-1">
-                                            <label className="text-xs text-slate-400 font-bold uppercase">Final Negotiated Price (MAD)</label>
-                                            {discountAmount > 0 && (
-                                                <span className="bg-emerald-950/30 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-900/50 flex items-center gap-1">
-                                                    <TrendingDown size={10} /> Discount Applied: -{formatCurrency(discountAmount)} ({discountPercent}%)
-                                                </span>
-                                            )}
-                                        </div>
-                                        <input
-                                            type="number"
-                                            className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-white font-bold text-lg focus:border-blue-500 outline-none hover:border-slate-700 transition-colors"
-                                            value={negotiatedPrice}
-                                            onChange={e => setNegotiatedPrice(Number(e.target.value))}
-                                        />
-                                        {standardTuition !== negotiatedPrice && (
-                                            <div className="text-xs text-slate-500 mt-1 text-right">
-                                                Standard Price: <span className="line-through">{formatCurrency(standardTuition)}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="h-px bg-slate-800"></div>
-
-                                    <div className="flex justify-between text-sm text-emerald-400 font-bold mb-1">
-                                        <span>Total Paying Now</span>
-                                        <span>{formatCurrency(totalPayingNow)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm">
-                                        <span className="text-slate-500 font-medium">Remaining Balance</span>
-                                        <span className={`${remainingBalance > 0 ? 'text-red-400' : 'text-slate-500'} font-bold`}>{formatCurrency(remainingBalance)}</span>
-                                    </div>
-                                </div>
-
-                                {/* Payment Promises / Contract */}
-                                {enrollProgramForm.paymentPlan !== 'full' && (
-                                    <div className="bg-indigo-950/20 border border-indigo-900/50 p-4 rounded-xl mb-4 space-y-3">
-                                        <div className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex justify-between items-center">
-                                            <span>Payment Contract (Promises)</span>
-                                            <span className="text-slate-400 font-normal">
-                                                Promised: {formatCurrency(enrollPaymentPromises.reduce((s, p) => s + Number(p.amount), 0))} / {formatCurrency(remainingBalance)}
-                                            </span>
-                                        </div>
-                                        {enrollPaymentPromises.length > 0 && (
-                                            <div className="space-y-2">
-                                                {enrollPaymentPromises.map((p, idx) => (
-                                                    <div key={p.id} className="flex justify-between items-center bg-slate-900 p-2 rounded-lg border border-slate-800 text-sm">
-                                                        <div className="text-slate-300"><span className="text-indigo-400 font-mono text-xs">{p.month}</span> • {formatCurrency(Number(p.amount))}</div>
-                                                        <button onClick={() => handleRemovePromise(p.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                        <div className="flex items-end gap-2 mt-2">
-                                            <div className="flex-1">
-                                                <label className="text-[10px] text-slate-500 block mb-1">Month</label>
-                                                <input type="month" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm focus:border-indigo-500 outline-none" value={currentPromise.month} onChange={e => setCurrentPromise({ ...currentPromise, month: e.target.value })} />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="text-[10px] text-slate-500 block mb-1">Amount</label>
-                                                <input type="number" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm focus:border-indigo-500 outline-none" value={currentPromise.amount} onChange={e => setCurrentPromise({ ...currentPromise, amount: e.target.value })} placeholder="0.00" />
-                                            </div>
-                                            <button onClick={handleAddPromise} disabled={!currentPromise.amount || !currentPromise.month} className="bg-indigo-600 hover:bg-indigo-500 text-white p-2 rounded-lg transition-colors disabled:opacity-50"><Plus size={18} /></button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Payment List */}
-                                {enrollPayments.length > 0 && (
-                                    <div className="space-y-2 mb-4">
-                                        <label className="text-xs text-slate-500 uppercase tracking-wider font-bold">Payments to Record</label>
-                                        {enrollPayments.map((p, idx) => (
-                                            <div key={p.id} className="flex justify-between items-center bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-sm shadow-sm">
-                                                <div>
-                                                    <div className="font-bold text-slate-200">{formatCurrency(p.amount)} <span className="text-slate-500 font-normal text-xs capitalize">via {p.method}</span></div>
-                                                    {p.method === 'check' && <div className="text-[10px] text-slate-500">Check #{p.checkNumber} • Deposit: {p.depositDate}</div>}
-                                                </div>
-                                                <button onClick={() => handleRemoveEnrollmentPayment(p.id)} className="text-slate-500 hover:text-red-400 p-1"><Trash2 size={14} /></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Add Payment Form */}
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-                                    <div className="text-xs font-bold text-blue-400 mb-3 uppercase tracking-wider flex items-center gap-2"><Plus size={12} /> Add Payment</div>
-                                    <div className="space-y-3">
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div><label className="text-[10px] text-slate-500 block mb-1 font-semibold">Amount</label><input type="number" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm font-bold focus:border-blue-500 outline-none" value={currentEnrollPayment.amount} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, amount: e.target.value })} placeholder="0.00" /></div>
-                                            <div><label className="text-[10px] text-slate-500 block mb-1 font-semibold">Method</label><select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none" value={currentEnrollPayment.method} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, method: e.target.value })}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank Transfer</option></select></div>
-                                        </div>
-
-                                        {currentEnrollPayment.method === 'check' && (
-                                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2 animate-in slide-in-from-top-1 shadow-sm">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white focus:bg-slate-800 focus:border-blue-500 outline-none transition-colors" placeholder="Check No." value={currentEnrollPayment.checkNumber} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, checkNumber: e.target.value })} /></div>
-                                                    <div><input className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white focus:bg-slate-800 focus:border-blue-500 outline-none transition-colors" placeholder="Bank Name" value={currentEnrollPayment.bankName} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, bankName: e.target.value })} /></div>
-                                                </div>
-                                                <div><label className="text-[10px] text-slate-500 block mb-1">Deposit Date</label><input type="date" className="w-full bg-slate-900 border border-slate-800 rounded p-1.5 text-xs text-white focus:bg-slate-800 focus:border-blue-500 outline-none transition-colors" value={currentEnrollPayment.depositDate} onChange={e => setCurrentEnrollPayment({ ...currentEnrollPayment, depositDate: e.target.value })} /></div>
-                                            </div>
-                                        )}
-
-                                        <button onClick={handleAddEnrollmentPayment} disabled={!currentEnrollPayment.amount} className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 shadow-md">Add to List</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Wizard Footer */}
-                    <div className="flex justify-between pt-4 border-t border-slate-800 mt-4">
-                        {enrollmentStep > 1 ? (
-                            <button onClick={() => setEnrollmentStep(s => s - 1)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Back</button>
-                        ) : (
-                            <button onClick={() => setIsEnrollmentModalOpen(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm">Cancel</button>
-                        )}
-
-                        {enrollmentStep < 3 ? (
-                            <button
-                                onClick={() => {
-                                    if (enrollmentStep === 1 && !enrollStudentForm.name && !quickEnrollStudentId) return showAlert("Validation Error", "Name is required", "warning");
-                                    if (enrollmentStep === 2 && !enrollProgramForm.programId) return showAlert("Validation Error", "Program is required", "warning");
-                                    if (enrollmentStep === 2 && !enrollProgramForm.groupId) return showAlert("Validation Error", "Group selection is required", "warning");
-                                    setEnrollmentStep(s => s + 1);
-                                }}
-                                className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold flex items-center gap-2"
-                            >
-                                Next Step <ChevronRight size={16} />
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handleFinishEnrollment}
-                                disabled={isSubmittingEnrollment}
-                                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold flex items-center gap-2"
-                            >
-                                {isSubmittingEnrollment ? 'Processing...' : 'Confirm Enrollment'} <CheckCircle2 size={16} />
-                            </button>
-                        )}
-                    </div>
-                </div>
-            </Modal>
+            <EnrollmentWizard
+                isOpen={isEnrollmentModalOpen}
+                onClose={() => {
+                    setIsEnrollmentModalOpen(false);
+                    setQuickEnrollStudentId(null);
+                }}
+                step={enrollmentStep}
+                setStep={setEnrollmentStep}
+                learnerMode={enrollmentLearnerMode}
+                setLearnerMode={setEnrollmentLearnerMode}
+                selectedStudentId={quickEnrollStudentId}
+                setSelectedStudentId={setQuickEnrollStudentId}
+                studentForm={enrollStudentForm}
+                setStudentForm={setEnrollStudentForm}
+                programForm={enrollProgramForm}
+                setProgramForm={setEnrollProgramForm}
+                students={students}
+                programs={programs}
+                enrollments={enrollments}
+                selectedProgram={selectedProgram}
+                standardTuition={standardTuition}
+                negotiatedPrice={negotiatedPrice}
+                setNegotiatedPrice={setNegotiatedPrice}
+                payments={enrollPayments}
+                currentPayment={currentEnrollPayment}
+                setCurrentPayment={setCurrentEnrollPayment}
+                onAddPayment={handleAddEnrollmentPayment}
+                onRemovePayment={handleRemoveEnrollmentPayment}
+                promises={enrollPaymentPromises}
+                currentPromise={currentPromise}
+                setCurrentPromise={setCurrentPromise}
+                onAddPromise={handleAddPromise}
+                onRemovePromise={handleRemovePromise}
+                totalPayingNow={totalPayingNow}
+                remainingBalance={remainingBalance}
+                remainingToSchedule={remainingToSchedule}
+                pendingPayingNow={pendingPayingNow}
+                discountAmount={discountAmount}
+                discountPercent={discountPercent}
+                requiredStudentFields={{
+                    parentName: Boolean(settings.studentFormConfig.parentName.required),
+                    birthDate: Boolean(settings.studentFormConfig.birthDate.required)
+                }}
+                isSubmitting={isSubmittingEnrollment}
+                onFinish={handleFinishEnrollment}
+            />
 
         </Layout>
     );
 };
-
-import { ModuleProvider } from './context/ModuleContext';
 
 const App = () => {
     return (

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, AlertTriangle, CheckCircle, Info, AlertOctagon } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 
 export type AlertVariant = 'info' | 'success' | 'warning' | 'danger';
 
@@ -15,6 +15,38 @@ interface AlertModalProps {
     isAlert?: boolean;
 }
 
+const variantStyles: Record<AlertVariant, {
+    icon: React.ReactNode;
+    iconSurface: string;
+    accent: string;
+    confirm: string;
+}> = {
+    info: {
+        icon: <Info className="h-5 w-5 text-[#2DD4BF]" />,
+        iconSurface: 'border-[#14B8A6]/35 bg-[#14B8A6]/10',
+        accent: 'bg-[#14B8A6]',
+        confirm: 'bg-[#14B8A6] text-[#08111F] hover:bg-[#2DD4BF]',
+    },
+    success: {
+        icon: <CheckCircle2 className="h-5 w-5 text-[#2DD4BF]" />,
+        iconSurface: 'border-[#14B8A6]/35 bg-[#14B8A6]/10',
+        accent: 'bg-[#14B8A6]',
+        confirm: 'bg-[#14B8A6] text-[#08111F] hover:bg-[#2DD4BF]',
+    },
+    warning: {
+        icon: <AlertTriangle className="h-5 w-5 text-[#F2C766]" />,
+        iconSurface: 'border-[#F2C766]/35 bg-[#F2C766]/10',
+        accent: 'bg-[#F2C766]',
+        confirm: 'bg-[#F2C766] text-[#08111F] hover:bg-[#F7D98D]',
+    },
+    danger: {
+        icon: <AlertOctagon className="h-5 w-5 text-[#FB7185]" />,
+        iconSurface: 'border-[#FB7185]/35 bg-[#FB7185]/10',
+        accent: 'bg-[#FB7185]',
+        confirm: 'bg-[#FB7185] text-[#08111F] hover:bg-[#FDA4AF]',
+    },
+};
+
 export const AlertModal: React.FC<AlertModalProps> = ({
     isOpen,
     onClose,
@@ -26,95 +58,98 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     variant = 'info',
     isAlert = false,
 }) => {
-    const [animate, setAnimate] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
-            setAnimate(true);
-        } else {
-            setTimeout(() => setAnimate(false), 200);
+            setIsMounted(true);
+            return;
         }
+
+        const timeout = window.setTimeout(() => setIsMounted(false), 200);
+        return () => window.clearTimeout(timeout);
     }, [isOpen]);
 
-    if (!isOpen && !animate) return null;
+    useEffect(() => {
+        if (!isOpen) return;
 
-    const getIcon = () => {
-        switch (variant) {
-            case 'danger': return <AlertOctagon className="w-6 h-6 text-red-600" />;
-            case 'warning': return <AlertTriangle className="w-6 h-6 text-amber-500" />;
-            case 'success': return <CheckCircle className="w-6 h-6 text-emerald-500" />;
-            default: return <Info className="w-6 h-6 text-blue-500" />;
-        }
-    };
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
 
-    const getHeaderColor = () => {
-        switch (variant) {
-            case 'danger': return 'bg-red-950/30 border-red-900/50';
-            case 'warning': return 'bg-amber-950/30 border-amber-900/50';
-            case 'success': return 'bg-emerald-950/30 border-emerald-900/50';
-            default: return 'bg-blue-950/30 border-blue-900/50';
-        }
-    };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
 
-    const getConfirmBtnColor = () => {
-        switch (variant) {
-            case 'danger': return 'bg-red-600 hover:bg-red-700 text-white shadow-red-200';
-            case 'warning': return 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200';
-            case 'success': return 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200';
-            default: return 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200';
-        }
-    };
+    if (!isMounted) return null;
+
+    const styles = variantStyles[variant];
 
     return (
         <div
-            className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all duration-200 
-      ${isOpen ? 'opacity-100 visible' : 'opacity-0 invisible'}`}
+            className={`fixed inset-0 z-[100] flex items-center justify-center p-3 transition-opacity duration-200 sm:p-5 ${
+                isOpen ? 'visible opacity-100' : 'invisible opacity-0'
+            }`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="atlas-alert-title"
+            aria-describedby="atlas-alert-message"
         >
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
+            <button
+                type="button"
+                className="absolute inset-0 cursor-default bg-[#08111F]/80"
                 onClick={onClose}
+                aria-label="Close dialog"
             />
 
-            {/* Modal Content */}
             <div
-                className={`relative bg-slate-950 border border-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden transform transition-all duration-300
-        ${isOpen ? 'scale-100 translate-y-0' : 'scale-95 translate-y-4'}`}
+                className={`relative w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D] shadow-2xl transition duration-200 ${
+                    isOpen ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'
+                }`}
             >
-                {/* Header */}
-                <div className={`px-6 py-4 border-b flex items-center gap-3 ${getHeaderColor()}`}>
-                    <div className="shrink-0 p-2 bg-slate-900 rounded-full shadow-sm border border-slate-800">
-                        {getIcon()}
+                <div className={`h-1 w-full ${styles.accent}`} />
+                <div className="flex items-start gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${styles.iconSurface}`}>
+                        {styles.icon}
                     </div>
-                    <h3 className="font-bold text-white text-lg flex-1">{title}</h3>
+                    <div className="min-w-0 flex-1 pt-1">
+                        <h3 id="atlas-alert-title" className="text-base font-bold leading-5 text-white">
+                            {title}
+                        </h3>
+                    </div>
                     {!isAlert && (
                         <button
+                            type="button"
                             onClick={onClose}
-                            className="p-2 -mr-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-full transition-colors"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+                            aria-label="Close dialog"
+                            title="Close"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="h-4 w-4" />
                         </button>
                     )}
                 </div>
 
-                {/* Body */}
-                <div className="p-6">
-                    <p className="text-slate-300 leading-relaxed text-[15px]">{message}</p>
+                <div className="px-4 py-5 sm:px-5">
+                    <p id="atlas-alert-message" className="whitespace-pre-line text-sm leading-6 text-slate-300">
+                        {message}
+                    </p>
                 </div>
 
-                {/* Footer */}
-                <div className="px-6 py-4 bg-slate-900 border-t border-slate-800 flex justify-end gap-3">
+                <div className="flex flex-col-reverse gap-2 border-t border-white/10 bg-[#08111F]/35 px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
                     {!isAlert && (
                         <button
+                            type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-slate-400 font-medium hover:bg-slate-800 hover:text-white rounded-lg transition-colors text-sm"
+                            className="h-10 rounded-lg border border-white/10 px-4 text-sm font-semibold text-slate-300 transition-colors hover:border-white/20 hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
                         >
                             {cancelText}
                         </button>
                     )}
                     <button
+                        type="button"
                         onClick={onConfirm}
-                        className={`px-6 py-2 rounded-lg font-semibold shadow-lg shadow-opacity-20 transition-all transform active:scale-95 text-sm ${getConfirmBtnColor()}`}
+                        className={`h-10 rounded-lg px-5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-white/60 ${styles.confirm}`}
                     >
                         {confirmText}
                     </button>

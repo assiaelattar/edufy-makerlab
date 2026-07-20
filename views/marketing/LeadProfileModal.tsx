@@ -1,363 +1,495 @@
-import React, { useState, useMemo } from 'react';
-import { User, Phone, Mail, Calendar, Clock, Tag, Plus, MessageSquare, ArrowRight, UserCheck, X } from 'lucide-react';
-import { Lead, Booking, WorkshopSlot, WorkshopTemplate } from '../../types'; // Adjust import path as needed
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+    Calendar,
+    CheckCircle2,
+    Clock,
+    Mail,
+    MessageSquare,
+    Phone,
+    Plus,
+    User,
+    UserCheck,
+    X
+} from 'lucide-react';
+import { arrayUnion, doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Modal } from '../../components/Modal';
-import { ChatImporterModal } from './ChatImporterModal'; // New Import
-import { formatDate } from '../../utils/helpers';
 import { useAppContext } from '../../context/AppContext';
-import { updateDoc, doc, arrayUnion, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
 import { db } from '../../services/firebase';
+import { Lead } from '../../types';
+import { formatDate } from '../../utils/helpers';
+import { ChatImporterModal } from './ChatImporterModal';
 
 interface LeadProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
     lead: Lead;
     onEnroll?: () => void;
+    initialAction?: 'call' | 'booking' | null;
 }
 
-export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onClose, lead, onEnroll }) => {
-    const { bookings, workshopSlots, workshopTemplates } = useAppContext();
-    const [note, setNote] = useState('');
-    const [activeTab, setActiveTab] = useState<'timeline' | 'workshops'>('timeline');
+type Feedback = { kind: 'success' | 'error'; message: string } | null;
 
-    // --- Derived Data ---
+const CALL_OUTCOMES = [
+    { value: 'interested', label: 'Interested', nextStatus: 'interested' as Lead['status'] },
+    { value: 'follow_up', label: 'Follow up later', nextStatus: 'contacted' as Lead['status'] },
+    { value: 'no_answer', label: 'No answer', nextStatus: 'contacted' as Lead['status'] },
+    { value: 'not_interested', label: 'Not interested', nextStatus: 'closed' as Lead['status'] }
+];
+
+export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onClose, lead, onEnroll, initialAction = null }) => {
+    const { bookings, workshopSlots, workshopTemplates } = useAppContext();
+    const { currentOrganization, userProfile, can } = useAuth();
+    const [note, setNote] = useState('');
+    const [callOutcome, setCallOutcome] = useState('interested');
+    const [callNote, setCallNote] = useState('');
+    const [activeTab, setActiveTab] = useState<'timeline' | 'workshops'>('timeline');
+    const [isBookingMode, setIsBookingMode] = useState(false);
+    const [isCallMode, setIsCallMode] = useState(false);
+    const [isChatImportOpen, setIsChatImportOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState<'booking' | 'note' | 'call' | null>(null);
+    const [feedback, setFeedback] = useState<Feedback>(null);
+    const canManageMarketing = can('marketing.create');
+    const isCurrentTenant = Boolean(currentOrganization?.id && lead.organizationId === currentOrganization.id);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setIsCallMode(initialAction === 'call');
+        setIsBookingMode(initialAction === 'booking');
+        setActiveTab('timeline');
+        setFeedback(null);
+    }, [initialAction, isOpen, lead.id]);
+
     const leadBookings = useMemo(() => {
-        // Match by phone number (removing spaces/formatting for loose matching)
-        const cleanPhone = (p: string) => p.replace(/[^0-9]/g, '');
+        const cleanPhone = (phone: string) => phone.replace(/[^0-9]/g, '');
         const leadPhone = cleanPhone(lead.phone);
 
-        return bookings.filter(b => cleanPhone(b.phoneNumber) === leadPhone).sort((a, b) => b.bookedAt?.toMillis() - a.bookedAt?.toMillis());
-    }, [bookings, lead.phone]);
+        if (!leadPhone) return [];
+        return bookings
+            .filter(booking => booking.organizationId === lead.organizationId && cleanPhone(booking.phoneNumber) === leadPhone)
+            .sort((a, b) => (b.bookedAt?.toMillis?.() || 0) - (a.bookedAt?.toMillis?.() || 0));
+    }, [bookings, lead.organizationId, lead.phone]);
 
     const timelineEvents = useMemo(() => {
-        const events: any[] = [...(lead.timeline || [])];
-
-        // Inject workshop bookings into timeline view dynamically if they aren't already logged
-        // (Optional: depending on if we want "source of truth" to be only the DB timeline)
-        // For now, let's keep it simple and just show what's in 'timeline' plus the bookings list in its own tab.
-        return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return [...(lead.timeline || [])].sort(
+            (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
     }, [lead.timeline]);
 
-    const [isBookingMode, setIsBookingMode] = useState(false);
-    const [isChatImportOpen, setIsChatImportOpen] = useState(false);
+    const upcomingSlots = useMemo(() => {
+        return workshopSlots
+            .filter(slot => slot.organizationId === lead.organizationId && slot.status === 'available' && slot.bookedCount < slot.capacity && new Date(`${slot.date}T23:59:59`) >= new Date())
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [lead.organizationId, workshopSlots]);
 
-    // --- Handlers ---
     const handleBookDemo = async (slotId: string) => {
-        if (!db) return;
-        const slot = workshopSlots.find(s => s.id === slotId);
-        const template = workshopTemplates.find(t => t.id === slot?.workshopTemplateId);
+        if (!db || pendingAction) return;
+        if (!canManageMarketing || !isCurrentTenant) {
+            setFeedback({ kind: 'error', message: 'This lead is view-only for your current organization.' });
+            return;
+        }
+        const slot = workshopSlots.find(item => item.id === slotId);
+        const template = workshopTemplates.find(item => item.id === slot?.workshopTemplateId);
+        const orgId = lead.organizationId || slot?.organizationId || template?.organizationId;
 
-        // 1. Create Booking
-        await addDoc(collection(db, 'bookings'), {
-            workshopSlotId: slotId,
-            kidName: lead.name,
-            parentName: lead.parentName,
-            phoneNumber: lead.phone,
-            email: lead.email || '',
-            status: 'confirmed',
-            bookedAt: serverTimestamp(),
-            notes: 'Booked via CRM Lead Profile',
-            paymentStatus: 'pending'
-        });
+        if (!slot || !orgId || orgId !== currentOrganization?.id || slot.organizationId !== orgId) {
+            setFeedback({ kind: 'error', message: 'Select a valid workshop slot before booking.' });
+            return;
+        }
+        if (slot.status !== 'available' || slot.bookedCount >= slot.capacity) {
+            setFeedback({ kind: 'error', message: 'This workshop is now full or unavailable. Choose another session.' });
+            return;
+        }
+        const cleanPhone = (phone: string) => phone.replace(/\D/g, '');
+        const duplicateBooking = bookings.some(booking =>
+            booking.organizationId === orgId &&
+            booking.workshopSlotId === slotId &&
+            cleanPhone(booking.phoneNumber) === cleanPhone(lead.phone) &&
+            booking.status !== 'cancelled'
+        );
+        if (duplicateBooking) {
+            setFeedback({ kind: 'error', message: 'This lead already has a booking for that workshop.' });
+            return;
+        }
 
-        // 2. Update Lead Timeline
-        await updateDoc(doc(db, 'leads', lead.id), {
-            status: 'workshop_booked',
-            timeline: arrayUnion({
-                date: new Date().toISOString(),
-                type: 'note', // Using note/workshop type
-                details: `Booked Demo Workshop: ${template?.title} (${slot?.date})`,
-                author: 'Admin'
-            })
-        });
+        setPendingAction('booking');
+        setFeedback(null);
+        try {
+            const slotRef = doc(db, 'workshop_slots', slot.id);
+            const bookingRef = doc(db, 'bookings', `crm_${slot.id}_${lead.id}`);
+            const leadRef = doc(db, 'leads', lead.id);
+            await runTransaction(db, async transaction => {
+                const [freshSlot, existingBooking] = await Promise.all([transaction.get(slotRef), transaction.get(bookingRef)]);
+                if (!freshSlot.exists()) throw new Error('slot-missing');
+                const slotData = freshSlot.data();
+                if (slotData.organizationId !== orgId || slotData.status !== 'available' || Number(slotData.bookedCount || 0) >= Number(slotData.capacity || 0)) throw new Error('slot-full');
+                if (existingBooking.exists() && existingBooking.data().status !== 'cancelled') throw new Error('duplicate-booking');
 
-        setIsBookingMode(false);
-        setActiveTab('workshops'); // Switch tab to show it
-        alert("Workshop Demo Booked!");
-    };
-
-    const handleAddNote = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!db || !note.trim()) return;
-
-        const newEvent = {
-            date: new Date().toISOString(),
-            type: 'note',
-            details: note,
-            author: 'Admin' // potentially get from user context
-        };
-
-        await updateDoc(doc(db, 'leads', lead.id), {
-            timeline: arrayUnion(newEvent)
-        });
-        setNote('');
-    };
-
-    const handleLogCall = async () => {
-        if (!db) return;
-        const result = prompt("Call Outcome?", "Contacted - Interested");
-        if (result) {
-            await updateDoc(doc(db, 'leads', lead.id), {
-                status: 'contacted',
-                timeline: arrayUnion({
-                    date: new Date().toISOString(),
-                    type: 'call',
-                    details: `Call Log: ${result}`,
-                    author: 'Admin'
-                })
+                transaction.set(bookingRef, {
+                    organizationId: orgId,
+                    workshopSlotId: slotId,
+                    workshopTemplateId: slot.workshopTemplateId,
+                    kidName: lead.name,
+                    kidAge: 0,
+                    parentName: lead.parentName,
+                    phoneNumber: lead.phone,
+                    email: lead.email || '',
+                    status: 'confirmed',
+                    bookedAt: serverTimestamp(),
+                    notes: 'Booked via CRM Lead Profile',
+                    paymentStatus: 'pending'
+                });
+                transaction.update(leadRef, {
+                    status: 'workshop_booked',
+                    timeline: arrayUnion({ date: new Date().toISOString(), type: 'workshop', details: `Booked workshop: ${template?.title || 'Workshop'} on ${slot.date} at ${slot.startTime}`, author: userProfile?.name || 'Team member' })
+                });
+                transaction.update(slotRef, { bookedCount: Number(slotData.bookedCount || 0) + 1 });
             });
+
+            setIsBookingMode(false);
+            setActiveTab('workshops');
+            setFeedback({ kind: 'success', message: 'Demo workshop booked and added to the lead timeline.' });
+        } catch (error) {
+            console.error('Workshop booking failed', error);
+            const message = error instanceof Error && error.message === 'duplicate-booking'
+                ? 'This lead already has a booking for that workshop.'
+                : error instanceof Error && ['slot-full', 'slot-missing'].includes(error.message)
+                    ? 'This workshop is now full or unavailable. Choose another session.'
+                    : 'The workshop could not be booked. Try again.';
+            setFeedback({ kind: 'error', message });
+        } finally {
+            setPendingAction(null);
         }
     };
 
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Lead Profile" size="lg">
-            <div className="flex flex-col h-[80vh] md:h-[600px]">
-                {/* Header Card */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-950 p-6 rounded-2xl border border-slate-800 mb-6 flex flex-col md:flex-row justify-between items-start gap-6 shadow-xl relative overflow-hidden group">
-                    {/* Decorative Blur */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none -mt-32 -mr-32 group-hover:bg-purple-500/20 transition-all duration-1000"></div>
+    const handleAddNote = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!db || !note.trim() || pendingAction) return;
+        if (!canManageMarketing || !isCurrentTenant) {
+            setFeedback({ kind: 'error', message: 'This lead is view-only for your current organization.' });
+            return;
+        }
 
-                    <div className="flex items-center gap-5 relative z-10">
-                        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-0.5 shadow-lg shadow-indigo-500/20">
-                            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center text-2xl font-black text-white">
+        setPendingAction('note');
+        setFeedback(null);
+        try {
+            await updateDoc(doc(db, 'leads', lead.id), {
+                timeline: arrayUnion({
+                    date: new Date().toISOString(),
+                    type: 'note',
+                    details: note.trim(),
+                    author: userProfile?.name || 'Team member'
+                })
+            });
+            setNote('');
+            setFeedback({ kind: 'success', message: 'Note added to the lead timeline.' });
+        } catch (error) {
+            console.error('Lead note failed', error);
+            setFeedback({ kind: 'error', message: 'The note could not be saved. Try again.' });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleLogCall = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!db || !callOutcome || pendingAction) return;
+        if (!canManageMarketing || !isCurrentTenant) {
+            setFeedback({ kind: 'error', message: 'This lead is view-only for your current organization.' });
+            return;
+        }
+        const selectedOutcome = CALL_OUTCOMES.find(outcome => outcome.value === callOutcome);
+        if (!selectedOutcome) return;
+
+        setPendingAction('call');
+        setFeedback(null);
+        try {
+            await updateDoc(doc(db, 'leads', lead.id), {
+                status: selectedOutcome.nextStatus,
+                timeline: arrayUnion({
+                    date: new Date().toISOString(),
+                    type: 'call',
+                    details: `Call outcome: ${selectedOutcome.label}${callNote.trim() ? `\n${callNote.trim()}` : ''}`,
+                    author: userProfile?.name || 'Team member'
+                })
+            });
+            setIsCallMode(false);
+            setCallNote('');
+            setFeedback({ kind: 'success', message: `Call logged. Lead moved to ${selectedOutcome.nextStatus.replace('_', ' ')}.` });
+        } catch (error) {
+            console.error('Call log failed', error);
+            setFeedback({ kind: 'error', message: 'The call outcome could not be saved. Try again.' });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const statusClass = lead.status === 'converted'
+        ? 'border-teal-400/30 bg-teal-400/10 text-teal-200'
+        : lead.status === 'new'
+            ? 'border-[#F2C766]/30 bg-[#F2C766]/10 text-[#F2C766]'
+            : 'border-slate-600 bg-slate-800 text-slate-300';
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Lead profile" size="lg">
+            <div className="flex h-[min(76vh,660px)] flex-col gap-4 text-slate-900">
+                <section className="shrink-0 rounded-lg border border-slate-800 bg-[#08111F] p-4 text-white">
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                        <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-teal-400/30 bg-[#0F1B2D] text-lg font-black text-teal-300">
                                 {lead.name.charAt(0)}
                             </div>
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-bold text-white tracking-tight">{lead.name}</h2>
-                            <div className="flex items-center gap-2 text-slate-400 text-sm mt-1">
-                                <User size={14} className="text-indigo-400" />
-                                <span className="font-medium text-slate-300">{lead.parentName}</span>
-                            </div>
-                            <div className="flex gap-4 mt-3 text-xs font-medium text-slate-500">
-                                <span className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"><Phone size={12} /> {lead.phone}</span>
-                                {lead.email && <span className="flex items-center gap-1.5 hover:text-indigo-400 transition-colors"><Mail size={12} /> {lead.email}</span>}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col items-end gap-3 relative z-10">
-                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider border shadow-sm ${lead.status === 'new' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                lead.status === 'converted' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                                    'bg-slate-800/50 text-slate-400 border-slate-700'
-                            }`}>
-                            {lead.status.replace('_', ' ')}
-                        </span>
-
-                        {/* Enroll Action (Primary) */}
-                        {onEnroll && lead.status !== 'converted' && (
-                            <button
-                                onClick={() => { onEnroll(); onClose(); }}
-                                className="group flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-900/20 transition-all active:scale-[0.98]"
-                            >
-                                <UserCheck size={16} className="group-hover:scale-110 transition-transform" />
-                                Enroll Student
-                            </button>
-                        )}
-
-                        <div className="flex flex-wrap gap-1.5 justify-end max-w-[240px] mt-1">
-                            {lead.interests?.slice(0, 3).map((tag, i) => (
-                                <span key={i} className="px-2.5 py-1 bg-purple-500/10 text-purple-300 rounded-lg border border-purple-500/20 text-[10px] font-semibold">{tag}</span>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="flex items-center gap-6 border-b border-slate-800 mb-6 px-2">
-                    <button
-                        onClick={() => setActiveTab('timeline')}
-                        className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'timeline' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                    >
-                        <MessageSquare size={16} /> Timeline & Notes
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('workshops')}
-                        className={`pb-3 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === 'workshops' ? 'border-purple-500 text-purple-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                    >
-                        <Calendar size={16} /> Workshop History
-                        <span className="bg-slate-800 text-slate-400 px-1.5 rounded-md text-[10px]">{leadBookings.length}</span>
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
-
-                    {activeTab === 'timeline' && (
-                        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                            {/* Input Area */}
-                            <form onSubmit={handleAddNote} className="flex gap-3 mb-8">
-                                <div className="flex-1 relative group">
-                                    <input
-                                        className="w-full p-4 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 outline-none transition-all group-hover:border-slate-700"
-                                        placeholder="Add a new note, observation, or detail..."
-                                        value={note}
-                                        onChange={e => setNote(e.target.value)}
-                                    />
-                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                        <button type="button" className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"><Tag size={14} /></button>
-                                    </div>
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="truncate text-lg font-bold">{lead.name}</h2>
+                                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${statusClass}`}>
+                                        {lead.status.replace('_', ' ')}
+                                    </span>
                                 </div>
-                                <button type="submit" className="px-5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all border border-slate-700 hover:border-slate-600 flex items-center justify-center">
-                                    <Plus size={20} />
+                                <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-300">
+                                    <User size={14} className="text-teal-300" /> {lead.parentName}
+                                </p>
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                                    <a href={`tel:${lead.phone}`} className="flex items-center gap-1.5 rounded text-slate-300 hover:text-teal-200" title={`Call ${lead.parentName}`}><Phone size={12} /> {lead.phone}</a>
+                                    {lead.email && <span className="flex items-center gap-1.5"><Mail size={12} /> {lead.email}</span>}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                            {lead.interests?.slice(0, 3).map((interest, index) => (
+                                <span key={index} className="rounded-full border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-300">
+                                    {interest}
+                                </span>
+                            ))}
+                            {onEnroll && lead.status !== 'converted' && (
+                                <button
+                                    type="button"
+                                    onClick={() => { onEnroll(); onClose(); }}
+                                    className="flex h-10 items-center gap-2 rounded-lg bg-[#14B8A6] px-3 text-sm font-bold text-[#08111F] transition-colors hover:bg-teal-300"
+                                >
+                                    <UserCheck size={16} /> Enroll student
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </section>
+
+                {feedback && (
+                    <div className={`flex shrink-0 items-start gap-2 rounded-lg border px-3 py-2 text-sm ${feedback.kind === 'success' ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-rose-200 bg-rose-50 text-rose-800'}`} role="status">
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+                        <span>{feedback.message}</span>
+                    </div>
+                )}
+
+                {(!canManageMarketing || !isCurrentTenant) && (
+                    <div className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                        View-only record. Switch to the lead's organization or ask for Marketing create access to add activity.
+                    </div>
+                )}
+
+                <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Lead record">
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'timeline'}
+                        onClick={() => setActiveTab('timeline')}
+                        className={`flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-bold transition-colors ${activeTab === 'timeline' ? 'border-[#14B8A6] text-slate-950' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                        <MessageSquare size={16} /> Timeline and notes
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        aria-selected={activeTab === 'workshops'}
+                        onClick={() => setActiveTab('workshops')}
+                        className={`flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-bold transition-colors ${activeTab === 'workshops' ? 'border-[#14B8A6] text-slate-950' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                        <Calendar size={16} /> Workshops
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">{leadBookings.length}</span>
+                    </button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                    {activeTab === 'timeline' && (
+                        <div className="space-y-4">
+                            <form onSubmit={handleAddNote} className="flex flex-col gap-2 sm:flex-row">
+                                <label className="sr-only" htmlFor="lead-note">Add a lead note</label>
+                                <input
+                                    id="lead-note"
+                                    className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-[#14B8A6] focus:ring-2 focus:ring-teal-100"
+                                    placeholder="Add a note or observation"
+                                    value={note}
+                                    onChange={event => setNote(event.target.value)}
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={!canManageMarketing || !isCurrentTenant || !note.trim() || pendingAction !== null}
+                                    className="flex h-10 items-center justify-center gap-2 rounded-lg bg-[#08111F] px-4 text-sm font-bold text-white transition-colors hover:bg-[#0F1B2D] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    <Plus size={16} /> {pendingAction === 'note' ? 'Saving...' : 'Add note'}
                                 </button>
                             </form>
 
-                            {/* Quick Actions Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                                 <button
-                                    onClick={() => setIsBookingMode(!isBookingMode)}
-                                    className={`py-3 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all border ${isBookingMode ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-900/20' : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                                    type="button"
+                                    onClick={() => { setIsBookingMode(value => !value); setIsCallMode(false); }}
+                                    disabled={!canManageMarketing || !isCurrentTenant || lead.status === 'closed'}
+                                    className={`flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-bold transition-colors ${isBookingMode ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300'}`}
                                 >
-                                    <Calendar size={16} className={isBookingMode ? "text-indigo-200" : "text-slate-500"} />
-                                    Book Demo
+                                    <Calendar size={16} /> Book demo
                                 </button>
                                 <button
-                                    onClick={handleLogCall}
-                                    className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                                    type="button"
+                                    onClick={() => { setIsCallMode(value => !value); setIsBookingMode(false); }}
+                                    disabled={!canManageMarketing || !isCurrentTenant}
+                                    className={`flex h-10 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-bold transition-colors ${isCallMode ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-slate-700 hover:border-teal-300'}`}
                                 >
-                                    <Phone size={16} className="text-emerald-500" />
-                                    Log Call
+                                    <Phone size={16} /> Log call
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => setIsChatImportOpen(true)}
-                                    className="py-3 px-4 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                                    disabled={!canManageMarketing || !isCurrentTenant}
+                                    className="flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 transition-colors hover:border-teal-300"
                                 >
-                                    <MessageSquare size={16} className="text-green-500" />
-                                    Import Chat
+                                    <MessageSquare size={16} /> Import chat
                                 </button>
                             </div>
 
-                            {/* Booking Selection Panel */}
-                            {isBookingMode && (
-                                <div className="bg-indigo-950/30 border border-indigo-500/30 rounded-2xl p-5 animate-in zoom-in-95 duration-200">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-2">
-                                            <Clock size={14} /> Upcoming Workshops
-                                        </h4>
-                                        <button onClick={() => setIsBookingMode(false)} className="text-indigo-400 hover:text-white"><X size={14} /></button>
+                            {isCallMode && (
+                                <form onSubmit={handleLogCall} className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+                                    <div className="mb-2 flex items-center justify-between gap-3">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-slate-900">Call outcome</h3>
+                                            <p className="text-xs text-slate-600">Record what happened before saving the activity.</p>
+                                        </div>
+                                        <button type="button" onClick={() => setIsCallMode(false)} className="rounded-lg p-2 text-slate-500 hover:bg-white" aria-label="Close call outcome"><X size={16} /></button>
                                     </div>
+                                    <div className="grid gap-2 sm:grid-cols-[180px_1fr_auto]">
+                                        <select
+                                            value={callOutcome}
+                                            onChange={event => setCallOutcome(event.target.value)}
+                                            className="h-10 min-w-0 flex-1 rounded-lg border border-teal-200 bg-white px-3 text-sm outline-none focus:border-[#14B8A6] focus:ring-2 focus:ring-teal-100"
+                                            aria-label="Call outcome"
+                                            autoFocus
+                                        >
+                                            {CALL_OUTCOMES.map(outcome => <option key={outcome.value} value={outcome.value}>{outcome.label}</option>)}
+                                        </select>
+                                        <input value={callNote} onChange={event => setCallNote(event.target.value)} placeholder="Optional follow-up note" className="h-10 min-w-0 rounded-lg border border-teal-200 bg-white px-3 text-sm outline-none focus:border-[#14B8A6] focus:ring-2 focus:ring-teal-100" />
+                                        <button type="submit" disabled={!callOutcome || pendingAction !== null} className="h-10 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50">
+                                            {pendingAction === 'call' ? 'Saving...' : 'Save outcome'}
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
 
-                                    <div className="space-y-2 max-h-[240px] overflow-y-auto custom-scrollbar pr-2">
-                                        {workshopSlots
-                                            .filter(s => new Date(s.date) >= new Date())
-                                            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                                            .map(slot => {
-                                                const tmpl = workshopTemplates.find(t => t.id === slot.workshopTemplateId);
-                                                return (
-                                                    <button key={slot.id} onClick={() => handleBookDemo(slot.id)} className="w-full text-left bg-slate-900/80 p-3 rounded-xl border border-indigo-500/10 hover:border-indigo-500/50 hover:bg-indigo-900/20 transition-all flex justify-between items-center group">
-                                                        <div>
-                                                            <div className="font-bold text-slate-200 text-sm group-hover:text-white">{tmpl?.title}</div>
-                                                            <div className="text-xs text-indigo-400/80 flex gap-3 mt-1 font-medium">
-                                                                <span className="flex items-center gap-1.5"><Calendar size={12} /> {formatDate(slot.date)}</span>
-                                                                <span className="flex items-center gap-1.5"><Clock size={12} /> {slot.startTime}</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="bg-indigo-500/10 p-1.5 rounded-lg group-hover:bg-indigo-500 group-hover:text-white text-indigo-400 transition-colors">
-                                                            <Plus size={16} />
-                                                        </div>
-                                                    </button>
-                                                )
-                                            })}
-                                        {workshopSlots.filter(s => new Date(s.date) >= new Date()).length === 0 && (
-                                            <div className="text-center py-8 border border-dashed border-indigo-500/20 rounded-xl bg-indigo-500/5">
-                                                <p className="text-indigo-300 text-sm font-medium">No workshops scheduled</p>
-                                                <p className="text-indigo-400/50 text-xs mt-1">Check back later</p>
+                            {isBookingMode && (
+                                <section className="rounded-lg border border-[#F2C766]/60 bg-amber-50 p-3">
+                                    <div className="mb-3 flex items-start justify-between gap-3">
+                                        <div>
+                                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Clock size={15} className="text-amber-600" /> Upcoming workshops</h3>
+                                            <p className="mt-0.5 text-xs text-slate-600">Choose a session to create a confirmed booking.</p>
+                                        </div>
+                                        <button type="button" onClick={() => setIsBookingMode(false)} className="rounded-lg p-2 text-slate-500 hover:bg-white" aria-label="Close workshop selection"><X size={16} /></button>
+                                    </div>
+                                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                                        {upcomingSlots.map(slot => {
+                                            const template = workshopTemplates.find(item => item.id === slot.workshopTemplateId);
+                                            return (
+                                                <button
+                                                    key={slot.id}
+                                                    type="button"
+                                                    onClick={() => handleBookDemo(slot.id)}
+                                                    disabled={pendingAction !== null}
+                                                    className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-left transition-colors hover:border-amber-400 disabled:opacity-50"
+                                                >
+                                                    <span className="min-w-0">
+                                                        <span className="block truncate text-sm font-bold text-slate-900">{template?.title || 'Workshop'}</span>
+                                                        <span className="mt-0.5 flex flex-wrap gap-3 text-xs text-slate-500">
+                                                            <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(slot.date)}</span>
+                                                            <span className="flex items-center gap-1"><Clock size={12} /> {slot.startTime}</span>
+                                                            <span>{Math.max(0, slot.capacity - slot.bookedCount)} seats left</span>
+                                                        </span>
+                                                    </span>
+                                                    <Plus size={16} className="shrink-0 text-amber-700" />
+                                                </button>
+                                            );
+                                        })}
+                                        {upcomingSlots.length === 0 && (
+                                            <div className="rounded-lg border border-dashed border-amber-300 px-4 py-6 text-center">
+                                                <p className="text-sm font-bold text-slate-800">No workshops scheduled</p>
+                                                <p className="mt-1 text-xs text-slate-500">Add a workshop slot before booking this lead.</p>
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                </section>
                             )}
 
-                            {/* Timeline Feed */}
-                            <div className="space-y-0 relative pl-4">
-                                {/* Vertical Line */}
-                                <div className="absolute left-[27px] top-4 bottom-4 w-0.5 bg-slate-800"></div>
-
+                            <section aria-label="Lead timeline" className="divide-y divide-slate-200 border-y border-slate-200">
                                 {timelineEvents.length === 0 ? (
-                                    <div className="text-center py-12">
-                                        <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-700 border border-slate-800">
-                                            <MessageSquare size={24} />
-                                        </div>
-                                        <p className="text-slate-500 text-sm font-medium">No history recorded yet.</p>
+                                    <div className="py-10 text-center">
+                                        <MessageSquare size={24} className="mx-auto text-slate-300" />
+                                        <p className="mt-2 text-sm font-bold text-slate-700">No history recorded yet</p>
+                                        <p className="mt-1 text-xs text-slate-500">Add a note, call, booking, or imported chat to begin the timeline.</p>
                                     </div>
-                                ) : (
-                                    timelineEvents.map((ev, idx) => (
-                                        <div key={idx} className="relative pl-12 pb-6 group">
-                                            {/* Node Dot */}
-                                            <div className={`absolute left-[19px] top-0 w-4 h-4 rounded-full border-4 border-slate-950 z-10 box-content ${ev.type === 'note' ? 'bg-slate-500' :
-                                                    ev.type === 'call' ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]' :
-                                                        ev.type === 'conversion' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' :
-                                                            'bg-purple-500'
-                                                }`}></div>
-
-                                            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 group-hover:border-slate-700 transition-colors shadow-sm">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded ${ev.type === 'call' ? 'bg-blue-950 text-blue-400' :
-                                                            ev.type === 'conversion' ? 'bg-emerald-950 text-emerald-400' :
-                                                                'bg-slate-800 text-slate-400'
-                                                        }`}>
-                                                        {ev.type.replace('_', ' ')}
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-500 font-mono">{formatDate(ev.date)}</span>
-                                                </div>
-                                                <p className="text-sm text-slate-300 leading-relaxed">{ev.details}</p>
-                                                <div className="mt-2 text-[10px] text-slate-600 font-bold uppercase tracking-widest">
-                                                    by {ev.author}
-                                                </div>
-                                            </div>
+                                ) : timelineEvents.map((event: any, index: number) => (
+                                    <article key={index} className="grid gap-2 py-3 sm:grid-cols-[112px_1fr]">
+                                        <div>
+                                            <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase ${event.type === 'call' ? 'bg-teal-50 text-teal-700' : event.type === 'conversion' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                                                {event.type.replace('_', ' ')}
+                                            </span>
+                                            <p className="mt-1 font-mono text-[10px] text-slate-400">{formatDate(event.date)}</p>
                                         </div>
-                                    ))
-                                )}
-                            </div>
+                                        <div className="min-w-0">
+                                            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{event.details}</p>
+                                            <p className="mt-1 text-[10px] font-bold uppercase text-slate-400">by {event.author}</p>
+                                        </div>
+                                    </article>
+                                ))}
+                            </section>
                         </div>
                     )}
 
                     {activeTab === 'workshops' && (
-                        <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                        <div className="space-y-2">
                             {leadBookings.map(booking => {
-                                const slot = workshopSlots.find(s => s.id === booking.workshopSlotId);
-                                const template = workshopTemplates.find(t => t.id === slot?.workshopTemplateId);
-
+                                const slot = workshopSlots.find(item => item.id === booking.workshopSlotId);
+                                const template = workshopTemplates.find(item => item.id === slot?.workshopTemplateId);
                                 return (
-                                    <div key={booking.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex justify-between items-center group hover:border-indigo-500/30 hover:bg-slate-800/50 transition-all">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-110 transition-transform">
-                                                <Calendar size={20} />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-white text-base group-hover:text-indigo-300 transition-colors">{template?.title || 'Workshop'}</h4>
-                                                <div className="text-xs text-slate-500 flex gap-3 mt-1">
-                                                    <span className="flex items-center gap-1.5"><Calendar size={12} /> {formatDate(slot?.date || '')}</span>
-                                                    <span className="flex items-center gap-1.5"><Clock size={12} /> {slot?.startTime}</span>
+                                    <article key={booking.id} className="flex flex-col justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700"><Calendar size={18} /></div>
+                                            <div className="min-w-0">
+                                                <h3 className="truncate text-sm font-bold text-slate-900">{template?.title || 'Workshop'}</h3>
+                                                <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                                                    <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(slot?.date || '')}</span>
+                                                    <span className="flex items-center gap-1"><Clock size={12} /> {slot?.startTime}</span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${booking.status === 'attended' ? 'bg-emerald-500/10 text-emerald-400' :
-                                                booking.status === 'cancelled' ? 'bg-red-500/10 text-red-400' :
-                                                    'bg-blue-500/10 text-blue-400'
-                                            }`}>
+                                        <span className={`self-start rounded-full px-2 py-1 text-[10px] font-bold uppercase sm:self-auto ${booking.status === 'attended' ? 'bg-teal-50 text-teal-700' : booking.status === 'cancelled' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>
                                             {booking.status}
-                                        </div>
-                                    </div>
+                                        </span>
+                                    </article>
                                 );
                             })}
                             {leadBookings.length === 0 && (
-                                <div className="text-center py-20 bg-slate-900/50 rounded-2xl border border-dashed border-slate-800">
-                                    <Clock size={40} className="mx-auto text-slate-700 mb-4" />
-                                    <p className="text-slate-400 font-medium">No workshops booked yet.</p>
-                                    <button onClick={() => { setActiveTab('timeline'); setIsBookingMode(true); }} className="mt-4 text-indigo-400 text-sm font-bold hover:text-indigo-300 underline">
-                                        Book a demo now
+                                <div className="rounded-lg border border-dashed border-slate-300 py-12 text-center">
+                                    <Clock size={26} className="mx-auto text-slate-300" />
+                                    <p className="mt-2 text-sm font-bold text-slate-700">No workshops booked yet</p>
+                                    <button type="button" onClick={() => { setActiveTab('timeline'); setIsBookingMode(true); }} className="mt-3 h-10 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300">
+                                        Book a demo
                                     </button>
                                 </div>
                             )}
                         </div>
                     )}
-
                 </div>
             </div>
 
             <ChatImporterModal isOpen={isChatImportOpen} onClose={() => setIsChatImportOpen(false)} lead={lead} />
-        </Modal >
+        </Modal>
     );
 };

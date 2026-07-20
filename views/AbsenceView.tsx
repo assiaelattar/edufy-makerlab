@@ -1,109 +1,114 @@
-
-import React, { useState, useMemo } from 'react';
-import { ClipboardCheck, Search, Filter, Calendar, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, MessageCircle, BarChart2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { addDays, format, parseISO } from 'date-fns';
+import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Filter, MessageCircle, RotateCcw, Search, ShieldCheck, Users, XCircle } from 'lucide-react';
+import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
 
 export const AbsenceView = () => {
     const { enrollments, students, attendanceRecords } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const { confirm, alert: showAlert } = useConfirm();
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const [selectedDate, setSelectedDate] = useState(today);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedGroup, setSelectedGroup] = useState('All');
+    const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
+    const [isConfirmingSession, setIsConfirmingSession] = useState(false);
 
-    // 1. Determine the "Day of Week" string for the selected date (e.g., "Monday")
     const dayOfWeek = useMemo(() => {
-        const d = new Date(selectedDate);
-        return d.toLocaleDateString('en-US', { weekday: 'long' });
+        return format(parseISO(selectedDate), 'EEEE');
     }, [selectedDate]);
 
-    // 2. Identify Current Time for Smart Highlighting
     const currentTimeMinutes = useMemo(() => {
         const now = new Date();
         return now.getHours() * 60 + now.getMinutes();
     }, []);
 
-    const isToday = selectedDate === new Date().toISOString().split('T')[0];
+    const isToday = selectedDate === today;
+    const isFutureDate = selectedDate > today;
 
-    // 3. Filter Enrollments: Must be Active + Student Active + Have a Class Scheduled Today
-    const scheduledStudents = useMemo(() => {
-        const dayString = dayOfWeek; // e.g. "Wednesday"
+    const allScheduledStudents = useMemo(() => {
+        return enrollments.filter(enrollment => {
+            if (enrollment.status !== 'active') return false;
 
-        return enrollments.filter(e => {
-            // Strict check: Enrollment active
-            if (e.status !== 'active') return false;
-
-            // Strict check: Student Active
-            const student = students.find(s => s.id === e.studentId);
+            const student = students.find(item => item.id === enrollment.studentId);
             if (!student || student.status === 'inactive') return false;
 
-            // Check main group
-            const mainHasClass = e.groupTime?.includes(dayString);
-            // Check secondary group (DIY)
-            const secHasClass = e.secondGroupTime?.includes(dayString);
+            const mainHasClass = enrollment.groupTime?.includes(dayOfWeek);
+            const secondaryHasClass = enrollment.secondGroupTime?.includes(dayOfWeek);
 
-            // Filter by search
-            if (searchQuery && !e.studentName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-
-            // Filter by Group Dropdown (if strict grouping is needed, though we group by time primarily)
-            if (selectedGroup !== 'All' && e.groupName !== selectedGroup && e.secondGroupName !== selectedGroup) return false;
-
-            return mainHasClass || secHasClass;
-        }).flatMap(e => {
-            // Use flatMap to allow One Student -> Multiple Slots (e.g. 15:30 AND 17:30)
+            return mainHasClass || secondaryHasClass;
+        }).flatMap(enrollment => {
             const slots = [];
 
-            if (e.groupTime?.includes(dayString)) {
+            if (enrollment.groupTime?.includes(dayOfWeek)) {
                 slots.push({
-                    ...e,
-                    displayTime: e.groupTime.replace(dayString, '').trim(),
-                    displayGroup: e.groupName || ''
+                    ...enrollment,
+                    displayTime: enrollment.groupTime.replace(dayOfWeek, '').trim(),
+                    displayGroup: enrollment.groupName || ''
                 });
             }
 
-            if (e.secondGroupTime?.includes(dayString)) {
+            if (enrollment.secondGroupTime?.includes(dayOfWeek)) {
                 slots.push({
-                    ...e,
-                    displayTime: e.secondGroupTime.replace(dayString, '').trim(),
-                    displayGroup: e.secondGroupName || ''
+                    ...enrollment,
+                    displayTime: enrollment.secondGroupTime.replace(dayOfWeek, '').trim(),
+                    displayGroup: enrollment.secondGroupName || ''
                 });
             }
 
             return slots;
         });
-    }, [enrollments, students, dayOfWeek, searchQuery, selectedGroup]);
+    }, [enrollments, students, dayOfWeek]);
 
-    // 4. Group by Time Slot
+    const scheduledStudents = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        return allScheduledStudents.filter(enrollment => {
+            if (query && !enrollment.studentName.toLowerCase().includes(query)) return false;
+            return selectedGroup === 'All' || enrollment.displayGroup === selectedGroup;
+        });
+    }, [allScheduledStudents, searchQuery, selectedGroup]);
+
     const studentsByTime = useMemo(() => {
         const groups: Record<string, typeof scheduledStudents> = {};
-        scheduledStudents.forEach(s => {
-            if (!groups[s.displayTime]) groups[s.displayTime] = [];
-            groups[s.displayTime].push(s);
+        scheduledStudents.forEach(student => {
+            if (!groups[student.displayTime]) groups[student.displayTime] = [];
+            groups[student.displayTime].push(student);
         });
 
-        // Sort times chronologically
-        const sortedTimes = Object.keys(groups).sort((a, b) => {
-            const ta = parseInt(a.replace(':', ''));
-            const tb = parseInt(b.replace(':', ''));
-            return ta - tb;
-        });
-
-        return sortedTimes.map(time => ({
-            time,
-            students: groups[time]
-        }));
+        return Object.keys(groups)
+            .sort((first, second) => parseInt(first.replace(':', '')) - parseInt(second.replace(':', '')))
+            .map(time => ({ time, students: groups[time] }));
     }, [scheduledStudents]);
 
-    // 5. Attendance Handler
-    const handleMarkAttendance = async (studentId: string, enrollmentId: string, status: AttendanceRecord['status'], timeSlot: string) => {
-        if (!db) return;
-
-        // Use a composite ID: DATE_STUDENTID_TIMESLOT to support multiple slots per day
+    const getRecordId = (studentId: string, timeSlot: string) => {
         const sanitizedTime = timeSlot.replace(':', '');
-        const recordId = `${selectedDate}_${studentId}_${sanitizedTime}`;
+        return `${selectedDate}_${studentId}_${sanitizedTime}`;
+    };
+
+    const getStatus = (studentId: string, timeSlot: string) => {
+        const recordId = getRecordId(studentId, timeSlot);
+        return attendanceRecords.find(record => record.id === recordId)?.status || 'unmarked';
+    };
+
+    const handleMarkAttendance = async (studentId: string, enrollmentId: string, status: AttendanceRecord['status'], timeSlot: string) => {
+        if (!db || !currentOrganization?.id) {
+            await showAlert('Organization required', 'Select an organization before marking student attendance.', 'warning');
+            return;
+        }
+        if (isFutureDate) {
+            await showAlert('Future attendance is locked', 'Move to today or an earlier date before recording attendance.', 'warning');
+            return;
+        }
+
+        const recordId = getRecordId(studentId, timeSlot);
+        const existingRecord = attendanceRecords.find(record => record.id === recordId);
+        setSavingRecordId(recordId);
 
         try {
             await setDoc(doc(db, 'attendance', recordId), {
@@ -112,280 +117,290 @@ export const AbsenceView = () => {
                 enrollmentId,
                 status,
                 slotTime: timeSlot,
-                organizationId: currentOrganization?.id || 'makerlab-academy',
-                createdAt: serverTimestamp() // Updates timestamp on change
-            });
-        } catch (err) {
-            console.error("Error marking attendance", err);
-            alert(`Failed to mark attendance. \nError: ${err}\n\nDebug Info:\nRole: ${userProfile?.role || 'Unknown'}\nUID: ${userProfile?.uid}\nOrg: ${currentOrganization?.id}`);
+                organizationId: currentOrganization.id,
+                markedBy: userProfile?.uid || '',
+                ...(existingRecord ? {} : { createdAt: serverTimestamp() }),
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error marking attendance', error);
+            await showAlert(
+                'Attendance was not saved',
+                `The attendance mark could not be saved. ${error instanceof Error ? error.message : String(error)}`,
+                'danger'
+            );
+        } finally {
+            setSavingRecordId(null);
+        }
+    };
+
+    const handleClearAttendance = async (studentId: string, studentName: string, timeSlot: string) => {
+        if (!db || !currentOrganization?.id || isFutureDate) return;
+        const recordId = getRecordId(studentId, timeSlot);
+        const approved = await confirm({
+            title: 'Clear this attendance mark?',
+            message: `${studentName} will return to unmarked for the ${timeSlot} session. This does not mark the student present.`,
+            confirmText: 'Clear mark',
+            cancelText: 'Keep mark',
+            variant: 'warning'
+        });
+        if (!approved) return;
+
+        setSavingRecordId(recordId);
+        try {
+            await deleteDoc(doc(db, 'attendance', recordId));
+        } catch (error) {
+            console.error('Error clearing attendance', error);
+            await showAlert('Attendance mark was not cleared', 'The existing mark is still in place. Please try again.', 'danger');
+        } finally {
+            setSavingRecordId(null);
         }
     };
 
     const handleConfirmAllPresent = async (studentsInSlot: typeof scheduledStudents) => {
-        if (!db) return;
-        if (!confirm(`Mark all ${studentsInSlot.length} students as PRESENT? (Only 'unmarked' ones will be updated)`)) return;
+        if (!db || !currentOrganization?.id) {
+            await showAlert('Organization required', 'Select an organization before confirming this session.', 'warning');
+            return;
+        }
+        if (isFutureDate) {
+            await showAlert('Future attendance is locked', 'Sessions can only be confirmed on or after their scheduled date.', 'warning');
+            return;
+        }
 
-        const batch: Promise<void>[] = [];
+        const unmarked = studentsInSlot.filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked');
+        if (unmarked.length === 0) {
+            await showAlert('Attendance already confirmed', 'Every student in this session already has an attendance mark.', 'info');
+            return;
+        }
 
-        studentsInSlot.forEach(student => {
-            const currentStatus = getStatus(student.studentId, student.displayTime);
-            if (currentStatus === 'unmarked') {
-                const sanitizedTime = student.displayTime.replace(':', '');
-                const recordId = `${selectedDate}_${student.studentId}_${sanitizedTime}`;
+        const approved = await confirm({
+            title: 'Confirm this session?',
+            message: `Mark ${unmarked.length} unmarked ${unmarked.length === 1 ? 'student' : 'students'} as present. Existing late, absent, and excused marks will stay unchanged.${searchQuery || selectedGroup !== 'All' ? ' Only students currently shown by your filters will be changed.' : ''}`,
+            confirmText: 'Mark present',
+            cancelText: 'Cancel',
+            variant: 'info'
+        });
+        if (!approved) return;
 
-                const promise = setDoc(doc(db!, 'attendance', recordId), {
+        setIsConfirmingSession(true);
+        try {
+            const batch = writeBatch(db);
+            unmarked.forEach(student => {
+                const recordId = getRecordId(student.studentId, student.displayTime);
+                batch.set(doc(db, 'attendance', recordId), {
                     date: selectedDate,
                     studentId: student.studentId,
                     enrollmentId: student.id,
                     status: 'present',
                     slotTime: student.displayTime,
-                    organizationId: currentOrganization?.id || 'makerlab-academy',
+                    organizationId: currentOrganization.id,
+                    markedBy: userProfile?.uid || '',
                     createdAt: serverTimestamp()
                 });
-                batch.push(promise);
-            }
-        });
-
-        try {
-            await Promise.all(batch);
-        } catch (err) {
-            console.error("Error confirming attendance", err);
-            alert(`Failed to confirm attendance. \nError: ${err}\n\nDebug Info:\nRole: ${userProfile?.role || 'Unknown'}\nUID: ${userProfile?.uid}`);
+            });
+            await batch.commit();
+            await showAlert('Session confirmed', `${unmarked.length} unmarked ${unmarked.length === 1 ? 'student is' : 'students are'} now marked present. Existing exceptions were preserved.`, 'success');
+        } catch (error) {
+            console.error('Error confirming attendance', error);
+            await showAlert(
+                'Session was not confirmed',
+                `The unmarked students could not be updated. ${error instanceof Error ? error.message : String(error)}`,
+                'danger'
+            );
+        } finally {
+            setIsConfirmingSession(false);
         }
     };
 
-    const getStatus = (studentId: string, timeSlot: string) => {
-        // Find local record first (optimistic UI provided by AppContext listener)
-        // Try strict match first (NewID)
-        const sanitizedTime = timeSlot.replace(':', '');
-        const newId = `${selectedDate}_${studentId}_${sanitizedTime}`;
-
-        const strictRecord = attendanceRecords.find(r => r.id === newId);
-        if (strictRecord) return strictRecord.status;
-
-        // Validating uniqueness: If we don't find a strict match, do we fallback to `Date_Student`?
-        // Only if we want backward compatibility for single-slot days.
-        // But for this specific "double slot" bug, falling back is what causes the glitch (ambiguity).
-        // So we should NOT fallback if we want to enforce separation. 
-        // However, existing records for today are likely saved as `Date_Student`.
-        // If we don't fallback, they will appear unmarked.
-
-        // Compromise: check legacy only if there is ONLY ONE slot for this student today?
-        // Easier: Just check legacy ID. If it exists, use it. But this risks showing the SAME status for both slots.
-        // Since the user wants to separate them, showing "Present" for both when only one was clicked is confusing.
-        // It's better to show "Unmarked" for the new slot logic and force re-marking for clarity.
-
-        return 'unmarked';
-    };
-
-    // Helper to see if a time block is "Current"
-    const isCurrentBlock = (timeStr: string) => {
-        if (!isToday || !timeStr) return false;
-        const [h, m] = timeStr.split(':').map(Number);
-        const slotMinutes = h * 60 + m;
-        // Assume class is 90 mins. If current time is within slot start and slot start + 90
+    const isCurrentBlock = (time: string) => {
+        if (!isToday || !time) return false;
+        const [hours, minutes] = time.split(':').map(Number);
+        const slotMinutes = hours * 60 + minutes;
         return currentTimeMinutes >= slotMinutes && currentTimeMinutes < slotMinutes + 90;
     };
 
-    // Calculate Daily Stats
     const dailyStats = useMemo(() => {
         let present = 0;
         let absent = 0;
         let late = 0;
-        const total = scheduledStudents.length;
+        let excused = 0;
+        let unmarked = 0;
 
-        scheduledStudents.forEach(student => {
+        allScheduledStudents.forEach(student => {
             const status = getStatus(student.studentId, student.displayTime);
-            if (status === 'absent') absent++;
+            if (status === 'present') present++;
+            else if (status === 'absent') absent++;
             else if (status === 'late') late++;
-            // Treat 'unmarked' as 'present' for the daily report, assuming default presence
-            else present++;
+            else if (status === 'excused') excused++;
+            else unmarked++;
         });
 
-        return { total, present, absent, late };
-    }, [scheduledStudents, attendanceRecords, selectedDate]);
+        return { total: allScheduledStudents.length, present, absent, late, excused, unmarked };
+    }, [allScheduledStudents, attendanceRecords, selectedDate]);
 
-    // Extract all unique group names for filter
     const uniqueGroups = useMemo(() => {
-        const g = new Set<string>();
-        enrollments.forEach(e => {
-            if (e.groupName) g.add(e.groupName);
-            if (e.secondGroupName) g.add(e.secondGroupName);
+        const groups = new Set<string>();
+        enrollments.forEach(enrollment => {
+            if (enrollment.groupName) groups.add(enrollment.groupName);
+            if (enrollment.secondGroupName) groups.add(enrollment.secondGroupName);
         });
-        return Array.from(g).sort();
+        return Array.from(groups).sort();
     }, [enrollments]);
 
     const handleWhatsAppAlert = (studentName: string, parentPhone: string, status: string) => {
         const cleanPhone = parentPhone.replace(/[^0-9]/g, '');
-        const message = `Hello, just to inform you that ${studentName} was marked ${status.toUpperCase()} for today's class.`;
+        const message = `Hello, just to inform you that ${studentName} was marked ${status.toUpperCase()} for the class on ${selectedDate}.`;
         window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
+    const moveDate = (offset: number) => {
+        setSelectedDate(format(addDays(parseISO(selectedDate), offset), 'yyyy-MM-dd'));
+    };
+
     return (
-        <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-right-4">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
-                <div>
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2"><ClipboardCheck className="w-6 h-6 text-red-500" /> Attendance Manager</h2>
-                    <p className="text-slate-500 text-sm">Select a date to manage workshop attendance.</p>
-                </div>
-                <div className="flex items-center gap-4 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                    <span className="text-lg font-bold text-red-400 pl-2 uppercase tracking-widest">{dayOfWeek}</span>
-                    <div className="h-6 w-px bg-slate-800"></div>
-                    <div className="flex items-center gap-1">
-                        <button onClick={() => {
-                            const d = new Date(selectedDate);
-                            d.setDate(d.getDate() - 1);
-                            setSelectedDate(d.toISOString().split('T')[0]);
-                        }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} className="rotate-180" /></button>
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="bg-transparent text-white font-bold text-sm outline-none px-2 cursor-pointer"
-                        />
-                        <button onClick={() => {
-                            const d = new Date(selectedDate);
-                            d.setDate(d.getDate() + 1);
-                            setSelectedDate(d.toISOString().split('T')[0]);
-                        }} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
+        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+            <AtlasCommandHeader
+                eyebrow="Learning operations"
+                title="Student attendance"
+                description="Mark each scheduled session, surface exceptions, and contact families without leaving the roster."
+                icon={ClipboardCheck}
+                badges={isToday
+                    ? <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-1 text-[10px] font-black uppercase text-teal-200">Today</span>
+                    : isFutureDate
+                        ? <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Preview only</span>
+                        : undefined}
+                actions={(
+                    <div className="flex w-full items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 p-1 lg:w-auto">
+                        <button type="button" onClick={() => moveDate(-1)} aria-label="Previous day" title="Previous day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                            <ChevronRight size={18} className="rotate-180" />
+                        </button>
+                        <div className="min-w-0 border-x border-white/10 px-2 text-center">
+                            <div className="text-[9px] font-black uppercase text-teal-300">{dayOfWeek}</div>
+                            <input type="date" value={selectedDate} onChange={(event) => event.target.value && setSelectedDate(event.target.value)} aria-label="Attendance date" className="w-[132px] bg-transparent text-center font-mono text-xs font-bold text-white outline-none" />
+                        </div>
+                        {!isToday && <button type="button" onClick={() => setSelectedDate(today)} className="h-9 rounded-lg px-2 text-[10px] font-black uppercase text-teal-200 hover:bg-teal-400/10">Today</button>}
+                        <button type="button" onClick={() => moveDate(1)} aria-label="Next day" title="Next day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                            <ChevronRight size={18} />
+                        </button>
                     </div>
-                </div>
+                )}
+            />
+
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AtlasSignalCard label="Scheduled" value={dailyStats.total} detail={`${studentsByTime.length} session${studentsByTime.length === 1 ? '' : 's'}`} icon={Users} tone="slate" />
+                <AtlasSignalCard label="Marked present" value={dailyStats.present} detail={`${dailyStats.unmarked} awaiting a mark`} icon={CheckCircle2} tone="teal" />
+                <AtlasSignalCard label="Late" value={dailyStats.late} detail="Needs follow-up" icon={AlertCircle} tone="amber" />
+                <AtlasSignalCard label="Absent" value={dailyStats.absent} detail={`${dailyStats.excused} excused`} icon={XCircle} tone="red" />
             </div>
 
-            {/* Daily Report Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Scheduled</div>
-                    <div className="text-2xl font-bold text-white">{dailyStats.total}</div>
-                    <Calendar className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
+            <AtlasToolbar>
+                <div className="relative min-w-[220px] flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input type="search" placeholder="Search students" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                 </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-emerald-500 text-xs font-bold uppercase tracking-wider mb-1">Present (Est.)</div>
-                    <div className="text-2xl font-bold text-emerald-400">{dailyStats.present}</div>
-                    <CheckCircle2 className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
-                </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-red-500 text-xs font-bold uppercase tracking-wider mb-1">Absent</div>
-                    <div className="text-2xl font-bold text-red-400">{dailyStats.absent}</div>
-                    <XCircle className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
-                </div>
-                <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col relative overflow-hidden">
-                    <div className="text-amber-500 text-xs font-bold uppercase tracking-wider mb-1">Late</div>
-                    <div className="text-2xl font-bold text-amber-400">{dailyStats.late}</div>
-                    <AlertCircle className="absolute right-3 top-3 text-slate-800 w-8 h-8" />
-                </div>
-            </div>
-
-            {/* Controls */}
-            <div className="flex flex-col md:flex-row gap-3 bg-slate-900 p-3 rounded-xl border border-slate-800">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                    <input type="text" placeholder="Search student..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white focus:border-red-500 outline-none placeholder:text-slate-600 transition-all" />
-                </div>
-                <div className="relative min-w-[150px]">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5" />
-                    <select value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)} className="w-full pl-9 pr-8 py-2 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg appearance-none focus:border-red-500 outline-none cursor-pointer">
-                        <option value="All">All Groups</option>
-                        {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                <div className="relative min-w-[170px]">
+                    <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <select value={selectedGroup} onChange={(event) => setSelectedGroup(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-10 pr-8 text-sm text-slate-300 outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10">
+                        <option value="All">All groups</option>
+                        {uniqueGroups.map(group => <option key={group} value={group}>{group}</option>)}
                     </select>
                 </div>
-            </div>
+            </AtlasToolbar>
 
-            {/* Time Slots List */}
-            <div className="space-y-6">
-                {studentsByTime.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-12 bg-slate-900 border border-slate-800 rounded-xl text-center">
-                        <Calendar className="w-12 h-12 text-slate-700 mb-4" />
-                        <h3 className="text-slate-400 font-bold mb-1">No Classes Scheduled</h3>
-                        <p className="text-slate-500 text-sm">There are no workshops scheduled for {dayOfWeek} ({selectedDate}).</p>
+            <section className="space-y-4">
+                <AtlasSectionHeader title="Session roster" description={`${dayOfWeek}, ${selectedDate} · ${dailyStats.unmarked} attendance ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`} icon={Calendar} />
+                {isFutureDate && (
+                    <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                        This is a schedule preview. Attendance controls unlock on the session date.
                     </div>
-                ) : (
-                    studentsByTime.map(slot => {
-                        const isLive = isCurrentBlock(slot.time);
-                        return (
-                            <div key={slot.time} className={`bg-slate-900 border rounded-xl overflow-hidden transition-all ${isLive ? 'border-red-500/50 shadow-lg shadow-red-900/10' : 'border-slate-800'}`}>
-                                <div className={`p-4 flex items-center gap-3 border-b ${isLive ? 'bg-red-950/20 border-red-900/30' : 'bg-slate-950/50 border-slate-800'}`}>
-                                    <div className={`px-3 py-1 rounded text-sm font-bold font-mono ${isLive ? 'bg-red-500 text-white' : 'bg-slate-800 text-slate-300'}`}>
-                                        {slot.time}
-                                    </div>
-                                    <span className="text-sm font-medium text-slate-400">{slot.students.length} Students Scheduled</span>
-                                    {isLive && <span className="ml-auto text-xs font-bold text-red-500 animate-pulse flex items-center gap-1">● LIVE NOW</span>}
-
-                                    {/* Confirm All Button */}
-                                    <button
-                                        onClick={() => handleConfirmAllPresent(slot.students)}
-                                        className="ml-auto text-xs font-bold bg-emerald-900/30 text-emerald-400 border border-emerald-900/50 px-3 py-1.5 rounded-lg hover:bg-emerald-900/50 transition-colors flex items-center gap-2"
-                                    >
-                                        <CheckCircle2 size={12} /> Confirm Attendance
-                                    </button>
-                                </div>
-
-                                <div className="divide-y divide-slate-800">
-                                    {slot.students.map(student => {
-                                        const status = getStatus(student.studentId, student.displayTime);
-                                        // Default "Present" logic: If unmarked, visualize as Present
-                                        const isPresent = status === 'present' || status === 'unmarked';
-
-                                        const initials = (student.studentName || '').split(' ').map(n => n[0]).join('').slice(0, 2);
-                                        const studentDetails = students.find(s => s.id === student.studentId);
-
-                                        return (
-                                            <div key={`${student.id}_${student.displayTime}`} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-800/30 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">
-                                                        {initials}
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-bold text-white text-sm flex items-center gap-2">
-                                                            {student.studentName}
-                                                            {(status === 'absent' || status === 'late') && studentDetails?.parentPhone && (
-                                                                <button
-                                                                    onClick={(e) => { e.stopPropagation(); handleWhatsAppAlert(student.studentName, studentDetails.parentPhone, status); }}
-                                                                    className="text-emerald-500 hover:text-emerald-400 bg-emerald-950/30 p-1 rounded hover:bg-emerald-950/50 transition-colors"
-                                                                    title="Alert Parent via WhatsApp"
-                                                                >
-                                                                    <MessageCircle size={14} />
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-xs text-slate-500 flex items-center gap-2">
-                                                            <span className="bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">{student.programName}</span>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span>{student.displayGroup}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex gap-2 self-end sm:self-auto">
-                                                    <button
-                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'present', student.displayTime)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${isPresent ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-emerald-500/50 hover:text-emerald-400'}`}
-                                                    >
-                                                        <CheckCircle2 size={14} /> Present
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'late', student.displayTime)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${status === 'late' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-amber-500/50 hover:text-amber-400'}`}
-                                                    >
-                                                        <Clock size={14} /> Late
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent', student.displayTime)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${status === 'absent' ? 'bg-red-600 text-white shadow-lg shadow-red-900/20' : 'bg-slate-950 border border-slate-800 text-slate-400 hover:border-red-500/50 hover:text-red-400'}`}
-                                                    >
-                                                        <XCircle size={14} /> Absent
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        );
-                    })
                 )}
-            </div>
+                {studentsByTime.length === 0 ? (
+                    <AtlasEmptyState
+                        title={allScheduledStudents.length > 0 ? 'No students match these filters' : 'No scheduled sessions'}
+                        description={allScheduledStudents.length > 0 ? 'Clear the search or group filter to restore the daily roster.' : `No active class enrollments are scheduled for ${dayOfWeek}. Try another date or review the class schedule.`}
+                        icon={Calendar}
+                        action={allScheduledStudents.length > 0 ? <AtlasActionButton onClick={() => { setSearchQuery(''); setSelectedGroup('All'); }}>Clear filters</AtlasActionButton> : !isToday ? <AtlasActionButton onClick={() => setSelectedDate(today)}>Go to today</AtlasActionButton> : undefined}
+                    />
+                ) : (
+                    <div className="space-y-3">
+                        {studentsByTime.map(slot => {
+                            const isLive = isCurrentBlock(slot.time);
+                            const unmarkedCount = slot.students.filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked').length;
+                            return (
+                                <div key={slot.time} className={`overflow-hidden rounded-xl border bg-slate-900/75 ${isLive ? 'border-teal-300/40' : 'border-white/10'}`}>
+                                    <div className={`flex flex-col gap-3 border-b px-3 py-3 sm:flex-row sm:items-center ${isLive ? 'border-teal-300/20 bg-teal-400/[0.06]' : 'border-white/10 bg-slate-950/55'}`}>
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <span className={`rounded-lg border px-2.5 py-1.5 font-mono text-xs font-black ${isLive ? 'border-teal-300/30 bg-teal-400/10 text-teal-200' : 'border-white/10 bg-white/[0.04] text-slate-200'}`}>{slot.time}</span>
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-sm font-black text-white">{slot.students.length} scheduled</span>
+                                                    {isLive && <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-0.5 text-[9px] font-black uppercase text-teal-200">Live now</span>}
+                                                </div>
+                                                <p className="text-[11px] text-slate-500">{unmarkedCount === 0 ? 'Session complete' : `${unmarkedCount} ${unmarkedCount === 1 ? 'mark' : 'marks'} remaining`}</p>
+                                            </div>
+                                        </div>
+                                        <AtlasActionButton icon={CheckCircle2} variant="primary" className="sm:ml-auto" disabled={unmarkedCount === 0 || isFutureDate || isConfirmingSession} onClick={() => handleConfirmAllPresent(slot.students)}>
+                                            {isConfirmingSession ? 'Confirming...' : 'Confirm unmarked'}
+                                        </AtlasActionButton>
+                                    </div>
+
+                                    <div className="divide-y divide-white/[0.07]">
+                                        {slot.students.map(student => {
+                                            const status = getStatus(student.studentId, student.displayTime);
+                                            const recordId = getRecordId(student.studentId, student.displayTime);
+                                            const isSaving = savingRecordId === recordId;
+                                            const initials = (student.studentName || '').split(' ').map(name => name[0]).join('').slice(0, 2);
+                                            const studentDetails = students.find(item => item.id === student.studentId);
+                                            return (
+                                                <div key={`${student.id}_${student.displayTime}`} className="flex flex-col gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
+                                                    <div className="flex min-w-0 items-center gap-3">
+                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-[11px] font-black text-slate-300">{initials}</div>
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="truncate text-sm font-bold text-white">{student.studentName}</span>
+                                                                {(status === 'absent' || status === 'late') && studentDetails?.parentPhone && (
+                                                                    <button type="button" onClick={(event) => { event.stopPropagation(); handleWhatsAppAlert(student.studentName, studentDetails.parentPhone, status); }} aria-label={`Message ${student.studentName}'s parent`} title="Message parent on WhatsApp" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-teal-300 transition-colors hover:bg-teal-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                                                                        <MessageCircle size={14} />
+                                                                    </button>
+                                                                )}
+                                                                {status !== 'unmarked' && (
+                                                                    <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleClearAttendance(student.studentId, student.studentName, student.displayTime)} aria-label={`Clear attendance mark for ${student.studentName}`} title="Return to unmarked" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                                                                        <RotateCcw size={13} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                                                                <span className="truncate">{student.programName}</span>
+                                                                <span aria-hidden="true">·</span>
+                                                                <span className="truncate">{student.displayGroup}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-1.5 sm:flex sm:shrink-0">
+                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'present', student.displayTime)} aria-pressed={status === 'present'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${status === 'present' ? 'border-teal-300/40 bg-teal-500 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-teal-300/30 hover:text-teal-200'}`}>
+                                                            <CheckCircle2 size={14} /> Present
+                                                        </button>
+                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'late', student.displayTime)} aria-pressed={status === 'late'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 ${status === 'late' ? 'border-amber-300/40 bg-amber-400 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-amber-300/30 hover:text-amber-200'}`}>
+                                                            <Clock size={14} /> Late
+                                                        </button>
+                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent', student.displayTime)} aria-pressed={status === 'absent'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 ${status === 'absent' ? 'border-red-300/40 bg-red-500 text-white' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-red-300/30 hover:text-red-200'}`}>
+                                                            <XCircle size={14} /> Absent
+                                                        </button>
+                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'excused', student.displayTime)} aria-pressed={status === 'excused'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 ${status === 'excused' ? 'border-sky-300/40 bg-sky-400 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-sky-300/30 hover:text-sky-200'}`}>
+                                                            <ShieldCheck size={14} /> Excused
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </section>
         </div>
     );
 };

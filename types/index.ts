@@ -1,11 +1,22 @@
 
 import { Timestamp } from 'firebase/firestore';
+import type { ProgramFormatPreset, RegistrationMode } from './programOperations';
+
+export interface ProgramScheduleSlot {
+  id: string;
+  day: string;
+  startTime: string;
+  endTime: string;
+  shiftLabel?: string;
+}
 
 export interface Group {
   id: string;
   name: string;
   day: string;
   time: string;
+  capacity?: number;
+  scheduleBlocks?: ProgramScheduleSlot[];
 }
 
 export interface Grade {
@@ -24,14 +35,60 @@ export interface ProgramPack {
   promoPrice?: number; // Per-pack Discount Price
 }
 
+export interface ProgramRunSetupDraft {
+  name?: string;
+  startDate: string;
+  endDate: string;
+  enrollmentOpenDate?: string;
+  enrollmentCloseDate?: string;
+  timezone: string;
+  locationName?: string;
+}
+
+export interface ProgramRegistrationSetupDraft {
+  enabled: boolean;
+  mode: RegistrationMode;
+  allowWaitlist: boolean;
+  requiresReview: boolean;
+  qrEnabled: boolean;
+}
+
+export interface ProgramDocumentSetupDraft {
+  registrationConfirmation: boolean;
+  enrollmentAttestation: boolean;
+  completionCertificate: boolean;
+}
+
+export type ProgramEnrollmentMode = 'fixed_run' | 'rolling_membership' | 'modular';
+
+export interface ProgramEnrollmentPolicy {
+  mode: ProgramEnrollmentMode;
+  membershipDurationMonths?: number;
+  allowJoinAnytime: boolean;
+  moduleLabel?: string;
+}
+
+export interface ProgramAcademicPeriod {
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
 export interface Program {
   id: string;
   organizationId: string;
   name: string;
   type: 'Regular Program' | 'Holiday Camp' | 'Workshop' | 'Internship' | 'Camp';
   description: string;
-  status: 'active' | 'archived';
+  status: 'draft' | 'active' | 'archived';
   targetAudience?: 'kids' | 'adults';
+  formatPreset?: ProgramFormatPreset;
+  runSetup?: ProgramRunSetupDraft;
+  registrationSetup?: ProgramRegistrationSetupDraft;
+  documentSetup?: ProgramDocumentSetupDraft;
+  enrollmentPolicy?: ProgramEnrollmentPolicy;
+  academicPeriod?: ProgramAcademicPeriod;
+  templateSourceProgramId?: string;
   packs: ProgramPack[];
   grades: Grade[];
   dashboardConfig?: ProgramDashboardConfig;
@@ -57,6 +114,7 @@ export interface Organization {
   ownerUid: string; // The "Admin" of this school
   createdAt: Timestamp;
   status: 'active' | 'suspended' | 'trial';
+  platformRole?: 'tenant' | 'platform_owner';
 
   // Installed Apps from App Store
   installedApps?: string[];
@@ -77,6 +135,7 @@ export interface Organization {
     nextBillingDate: Timestamp;
     customPrice?: number; // Override plan price
     interval: 'month' | 'year';
+    addOns?: string[]; // Paid catalog items granted outside the base plan
   };
 
   // Limits (Optional for SaaS Tiers)
@@ -84,6 +143,101 @@ export interface Organization {
     students: number;
     storage: number; // GB
   };
+}
+
+// --- ATLAS SAAS PLATFORM TYPES ---
+
+export type AtlasAppId = 'edufy-core' | 'sparkquest' | 'maker-pro' | string;
+
+export type AtlasAudience =
+  | 'admin'
+  | 'staff'
+  | 'student'
+  | 'parent'
+  | 'adultLearner'
+  | 'public';
+
+export type AtlasProductArea =
+  | 'platform'
+  | 'core'
+  | 'kids_lms'
+  | 'adult_lms'
+  | 'marketplace'
+  | 'agent';
+
+export type AtlasPlanId = 'starter' | 'growth' | 'scale' | 'enterprise' | string;
+
+export type AtlasCatalogBilling = 'included' | 'free' | 'paid';
+export type AtlasCatalogItemKind = 'module' | 'app';
+
+export interface AtlasCatalogPolicy {
+  id: string;
+  kind: AtlasCatalogItemKind;
+  billing: AtlasCatalogBilling;
+  isPublished: boolean;
+  canSelfActivate: boolean;
+  priceMonthly?: number;
+  currency?: string;
+  updatedAt?: Timestamp;
+}
+
+export type AtlasPermission =
+  | '*'
+  | `${string}.view`
+  | `${string}.create`
+  | `${string}.edit`
+  | `${string}.delete`
+  | `${string}.manage`
+  | `${string}.export`
+  | `${string}.*`
+  | string;
+
+export interface AtlasTenantAccess {
+  organizationId: string;
+  userId?: string;
+  role?: RoleType;
+  permissions?: AtlasPermission[];
+  installedApps?: string[];
+  enabledModules?: Record<string, boolean>;
+  subscriptionPlanId?: AtlasPlanId;
+}
+
+export interface AtlasModuleDefinition {
+  id: ViewState;
+  appId: AtlasAppId;
+  label: string;
+  description?: string;
+  productArea: AtlasProductArea;
+  category: 'dashboard' | 'academic' | 'business' | 'organization' | 'system' | 'learning' | 'marketplace';
+  enabledByDefault: boolean;
+  requiredPermission?: AtlasPermission;
+  requiredPlan?: AtlasPlanId;
+  dependencies?: string[];
+  audience: AtlasAudience[];
+}
+
+export interface AtlasMarketplaceApp {
+  id: AtlasAppId;
+  name: string;
+  description: string;
+  productArea: AtlasProductArea;
+  category: 'learning' | 'marketing' | 'productivity' | 'operations' | 'finance' | 'analytics' | 'communication' | 'platform';
+  audience: AtlasAudience[];
+  requiredPermissions: AtlasPermission[];
+  requiredPlan?: AtlasPlanId;
+  dependencies?: string[];
+  agentTools?: string[];
+  version: string;
+  developer: string;
+}
+
+export interface AtlasAgentToolDefinition {
+  name: string;
+  appId: AtlasAppId;
+  description: string;
+  requiredPermission: AtlasPermission;
+  writeMode: 'read' | 'safe_write' | 'sensitive_write';
+  audit: boolean;
 }
 
 export interface SubscriptionPlan {
@@ -101,6 +255,7 @@ export interface SubscriptionPlan {
   includedModules: string[]; // List of module IDs included by default
   isPopular?: boolean;
   trialDays?: number; // 0 or undefined = no trial
+  status?: 'active' | 'archived';
 }
 
 export interface ProgramDashboardConfig {
@@ -174,6 +329,10 @@ export interface Enrollment {
   paymentPromises?: PaymentPromise[]; // e.g. [{month: "2024-09", amount: 1000}]
   status: 'active' | 'completed' | 'dropped';
   startDate: string;
+  endDate?: string;
+  serviceStartDate?: string;
+  serviceEndDate?: string;
+  enrollmentMode?: ProgramEnrollmentMode;
   session?: string; // Academic Year (e.g. "2024-2025")
   defaultWorkflowId?: string;
   createdAt?: Timestamp;
@@ -505,6 +664,7 @@ export interface ProjectStep {
 
 export interface ProjectTemplate {
   id: string;
+  organizationId: string;
   title: string;
   description: string;
   difficulty: 'beginner' | 'intermediate' | 'advanced';
@@ -526,6 +686,7 @@ export interface ProjectTemplate {
 
 export interface StudentProject {
   id: string;
+  organizationId: string;
   studentId: string;
   studentName: string;
   templateId?: string | null; // If based on a template. Nullable to prevent undefined issues.
@@ -584,6 +745,7 @@ export interface ProcessPhase {
 
 export interface ProcessTemplate {
   id: string;
+  organizationId: string;
   name: string;
   description: string;
   phases: ProcessPhase[];
@@ -593,6 +755,7 @@ export interface ProcessTemplate {
 
 export interface Station {
   id: string;
+  organizationId: string;
   label: string;
   color: string;
   icon: string;
@@ -607,6 +770,7 @@ export interface Station {
 
 export interface Badge {
   id: string;
+  organizationId: string;
   name: string;
   description: string;
   icon: string;
@@ -623,6 +787,7 @@ export interface Badge {
 
 export interface ToolLink {
   id: string;
+  organizationId: string;
   title: string;
   url: string;
   category: 'robotics' | 'coding' | 'design' | 'engineering' | 'multimedia' | 'other';
@@ -633,6 +798,7 @@ export interface ToolLink {
 
 export interface ArchiveLink {
   id: string;
+  organizationId: string;
   title: string;
   url: string;
   category: 'gemini_gems' | 'websites' | 'sheets' | 'documents' | 'other';
@@ -656,6 +822,7 @@ export interface Asset {
 
 export interface GalleryItem {
   id: string;
+  organizationId: string;
   url: string; // Image URL
   caption?: string;
   type: 'image' | 'video';
@@ -697,7 +864,7 @@ export interface AppNotification {
 
 // --- AUTH & RBAC TYPES ---
 
-export type RoleType = 'admin' | 'admission_officer' | 'accountant' | 'instructor' | 'content_manager' | 'parent' | 'student' | 'guest';
+export type RoleType = 'super_admin' | 'owner' | 'admin' | 'admission_officer' | 'accountant' | 'instructor' | 'content_manager' | 'parent' | 'student' | 'guest';
 
 export interface UserProfile {
   uid?: string; // Firebase Auth UID
@@ -737,6 +904,9 @@ export interface AppSettings {
   academicYear: string;
   logoUrl?: string;
   language: 'en' | 'fr';
+  currency?: 'MAD' | 'EUR' | 'USD' | string;
+  timezone?: string;
+  weekStartsOn?: 0 | 1 | 6;
   receiptContact?: string;
   receiptFooter?: string;
   googleReviewUrl?: string;

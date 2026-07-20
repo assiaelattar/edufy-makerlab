@@ -45,7 +45,7 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
     processTemplates, handleSaveProject, handleStartBuilding, handleMoveStep,
     handleAddStep, handleDeleteStep, newStepTitle, setNewStepTitle, apiConfig, isWorkflowLocked, badges, handleSubmitForReview
 }) => {
-    const INPUT_CLASS = studioClass("w-full p-4 border-2 rounded-xl outline-none transition-all font-bold", STUDIO_THEME.background.card, STUDIO_THEME.border.light, STUDIO_THEME.text.primary, "focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 placeholder:text-slate-400");
+    const INPUT_CLASS = "min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20";
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
 
     const [isCommitModalOpen, setIsCommitModalOpen] = React.useState(false);
@@ -206,14 +206,14 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
         const steps = projectForm.steps?.filter((s) => s.status?.toLowerCase() === status) || [];
 
         return (
-            <div className={`flex-1 flex flex-col ${bgClass} backdrop-blur-md border border-white/40 rounded-[2.5rem] min-h-[500px] transition-all duration-500 shadow-xl overflow-hidden`}>
-                <div className={`p-6 border-b border-white/20 font-black text-sm uppercase tracking-wider text-center flex items-center justify-center gap-2 ${colorClass}`}>
+            <div className={`flex min-h-[420px] flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/80 ${bgClass} backdrop-blur-md transition-colors`}>
+                <div className={`flex items-center justify-center gap-2 border-b border-slate-200/70 p-4 text-center text-xs font-black uppercase tracking-wider ${colorClass}`}>
                     <div className="p-2 bg-white/50 rounded-lg shadow-sm">{icon}</div>
                     {title}
                     <span className="bg-white/50 px-2 py-0.5 rounded-full text-[10px] font-bold">{steps.length}</span>
                 </div>
 
-                <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 space-y-3 overflow-y-auto p-3 custom-scrollbar">
                     {steps.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-slate-400/50 text-sm font-bold italic gap-2">
                             <div className="w-12 h-12 rounded-full border-2 border-dashed border-current flex items-center justify-center opacity-50">
@@ -226,7 +226,7 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                         <div
                             key={step.id}
                             style={{ animationDelay: `${idx * 100}ms` }}
-                            className="bg-white/80 hover:bg-white border-2 border-white p-5 rounded-2xl shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-indigo-200 transition-all duration-300 group relative animate-in slide-in-from-bottom-2 fill-mode-backwards"
+                            className="group relative rounded-lg border border-white bg-white/90 p-4 shadow-sm transition-colors hover:border-teal-300 animate-in slide-in-from-bottom-2 fill-mode-backwards"
                         >
                             <p className="font-bold text-slate-700 mb-4 text-lg leading-tight">{step.title}</p>
                             {step.proofUrl && (
@@ -248,7 +248,7 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                                     </>
                                 )}
                                 {status === 'todo' && (
-                                    <button onClick={() => handleInternalMoveStep(step.id, 'doing')} className="w-full py-3 bg-indigo-600 text-white hover:bg-indigo-500 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-95">
+                                    <button onClick={() => handleInternalMoveStep(step.id, 'doing')} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400">
                                         Start Mission <ArrowRight size={16} />
                                     </button>
                                 )}
@@ -266,19 +266,19 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-slate-50 overflow-hidden flex flex-col font-sans animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-slate-50 font-sans animate-in fade-in duration-200">
             {/* Background Pattern */}
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#2D2B6B 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
             {/* Top HUD */}
-            <div className="border-b relative z-20 bg-white/80 backdrop-blur-xl border-slate-200/60 shrink-0">
-                <div className="px-8 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-6">
-                        <button onClick={onClose} className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 hover:bg-rose-100 hover:text-rose-500 flex items-center justify-center transition-colors">
+            <div className="relative z-20 shrink-0 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
+                <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-6">
+                    <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                        <button onClick={onClose} aria-label="Close project" title="Close project" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition-colors hover:border-rose-300 hover:text-rose-500">
                             <X size={20} />
                         </button>
                         <div>
-                            <h2 className="text-2xl font-black tracking-tight text-slate-800">
+                            <h2 className="truncate text-lg font-black tracking-normal text-slate-900 sm:text-2xl">
                                 {projectForm.title || 'Untitled Project'}
                             </h2>
                             <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -291,12 +291,12 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-2">
                         <button
                             onClick={() => handleSaveProject(false)}
-                            className="bg-white border-2 border-slate-100 text-indigo-600 font-bold px-6 py-2.5 rounded-xl hover:border-indigo-100 hover:bg-indigo-50 hover:shadow-sm transition-all flex items-center gap-2"
+                            className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/40 bg-teal-500 px-3 text-sm font-bold text-slate-950 transition-colors hover:bg-teal-400 sm:px-4"
                         >
-                            <CheckSquare size={18} /> Save Draft
+                            <CheckSquare size={18} /> <span className="hidden sm:inline">Save draft</span>
                         </button>
                     </div>
                 </div>
@@ -307,11 +307,11 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                 {/* Planning Phase (Wizard) */}
                 {projectForm.status === 'planning' && (
                     <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
-                        <div className="min-h-full p-8 md:p-12 pb-32 max-w-7xl mx-auto flex flex-col">
+                        <div className="mx-auto flex min-h-full max-w-7xl flex-col p-4 pb-28 sm:p-6 md:p-8">
 
                             {/* Wizard Progress */}
-                            <div className="flex justify-center mb-12 sticky top-0 z-30 pt-4">
-                                <div className="bg-white/90 backdrop-blur-xl px-8 py-3 rounded-full shadow-lg shadow-indigo-500/10 border border-white/50 flex items-center gap-6 text-xs font-black uppercase tracking-wider text-slate-400">
+                            <div className="sticky top-0 z-30 mb-8 flex justify-center pt-2">
+                                <div className="flex max-w-full items-center gap-3 overflow-x-auto rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-[10px] font-black uppercase text-slate-400 shadow-sm backdrop-blur-xl sm:gap-6 sm:px-5 sm:text-xs">
                                     <div className={`transition-colors ${wizardStep >= 1 ? 'text-indigo-600' : ''} flex items-center gap-3`}>
                                         <span className={`w-8 h-8 rounded-full flex items-center justify-center border-2 text-sm ${wizardStep >= 1 ? 'border-indigo-600 bg-indigo-50 shadow-sm' : 'border-slate-300'}`}>1</span> Identity
                                     </div>
@@ -518,7 +518,7 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                             {wizardStep > 1 && (
                                 <button
                                     onClick={handleBack}
-                                    className="pointer-events-auto px-8 py-4 bg-white/90 backdrop-blur-xl border-2 border-slate-100 text-slate-600 rounded-3xl font-bold hover:bg-white hover:border-slate-300 hover:scale-105 active:scale-95 transition-all shadow-xl flex items-center gap-2 drop-shadow-lg"
+                                    className="pointer-events-auto flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white/95 px-4 text-sm font-bold text-slate-600 shadow-sm backdrop-blur-xl transition-colors hover:border-slate-300"
                                 >
                                     <ArrowLeft size={20} /> Back
                                 </button>
@@ -527,7 +527,7 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                                 <button
                                     onClick={handleNext}
                                     disabled={wizardStep === 1 ? !isStep1Valid : !isStep2Valid}
-                                    className="pointer-events-auto px-10 py-4 bg-indigo-600 text-white rounded-3xl font-black text-lg hover:bg-indigo-500 hover:scale-105 active:scale-95 transition-all shadow-xl shadow-indigo-600/40 flex items-center gap-3 disabled:opacity-50 disabled:scale-100 disabled:cursor-not-allowed group"
+                                    className="pointer-events-auto flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/40 bg-teal-500 px-5 text-sm font-black text-slate-950 shadow-sm transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     Next Step <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                                 </button>
@@ -535,9 +535,9 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                                 <button
                                     onClick={handleStartBuilding}
                                     disabled={!isStep3Valid}
-                                    className="pointer-events-auto px-12 py-4 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-3xl font-black text-lg hover:brightness-110 hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-emerald-500/40 flex items-center gap-3 disabled:opacity-50 group"
+                                    className="pointer-events-auto flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/40 bg-teal-500 px-5 text-sm font-black text-slate-950 shadow-sm transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    Start Building 🚀
+                                    Start building
                                 </button>
                             )}
                         </div>
@@ -546,23 +546,23 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
 
                 {/* Building Phase (Mission Control) */}
                 {projectForm.status !== 'planning' && (
-                    <div className="flex-1 overflow-hidden flex flex-col bg-slate-50 relative p-8">
+                    <div className="relative flex flex-1 flex-col overflow-hidden bg-slate-50 p-3 sm:p-5 md:p-6">
                         {/* Animated Background */}
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/50 via-slate-50 to-emerald-50/50 pointer-events-none"></div>
 
                         {/* Mission Header */}
-                        <div className="flex justify-between items-center mb-8 relative z-10">
-                            <h3 className="text-4xl font-black text-slate-800 flex items-center gap-4">
-                                <div className="p-4 bg-white rounded-2xl shadow-sm border border-slate-100">
-                                    <Zap size={32} className="text-amber-500 fill-amber-500" />
+                        <div className="relative z-10 mb-5 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                            <h3 className="flex items-center gap-3 text-2xl font-black text-slate-800 sm:text-3xl">
+                                <div className="rounded-lg border border-slate-200 bg-white p-2">
+                                    <Zap size={24} className="text-amber-500 fill-amber-500" />
                                 </div>
-                                Mission Control 🚀
+                                Mission control
                             </h3>
                             {projectForm.status !== 'published' && (
-                                <div className="flex items-center gap-4">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <button
                                         onClick={() => setIsCommitModalOpen(true)}
-                                        className="bg-white hover:bg-slate-50 text-slate-600 px-8 py-4 rounded-2xl font-bold border-2 border-slate-200 shadow-sm hover:shadow-md transition-all flex items-center gap-2 text-lg"
+                                        className="flex min-h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-600 transition-colors hover:border-teal-300 hover:text-teal-700"
                                     >
                                         <GitCommit size={24} /> Commit
                                     </button>
@@ -588,16 +588,16 @@ export const StudentProjectWizardView: React.FC<StudentProjectWizardProps> = ({
                                                 proceed();
                                             }
                                         }}
-                                        className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-10 py-4 rounded-2xl font-black shadow-lg shadow-indigo-500/30 transition-all flex items-center gap-3 hover:scale-105 active:scale-95 text-xl"
+                                        className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/40 bg-teal-500 px-4 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400"
                                     >
-                                        Mission Complete <Flag size={24} fill="currentColor" />
+                                        Complete mission <Flag size={18} fill="currentColor" />
                                     </button>
                                 </div>
                             )}
                         </div>
 
                         {/* Kanban Board */}
-                        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-8 relative z-10 pb-4">
+                        <div className="relative z-10 flex flex-1 flex-col gap-4 overflow-y-auto pb-4 lg:flex-row lg:overflow-hidden">
                             {renderKanbanColumn('todo', 'Ready for Launch', <ListChecks size={24} className="text-indigo-600" />, 'text-indigo-600', 'bg-indigo-50/50')}
                             {renderKanbanColumn('doing', 'In Flight', <Loader2 size={24} className="text-amber-500 animate-spin-slow" />, 'text-amber-600', 'bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100')}
                             {renderKanbanColumn('done', 'Mission Accomplished', <Trophy size={24} className="text-emerald-500" />, 'text-emerald-600', 'bg-emerald-50/50')}

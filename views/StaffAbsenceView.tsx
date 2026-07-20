@@ -1,313 +1,472 @@
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { ClipboardCheck, Search, Filter, Calendar, Clock, CheckCircle2, XCircle, AlertCircle, ChevronRight, User, BarChart2, FileText, Settings, Download, Save, Hash } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { addDays, format, parseISO } from 'date-fns';
+import { BarChart2, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Download, FileText, Filter, RotateCcw, Save, Search, ShieldCheck, User, XCircle } from 'lucide-react';
+import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { StaffAttendanceRecord } from '../types';
 import { calculateDuration, formatDuration, timeToMinutes } from '../utils/timeUtils';
 
+type StaffStatus = StaffAttendanceRecord['status'];
+
+const statusStyles: Record<string, string> = {
+    present: 'border-teal-300/35 bg-teal-500 text-slate-950',
+    late: 'border-amber-300/35 bg-amber-400 text-slate-950',
+    absent: 'border-red-300/35 bg-red-500 text-white',
+    leave: 'border-sky-300/30 bg-sky-400/15 text-sky-200',
+    excused: 'border-sky-300/30 bg-sky-400/15 text-sky-200'
+};
+
 export const StaffAbsenceView = () => {
     const { teamMembers, staffAttendanceRecords, settings } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const { confirm, alert: showAlert } = useConfirm();
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const [selectedDate, setSelectedDate] = useState(today);
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'unmarked' | StaffStatus>('all');
     const [activeTab, setActiveTab] = useState<'daily' | 'management'>('daily');
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [localData, setLocalData] = useState<Record<string, { arrival?: string, departure?: string }>>({});
     const [saving, setSaving] = useState<string | null>(null);
+    const [isBulkSaving, setIsBulkSaving] = useState(false);
 
-    // Filter staff members (excluding students/parents/guests)
-    const staffList = useMemo(() => {
-        return teamMembers.filter(u =>
-            !['student', 'parent', 'guest'].includes(u.role) &&
-            (searchQuery === '' || u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.role.toLowerCase().includes(searchQuery.toLowerCase()))
-        );
-    }, [teamMembers, searchQuery]);
+    const eligibleStaff = useMemo(() => teamMembers.filter(member => !['student', 'parent', 'guest'].includes(member.role)), [teamMembers]);
+    const staffList = useMemo(() => eligibleStaff.filter(member => {
+        const query = searchQuery.trim().toLowerCase();
+        if (query && !member.name.toLowerCase().includes(query) && !member.role.toLowerCase().includes(query)) return false;
+        const status = staffAttendanceRecords.find(record => record.staffId === member.uid && record.date === selectedDate)?.status || 'unmarked';
+        return statusFilter === 'all' || status === statusFilter;
+    }), [eligibleStaff, searchQuery, selectedDate, staffAttendanceRecords, statusFilter]);
 
     const dayOfWeek = useMemo(() => {
-        const d = new Date(selectedDate);
-        return d.toLocaleDateString('en-US', { weekday: 'long' });
+        return format(parseISO(selectedDate), 'EEEE');
     }, [selectedDate]);
+    const isToday = selectedDate === today;
+    const isFutureDate = selectedDate > today;
 
-    const getRecord = (staffId: string) => {
-        return staffAttendanceRecords.find(r => r.staffId === staffId && r.date === selectedDate);
-    };
+    const getRecord = (staffId: string) => staffAttendanceRecords.find(record => record.staffId === staffId && record.date === selectedDate);
+    const getRecordId = (staffId: string) => getRecord(staffId)?.id || `staff_${currentOrganization?.id}_${selectedDate}_${staffId}`;
 
-    // Initialize local inputs from existing records
     useEffect(() => {
-        const newLocal: Record<string, { arrival?: string, departure?: string }> = {};
-        staffList.forEach(s => {
-            const record = getRecord(s.uid!);
-            newLocal[s.uid!] = {
+        const nextLocal: Record<string, { arrival?: string, departure?: string }> = {};
+        eligibleStaff.forEach(staff => {
+            const record = getRecord(staff.uid!);
+            nextLocal[staff.uid!] = {
                 arrival: record?.arrivalTime || '',
                 departure: record?.departureTime || ''
             };
         });
-        setLocalData(newLocal);
-    }, [selectedDate, staffAttendanceRecords]);
+        setLocalData(nextLocal);
+    }, [selectedDate, staffAttendanceRecords, eligibleStaff]);
 
-    // Attendance Handler
-    const handleMarkAttendance = async (staffId: string, staffName: string, status: StaffAttendanceRecord['status'], overrides?: Partial<StaffAttendanceRecord>) => {
+    const handleMarkAttendance = async (staffId: string, staffName: string, status: StaffStatus, overrides?: Partial<StaffAttendanceRecord>) => {
         if (!db || !currentOrganization?.id) {
-            console.error("Missing DB or Org ID", { db: !!db, org: currentOrganization?.id });
+            console.error('Missing DB or Org ID', { db: !!db, org: currentOrganization?.id });
+            await showAlert('Organization required', 'Select an organization before marking staff attendance.', 'warning');
+            return;
+        }
+        if (isFutureDate) {
+            await showAlert('Future attendance is locked', 'Move to today or an earlier date before recording staff attendance.', 'warning');
             return;
         }
 
         setSaving(staffId);
-        const recordId = `staff_${selectedDate}_${staffId}`;
+        const recordId = getRecordId(staffId);
         const existingRecord = getRecord(staffId);
-
-        // Calculate Totals if times are present
-        const arrival = overrides?.arrivalTime || localData[staffId]?.arrival || existingRecord?.arrivalTime;
-        const departure = overrides?.departureTime || localData[staffId]?.departure || existingRecord?.departureTime;
-
+        const arrival = overrides?.arrivalTime ?? localData[staffId]?.arrival ?? existingRecord?.arrivalTime;
+        const departure = overrides?.departureTime ?? localData[staffId]?.departure ?? existingRecord?.departureTime;
         let totalMinutes = 0;
         let overtimeMinutes = 0;
 
         if (arrival && departure) {
             totalMinutes = calculateDuration(arrival, departure);
-
-            // Get work hours for this staff or global default
-            const staff = teamMembers.find(u => u.uid === staffId);
+            const staff = teamMembers.find(member => member.uid === staffId);
             const workStart = staff?.workHours?.start || settings.defaultWorkHours?.start || '09:00';
             const workEnd = staff?.workHours?.end || settings.defaultWorkHours?.end || '18:00';
-            const expectedMinutes = calculateDuration(workStart, workEnd);
-
-            overtimeMinutes = totalMinutes - expectedMinutes;
+            overtimeMinutes = Math.max(0, totalMinutes - calculateDuration(workStart, workEnd));
         }
 
         try {
-            const recordData: any = {
+            let finalStatus = status;
+            const staff = teamMembers.find(member => member.uid === staffId);
+            const workStart = staff?.workHours?.start || settings.defaultWorkHours?.start || '09:00';
+            if (status === 'present' && arrival && timeToMinutes(arrival) > timeToMinutes(workStart) + 5) {
+                finalStatus = 'late';
+            }
+            const recordsTime = finalStatus === 'present' || finalStatus === 'late';
+            await setDoc(doc(db, 'staff_attendance', recordId), {
                 date: selectedDate,
                 staffId,
                 staffName,
-                status,
-                type: 'staff', // This is CRITICAL for permissions and filtering
+                status: finalStatus,
+                type: 'staff',
                 organizationId: currentOrganization.id,
                 markedBy: userProfile?.uid,
-                createdAt: serverTimestamp(),
+                ...(existingRecord ? {} : { createdAt: serverTimestamp() }),
+                updatedAt: serverTimestamp(),
                 ...overrides,
-                totalMinutes,
-                overtimeMinutes,
-                arrivalTime: arrival || null,
-                departureTime: departure || null
-            };
-
-            await setDoc(doc(db, 'staff_attendance', recordId), recordData, { merge: true });
-
-            // Auto-update status to 'late' if arrival is after scheduled start
-            if (status === 'present' && arrival) {
-                const staff = teamMembers.find(u => u.uid === staffId);
-                const workStart = staff?.workHours?.start || settings.defaultWorkHours?.start || '09:00';
-                if (timeToMinutes(arrival) > timeToMinutes(workStart) + 5) { // 5 min grace period
-                    await setDoc(doc(db, 'staff_attendance', recordId), { status: 'late' }, { merge: true });
-                }
-            }
-
-        } catch (err: any) {
-            console.error("Error marking staff attendance", err);
-            alert(`Failed to save. \nError: ${err.message || err.toString()}\n\nDebug Info:\nOrg: ${currentOrganization?.id}\nUser: ${userProfile?.uid}\nRecord: ${recordId}`);
+                totalMinutes: recordsTime ? totalMinutes : 0,
+                overtimeMinutes: recordsTime ? overtimeMinutes : 0,
+                arrivalTime: recordsTime ? arrival || null : null,
+                departureTime: recordsTime ? departure || null : null
+            }, { merge: true });
+        } catch (error) {
+            console.error('Error marking staff attendance', error);
+            await showAlert(
+                'Staff attendance was not saved',
+                `The attendance record for ${staffName} could not be saved. ${error instanceof Error ? error.message : String(error)}`,
+                'danger'
+            );
         } finally {
             setSaving(null);
         }
     };
 
+    const handleSaveTimes = async (staffId: string, staffName: string, status: StaffStatus | 'unmarked') => {
+        if (status !== 'present' && status !== 'late') {
+            await showAlert('Choose a working status first', 'Mark the team member present or late before saving arrival and departure times.', 'warning');
+            return;
+        }
+        await handleMarkAttendance(staffId, staffName, status);
+    };
+
+    const handleClearAttendance = async (staffId: string, staffName: string) => {
+        if (!db || !currentOrganization?.id || isFutureDate) return;
+        const approved = await confirm({
+            title: 'Clear this staff mark?',
+            message: `${staffName} will return to unmarked for ${selectedDate}. Saved working times for this day will also be removed.`,
+            confirmText: 'Clear mark',
+            cancelText: 'Keep mark',
+            variant: 'warning'
+        });
+        if (!approved) return;
+        setSaving(staffId);
+        try {
+            await deleteDoc(doc(db, 'staff_attendance', getRecordId(staffId)));
+        } catch (error) {
+            console.error('Error clearing staff attendance', error);
+            await showAlert('Staff mark was not cleared', 'The existing attendance record is still in place. Please try again.', 'danger');
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    const handleConfirmAllPresent = async () => {
+        if (!db || !currentOrganization?.id) {
+            await showAlert('Organization required', 'Select an organization before confirming staff attendance.', 'warning');
+            return;
+        }
+        if (isFutureDate) {
+            await showAlert('Future attendance is locked', 'Move to today or an earlier date before recording staff attendance.', 'warning');
+            return;
+        }
+        const unmarked = eligibleStaff.filter(staff => !getRecord(staff.uid!));
+        if (unmarked.length === 0) {
+            await showAlert('Attendance already complete', 'Every team member already has an attendance mark for this date.', 'info');
+            return;
+        }
+        const approved = await confirm({
+            title: 'Confirm unmarked staff as present?',
+            message: `Mark ${unmarked.length} unmarked ${unmarked.length === 1 ? 'team member' : 'team members'} present. Existing late, absent, leave, and excused records will remain unchanged.`,
+            confirmText: 'Mark present',
+            cancelText: 'Cancel',
+            variant: 'info'
+        });
+        if (!approved) return;
+
+        setIsBulkSaving(true);
+        try {
+            const batch = writeBatch(db);
+            unmarked.forEach(staff => {
+                batch.set(doc(db, 'staff_attendance', `staff_${currentOrganization.id}_${selectedDate}_${staff.uid}`), {
+                    date: selectedDate,
+                    staffId: staff.uid,
+                    staffName: staff.name,
+                    status: 'present',
+                    type: 'staff',
+                    organizationId: currentOrganization.id,
+                    markedBy: userProfile?.uid || '',
+                    totalMinutes: 0,
+                    overtimeMinutes: 0,
+                    createdAt: serverTimestamp()
+                });
+            });
+            await batch.commit();
+            await showAlert('Staff attendance confirmed', `${unmarked.length} unmarked ${unmarked.length === 1 ? 'team member is' : 'team members are'} now marked present.`, 'success');
+        } catch (error) {
+            console.error('Error confirming staff attendance', error);
+            await showAlert('Staff attendance was not confirmed', 'No bulk attendance changes were completed. Please try again.', 'danger');
+        } finally {
+            setIsBulkSaving(false);
+        }
+    };
+
     const dailyStats = useMemo(() => {
-        let present = 0, absent = 0, late = 0, leave = 0;
-        staffList.forEach(s => {
-            const status = getRecord(s.uid!)?.status || 'unmarked';
+        let present = 0;
+        let absent = 0;
+        let late = 0;
+        let leave = 0;
+        let excused = 0;
+        let unmarked = 0;
+
+        eligibleStaff.forEach(staff => {
+            const status = getRecord(staff.uid!)?.status || 'unmarked';
             if (status === 'present') present++;
             else if (status === 'absent') absent++;
             else if (status === 'late') late++;
             else if (status === 'leave') leave++;
+            else if (status === 'excused') excused++;
+            else unmarked++;
         });
-        return { total: staffList.length, present, absent, late, leave };
-    }, [staffList, staffAttendanceRecords, selectedDate]);
+
+        return { total: eligibleStaff.length, present, absent, late, leave, excused, unmarked };
+    }, [eligibleStaff, staffAttendanceRecords, selectedDate]);
 
     const monthlyReport = useMemo(() => {
         const report: Record<string, { present: number, absent: number, late: number, leave: number, totalMinutes: number, overtime: number }> = {};
-        staffList.forEach(s => {
-            report[s.uid!] = { present: 0, absent: 0, late: 0, leave: 0, totalMinutes: 0, overtime: 0 };
+        staffList.forEach(staff => {
+            report[staff.uid!] = { present: 0, absent: 0, late: 0, leave: 0, totalMinutes: 0, overtime: 0 };
         });
-        staffAttendanceRecords.forEach(r => {
-            if (r.date.startsWith(selectedMonth) && report[r.staffId]) {
-                if (r.status === 'present') report[r.staffId].present++;
-                else if (r.status === 'absent') report[r.staffId].absent++;
-                else if (r.status === 'late') report[r.staffId].late++;
-                else if (r.status === 'leave') report[r.staffId].leave++;
 
-                report[r.staffId].totalMinutes += (r.totalMinutes || 0);
-                report[r.staffId].overtime += (r.overtimeMinutes || 0);
+        staffAttendanceRecords.forEach(record => {
+            if (!record.date.startsWith(selectedMonth) || !report[record.staffId]) return;
+            if (record.status === 'present') report[record.staffId].present++;
+            else if (record.status === 'absent') report[record.staffId].absent++;
+            else if (record.status === 'late') report[record.staffId].late++;
+            else if (record.status === 'leave') report[record.staffId].leave++;
+
+            if (record.status === 'present' || record.status === 'late') {
+                report[record.staffId].totalMinutes += record.totalMinutes || 0;
+                report[record.staffId].overtime += record.overtimeMinutes || 0;
             }
         });
         return report;
     }, [staffList, staffAttendanceRecords, selectedMonth]);
 
+    const moveDate = (offset: number) => {
+        setSelectedDate(format(addDays(parseISO(selectedDate), offset), 'yyyy-MM-dd'));
+    };
+
+    const updateLocalTime = (staffId: string, field: 'arrival' | 'departure', value: string) => {
+        setLocalData(previous => ({
+            ...previous,
+            [staffId]: { ...previous[staffId], [field]: value }
+        }));
+    };
+
+    const tabs = (
+        <div className="flex w-full rounded-lg border border-white/10 bg-slate-950/70 p-1 lg:w-auto" role="tablist" aria-label="Staff attendance view">
+            <button type="button" role="tab" aria-selected={activeTab === 'daily'} onClick={() => setActiveTab('daily')} className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors lg:flex-none ${activeTab === 'daily' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}>
+                <Calendar size={16} /> Daily
+            </button>
+            <button type="button" role="tab" aria-selected={activeTab === 'management'} onClick={() => setActiveTab('management')} className={`inline-flex min-h-9 flex-1 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors lg:flex-none ${activeTab === 'management' ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}>
+                <BarChart2 size={16} /> Reports
+            </button>
+        </div>
+    );
+
     return (
-        <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-right-4">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 p-6 rounded-2xl border border-slate-800 gap-4 shadow-xl">
-                <div>
-                    <h2 className="text-2xl font-black text-white flex items-center gap-3">
-                        <ClipboardCheck className="w-8 h-8 text-red-500" /> Staff Attendance
-                    </h2>
-                    <p className="text-slate-400 text-sm mt-1">Track presence, clock-in/out, and overtime logic.</p>
-                </div>
-                <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
-                    <button onClick={() => setActiveTab('daily')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'daily' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}><Calendar size={18} /> Daily</button>
-                    <button onClick={() => setActiveTab('management')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'management' ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}><BarChart2 size={18} /> Management</button>
-                </div>
-            </div>
+        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+            <AtlasCommandHeader
+                eyebrow="Team operations"
+                title="Staff attendance"
+                description="Keep daily presence, working hours, and attendance exceptions in one compact desk."
+                icon={ClipboardCheck}
+                badges={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-black uppercase text-slate-300">{eligibleStaff.length} staff</span>}
+                actions={tabs}
+            />
 
             {activeTab === 'daily' ? (
                 <>
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                        {[
-                            { label: 'Team', val: dailyStats.total, icon: User, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-                            { label: 'Present', val: dailyStats.present, icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
-                            { label: 'Late', val: dailyStats.late, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-400/10' },
-                            { label: 'Absent', val: dailyStats.absent, icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10' },
-                            { label: 'On Leave', val: dailyStats.leave, icon: FileText, color: 'text-purple-400', bg: 'bg-purple-400/10' },
-                        ].map((stat, i) => (
-                            <div key={i} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center gap-4">
-                                <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center shrink-0`}>
-                                    <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                        <AtlasSignalCard label="Team" value={dailyStats.total} detail={`${dailyStats.unmarked} awaiting a mark`} icon={User} tone="slate" />
+                        <AtlasSignalCard label="Present" value={dailyStats.present} detail={`${dailyStats.leave} leave | ${dailyStats.excused} excused`} icon={CheckCircle2} tone="teal" />
+                        <AtlasSignalCard label="Late" value={dailyStats.late} detail="Needs attention" icon={Clock} tone="amber" />
+                        <AtlasSignalCard label="Absent" value={dailyStats.absent} detail="Attendance risk" icon={XCircle} tone="red" />
+                    </div>
+
+                    <AtlasToolbar
+                        trailing={(
+                            <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-slate-950 p-1">
+                                <button type="button" onClick={() => moveDate(-1)} aria-label="Previous day" title="Previous day" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                                    <ChevronRight size={17} className="rotate-180" />
+                                </button>
+                                <div className="border-x border-white/10 px-2 text-center">
+                                    <div className="text-[9px] font-black uppercase text-teal-300">{dayOfWeek}</div>
+                                    <input type="date" value={selectedDate} onChange={(event) => event.target.value && setSelectedDate(event.target.value)} aria-label="Staff attendance date" className="w-[132px] bg-transparent text-center font-mono text-xs font-bold text-white outline-none" />
                                 </div>
-                                <div>
-                                    <div className="text-slate-500 text-[9px] font-black uppercase tracking-widest">{stat.label}</div>
-                                    <div className="text-xl font-black text-white">{stat.val}</div>
-                                </div>
+                                {!isToday && <button type="button" onClick={() => setSelectedDate(today)} className="h-8 rounded-lg px-2 text-[10px] font-black uppercase text-teal-200 hover:bg-teal-400/10">Today</button>}
+                                <button type="button" onClick={() => moveDate(1)} aria-label="Next day" title="Next day" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                                    <ChevronRight size={17} />
+                                </button>
                             </div>
-                        ))}
-                    </div>
-
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
-                            <input type="text" placeholder="Search team..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-slate-900 border border-slate-800 rounded-2xl text-white outline-none focus:border-red-500/50" />
+                        )}
+                    >
+                        <div className="relative min-w-[220px] flex-1">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                            <input type="search" placeholder="Search team members or roles" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                         </div>
-                        <div className="flex items-center gap-2 bg-slate-900 p-2 rounded-2xl border border-slate-800">
-                            <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 text-slate-400 hover:text-white"><ChevronRight className="rotate-180" /></button>
-                            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-transparent text-white font-bold text-sm outline-none cursor-pointer px-4" />
-                            <button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d.toISOString().split('T')[0]); }} className="p-2 text-slate-400 hover:text-white"><ChevronRight /></button>
+                        <div className="relative min-w-[170px]">
+                            <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | 'unmarked' | StaffStatus)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-10 pr-8 text-sm text-slate-300 outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10">
+                                <option value="all">All statuses</option>
+                                <option value="unmarked">Unmarked</option>
+                                <option value="present">Present</option>
+                                <option value="late">Late</option>
+                                <option value="absent">Absent</option>
+                                <option value="leave">Leave</option>
+                                <option value="excused">Excused</option>
+                            </select>
                         </div>
-                    </div>
+                        <AtlasActionButton icon={CheckCircle2} variant="primary" disabled={dailyStats.unmarked === 0 || isFutureDate || isBulkSaving} onClick={handleConfirmAllPresent}>
+                            {isBulkSaving ? 'Confirming...' : 'Confirm unmarked'}
+                        </AtlasActionButton>
+                    </AtlasToolbar>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {staffList.map(item => {
-                            const record = getRecord(item.uid!);
-                            const status = record?.status || 'unmarked';
-                            const overtime = record?.overtimeMinutes || 0;
-
-                            return (
-                                <div key={item.uid} className={`bg-slate-900 border rounded-[1.5rem] p-5 transition-all relative group ${status !== 'unmarked' ? 'border-red-500/30 ring-1 ring-red-500/20' : 'border-slate-800 shadow-lg shadow-black/40'}`}>
-                                    {saving === item.uid && <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-[1.5rem] z-20 flex items-center justify-center"><Clock className="animate-spin text-red-500" /></div>}
-
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-black text-white">{item.name[0]}</div>
-                                            <div>
-                                                <h4 className="font-bold text-white text-md tracking-tight leading-none mb-1">{item.name}</h4>
-                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{item.role}</span>
-                                            </div>
-                                        </div>
-                                        {status !== 'unmarked' && (
-                                            <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${status === 'present' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : status === 'absent' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
-                                                {status}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-4 gap-2 mb-4">
-                                        {[
-                                            { id: 'present', icon: CheckCircle2, color: 'bg-emerald-600' },
-                                            { id: 'late', icon: Clock, color: 'bg-amber-500' },
-                                            { id: 'absent', icon: XCircle, color: 'bg-red-600' },
-                                            { id: 'leave', icon: FileText, color: 'bg-purple-600' }
-                                        ].map(btn => (
-                                            <button
-                                                key={btn.id}
-                                                onClick={() => handleMarkAttendance(item.uid!, item.name, btn.id as any)}
-                                                className={`p-2.5 rounded-xl flex flex-col items-center gap-1 transition-all border ${status === btn.id ? `${btn.color} text-white border-white/20 shadow-lg scale-105 z-10` : 'bg-slate-950 text-slate-600 border-slate-800 hover:border-slate-600'}`}
-                                            >
-                                                <btn.icon size={18} />
-                                                <span className="text-[8px] font-bold uppercase">{btn.id[0]}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* Clock In/Out Section */}
-                                    <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-3">
-                                        <div className="flex gap-4">
-                                            <div className="flex-1">
-                                                <label className="block text-[9px] text-slate-500 font-black uppercase mb-1">Arrival</label>
-                                                <input
-                                                    type="time"
-                                                    value={localData[item.uid!]?.arrival || ''}
-                                                    onChange={e => setLocalData({ ...localData, [item.uid!]: { ...localData[item.uid!], arrival: e.target.value } })}
-                                                    onBlur={() => handleMarkAttendance(item.uid!, item.name, status === 'unmarked' ? 'present' : status)}
-                                                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1.5 text-xs text-white outline-none focus:border-red-500/50 transition-colors"
-                                                />
-                                            </div>
-                                            <div className="flex-1">
-                                                <label className="block text-[9px] text-slate-500 font-black uppercase mb-1">Departure</label>
-                                                <input
-                                                    type="time"
-                                                    value={localData[item.uid!]?.departure || ''}
-                                                    onChange={e => setLocalData({ ...localData, [item.uid!]: { ...localData[item.uid!], departure: e.target.value } })}
-                                                    onBlur={() => handleMarkAttendance(item.uid!, item.name, status === 'unmarked' ? 'present' : status)}
-                                                    className="w-full bg-slate-900 border border-slate-800 rounded-lg p-1.5 text-xs text-white outline-none focus:border-red-500/50 transition-colors"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {(record?.totalMinutes || 0) > 0 && (
-                                            <div className="flex justify-between items-center pt-1 border-t border-slate-800/50">
-                                                <div className="text-[10px] text-slate-400 font-medium">Worked: <span className="text-white font-bold">{formatDuration(record!.totalMinutes!)}</span></div>
-                                                <div className={`text-[10px] font-black uppercase tracking-wider ${overtime >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                                    {overtime > 0 ? `+${formatDuration(overtime)} OT` : overtime < 0 ? `${formatDuration(overtime)} SHORT` : 'ON TIME'}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </>
-            ) : (
-                <div className="space-y-6">
-                    <div className="flex justify-between items-center bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                        <div><h3 className="text-xl font-black text-white">Monthly Hours Report</h3><p className="text-slate-400 text-sm">Aggregated working time and overtime summary.</p></div>
-                        <div className="flex gap-3">
-                            <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-slate-950 border border-slate-800 text-white px-4 py-2 rounded-xl text-sm outline-none" />
-                            <button className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm border border-slate-700 transition-all font-bold"><Download size={18} /> Export</button>
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-950"><tr className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none"><th className="px-6 py-4">Name</th><th className="px-6 py-4 text-center">Days</th><th className="px-6 py-4 text-center">Total Time</th><th className="px-6 py-4 text-center">Net Overtime</th><th className="px-6 py-4 text-center">Attendance %</th></tr></thead>
-                            <tbody className="divide-y divide-slate-800">
+                    <section className="space-y-4">
+                        <AtlasSectionHeader title="Daily team roster" description={`${dailyStats.unmarked} of ${dailyStats.total} team members still need an attendance mark`} icon={User} />
+                        {isFutureDate && <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">This is a schedule preview. Staff attendance controls unlock on the selected date.</div>}
+                        {staffList.length === 0 ? (
+                            <AtlasEmptyState title="No team members found" description="No staff match the current search and status filters." icon={User} action={<AtlasActionButton onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>Clear filters</AtlasActionButton>} />
+                        ) : (
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 {staffList.map(staff => {
-                                    const stats = monthlyReport[staff.uid!] || { present: 0, absent: 0, late: 0, leave: 0, totalMinutes: 0, overtime: 0 };
-                                    const totalEntries = stats.present + stats.absent + stats.late;
-                                    const attendanceRate = totalEntries > 0 ? Math.round(((stats.present + stats.late) / totalEntries) * 100) : 0;
+                                    const record = getRecord(staff.uid!);
+                                    const status = record?.status || 'unmarked';
+                                    const overtime = record?.overtimeMinutes || 0;
+                                    const localArrival = localData[staff.uid!]?.arrival || '';
+                                    const localDeparture = localData[staff.uid!]?.departure || '';
+                                    const timesDirty = localArrival !== (record?.arrivalTime || '') || localDeparture !== (record?.departureTime || '');
+                                    const statusOptions: Array<{ id: StaffStatus, label: string, icon: typeof CheckCircle2 }> = [
+                                        { id: 'present', label: 'Present', icon: CheckCircle2 },
+                                        { id: 'late', label: 'Late', icon: Clock },
+                                        { id: 'absent', label: 'Absent', icon: XCircle },
+                                        { id: 'leave', label: 'Leave', icon: FileText },
+                                        { id: 'excused', label: 'Excused', icon: ShieldCheck }
+                                    ];
+
                                     return (
-                                        <tr key={staff.uid} className="hover:bg-white/5 transition-colors">
-                                            <td className="px-6 py-4 font-bold text-white text-sm">{staff.name}</td>
-                                            <td className="px-6 py-4 text-center font-bold text-slate-300 text-xs">{stats.present + stats.late}d</td>
-                                            <td className="px-6 py-4 text-center font-black text-white text-xs whitespace-nowrap">{formatDuration(stats.totalMinutes)}</td>
-                                            <td className={`px-6 py-4 text-center font-black text-xs whitespace-nowrap ${stats.overtime >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{stats.overtime > 0 ? '+' : ''}{formatDuration(stats.overtime)}</td>
-                                            <td className="px-6 py-4 text-center text-sm font-black text-white">{attendanceRate}%</td>
-                                        </tr>
+                                        <article key={staff.uid} className={`relative overflow-hidden rounded-xl border bg-slate-900/75 p-4 ${status === 'absent' ? 'border-red-400/30' : status === 'late' ? 'border-amber-300/25' : status === 'present' ? 'border-teal-300/20' : 'border-white/10'}`}>
+                                            {saving === staff.uid && (
+                                                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/65">
+                                                    <Clock className="animate-spin text-teal-300" size={20} aria-label="Saving attendance" />
+                                                </div>
+                                            )}
+
+                                            <div className="mb-3 flex items-start justify-between gap-3">
+                                                <div className="flex min-w-0 items-center gap-3">
+                                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-sm font-black text-white">{staff.name[0]}</div>
+                                                    <div className="min-w-0">
+                                                        <h4 className="truncate text-sm font-black text-white">{staff.name}</h4>
+                                                        <span className="block truncate text-[10px] font-bold uppercase text-slate-500">{staff.role}</span>
+                                                    </div>
+                                                </div>
+                                                <span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase ${status === 'unmarked' ? 'border-amber-300/20 bg-amber-400/10 text-amber-200' : statusStyles[status]}`}>
+                                                    {status}
+                                                </span>
+                                            </div>
+
+                                            <div className="mb-3 grid grid-cols-5 gap-1.5" aria-label={`Attendance status for ${staff.name}`}>
+                                                {statusOptions.map(option => (
+                                                    <button key={option.id} type="button" disabled={saving === staff.uid || isFutureDate} onClick={() => handleMarkAttendance(staff.uid!, staff.name, option.id)} aria-pressed={status === option.id} title={option.label} className={`flex h-10 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${status === option.id ? statusStyles[option.id] : 'border-white/10 bg-slate-950 text-slate-500 hover:border-white/20 hover:text-white'}`}>
+                                                        <option.icon size={16} />
+                                                        <span className="sr-only">{option.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <div className="rounded-lg border border-white/10 bg-slate-950/70 p-3">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <label className="min-w-0">
+                                                        <span className="mb-1 block text-[9px] font-black uppercase text-slate-500">Arrival</span>
+                                                        <input type="time" value={localArrival} disabled={isFutureDate} onChange={(event) => updateLocalTime(staff.uid!, 'arrival', event.target.value)} className="h-9 w-full rounded-lg border border-white/10 bg-slate-900 px-2 font-mono text-xs text-white outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                                                    </label>
+                                                    <label className="min-w-0">
+                                                        <span className="mb-1 block text-[9px] font-black uppercase text-slate-500">Departure</span>
+                                                        <input type="time" value={localDeparture} disabled={isFutureDate} onChange={(event) => updateLocalTime(staff.uid!, 'departure', event.target.value)} className="h-9 w-full rounded-lg border border-white/10 bg-slate-900 px-2 font-mono text-xs text-white outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                                                    </label>
+                                                </div>
+
+                                                <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-2">
+                                                    <span className="text-[10px] text-slate-500">Times save only for present or late staff.</span>
+                                                    <div className="flex shrink-0 items-center gap-1">
+                                                        {status !== 'unmarked' && <button type="button" disabled={saving === staff.uid || isFutureDate} onClick={() => handleClearAttendance(staff.uid!, staff.name)} title="Return to unmarked" aria-label={`Clear attendance mark for ${staff.name}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><RotateCcw size={14} /></button>}
+                                                        <button type="button" disabled={!timesDirty || saving === staff.uid || isFutureDate || (status !== 'present' && status !== 'late')} onClick={() => handleSaveTimes(staff.uid!, staff.name, status)} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-[10px] font-bold text-slate-300 hover:border-teal-300/30 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-40">
+                                                            <Save size={13} /> Save times
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {(record?.totalMinutes || 0) > 0 && (
+                                                    <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-2 text-[10px]">
+                                                        <span className="text-slate-500">Worked <strong className="font-mono text-white">{formatDuration(record!.totalMinutes!)}</strong></span>
+                                                        <span className={`font-mono font-black ${overtime < 0 ? 'text-red-300' : overtime > 0 ? 'text-amber-200' : 'text-teal-200'}`}>
+                                                            {overtime > 0 ? `+${formatDuration(overtime)} OT` : overtime < 0 ? `${formatDuration(overtime)} short` : 'On time'}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </article>
                                     );
                                 })}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                            </div>
+                        )}
+                    </section>
+                </>
+            ) : (
+                <section className="space-y-4">
+                    <AtlasSectionHeader title="Monthly hours report" description="Review attendance rate, worked time, and overtime across the team." icon={BarChart2} />
+                    <AtlasToolbar
+                        trailing={<AtlasActionButton icon={Download} disabled title="Report export is not connected yet">Export unavailable</AtlasActionButton>}
+                    >
+                        <label className="flex min-w-[220px] flex-1 items-center gap-3">
+                            <span className="text-xs font-bold text-slate-400">Reporting month</span>
+                            <input type="month" value={selectedMonth} onChange={(event) => event.target.value && setSelectedMonth(event.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 font-mono text-sm text-white outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                        </label>
+                    </AtlasToolbar>
+                    <p className="text-xs text-slate-500">Export is intentionally disabled until a verified payroll-ready format is connected. The on-screen report remains the source of truth.</p>
+
+                    {staffList.length === 0 ? (
+                        <AtlasEmptyState title="No staff to report" description="The monthly report will appear when staff members are available." icon={BarChart2} />
+                    ) : (
+                        <div className="overflow-x-auto rounded-xl border border-white/10 bg-slate-900/70">
+                            <table className="w-full min-w-[680px] text-left">
+                                <thead className="border-b border-white/10 bg-slate-950/80">
+                                    <tr className="text-[10px] font-black uppercase text-slate-500">
+                                        <th className="px-4 py-3">Team member</th>
+                                        <th className="px-4 py-3 text-center">Days</th>
+                                        <th className="px-4 py-3 text-center">Total time</th>
+                                        <th className="px-4 py-3 text-center">Net overtime</th>
+                                        <th className="px-4 py-3 text-center">Attendance</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/[0.07]">
+                                    {staffList.map(staff => {
+                                        const stats = monthlyReport[staff.uid!] || { present: 0, absent: 0, late: 0, leave: 0, totalMinutes: 0, overtime: 0 };
+                                        const totalEntries = stats.present + stats.absent + stats.late;
+                                        const attendanceRate = totalEntries > 0 ? Math.round(((stats.present + stats.late) / totalEntries) * 100) : 0;
+                                        return (
+                                            <tr key={staff.uid} className="transition-colors hover:bg-white/[0.025]">
+                                                <td className="px-4 py-3">
+                                                    <div className="text-sm font-bold text-white">{staff.name}</div>
+                                                    <div className="text-[10px] uppercase text-slate-500">{staff.role}</div>
+                                                </td>
+                                                <td className="px-4 py-3 text-center font-mono text-xs font-bold text-slate-300">{stats.present + stats.late}d</td>
+                                                <td className="px-4 py-3 text-center font-mono text-xs font-black text-white">{formatDuration(stats.totalMinutes)}</td>
+                                                <td className={`px-4 py-3 text-center font-mono text-xs font-black ${stats.overtime < 0 ? 'text-red-300' : stats.overtime > 0 ? 'text-amber-200' : 'text-teal-200'}`}>{stats.overtime > 0 ? '+' : ''}{formatDuration(stats.overtime)}</td>
+                                                <td className="px-4 py-3 text-center font-mono text-sm font-black text-white">{attendanceRate}%</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </section>
             )}
         </div>
     );
