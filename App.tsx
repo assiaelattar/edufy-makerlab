@@ -58,6 +58,7 @@ import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'fir
 import { db } from './services/firebase';
 import { formatCurrency, compressImage, normalizePhone } from './utils/helpers';
 import { resolveEnrollmentServicePeriod } from './utils/programLifecycle';
+import { isPublicEnrollmentRequest } from './utils/publicEnrollment';
 import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
 import { InstructorLayout } from './components/layouts/InstructorLayout';
@@ -1105,7 +1106,7 @@ const AppContent = () => {
 
     // Routing
     if (locationPath.includes('mode=booking') || window.location.search.includes('mode=booking')) return <PublicBookingView />;
-    if (locationPath === '/enroll') return <PublicEnrollmentView />;
+    if (isPublicEnrollmentRequest({ pathname: locationPath, search: window.location.search })) return <PublicEnrollmentView />;
     if (locationPath === '/parent-portal' || locationHash === '#parent') return <ParentLoginView />;
 
     if (authLoading || appLoading || (user && !userProfile)) {

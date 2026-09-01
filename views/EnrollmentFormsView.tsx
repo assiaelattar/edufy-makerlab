@@ -28,6 +28,7 @@ import {
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
 import { getProgramReadiness } from '../utils/program-readiness';
+import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
 
 interface EnrollmentFormsViewProps {
     onEnrollLead?: (lead: Lead) => void;
@@ -47,7 +48,6 @@ export const EnrollmentFormsView: React.FC<EnrollmentFormsViewProps> = () => {
         documentTitle: `Inscription_${selectedProgram?.name || 'Form'}`,
     });
 
-    const baseUrl = window.location.origin;
     const activePrograms = programs.filter(program => program.status === 'active');
     const kidsPrograms = activePrograms.filter(program => program.targetAudience !== 'adults').length;
     const adultPrograms = activePrograms.filter(program => program.targetAudience === 'adults').length;
@@ -75,7 +75,7 @@ export const EnrollmentFormsView: React.FC<EnrollmentFormsViewProps> = () => {
         window.setTimeout(() => handlePrint(), 100);
     };
 
-    const getEnrollmentUrl = (program: Program) => `${baseUrl}/enroll?program=${program.id}`;
+    const getEnrollmentUrl = (program: Program) => buildPublicEnrollmentUrl(program.id);
     const openQr = (program: Program) => {
         setCopyError('');
         setQrProgram(program);

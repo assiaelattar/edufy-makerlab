@@ -24,6 +24,7 @@ import { storage } from '../services/firebase';
 import { compressImage } from '../utils/image-compression';
 import { getProgramReadiness } from '../utils/program-readiness';
 import { buildProgramDuplicateDraft, getNextAcademicPeriod } from '../utils/programLifecycle';
+import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
 import { Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 
 interface ProgramsViewProps {
@@ -122,7 +123,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       return;
     }
     try {
-      await navigator.clipboard.writeText(`${baseUrl}/enroll?program=${program.id}`);
+      await navigator.clipboard.writeText(buildPublicEnrollmentUrl(program.id));
       setCopiedProgramId(program.id);
       window.setTimeout(() => {
         setCopiedProgramId(current => current === program.id ? null : current);
@@ -198,8 +199,6 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       handlePrint();
     }, 100);
   };
-
-  const baseUrl = window.location.origin;
 
   const academicYears = settings.academicYear?.match(/(20\d{2})\D+(20\d{2})/);
   const defaultRunSetup = {
@@ -1188,12 +1187,12 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
           </div>
 
           <div className="mb-6 flex justify-center rounded-lg border border-slate-200 bg-[#F7F1E4] p-4">
-            <QRCodeSVG value={`${baseUrl}/enroll?program=${qrProgram.id}`} size={200} />
+            <QRCodeSVG value={buildPublicEnrollmentUrl(qrProgram.id)} size={200} />
           </div>
 
           <div className="space-y-3">
             <button
-              onClick={() => window.open(`${baseUrl}/enroll?program=${qrProgram.id}`, '_blank', 'noopener,noreferrer')}
+              onClick={() => window.open(buildPublicEnrollmentUrl(qrProgram.id), '_blank', 'noopener,noreferrer')}
               className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 py-3 font-bold text-slate-950 transition-colors hover:bg-teal-400"
             >
               <Tablet size={18} /> Open Kiosk Mode

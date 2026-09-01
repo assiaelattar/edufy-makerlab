@@ -7,6 +7,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
 import { getProgramReadiness } from '../utils/program-readiness';
 import { buildLegacyProgramOperationsPreview } from '../utils/programOperations';
+import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
 import { ProgramOperationsPreviewPanel } from '../components/programs/ProgramOperationsPreview';
 import {
     AtlasActionButton,
@@ -39,7 +40,6 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     const [linkCopied, setLinkCopied] = useState(false);
     const [expandedGradeIds, setExpandedGradeIds] = useState<string[]>([]);
     const workspaceRef = useRef<HTMLDivElement>(null);
-    const baseUrl = window.location.origin;
 
     // Get the program (Prioritize Prop -> then URL Param)
     const targetId = programIdProp || viewParams.programId;
@@ -139,7 +139,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
             return;
         }
         try {
-            await navigator.clipboard.writeText(`${baseUrl}/enroll?program=${program.id}`);
+            await navigator.clipboard.writeText(buildPublicEnrollmentUrl(program.id));
             setLinkCopied(true);
             window.setTimeout(() => setLinkCopied(false), 1800);
         } catch (error) {
@@ -429,13 +429,13 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                             <div className="flex flex-col gap-3 rounded-lg border border-slate-800 bg-slate-950 p-4">
                                 <div className="text-xs font-bold text-slate-500 uppercase">Public URL</div>
                                 <div className="text-sm text-blue-400 truncate font-mono bg-slate-900/50 p-2 rounded">
-                                    {`${baseUrl}/enroll?program=${program.id}`}
+                                    {buildPublicEnrollmentUrl(program.id)}
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <AtlasActionButton
-                                    onClick={() => window.open(`${baseUrl}/enroll?program=${program.id}`, '_blank', 'noopener,noreferrer')}
+                                    onClick={() => window.open(buildPublicEnrollmentUrl(program.id), '_blank', 'noopener,noreferrer')}
                                     icon={ExternalLink}
                                     variant="primary"
                                     disabled={program.status !== 'active' || !isEnrollmentReady}
