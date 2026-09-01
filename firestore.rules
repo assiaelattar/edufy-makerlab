@@ -205,6 +205,12 @@ service cloud.firestore {
           'programId',
           'selectedPack',
           'selectedSlot',
+          'selectedGradeId',
+          'selectedGroupId',
+          'secondGroupId',
+          'campSessionId',
+          'campShiftId',
+          'moduleIds',
           'preferredPaymentTerm',
           'paymentMethod',
           'notes',
@@ -214,6 +220,12 @@ service cloud.firestore {
         ]) &&
         request.resource.data.programId is string &&
         programMatchesOrg(request.resource.data.programId, request.resource.data.organizationId) &&
+        (request.resource.data.get('selectedGradeId', null) == null || request.resource.data.get('selectedGradeId', null) is string) &&
+        (request.resource.data.get('selectedGroupId', null) == null || request.resource.data.get('selectedGroupId', null) is string) &&
+        (request.resource.data.get('secondGroupId', null) == null || request.resource.data.get('secondGroupId', null) is string) &&
+        (request.resource.data.get('campSessionId', null) == null || request.resource.data.get('campSessionId', null) is string) &&
+        (request.resource.data.get('campShiftId', null) == null || request.resource.data.get('campShiftId', null) is string) &&
+        request.resource.data.get('moduleIds', []) is list &&
         request.resource.data.status == 'new' &&
         request.resource.data.createdAt == request.time;
     }
