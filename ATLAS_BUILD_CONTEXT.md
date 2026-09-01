@@ -1,6 +1,6 @@
 # Atlas Build Context
 
-Last updated: 2026-07-19
+Last updated: 2026-09-01
 
 This is the living build context for Atlas, the SaaS evolution of Edufy MakerLab. Before each work loop, read this file first. After each work loop, update it with what changed, what was tested, what remains risky, and the next best module.
 
@@ -736,6 +736,15 @@ Left:
 - Moved role customizations into organization-scoped overrides and merged them with platform role defaults at authentication time.
 - Tightened Firestore rules for organizations, settings, integration secrets, tenant users, and platform role definitions.
 - Production build, focused TypeScript checks, and diff checks pass. Authenticated desktop and 390px mobile QA passed for Workspace, Plan and Apps, and Team and Access with no document-level horizontal overflow or test writes.
+
+### 2026-09-01 - Program Roster Export And Waiting-List Controls
+
+- Added always-visible CSV and Excel roster exports plus matching actions in the Program Roster tab.
+- Exported active academic-year learner, parent, school, group, schedule, plan, placement, and period data with UTF-8 CSV and a filterable Excel worksheet.
+- Added Remove and Delete actions to program waiting-list cards. Remove closes and preserves the CRM record; Delete permanently removes only the lead record after confirmation.
+- Added tenant and role guards, pending states, and app-native success/error feedback.
+- Verified both 30-row Make & Go exports and both waiting-list confirmation paths without changing production records.
+- `npm.cmd run build` passes. The existing large App bundle warning remains.
 
 ## Immediate Next Loop
 
