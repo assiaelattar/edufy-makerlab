@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
+import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, FileSpreadsheet, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown, Trash2 } from 'lucide-react';
 import { Program, Lead } from '../types';
 import { formatCurrency } from '../utils/helpers';
 import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
+import { db } from '../services/firebase';
 import { getProgramReadiness } from '../utils/program-readiness';
 import { buildLegacyProgramOperationsPreview } from '../utils/programOperations';
 import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
@@ -32,13 +35,21 @@ type ProgramGroupWithCapacity = Program['grades'][number]['groups'][number] & {
     maxStudents?: number;
 };
 
+const toExportFileSegment = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+
 export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnrollLead, programIdProp, onClose, onPrintProgram, onEditProgram, onQuoteProgram, onOpenEnrollmentAccess }) => {
-    const { programs, viewParams, navigateTo, leads, enrollments, settings } = useAppContext();
-    const { currentOrganization } = useAuth();
-    const { alert: showAlert } = useConfirm();
+    const { programs, viewParams, navigateTo, leads, enrollments, students, settings } = useAppContext();
+    const { currentOrganization, userProfile, can } = useAuth();
+    const { alert: showAlert, confirm } = useConfirm();
     const [activeTab, setActiveTab] = useState<'operations' | 'overview' | 'classes' | 'students' | 'waiting-list' | 'financials' | 'resources'>('operations');
     const [linkCopied, setLinkCopied] = useState(false);
     const [expandedGradeIds, setExpandedGradeIds] = useState<string[]>([]);
+    const [pendingLeadAction, setPendingLeadAction] = useState<string | null>(null);
     const workspaceRef = useRef<HTMLDivElement>(null);
 
     // Get the program (Prioritize Prop -> then URL Param)
@@ -121,6 +132,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     ];
     const readinessCompleted = readinessChecks.filter(check => check.complete).length;
     const readinessPercent = Math.round((readinessCompleted / readinessChecks.length) * 100);
+    const canManageWaitingList = can('students.enroll') || can('marketing.create') || can('programs.manage');
 
     const nextAction = (() => {
         if (!programReadiness.hasPricing) return { title: 'Add a priced plan', detail: 'Families need a clear offer before enrollment can open.', label: 'Configure pricing', icon: DollarSign, action: () => onEditProgram?.(program), disabled: !onEditProgram };
@@ -145,6 +157,173 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
         } catch (error) {
             console.error('Could not copy enrollment link:', error);
             await showAlert('Link could not be copied', 'Open the enrollment kiosk and copy its address from the browser.', 'warning');
+        }
+    };
+
+    const buildRosterExport = () => {
+        const studentDirectory = new Map(
+            students
+                .filter(student => student.organizationId === currentOrganization?.id)
+                .map(student => [student.id, student])
+        );
+
+        const rows = sortedEnrollments.map(enrollment => {
+            const student = studentDirectory.get(enrollment.studentId);
+            const assignedGroup = groupOperations.find(item => item.roster.some(rosterEntry => rosterEntry.id === enrollment.id));
+            const grade = programGrades.find(item => item.id === enrollment.gradeId) || assignedGroup?.grade;
+            const primaryGroup = grade?.groups?.find(item => item.id === enrollment.groupId) || assignedGroup?.group;
+            const secondaryGroup = programGrades
+                .flatMap(item => item.groups || [])
+                .find(item => item.id === enrollment.secondGroupId);
+            const isPlaced = assignedEnrollmentIds.has(enrollment.id);
+            const primarySchedule = enrollment.groupTime || [primaryGroup?.day, primaryGroup?.time].filter(Boolean).join(' ');
+            const secondarySchedule = enrollment.secondGroupTime || [secondaryGroup?.day, secondaryGroup?.time].filter(Boolean).join(' ');
+
+            return {
+                'Learner': enrollment.studentName || student?.name || '',
+                'Parent / guardian': student?.parentName || '',
+                'Parent phone': student?.parentPhone || '',
+                'Email': student?.email || '',
+                'Birth date': student?.birthDate || '',
+                'School': student?.school || '',
+                'Level': enrollment.gradeName || grade?.name || '',
+                'Primary group': isPlaced ? (enrollment.groupName || primaryGroup?.name || '') : '',
+                'Primary schedule': isPlaced ? primarySchedule : '',
+                'Additional group': enrollment.secondGroupName || secondaryGroup?.name || '',
+                'Additional schedule': secondarySchedule,
+                'Plan': enrollment.packName || '',
+                'Payment plan': enrollment.paymentPlan || '',
+                'Start date': enrollment.startDate || '',
+                'Placement': isPlaced ? 'Placed' : 'Needs placement',
+                'Academic year': enrollment.session || settings.academicYear || ''
+            };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        worksheet['!cols'] = [
+            { wch: 24 }, { wch: 24 }, { wch: 18 }, { wch: 28 },
+            { wch: 14 }, { wch: 24 }, { wch: 18 }, { wch: 20 },
+            { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 20 },
+            { wch: 16 }, { wch: 14 }, { wch: 18 }, { wch: 16 }
+        ];
+        if (worksheet['!ref']) worksheet['!autofilter'] = { ref: worksheet['!ref'] };
+
+        const programSegment = toExportFileSegment(program.name) || 'program';
+        const periodSegment = toExportFileSegment(settings.academicYear || 'current-year');
+        const dateSegment = new Date().toISOString().slice(0, 10);
+
+        return {
+            rows,
+            worksheet,
+            fileBase: `roster-${programSegment}-${periodSegment}-${dateSegment}`
+        };
+    };
+
+    const exportRosterCsv = async () => {
+        try {
+            const { rows, worksheet, fileBase } = buildRosterExport();
+            if (!rows.length) {
+                await showAlert('Nothing to export', 'This program has no active learners in the selected academic year.', 'warning');
+                return;
+            }
+
+            const csv = XLSX.utils.sheet_to_csv(worksheet);
+            const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `${fileBase}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        } catch (error) {
+            console.error('Could not export program roster as CSV:', error);
+            await showAlert('Export failed', 'The CSV roster could not be created. Please try again.', 'warning');
+        }
+    };
+
+    const exportRosterExcel = async () => {
+        try {
+            const { rows, worksheet, fileBase } = buildRosterExport();
+            if (!rows.length) {
+                await showAlert('Nothing to export', 'This program has no active learners in the selected academic year.', 'warning');
+                return;
+            }
+
+            const workbook = XLSX.utils.book_new();
+            workbook.Props = {
+                Title: `${program.name} roster`,
+                Subject: `Active learners for ${settings.academicYear}`,
+                Author: 'Edufy'
+            };
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster');
+            XLSX.writeFile(workbook, `${fileBase}.xlsx`);
+        } catch (error) {
+            console.error('Could not export program roster as Excel:', error);
+            await showAlert('Export failed', 'The Excel roster could not be created. Please try again.', 'warning');
+        }
+    };
+
+    const cancelWaitingEntry = async (lead: Lead) => {
+        if (!db || !currentOrganization || lead.organizationId !== currentOrganization.id || !canManageWaitingList) {
+            await showAlert('Action unavailable', 'You do not have permission to manage this waiting-list entry.', 'warning');
+            return;
+        }
+
+        const approved = await confirm({
+            title: 'Remove from waiting list?',
+            message: `${lead.name} will disappear from this program's waiting list. The family record will remain in Marketing as closed and can be reviewed later.`,
+            confirmText: 'Remove from waiting list',
+            cancelText: 'Keep waiting',
+            variant: 'warning'
+        });
+        if (!approved) return;
+
+        setPendingLeadAction(`cancel-${lead.id}`);
+        try {
+            await updateDoc(doc(db, 'leads', lead.id), {
+                status: 'closed',
+                timeline: arrayUnion({
+                    date: new Date().toISOString(),
+                    type: 'status_change',
+                    details: `Removed from the ${program.name} waiting list`,
+                    author: userProfile?.name || userProfile?.email || 'Admissions team'
+                })
+            });
+            await showAlert('Waiting entry removed', `${lead.name} is no longer on this program's waiting list.`, 'success');
+        } catch (error) {
+            console.error('Could not close waiting-list entry:', error);
+            await showAlert('Action failed', 'The waiting-list entry could not be removed. Please try again.', 'warning');
+        } finally {
+            setPendingLeadAction(null);
+        }
+    };
+
+    const deleteWaitingEntry = async (lead: Lead) => {
+        if (!db || !currentOrganization || lead.organizationId !== currentOrganization.id || !canManageWaitingList) {
+            await showAlert('Action unavailable', 'You do not have permission to delete this waiting-list entry.', 'warning');
+            return;
+        }
+
+        const approved = await confirm({
+            title: 'Delete waiting entry permanently?',
+            message: `${lead.name}'s waiting-list and lead record will be permanently deleted. This does not delete a student profile or a confirmed enrollment, but the lead history cannot be recovered.`,
+            confirmText: 'Delete permanently',
+            cancelText: 'Keep record',
+            variant: 'danger'
+        });
+        if (!approved) return;
+
+        setPendingLeadAction(`delete-${lead.id}`);
+        try {
+            await deleteDoc(doc(db, 'leads', lead.id));
+            await showAlert('Waiting entry deleted', `${lead.name}'s waiting-list record was permanently deleted.`, 'success');
+        } catch (error) {
+            console.error('Could not delete waiting-list entry:', error);
+            await showAlert('Deletion failed', 'The waiting-list entry could not be deleted. Please try again.', 'warning');
+        } finally {
+            setPendingLeadAction(null);
         }
     };
 
@@ -274,7 +453,18 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
             case 'students':
                 return (
                     <div className="space-y-4 animate-in fade-in duration-200">
-                        <AtlasSectionHeader title="Program roster" description="Unplaced learners appear first so every family reaches the correct class." icon={Users} meta={<span className="text-xs font-black text-teal-300">{programEnrollments.length}</span>} />
+                        <AtlasSectionHeader
+                            title="Program roster"
+                            description="Unplaced learners appear first so every family reaches the correct class."
+                            icon={Users}
+                            meta={<span className="text-xs font-black text-teal-300">{programEnrollments.length}</span>}
+                            actions={(
+                                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                                    <AtlasActionButton icon={Download} variant="quiet" className="flex-1 sm:flex-none" disabled={!programEnrollments.length} onClick={exportRosterCsv}>Export CSV</AtlasActionButton>
+                                    <AtlasActionButton icon={FileSpreadsheet} variant="secondary" className="flex-1 sm:flex-none" disabled={!programEnrollments.length} onClick={exportRosterExcel}>Export Excel</AtlasActionButton>
+                                </div>
+                            )}
+                        />
                         {unassignedEnrollments.length > 0 && (
                             <div className="flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4">
                                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-200" />
@@ -359,14 +549,38 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                         </div>
                                     </div>
 
-                                    {onEnrollLead && (
-                                        <button
-                                            onClick={() => onEnrollLead(lead)}
-                                            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-300/25 bg-amber-300 px-3 py-2.5 font-bold text-slate-950 transition-colors hover:bg-amber-200"
-                                        >
-                                            <UserPlus size={16} /> Enroll Now
-                                        </button>
-                                    )}
+                                    <div className="mt-auto space-y-2">
+                                        {onEnrollLead && (
+                                            <button
+                                                type="button"
+                                                onClick={() => onEnrollLead(lead)}
+                                                disabled={pendingLeadAction !== null}
+                                                className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-300/25 bg-amber-300 px-3 py-2.5 font-bold text-slate-950 transition-colors hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <UserPlus size={16} /> Enroll now
+                                            </button>
+                                        )}
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            <AtlasActionButton
+                                                icon={X}
+                                                variant="quiet"
+                                                className="w-full"
+                                                disabled={!canManageWaitingList || pendingLeadAction !== null}
+                                                onClick={() => cancelWaitingEntry(lead)}
+                                            >
+                                                {pendingLeadAction === `cancel-${lead.id}` ? 'Removing...' : 'Remove'}
+                                            </AtlasActionButton>
+                                            <AtlasActionButton
+                                                icon={Trash2}
+                                                variant="danger"
+                                                className="w-full"
+                                                disabled={!canManageWaitingList || pendingLeadAction !== null}
+                                                onClick={() => deleteWaitingEntry(lead)}
+                                            >
+                                                {pendingLeadAction === `delete-${lead.id}` ? 'Deleting...' : 'Delete'}
+                                            </AtlasActionButton>
+                                        </div>
+                                    </div>
                                 </article>
                             ))
                         )}
@@ -568,6 +782,8 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                         <AtlasActionButton icon={programIdProp ? X : ArrowLeft} variant="quiet" onClick={() => programIdProp ? onClose?.() : navigateTo('programs')}>
                             {programIdProp ? 'Close' : 'Programs'}
                         </AtlasActionButton>
+                        <AtlasActionButton icon={Download} variant="quiet" disabled={!programEnrollments.length} onClick={exportRosterCsv}>CSV roster</AtlasActionButton>
+                        <AtlasActionButton icon={FileSpreadsheet} variant="secondary" disabled={!programEnrollments.length} onClick={exportRosterExcel}>Excel roster</AtlasActionButton>
                         {onPrintProgram && <AtlasActionButton icon={Printer} variant="quiet" title="Print program" aria-label="Print program" onClick={() => onPrintProgram(program)}><span className="hidden xl:inline">Print</span></AtlasActionButton>}
                         {onEditProgram && <AtlasActionButton icon={Pencil} variant="primary" onClick={() => onEditProgram(program)}>Edit setup</AtlasActionButton>}
                     </>
