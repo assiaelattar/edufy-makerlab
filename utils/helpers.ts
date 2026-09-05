@@ -2,6 +2,7 @@
 import { Enrollment, Payment, Student, AppSettings, WorkshopTemplate, WorkshopSlot, StudentProject } from '../types';
 import { translations } from './translations';
 import { STATION_THEMES } from './theme';
+import { normalizeWorkshopDays, parseLocalDateKey, toLocalDateKey } from './workshops';
 
 export const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-MA', { style: 'currency', currency: 'MAD' }).format(amount);
@@ -388,15 +389,15 @@ export const getGeneratedSlots = (
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
 
-  templates.filter(t => t.isActive).forEach(template => {
+  templates.filter(t => t.isActive !== false).forEach(template => {
     if (!template.recurrencePattern) return;
 
     if (template.recurrenceType === 'one-time' && template.recurrencePattern.date) {
-      const slotDate = new Date(template.recurrencePattern.date);
+      const slotDate = parseLocalDateKey(template.recurrencePattern.date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      if (slotDate >= today) {
+      if (slotDate && slotDate >= today) {
         const existing = existingSlots.find(s => s.workshopTemplateId === template.id && s.date === template.recurrencePattern.date);
         const [h, m] = (template.recurrencePattern.time || "00:00").split(':').map(Number);
         const endTimeDate = new Date();
@@ -418,13 +419,14 @@ export const getGeneratedSlots = (
     }
 
     if (template.recurrenceType === 'weekly' && template.recurrencePattern.days && template.recurrencePattern.time) {
+      const selectedDays = normalizeWorkshopDays(template.recurrencePattern.days);
       for (let i = 0; i < daysAhead; i++) {
         const d = new Date(start);
         d.setDate(start.getDate() + i);
         const dayOfWeek = d.getDay();
 
-        if (template.recurrencePattern.days.includes(dayOfWeek)) {
-          const dateStr = d.toISOString().split('T')[0];
+        if (selectedDays.includes(dayOfWeek)) {
+          const dateStr = toLocalDateKey(d);
           const existing = existingSlots.find(s => s.workshopTemplateId === template.id && s.date === dateStr);
           const [h, m] = template.recurrencePattern.time.split(':').map(Number);
           const endTimeDate = new Date();

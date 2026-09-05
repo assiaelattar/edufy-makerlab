@@ -1105,7 +1105,7 @@ const AppContent = () => {
     };
 
     // Routing
-    if (locationPath.includes('mode=booking') || window.location.search.includes('mode=booking')) return <PublicBookingView />;
+    if (/^\/w\/[^/]+\/?$/.test(locationPath) || window.location.search.includes('mode=booking')) return <PublicBookingView />;
     if (isPublicEnrollmentRequest({ pathname: locationPath, search: window.location.search })) return <PublicEnrollmentView />;
     if (locationPath === '/parent-portal' || locationHash === '#parent') return <ParentLoginView />;
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { CalendarCheck, Link as LinkIcon, Plus, Clock, Users, Calendar as CalendarIcon, Share2, MessageCircle, Star, UserCheck, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight, MapPin, MoreHorizontal, Magnet, PauseCircle } from 'lucide-react';
+import { CalendarCheck, Plus, Clock, Users, Calendar as CalendarIcon, MessageCircle, Star, UserCheck, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight, MapPin, MoreHorizontal, Magnet, PauseCircle, ExternalLink, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, getDocs, arrayUnion, runTransaction, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAppContext } from '../context/AppContext';
@@ -8,8 +8,9 @@ import { Modal } from '../components/Modal';
 import { AtlasCommandHeader, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { useConfirm } from '../context/ConfirmContext';
 import { WorkshopTemplate, Booking } from '../types';
-import { formatDate, getGeneratedSlots, VirtualSlot } from '../utils/helpers';
+import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { WorkshopReportModal } from '../components/WorkshopReportModal';
+import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, normalizeWorkshopDays, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
     const { workshopTemplates, workshopSlots, bookings } = useAppContext();
@@ -28,6 +29,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     const [viewingBookingsTemplateId, setViewingBookingsTemplateId] = useState<string | null>(null); // For history modal
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [savingBookingIds, setSavingBookingIds] = useState<string[]>([]);
+    const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
 
     const [templateForm, setTemplateForm] = useState<Partial<WorkshopTemplate>>({
         title: '', description: '', duration: 60, recurrenceType: 'one-time',
@@ -49,23 +51,49 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
     // --- Helpers ---
     const copyLink = async (template: WorkshopTemplate) => {
-        if (!template.isActive) {
+        if (template.isActive === false) {
             await showAlert('Workshop is paused', 'Activate this template before sharing its public booking link.', 'warning');
             return;
         }
 
-        const url = `${window.location.origin}/?mode=booking&slug=${encodeURIComponent(template.shareableSlug)}`;
+        const url = getWorkshopBookingUrl(template.shareableSlug);
         try {
             await navigator.clipboard.writeText(url);
-            await showAlert('Link copied', 'The public booking link is ready to share.', 'success');
+            setCopiedTemplateId(template.id);
+            window.setTimeout(() => setCopiedTemplateId(current => current === template.id ? null : current), 2200);
         } catch (error) {
             console.error('Workshop link copy failed', error);
             await showAlert('Link could not be copied', 'Clipboard access is blocked. Allow clipboard access and try again.', 'danger');
         }
     };
 
+    const shareWorkshopOnWhatsApp = async (template: WorkshopTemplate) => {
+        if (template.isActive === false) {
+            await showAlert('Workshop is paused', 'Activate this template before sharing its public booking link.', 'warning');
+            return;
+        }
+
+        const bookingUrl = getWorkshopBookingUrl(template.shareableSlug);
+        const message = buildWorkshopWhatsAppMessage(template, bookingUrl);
+        const opened = window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+
+        if (opened) opened.opener = null;
+        else await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try sharing again.', 'warning');
+    };
+
+    const openBookingPreview = (template: WorkshopTemplate) => {
+        const opened = window.open(getWorkshopBookingUrl(template.shareableSlug), '_blank');
+        if (opened) opened.opener = null;
+    };
+
     const handleEditTemplate = (template: WorkshopTemplate) => {
-        setTemplateForm({ ...template });
+        setTemplateForm({
+            ...template,
+            recurrencePattern: {
+                ...template.recurrencePattern,
+                days: normalizeWorkshopDays(template.recurrencePattern?.days)
+            }
+        });
         setEditingTemplateId(template.id);
         setIsTemplateModalOpen(true);
     };
@@ -94,7 +122,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         const capacityPerSlot = Number(templateForm.capacityPerSlot);
         const recurrenceType = templateForm.recurrenceType || 'one-time';
         const recurrencePattern = {
-            days: recurrenceType === 'weekly' ? [...new Set(templateForm.recurrencePattern?.days || [])].sort() : [],
+            days: recurrenceType === 'weekly' ? normalizeWorkshopDays(templateForm.recurrencePattern?.days) : [],
             time: templateForm.recurrencePattern?.time || '',
             date: recurrenceType === 'one-time' ? templateForm.recurrencePattern?.date || '' : ''
         };
@@ -197,7 +225,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         const relatedBookings = bookings.filter(booking => booking.workshopTemplateId === id || relatedSlots.some(slot => slot.id === booking.workshopSlotId));
 
         if (relatedSlots.length > 0 || relatedBookings.length > 0) {
-            if (!template.isActive) {
+            if (template.isActive === false) {
                 await showAlert('History must be retained', 'This paused template has slot or booking history and cannot be deleted.', 'info');
                 return;
             }
@@ -440,13 +468,13 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
     // Filter slots for the selected date
     const selectedDaySlots = useMemo(() => {
-        const dateStr = selectedDate.toISOString().split('T')[0];
+        const dateStr = toLocalDateKey(selectedDate);
         return virtualSlots.filter(s => s.dateStr === dateStr).sort((a, b) => a.startTime.localeCompare(b.startTime));
     }, [virtualSlots, selectedDate]);
 
     // Check if a date has slots (for calendar dots)
     const getDateStatus = (date: Date) => {
-        const dateStr = date.toISOString().split('T')[0];
+        const dateStr = toLocalDateKey(date);
         const daySlots = virtualSlots.filter(s => s.dateStr === dateStr);
         if (daySlots.length === 0) return 'none';
         const hasBookings = daySlots.some(s => s.bookedCount > 0);
@@ -719,25 +747,40 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             {activeTab === 'templates' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {can('workshops.manage') && (
-                        <button onClick={handleCreateNew} className="border-2 border-dashed border-slate-800 rounded-lg p-8 flex flex-col items-center justify-center text-slate-500 hover:border-teal-400/50 hover:text-teal-300 transition-colors min-h-[200px] group bg-slate-900/30 hover:bg-slate-900">
-                            <div className="w-14 h-14 rounded-full bg-slate-900 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg"><Plus size={28} /></div>
-                            <span className="font-bold text-lg">Create New Workshop</span>
-                            <span className="text-sm mt-1">Define event details & recurrence</span>
+                        <button onClick={handleCreateNew} className="group min-h-[360px] rounded-[24px] border-2 border-dashed border-slate-700/80 bg-slate-900/35 p-8 text-left text-slate-400 transition-all hover:-translate-y-0.5 hover:border-teal-300/50 hover:bg-slate-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70">
+                            <div className="flex h-full flex-col justify-between">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-teal-300/20 bg-teal-300/10 text-teal-300 transition-transform group-hover:rotate-3 group-hover:scale-105"><Plus size={26} /></div>
+                                <div className="mt-16">
+                                    <span className="block text-[11px] font-black uppercase tracking-[0.18em] text-teal-300">New invitation</span>
+                                    <span className="mt-2 block text-xl font-black tracking-[-0.03em]">Create a workshop</span>
+                                    <span className="mt-2 block max-w-xs text-sm leading-6 text-slate-500">Choose the real meeting days, add the social image, then share a ready-made WhatsApp invitation.</span>
+                                </div>
+                            </div>
                         </button>
                     )}
 
                     {workshopTemplates.map(template => (
-                        <div key={template.id} className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden flex flex-col relative group hover:border-teal-300/30 transition-colors">
+                        <div key={template.id} className="group relative flex min-h-[360px] flex-col overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900 shadow-[0_18px_45px_rgba(2,8,23,0.16)] transition-all hover:-translate-y-0.5 hover:border-teal-300/30">
+                            <div className="relative aspect-[1.91/1] overflow-hidden border-b border-slate-800 bg-slate-950">
+                                <img
+                                    src={getWorkshopOgImageUrl(template.imageUrl)}
+                                    alt=""
+                                    className="h-full w-full object-cover opacity-80 transition-transform duration-500 group-hover:scale-[1.03]"
+                                    onError={event => { event.currentTarget.src = `${window.location.origin}/images/makerlab-tello-python-hero-v1.png`; }}
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/15 to-transparent" />
+                                <div className="absolute bottom-3 left-4 flex flex-wrap gap-2">
+                                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] backdrop-blur ${template.recurrenceType === 'weekly' ? 'border-sky-300/25 bg-sky-400/15 text-sky-200' : 'border-amber-300/25 bg-amber-400/15 text-amber-200'}`}>{template.recurrenceType === 'weekly' ? 'Weekly series' : 'One-time event'}</span>
+                                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] backdrop-blur ${template.isActive !== false ? 'border-emerald-300/25 bg-emerald-400/15 text-emerald-200' : 'border-slate-500/40 bg-slate-950/70 text-slate-300'}`}>{template.isActive !== false ? 'Booking open' : 'Paused'}</span>
+                                </div>
+                            </div>
                             <div className="p-5 border-b border-slate-800 bg-slate-950/30 flex justify-between items-start">
-                                <div>
-                                    <div className="mb-2 flex flex-wrap gap-2">
-                                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded border ${template.recurrenceType === 'weekly' ? 'bg-blue-900/20 text-blue-400 border-blue-900/50' : 'bg-amber-900/20 text-amber-400 border-amber-900/50'}`}>{template.recurrenceType}</span>
-                                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded border ${template.isActive ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : 'border-slate-600 bg-slate-800 text-slate-400'}`}>{template.isActive ? 'Active' : 'Paused'}</span>
-                                    </div>
-                                    <h3 className="font-bold text-white text-lg">{template.title}</h3>
+                                <div className="min-w-0 pr-3">
+                                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Social invitation</p>
+                                    <h3 className="mt-1 truncate text-lg font-black tracking-[-0.025em] text-white" title={template.title}>{template.title}</h3>
                                 </div>
                                 <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => void copyLink(template)} disabled={!template.isActive} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-white border border-slate-800 hover:border-slate-700 disabled:cursor-not-allowed disabled:opacity-35" title={template.isActive ? 'Copy booking link' : 'Activate before sharing'}><LinkIcon size={14} /></button>
+                                    <button onClick={() => openBookingPreview(template)} disabled={template.isActive === false} className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-400 hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-35" title={template.isActive !== false ? 'Open parent booking page' : 'Activate before previewing'}><ExternalLink size={14} /></button>
                                     {can('workshops.manage') && (
                                         <>
                                             <button onClick={() => handleEditTemplate(template)} className="p-2 bg-slate-900 text-slate-400 rounded hover:text-blue-400 border border-slate-800 hover:border-blue-900/50" title="Edit Template"><MoreHorizontal size={14} /></button>
@@ -749,24 +792,21 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
                             <button type="button" className="p-5 flex-1 cursor-pointer text-left" onClick={() => setViewingBookingsTemplateId(template.id)}>
                                 <p className="text-sm text-slate-400 line-clamp-3 mb-4">{template.description}</p>
-                                {/* ... existing details ... */}
                                 <div className="space-y-2 text-sm text-slate-300">
                                     <div className="flex items-center gap-3"><Clock size={16} className="text-slate-500" /> {template.duration} mins</div>
                                     <div className="flex items-center gap-3"><Users size={16} className="text-slate-500" /> Max {template.capacityPerSlot} per slot</div>
                                     <div className="flex items-start gap-3"><CalendarIcon size={16} className="text-slate-500 mt-0.5" />
-                                        <span className="flex-1">
-                                            {template.recurrenceType === 'weekly'
-                                                ? `Every ${template.recurrencePattern?.days?.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')} at ${template.recurrencePattern?.time}`
-                                                : `${formatDate(template.recurrencePattern?.date || '')} at ${template.recurrencePattern?.time}`
-                                            }
-                                        </span>
+                                        <span className="flex-1 leading-5">{getWorkshopScheduleLabel(template)}</span>
                                     </div>
                                 </div>
                             </button>
 
-                            <div className="bg-slate-950 p-3 border-t border-slate-800 text-center">
-                                <button onClick={() => void copyLink(template)} disabled={!template.isActive} className="text-xs font-bold text-teal-300 hover:text-teal-200 flex items-center justify-center gap-2 w-full py-1 disabled:cursor-not-allowed disabled:text-slate-600">
-                                    {template.isActive ? <Share2 size={12} /> : <PauseCircle size={12} />} {template.isActive ? 'SHARE BOOKING LINK' : 'BOOKING PAUSED'}
+                            <div className="grid grid-cols-[1fr_auto] gap-2 border-t border-slate-800 bg-slate-950 p-3">
+                                <button onClick={() => void shareWorkshopOnWhatsApp(template)} disabled={template.isActive === false} className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 text-xs font-black text-[#07140b] transition-colors hover:bg-[#4ADF7F] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500">
+                                    {template.isActive !== false ? <MessageCircle size={15} /> : <PauseCircle size={15} />} {template.isActive !== false ? 'Share on WhatsApp' : 'Booking paused'}
+                                </button>
+                                <button onClick={() => void copyLink(template)} disabled={template.isActive === false} aria-label={copiedTemplateId === template.id ? 'Booking link copied' : 'Copy booking link'} title={copiedTemplateId === template.id ? 'Copied' : 'Copy booking link'} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition-colors hover:border-teal-300/50 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-35">
+                                    {copiedTemplateId === template.id ? <Check size={16} /> : <Copy size={16} />}
                                 </button>
                             </div>
                         </div>
@@ -775,59 +815,108 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             )}
 
             {/* Template Modal */}
-            <Modal isOpen={isTemplateModalOpen} onClose={() => !isSavingTemplate && setIsTemplateModalOpen(false)} title={editingTemplateId ? 'Edit workshop template' : 'Create workshop template'}>
-                <form onSubmit={handleSaveTemplate} className="space-y-4">
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Workshop Title</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.title} onChange={e => setTemplateForm({ ...templateForm, title: e.target.value })} placeholder="e.g. Intro to Robotics" /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Description</label><textarea required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24 resize-none" value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="What parents should know..." /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Cover Image URL (Optional)</label><input className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.imageUrl || ''} onChange={e => setTemplateForm({ ...templateForm, imageUrl: e.target.value })} placeholder="https://..." /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Duration (min)</label><input type="number" required min={15} max={480} step={5} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.duration} onChange={e => setTemplateForm({ ...templateForm, duration: Number(e.target.value) })} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Capacity</label><input type="number" required min={1} max={200} step={1} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.capacityPerSlot} onChange={e => setTemplateForm({ ...templateForm, capacityPerSlot: Number(e.target.value) })} /><p className="mt-1 text-[10px] leading-4 text-slate-500">Applies to new slots; saved slots keep their recorded capacity.</p></div>
-                    </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Target Audience</label>
-                        <select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white mb-4" value={templateForm.targetAudience} onChange={e => setTemplateForm({ ...templateForm, targetAudience: e.target.value as any })}>
-                            <option value="Child">Child (Booking by Parent)</option>
-                            <option value="School">School</option>
-                            <option value="Teacher">Teacher</option>
-                            <option value="Professional">Professional</option>
-                        </select>
-                    </div>
-
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Recurrence Type</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.recurrenceType} onChange={e => setTemplateForm({ ...templateForm, recurrenceType: e.target.value as any })}><option value="one-time">One Time Event</option><option value="weekly">Weekly Recurring</option></select></div>
-
-                    <div className="flex items-center gap-2 mt-4">
-                        <input type="checkbox" id="isActive" className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500" checked={templateForm.isActive ?? true} onChange={e => setTemplateForm({ ...templateForm, isActive: e.target.checked })} />
-                        <label htmlFor="isActive" className="text-sm text-slate-300 font-medium">Active (Visible for booking)</label>
-                    </div>
-
-                    {templateForm.recurrenceType === 'weekly' && (
-                        <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-4">
+            <Modal isOpen={isTemplateModalOpen} onClose={() => !isSavingTemplate && setIsTemplateModalOpen(false)} title={editingTemplateId ? 'Edit workshop template' : 'Create workshop template'} size="lg">
+                <form onSubmit={handleSaveTemplate} className="space-y-6">
+                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                        <div className="space-y-5">
                             <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-2">Select Days</label>
-                                <div className="flex gap-2 flex-wrap">
-                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, idx) => (
-                                        <button key={d} type="button" onClick={() => {
-                                            const days = templateForm.recurrencePattern?.days || [];
-                                            const newDays = days.includes(idx) ? days.filter(x => x !== idx) : [...days, idx];
-                                            setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, days: newDays } });
-                                        }} className={`w-10 h-10 rounded-lg text-xs font-bold transition-colors ${templateForm.recurrencePattern?.days?.includes(idx) ? 'bg-teal-500 text-slate-950' : 'bg-slate-950 border border-slate-700 text-slate-400 hover:border-slate-500'}`}>{d}</button>
-                                    ))}
+                                <label className="mb-1.5 block text-xs font-bold text-slate-300">Workshop title</label>
+                                <input required className="w-full border p-3 text-white" value={templateForm.title} onChange={e => setTemplateForm({ ...templateForm, title: e.target.value })} placeholder="e.g. Build your first robot" />
+                            </div>
+                            <div>
+                                <label className="mb-1.5 block text-xs font-bold text-slate-300">Invitation description</label>
+                                <textarea required className="h-28 w-full resize-none border p-3 text-white" value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="Tell parents what their child will make, learn, and take home." />
+                                <p className="mt-1.5 text-[11px] leading-5 text-slate-500">This text appears on the booking page and inside the WhatsApp invitation.</p>
+                            </div>
+                            <div>
+                                <label className="mb-1.5 block text-xs font-bold text-slate-300">Social preview image</label>
+                                <input type="url" className="w-full border p-3 text-white" value={templateForm.imageUrl || ''} onChange={e => setTemplateForm({ ...templateForm, imageUrl: e.target.value })} placeholder="https://example.com/workshop-cover.jpg" />
+                                <p className="mt-1.5 text-[11px] leading-5 text-slate-500">Use a public landscape image. Edufy uses the MakerLab workshop cover when this is empty.</p>
+                            </div>
+                        </div>
+
+                        <aside className="lg:sticky lg:top-0 lg:self-start">
+                            <div className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-xl">
+                                <div className="relative aspect-[1.91/1] overflow-hidden bg-slate-900">
+                                    <img
+                                        src={getWorkshopOgImageUrl(templateForm.imageUrl)}
+                                        alt="Social sharing preview"
+                                        className="h-full w-full object-cover"
+                                        onError={event => { event.currentTarget.src = `${window.location.origin}/images/makerlab-tello-python-hero-v1.png`; }}
+                                    />
+                                    <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-white/15 bg-slate-950/75 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.14em] text-white backdrop-blur"><ImageIcon size={11} /> Link preview</div>
+                                </div>
+                                <div className="p-4">
+                                    <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">{window.location.host || 'Edufy'} · workshop</p>
+                                    <h4 className="mt-1 line-clamp-2 text-sm font-black text-white">{templateForm.title?.trim() || 'Your workshop title'}</h4>
+                                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{templateForm.description?.trim() || 'Your invitation description will appear here when the link is shared.'}</p>
                                 </div>
                             </div>
-                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Time</label><input type="time" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
+                            <p className="mt-2 text-[10px] leading-4 text-slate-500">Preview of the Open Graph card used by WhatsApp and other social apps.</p>
+                        </aside>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-3">
+                        <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Duration</label><div className="relative"><input type="number" required min={15} max={480} step={5} className="w-full border p-3 pr-14 text-white" value={templateForm.duration} onChange={e => setTemplateForm({ ...templateForm, duration: Number(e.target.value) })} /><span className="pointer-events-none absolute right-3 top-3.5 text-xs text-slate-500">min</span></div></div>
+                        <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Places per session</label><input type="number" required min={1} max={200} step={1} className="w-full border p-3 text-white" value={templateForm.capacityPerSlot} onChange={e => setTemplateForm({ ...templateForm, capacityPerSlot: Number(e.target.value) })} /></div>
+                        <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Booking for</label><select className="w-full border p-3 text-white" value={templateForm.targetAudience} onChange={e => setTemplateForm({ ...templateForm, targetAudience: e.target.value as WorkshopTemplate['targetAudience'] })}><option value="Child">A child (by parent)</option><option value="School">A school</option><option value="Teacher">A teacher</option><option value="Professional">A professional</option></select></div>
+                    </div>
+
+                    <fieldset>
+                        <legend className="mb-2 block text-xs font-bold text-slate-300">Schedule type</legend>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {([
+                                { value: 'one-time', title: 'One date', detail: 'A workshop held once' },
+                                { value: 'weekly', title: 'Repeats weekly', detail: 'One or more chosen weekdays' },
+                            ] as const).map(option => (
+                                <button key={option.value} type="button" aria-pressed={templateForm.recurrenceType === option.value} onClick={() => setTemplateForm({ ...templateForm, recurrenceType: option.value })} className={`rounded-2xl border p-4 text-left transition-colors ${templateForm.recurrenceType === option.value ? 'border-teal-300/50 bg-teal-300/10 text-white' : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700'}`}>
+                                    <span className="block text-sm font-black">{option.title}</span>
+                                    <span className="mt-1 block text-xs">{option.detail}</span>
+                                </button>
+                            ))}
                         </div>
+                    </fieldset>
+
+                    {templateForm.recurrenceType === 'weekly' && (
+                        <fieldset className="space-y-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+                            <legend className="px-2 text-xs font-black uppercase tracking-[0.14em] text-teal-300">Weekly meeting days</legend>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                {WORKSHOP_WEEKDAYS.map(day => {
+                                    const selectedDays = normalizeWorkshopDays(templateForm.recurrencePattern?.days);
+                                    const isSelected = selectedDays.includes(day.value);
+                                    return (
+                                        <button key={day.value} type="button" aria-pressed={isSelected} onClick={() => {
+                                            const nextDays = isSelected ? selectedDays.filter(value => value !== day.value) : [...selectedDays, day.value];
+                                            setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, days: normalizeWorkshopDays(nextDays) } });
+                                        }} className={`flex min-h-12 items-center justify-between rounded-xl border px-3 text-sm font-bold transition-colors ${isSelected ? 'border-teal-300/60 bg-teal-400 text-slate-950' : 'border-slate-700 bg-slate-950 text-slate-400 hover:border-slate-500 hover:text-white'}`}>
+                                            <span>{day.label}</span>{isSelected && <Check size={15} />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Start time</label><input type="time" required className="w-full border p-3 text-white sm:max-w-xs" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
+                            {normalizeWorkshopDays(templateForm.recurrencePattern?.days).length > 0 && <p className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs leading-5 text-slate-300">{getWorkshopScheduleLabel({ recurrenceType: 'weekly', recurrencePattern: templateForm.recurrencePattern || {} })}</p>}
+                        </fieldset>
                     )}
 
                     {templateForm.recurrenceType === 'one-time' && (
-                        <div className="bg-slate-900 p-4 rounded-lg border border-slate-800 grid grid-cols-2 gap-4">
-                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input type="date" required min={new Date().toLocaleDateString('en-CA')} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.recurrencePattern?.date} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, date: e.target.value } })} /></div>
-                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Time</label><input type="time" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
+                        <div className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:grid-cols-2 sm:p-5">
+                            <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Workshop date</label><input type="date" required min={toLocalDateKey(new Date())} className="w-full border p-3 text-white" value={templateForm.recurrencePattern?.date} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, date: e.target.value } })} />{templateForm.recurrencePattern?.date && <p className="mt-1.5 text-xs font-semibold text-teal-300">{formatWorkshopDate(templateForm.recurrencePattern.date)}</p>}</div>
+                            <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Start time</label><input type="time" required className="w-full border p-3 text-white" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
                         </div>
                     )}
 
-                    <button type="submit" disabled={isSavingTemplate} className="w-full py-3 bg-teal-500 hover:bg-teal-400 text-slate-950 rounded-lg font-bold mt-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50">
-                        {isSavingTemplate ? 'Saving...' : editingTemplateId ? 'Update template' : 'Create template'}
-                    </button>
+                    <label htmlFor="isActive" className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                        <span><span className="block text-sm font-black text-white">Open public booking</span><span className="mt-1 block text-xs text-slate-500">Parents can see available dates and reserve a place.</span></span>
+                        <span className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${templateForm.isActive ?? true ? 'bg-teal-400' : 'bg-slate-700'}`}><input type="checkbox" id="isActive" className="peer sr-only" checked={templateForm.isActive ?? true} onChange={e => setTemplateForm({ ...templateForm, isActive: e.target.checked })} /><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${templateForm.isActive ?? true ? 'translate-x-6' : 'translate-x-1'}`} /></span>
+                    </label>
+
+                    <div className="flex flex-col-reverse gap-3 border-t border-slate-800 pt-5 sm:flex-row sm:justify-end">
+                        <button type="button" onClick={() => setIsTemplateModalOpen(false)} disabled={isSavingTemplate} className="min-h-11 rounded-xl border border-slate-700 px-5 text-sm font-bold text-slate-300 hover:bg-slate-800 disabled:opacity-50">Cancel</button>
+                        <button type="submit" disabled={isSavingTemplate} className="min-h-11 rounded-xl bg-teal-400 px-6 text-sm font-black text-slate-950 transition-colors hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-50">
+                            {isSavingTemplate ? 'Saving...' : editingTemplateId ? 'Save changes' : 'Create workshop & link'}
+                        </button>
+                    </div>
                 </form>
             </Modal>
 

@@ -1,6 +1,6 @@
 # Atlas Build Context
 
-Last updated: 2026-09-01
+Last updated: 2026-09-05
 
 This is the living build context for Atlas, the SaaS evolution of Edufy MakerLab. Before each work loop, read this file first. After each work loop, update it with what changed, what was tested, what remains risky, and the next best module.
 
@@ -283,15 +283,19 @@ Left:
 
 ### 8. Workshops
 
-Status: Tenant-patched with Atlas public and operator surfaces.
+Status: Tenant-patched with upgraded Atlas public and operator sharing surfaces.
 
 Done:
 - Workshop booking/CRM push patched with `organizationId`.
 - Workshop quality build bug fixed.
 - Public booking retuned to the paper/ink/teal/amber system with responsive fields and inline submission recovery.
+- Fixed recurring workshop generation to preserve local calendar dates instead of shifting selected weekdays through UTC.
+- Added Monday-first full weekday controls, shared schedule labels, and explicit weekday names on public session cards and booking confirmation.
+- Rebuilt workshop template cards and the parent booking journey with social-image previews, clearer capacity, responsive session tickets, and focused two-step booking.
+- Added prewritten WhatsApp invitations and `/w/{slug}` Open Graph share pages with custom or branded fallback images for both Vercel and Hostinger routing.
 
 Left:
-- Premium workshops command surface.
+- Deeper calendar and booking-history polish.
 - Better slot capacity and waitlist logic.
 - Better workshop-to-lead conversion workflow.
 - Replace browser alerts.
@@ -448,6 +452,7 @@ Left:
 
 ## Verification Log
 
+- 2026-09-05: `npm.cmd run build` passed after the workshop recurrence, parent booking, WhatsApp sharing, and Open Graph rollout. A live read-only Monday/Thursday template rendered 17 upcoming sessions using only those weekdays at desktop and 390px mobile, with zero mobile horizontal overflow. The Vercel Open Graph handler returned the live title, image, Monday/Thursday schedule, canonical `/w/` URL, and booking redirect; the Hostinger PHP route was added but could not be syntax-checked locally because PHP is not installed.
 - 2026-07-20: `npm.cmd run build` passed after adding the reusable MakerLab Summer Camp template, session/week/shift/age-band enrollment routing, public QR registration choices, and year-safe duplication. The MakerLab 2026 draft was seeded idempotently without enrollments.
 - 2026-07-18: `npm.cmd run build` passed after landing/login visual coherence pass and Finance command header work. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
 - 2026-07-18: `npm.cmd run build` passed after extracting Atlas surface primitives and wiring Finance/Students headers to them. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
