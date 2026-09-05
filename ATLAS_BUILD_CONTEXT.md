@@ -452,6 +452,7 @@ Left:
 
 ## Verification Log
 
+- 2026-09-05: Follow-up Open Graph verification found that an existing workshop used a Google Drive sharing-page URL, which social crawlers received as HTML instead of an image. Workshop image URLs now normalize supported Drive links to direct image responses, and copied/WhatsApp links include a content-derived preview version so stale pre-deployment cards are not reused. The production build passed; crawler and live deployment checks remain part of the release gate.
 - 2026-09-05: `npm.cmd run build` passed after the workshop recurrence, parent booking, WhatsApp sharing, and Open Graph rollout. A live read-only Monday/Thursday template rendered 17 upcoming sessions using only those weekdays at desktop and 390px mobile, with zero mobile horizontal overflow. The Vercel Open Graph handler returned the live title, image, Monday/Thursday schedule, canonical `/w/` URL, and booking redirect; the Hostinger PHP route was added but could not be syntax-checked locally because PHP is not installed.
 - 2026-07-20: `npm.cmd run build` passed after adding the reusable MakerLab Summer Camp template, session/week/shift/age-band enrollment routing, public QR registration choices, and year-safe duplication. The MakerLab 2026 draft was seeded idempotently without enrollments.
 - 2026-07-18: `npm.cmd run build` passed after landing/login visual coherence pass and Finance command header work. Existing warnings remain: large chunks and Firebase dynamic/static import mix.

@@ -140,6 +140,32 @@ function workshop_schedule(array $template): string
     return ($date ? $date->format('l, j F Y') : 'Date to be confirmed') . ' at ' . $time;
 }
 
+function workshop_image_url(string $value, string $fallback): string
+{
+    $candidate = trim($value);
+    if (!filter_var($candidate, FILTER_VALIDATE_URL) || !preg_match('/^https?:\/\//i', $candidate)) {
+        return $fallback;
+    }
+
+    $parts = parse_url($candidate);
+    $hostname = strtolower((string) ($parts['host'] ?? ''));
+    if ($hostname === 'drive.google.com' || $hostname === 'drive.usercontent.google.com') {
+        $driveFileId = '';
+        if (preg_match('#/file/d/([A-Za-z0-9_-]+)#', (string) ($parts['path'] ?? ''), $matches)) {
+            $driveFileId = $matches[1];
+        } elseif (!empty($parts['query'])) {
+            parse_str((string) $parts['query'], $query);
+            $driveFileId = (string) ($query['id'] ?? '');
+        }
+
+        if (preg_match('/^[A-Za-z0-9_-]+$/', $driveFileId)) {
+            return 'https://drive.usercontent.google.com/download?id=' . rawurlencode($driveFileId) . '&export=view';
+        }
+    }
+
+    return $candidate;
+}
+
 function render_unavailable(string $origin, string $message, int $status): void
 {
     http_response_code($status);
@@ -151,6 +177,10 @@ function render_unavailable(string $origin, string $message, int $status): void
 
 $origin = request_origin();
 $slug = trim((string) ($_GET['slug'] ?? ''));
+$shareVersion = trim((string) ($_GET['v'] ?? ''));
+if (!preg_match('/^[A-Za-z0-9-]{1,80}$/', $shareVersion)) {
+    $shareVersion = '';
+}
 if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{1,158}[A-Za-z0-9]$/', $slug)) {
     render_unavailable($origin, 'This invitation link is incomplete or invalid.', 404);
 }
@@ -169,12 +199,12 @@ $schedule = workshop_schedule($template);
 $socialText = trim($description . ' ' . $schedule);
 $socialDescription = function_exists('mb_substr') ? mb_substr($socialText, 0, 300) : substr($socialText, 0, 300);
 $encodedSlug = rawurlencode($slug);
-$shareUrl = $origin . '/w/' . $encodedSlug;
+$shareUrl = $origin . '/w/' . $encodedSlug . ($shareVersion !== '' ? '?v=' . rawurlencode($shareVersion) : '');
 $bookingUrl = $origin . '/?mode=booking&amp;slug=' . $encodedSlug;
 $redirectUrl = $origin . '/?mode=booking&slug=' . $encodedSlug;
 $defaultImage = $origin . '/images/makerlab-tello-python-hero-v1.png';
 $candidateImage = trim((string) ($template['imageUrl'] ?? ''));
-$imageUrl = filter_var($candidateImage, FILTER_VALIDATE_URL) && preg_match('/^https?:\/\//i', $candidateImage) ? $candidateImage : $defaultImage;
+$imageUrl = workshop_image_url($candidateImage, $defaultImage);
 
 header('Content-Type: text/html; charset=utf-8');
 header('Cache-Control: public, max-age=0, s-maxage=300, stale-while-revalidate=3600');
@@ -189,7 +219,7 @@ header('X-Content-Type-Options: nosniff');
   <meta name="description" content="<?= escape_html($socialDescription) ?>">
   <link rel="canonical" href="<?= escape_html($shareUrl) ?>">
   <meta property="og:type" content="website">
-  <meta property="og:site_name" content="Edufy Workshops">
+  <meta property="og:site_name" content="MakerLab Academy">
   <meta property="og:url" content="<?= escape_html($shareUrl) ?>">
   <meta property="og:title" content="<?= escape_html($title) ?>">
   <meta property="og:description" content="<?= escape_html($socialDescription) ?>">

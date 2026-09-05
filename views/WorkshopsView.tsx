@@ -10,7 +10,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { WorkshopTemplate, Booking } from '../types';
 import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { WorkshopReportModal } from '../components/WorkshopReportModal';
-import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, normalizeWorkshopDays, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
+import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, getWorkshopShareVersion, normalizeWorkshopDays, normalizeWorkshopImageUrl, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
     const { workshopTemplates, workshopSlots, bookings } = useAppContext();
@@ -50,13 +50,17 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     };
 
     // --- Helpers ---
+    const getShareUrl = (template: WorkshopTemplate) => (
+        getWorkshopBookingUrl(template.shareableSlug, undefined, getWorkshopShareVersion(template))
+    );
+
     const copyLink = async (template: WorkshopTemplate) => {
         if (template.isActive === false) {
             await showAlert('Workshop is paused', 'Activate this template before sharing its public booking link.', 'warning');
             return;
         }
 
-        const url = getWorkshopBookingUrl(template.shareableSlug);
+        const url = getShareUrl(template);
         try {
             await navigator.clipboard.writeText(url);
             setCopiedTemplateId(template.id);
@@ -73,7 +77,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             return;
         }
 
-        const bookingUrl = getWorkshopBookingUrl(template.shareableSlug);
+        const bookingUrl = getShareUrl(template);
         const message = buildWorkshopWhatsAppMessage(template, bookingUrl);
         const opened = window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
 
@@ -82,7 +86,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     };
 
     const openBookingPreview = (template: WorkshopTemplate) => {
-        const opened = window.open(getWorkshopBookingUrl(template.shareableSlug), '_blank');
+        const opened = window.open(getShareUrl(template), '_blank');
         if (opened) opened.opener = null;
     };
 
@@ -126,7 +130,8 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             time: templateForm.recurrencePattern?.time || '',
             date: recurrenceType === 'one-time' ? templateForm.recurrencePattern?.date || '' : ''
         };
-        const imageUrl = templateForm.imageUrl?.trim() || '';
+        const rawImageUrl = templateForm.imageUrl?.trim() || '';
+        const imageUrl = normalizeWorkshopImageUrl(rawImageUrl);
 
         if (title.length < 3 || description.length < 10) {
             await showAlert('Workshop details incomplete', 'Use a title of at least 3 characters and a description of at least 10 characters.', 'warning');
@@ -160,9 +165,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 return;
             }
         }
-        if (imageUrl) {
+        if (rawImageUrl) {
             try {
-                const parsedUrl = new URL(imageUrl);
+                const parsedUrl = new URL(rawImageUrl);
                 if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Unsupported protocol');
             } catch {
                 await showAlert('Cover image URL is invalid', 'Use a complete http or https image URL.', 'warning');

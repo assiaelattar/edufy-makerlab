@@ -12,6 +12,34 @@ export const WORKSHOP_WEEKDAYS = [
 
 const weekdayOrder = new Map<number, number>(WORKSHOP_WEEKDAYS.map((day, index) => [day.value, index]));
 
+const getGoogleDriveFileId = (url: URL): string | null => {
+  const hostname = url.hostname.toLowerCase();
+  if (hostname !== 'drive.google.com' && hostname !== 'drive.usercontent.google.com') return null;
+
+  const pathMatch = url.pathname.match(/\/file\/d\/([a-z0-9_-]+)/i);
+  const candidate = pathMatch?.[1] || url.searchParams.get('id');
+  return candidate && /^[a-z0-9_-]+$/i.test(candidate) ? candidate : null;
+};
+
+export const normalizeWorkshopImageUrl = (imageUrl?: string): string => {
+  const suppliedImage = imageUrl?.trim();
+  if (!suppliedImage) return '';
+
+  try {
+    const parsedUrl = new URL(suppliedImage);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) return '';
+
+    const driveFileId = getGoogleDriveFileId(parsedUrl);
+    if (driveFileId) {
+      return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveFileId)}&export=view`;
+    }
+
+    return parsedUrl.toString();
+  } catch {
+    return '';
+  }
+};
+
 export const normalizeWorkshopDays = (days: unknown): number[] => {
   if (!Array.isArray(days)) return [];
 
@@ -70,13 +98,41 @@ export const getWorkshopScheduleLabel = (template: Pick<WorkshopTemplate, 'recur
   return `${date} at ${time}`;
 };
 
-export const getWorkshopBookingUrl = (slug: string, origin?: string): string => {
+type WorkshopShareDetails = Pick<WorkshopTemplate, 'title' | 'description' | 'duration' | 'capacityPerSlot' | 'recurrenceType' | 'recurrencePattern' | 'imageUrl'>;
+
+export const getWorkshopShareVersion = (template: WorkshopShareDetails): string => {
+  const source = JSON.stringify({
+    schema: 2,
+    title: template.title.trim(),
+    description: template.description.trim(),
+    duration: template.duration,
+    capacityPerSlot: template.capacityPerSlot,
+    recurrenceType: template.recurrenceType,
+    recurrencePattern: {
+      days: normalizeWorkshopDays(template.recurrencePattern?.days),
+      time: template.recurrencePattern?.time || '',
+      date: template.recurrencePattern?.date || '',
+    },
+    imageUrl: normalizeWorkshopImageUrl(template.imageUrl),
+  });
+
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `2-${(hash >>> 0).toString(36)}`;
+};
+
+export const getWorkshopBookingUrl = (slug: string, origin?: string, version?: string): string => {
   const baseOrigin = (origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');
-  return `${baseOrigin}/w/${encodeURIComponent(slug)}`;
+  const shareVersion = version?.trim();
+  return `${baseOrigin}/w/${encodeURIComponent(slug)}${shareVersion ? `?v=${encodeURIComponent(shareVersion)}` : ''}`;
 };
 
 export const getWorkshopOgImageUrl = (imageUrl?: string, origin?: string): string => {
-  const suppliedImage = imageUrl?.trim();
+  const suppliedImage = normalizeWorkshopImageUrl(imageUrl);
   if (suppliedImage) return suppliedImage;
 
   const baseOrigin = (origin || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '');

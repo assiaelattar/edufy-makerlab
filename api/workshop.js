@@ -25,7 +25,18 @@ const escapeHtml = value => String(value ?? '')
 const safeHttpUrl = (value, fallback) => {
   try {
     const parsed = new URL(String(value || ''));
-    return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : fallback;
+    if (!['http:', 'https:'].includes(parsed.protocol)) return fallback;
+
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname === 'drive.google.com' || hostname === 'drive.usercontent.google.com') {
+      const pathMatch = parsed.pathname.match(/\/file\/d\/([a-z0-9_-]+)/i);
+      const driveFileId = pathMatch?.[1] || parsed.searchParams.get('id');
+      if (driveFileId && /^[a-z0-9_-]+$/i.test(driveFileId)) {
+        return `https://drive.usercontent.google.com/download?id=${encodeURIComponent(driveFileId)}&export=view`;
+      }
+    }
+
+    return parsed.toString();
   } catch {
     return fallback;
   }
@@ -82,6 +93,8 @@ const renderUnavailablePage = (origin, message) => `<!doctype html>
 export default async function handler(req, res) {
   const rawSlug = Array.isArray(req.query?.slug) ? req.query.slug[0] : req.query?.slug;
   const slug = String(rawSlug || '').trim();
+  const rawVersion = Array.isArray(req.query?.v) ? req.query.v[0] : req.query?.v;
+  const version = /^[a-z0-9-]{1,80}$/i.test(String(rawVersion || '')) ? String(rawVersion) : '';
   const origin = getRequestOrigin(req);
 
   if (!/^[a-z0-9][a-z0-9-]{1,158}[a-z0-9]$/i.test(slug)) {
@@ -108,7 +121,7 @@ export default async function handler(req, res) {
     const schedule = formatSchedule(template);
     const socialDescription = `${description} ${schedule}`.slice(0, 300);
     const encodedSlug = encodeURIComponent(slug);
-    const shareUrl = `${origin}/w/${encodedSlug}`;
+    const shareUrl = `${origin}/w/${encodedSlug}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
     const bookingUrl = `${origin}/?mode=booking&slug=${encodedSlug}`;
     const defaultImage = `${origin}/images/makerlab-tello-python-hero-v1.png`;
     const imageUrl = safeHttpUrl(template.imageUrl, defaultImage);
@@ -123,7 +136,7 @@ export default async function handler(req, res) {
     <link rel="canonical" href="${escapeHtml(shareUrl)}">
 
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="Edufy Workshops">
+    <meta property="og:site_name" content="MakerLab Academy">
     <meta property="og:url" content="${escapeHtml(shareUrl)}">
     <meta property="og:title" content="${escapeHtml(title)}">
     <meta property="og:description" content="${escapeHtml(socialDescription)}">
