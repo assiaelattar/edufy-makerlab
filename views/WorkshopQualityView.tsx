@@ -18,12 +18,14 @@ import {
     AtlasSectionHeader,
     AtlasSignalCard
 } from '../components/atlas/AtlasSurface';
+import './programs/education-programs-v1.css';
 
 export const WorkshopQualityView = () => {
     const { teamMembers, workshopEvaluations = [], classSessions } = useAppContext();
     const { currentOrganization } = useAuth();
     const { alert: showAlert, confirm } = useConfirm();
     const evaluatorAvailable = Boolean(import.meta.env.VITE_GOOGLE_API_KEY);
+    const showEducationProgramsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     const stats = useMemo(() => {
         const scoredEvaluations = workshopEvaluations.filter(item => Number.isFinite(Number(item.totalScore)));
@@ -181,7 +183,7 @@ export const WorkshopQualityView = () => {
     };
 
     return (
-        <div className="space-y-5 pb-20 animate-in fade-in duration-200">
+        <div className={`space-y-5 pb-20 animate-in fade-in duration-200 ${showEducationProgramsV1 ? 'edu-v1 edu-workshop-quality-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-workshop-quality-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Academic quality"
                 title="Workshop quality"

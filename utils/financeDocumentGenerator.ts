@@ -19,13 +19,13 @@ const formatDate = (value: string) => new Date(`${value}T12:00:00`).toLocaleDate
   year: 'numeric',
 });
 
-export const generateFinanceDocument = (record: FinanceDocument, settings: AppSettings, options: { preview?: boolean } = {}) => {
+export const generateFinanceDocument = (record: FinanceDocument, settings: AppSettings, options: { preview?: boolean; editPreview?: boolean } = {}) => {
   const win = window.open('', '_blank');
   if (!win) return false;
 
   const documentConfig = settings.documentConfig || {};
   const academyName = documentConfig.headerName || settings.academyName;
-  const documentLabel = options.preview ? 'APERÇU DE FACTURE' : record.kind === 'credit_note' ? "FACTURE D'AVOIR" : 'FACTURE';
+  const documentLabel = options.editPreview ? 'APERÇU DE CORRECTION' : options.preview ? 'APERÇU DE FACTURE' : record.kind === 'credit_note' ? "FACTURE D'AVOIR" : 'FACTURE';
   const participants = record.participants.length
     ? `<div class="participants"><strong>Participant${record.participants.length > 1 ? 's' : ''}</strong><ul>${record.participants.map(participant => `<li>${escapeHtml(participant.name)}${participant.role ? ` — ${escapeHtml(participant.role)}` : ''}</li>`).join('')}</ul></div>`
     : '';
@@ -47,10 +47,10 @@ export const generateFinanceDocument = (record: FinanceDocument, settings: AppSe
   </style>
 </head>
 <body>
-  <div class="actions"><div><strong>Aperçu ${documentLabel.toLowerCase()}</strong><div class="meta">${options.preview ? 'Document non émis. Aucun numéro définitif attribué.' : "Le document émis reste conservé dans l’historique Edufy."}</div></div><button onclick="window.print()">Imprimer / PDF</button></div>
+  <div class="actions"><div><strong>Aperçu ${documentLabel.toLowerCase()}</strong><div class="meta">${options.editPreview ? `Modifications non enregistrées de la facture ${escapeHtml(record.number)}.` : options.preview ? 'Document non émis. Aucun numéro définitif attribué.' : "Le document émis reste conservé dans l’historique Edufy."}</div></div><button onclick="window.print()">Imprimer / PDF</button></div>
   <main class="sheet">
     <header class="top">
-      <div><div class="eyebrow">Document comptable</div><h1 class="title">${documentLabel}</h1><div class="number">N° ${escapeHtml(record.number)}</div><div class="meta">Émise le ${formatDate(record.issueDate)}${record.dueDate ? ` · Échéance ${formatDate(record.dueDate)}` : ''}</div></div>
+      <div><h1 class="title">${documentLabel}</h1><div class="number">N° ${escapeHtml(record.number)}</div><div class="meta">Émise le ${formatDate(record.issueDate)}</div></div>
       <div class="issuer"><h2>${escapeHtml(academyName)}</h2><div class="meta">${escapeHtml(documentConfig.address || '')}<br/>${documentConfig.taxId ? `ICE ${escapeHtml(documentConfig.taxId)}<br/>` : ''}${documentConfig.regId ? `RC ${escapeHtml(documentConfig.regId)}<br/>` : ''}${escapeHtml(documentConfig.email || '')}</div></div>
     </header>
     <section class="parties">

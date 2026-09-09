@@ -29,12 +29,14 @@ import {
 } from '../components/atlas/AtlasSurface';
 import { getProgramReadiness } from '../utils/program-readiness';
 import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
+import './family-journey/education-family-journey-v1.css';
 
 interface EnrollmentFormsViewProps {
     onEnrollLead?: (lead: Lead) => void;
 }
 
 export const EnrollmentFormsView: React.FC<EnrollmentFormsViewProps> = () => {
+    const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { programs, navigateTo } = useAppContext();
     const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
     const [qrProgram, setQrProgram] = useState<Program | null>(null);
@@ -97,7 +99,7 @@ export const EnrollmentFormsView: React.FC<EnrollmentFormsViewProps> = () => {
     };
 
     return (
-        <div className="space-y-5 pb-10">
+        <div className={`space-y-5 pb-10 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-enrollment-forms-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-enrollment-forms-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Admissions workspace"
                 title="Enrollment forms"

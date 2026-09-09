@@ -18,6 +18,7 @@ export type {
   FinanceDocumentKind,
   FinanceDocumentLine,
   FinanceDocumentStatus,
+  FinanceInvoiceSequenceType,
   FinanceParticipant,
 } from './finance';
 

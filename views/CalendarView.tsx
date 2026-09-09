@@ -8,6 +8,7 @@ import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
+import './school-day/education-school-day-v1.css';
 import { Modal } from '../components/Modal';
 
 const addMinutesToTime = (time: string, minutesToAdd: number) => {
@@ -18,6 +19,7 @@ const addMinutesToTime = (time: string, minutesToAdd: number) => {
 };
 
 export const CalendarView = () => {
+    const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { programs, workshopTemplates, workshopSlots, classSessions, teamMembers } = useAppContext();
     const { can, currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -241,7 +243,7 @@ export const CalendarView = () => {
     };
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8">
+        <div className={`space-y-6 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-calendar-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-calendar-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Daily operations"
                 title="Session Calendar"

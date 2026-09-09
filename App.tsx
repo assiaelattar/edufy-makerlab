@@ -62,6 +62,7 @@ import { isPublicEnrollmentRequest } from './utils/publicEnrollment';
 import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
 import { InstructorLayout } from './components/layouts/InstructorLayout';
+import './components/education-ui/education-role-surfaces-v1.css';
 
 
 
@@ -109,6 +110,16 @@ const AppContent = () => {
     const { isModuleEnabled, getEntitlement } = useModuleContext();
     const { requestPermission } = useNotifications();
     const { alert: showAlert, confirm } = useConfirm();
+    // Apply the approved Education UI to authenticated workspaces only. Public
+    // pages keep their own styling, and atlas-legacy remains an emergency URL.
+    const showEducationUiV1 = Boolean(user)
+        && new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+
+    useEffect(() => {
+        if (!showEducationUiV1) return;
+        document.body.classList.add('education-ui-v1-active');
+        return () => document.body.classList.remove('education-ui-v1-active');
+    }, [showEducationUiV1]);
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -1183,7 +1194,7 @@ const AppContent = () => {
     // --- PARENT LAYOUT ---
     if (isParent) {
         return (
-            <div className="min-h-[100dvh] bg-[#F7F1E4] text-slate-800 font-sans selection:bg-teal-500/25">
+            <div className={`min-h-[100dvh] bg-[#F7F1E4] text-slate-800 font-sans selection:bg-teal-500/25 ${showEducationUiV1 ? 'edu-v1 edu-parent-shell-v1' : ''}`} data-testid={showEducationUiV1 ? 'education-parent-shell-v1' : undefined}>
                 <ParentDashboardView />
             </div>
         );
@@ -1192,7 +1203,7 @@ const AppContent = () => {
     // --- STUDENT LAYOUT ---
     if (isStudent) {
         return (
-            <div className="flex h-[100dvh] overflow-hidden bg-[#F7F1E4] font-spark selection:bg-teal-400/25 selection:text-[#08111F]">
+            <div className={`flex h-[100dvh] overflow-hidden bg-[#F7F1E4] font-spark selection:bg-teal-400/25 selection:text-[#08111F] ${showEducationUiV1 ? 'edu-v1 edu-student-shell-v1' : ''}`} data-testid={showEducationUiV1 ? 'education-student-shell-v1' : undefined}>
                 {/* Desktop Sidebar (SparkQuest Themed) */}
                 <aside className="relative z-20 hidden w-64 shrink-0 flex-col overflow-hidden border-r border-white/10 bg-[#08111F] text-slate-300 md:flex">
                     {/* Brand / Profile */}

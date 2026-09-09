@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import './family-journey/education-family-journey-v1.css';
 import {
     AlertCircle,
     CalendarClock,
@@ -95,6 +96,7 @@ const timestampValue = (value: unknown) => {
 };
 
 export const CommunicationsView = () => {
+    const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { students, enrollments, programs } = useAppContext();
     const { currentOrganization, can } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -537,7 +539,7 @@ export const CommunicationsView = () => {
     ];
 
     return (
-        <div className="space-y-4 pb-8">
+        <div className={`space-y-4 pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-communications-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-communications-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Edufy ERP / Family operations"
                 title="Communications"

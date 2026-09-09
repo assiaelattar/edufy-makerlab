@@ -33,6 +33,7 @@ import {
     AtlasSignalCard,
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
+import './family-journey/education-family-journey-v1.css';
 
 type QueueFilter = 'all' | 'arrived' | 'incoming' | 'released';
 
@@ -92,6 +93,7 @@ const getStatusLabel = (status: PickupEntry['status']): string => {
 };
 
 export const PickupView = () => {
+    const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { pickupQueue, students } = useAppContext();
     const { can, currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -523,7 +525,7 @@ export const PickupView = () => {
 
     if (!organizationId) {
         return (
-            <div className="pb-24 md:pb-8">
+            <div className={`pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
                 <AtlasEmptyState
                     title="Select an organization"
                     description="Pickup operations are tenant-scoped. Select an organization before opening the live queue."
@@ -534,7 +536,7 @@ export const PickupView = () => {
     }
 
     return (
-        <div className="space-y-5 pb-24 md:pb-8">
+        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
             {!isDisplayMode && (
                 <>
                     <AtlasCommandHeader

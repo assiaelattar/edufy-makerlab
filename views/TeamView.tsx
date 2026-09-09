@@ -50,6 +50,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { Project, RoleType, Task, UserProfile } from '../types';
 import { formatDate } from '../utils/helpers';
+import './team-operations/education-team-operations-v1.css';
 
 type TeamTab = 'directory' | 'tasks' | 'projects' | 'chat';
 type StaffStatusFilter = 'all' | UserProfile['status'];
@@ -97,6 +98,7 @@ const timestampLabel = (value?: unknown) => {
 };
 
 export const TeamView = () => {
+    const showEducationTeamOperationsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { tasks, projects, chatMessages, teamMembers, loading: appLoading } = useAppContext();
     const {
         userProfile,
@@ -568,7 +570,7 @@ export const TeamView = () => {
     }
 
     return (
-        <div className="flex min-h-full flex-col gap-5 pb-24 md:pb-8">
+        <div className={`flex min-h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-team-v1' : ''}`} data-testid={showEducationTeamOperationsV1 ? 'education-team-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="ERP team operations"
                 title="Team & Workspace"

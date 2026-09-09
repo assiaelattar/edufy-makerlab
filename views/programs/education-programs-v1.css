@@ -1,0 +1,69 @@
+.edu-programs-v1,
+.edu-program-details-v1,
+.edu-workshops-v1,
+.edu-workshop-quality-v1 { color: var(--edu-ink); }
+
+.edu-programs-v1 .atlas-command-header,
+.edu-program-details-v1 .atlas-command-header,
+.edu-workshops-v1 .atlas-command-header,
+.edu-workshop-quality-v1 .atlas-command-header { min-height: 142px; align-items: center; padding: 26px !important; }
+
+.edu-programs-v1 > .grid:first-of-type {
+    gap: 10px !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+.edu-programs-v1 > .grid:first-of-type > * { min-height: 112px; padding: 18px !important; border: 1px solid var(--edu-border); border-radius: 20px; box-shadow: var(--edu-shadow-sm); }
+.edu-programs-v1 > .grid:first-of-type > :nth-child(1) { border-color: var(--edu-brand); background: var(--edu-brand) !important; }
+.edu-programs-v1 > .grid:first-of-type > :nth-child(2) { background: #fff !important; }
+.edu-programs-v1 > .grid:first-of-type > :nth-child(3) { background: var(--edu-warm) !important; }
+
+.edu-programs-v1 > .space-y-2 > article { padding: 17px !important; border-color: var(--edu-border) !important; border-radius: 21px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-programs-v1 > .space-y-2 > article:hover { border-color: #bdd66f !important; transform: translateY(-1px); }
+.edu-programs-v1 > .space-y-2 > article > div > button:first-child > span:first-child { border-color: #cddd9e !important; color: #517329 !important; background: var(--edu-brand-soft) !important; }
+.edu-programs-v1 > .space-y-2 > article [class*='border-y'] { border-color: #e1e5de !important; }
+.edu-programs-v1 > .space-y-2 > article button { min-height: 44px !important; border-radius: 13px !important; }
+
+.edu-program-details-v1 > section:not(.atlas-command-header),
+.edu-program-details-v1 > div:not(.atlas-command-header) { border-color: var(--edu-border) !important; border-radius: 21px !important; }
+.edu-program-details-v1 > section[class*='bg-slate'] { background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-program-details-v1 > section.relative { border-left: 4px solid var(--edu-brand) !important; background: var(--edu-brand-soft) !important; }
+.edu-program-details-v1 [role='tablist'] { padding: 6px !important; border: 1px solid var(--edu-border) !important; border-radius: 17px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-program-details-v1 [role='tab'] { min-height: 44px; border-radius: 12px !important; color: var(--edu-muted) !important; }
+.edu-program-details-v1 [role='tab'][aria-selected='true'] { color: var(--edu-ink) !important; background: var(--edu-brand) !important; }
+
+.edu-workshops-v1 .atlas-command-header [role='tablist'] { padding: 5px !important; border-color: #d8ddd5 !important; border-radius: 15px !important; background: rgba(255,255,255,.75) !important; }
+.edu-workshops-v1 .atlas-command-header [role='tab'] { min-height: 44px; border-radius: 11px !important; color: var(--edu-muted) !important; }
+.edu-workshops-v1 .atlas-command-header [role='tab'][aria-selected='true'] { color: var(--edu-ink) !important; background: var(--edu-brand) !important; }
+.edu-workshops-v1 > .grid .atlas-signal-card { min-height: 122px; }
+.edu-workshops-v1 > .grid .atlas-signal-card:first-child { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.edu-workshops-v1 > .grid .atlas-signal-card:nth-child(2) { background: var(--edu-lilac) !important; }
+.edu-workshops-v1 > .grid .atlas-signal-card:nth-child(3) { background: var(--edu-warm) !important; }
+.edu-workshops-v1 > .grid .atlas-signal-card:nth-child(4) { color: #fff !important; background: var(--edu-ink) !important; }
+.edu-workshops-v1 > .grid .atlas-signal-card:nth-child(4) * { color: inherit !important; }
+
+.edu-workshops-v1 > div > div > div[class*='bg-slate-900'] { padding: 20px !important; border-color: var(--edu-border) !important; border-radius: 23px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm) !important; }
+.edu-workshops-v1 button[aria-pressed] { min-height: 44px; border-color: #dfe4dc !important; border-radius: 13px !important; color: var(--edu-ink) !important; background: #f6f8f4 !important; }
+.edu-workshops-v1 button[aria-pressed='true'] { border-color: #9bc21f !important; background: var(--edu-brand) !important; }
+.edu-workshops-v1 [role='button'] { border-color: var(--edu-border) !important; border-radius: 18px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+
+.edu-workshop-quality-v1 > .grid .atlas-signal-card:first-child { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.edu-workshop-quality-v1 > .grid .atlas-signal-card:nth-child(2) { background: var(--edu-brand-soft) !important; }
+.edu-workshop-quality-v1 > .grid .atlas-signal-card:nth-child(3) { color: #fff !important; background: var(--edu-ink) !important; }
+.edu-workshop-quality-v1 > .grid .atlas-signal-card:nth-child(3) * { color: inherit !important; }
+.edu-workshop-quality-v1 > .grid .atlas-signal-card:nth-child(4) { background: var(--edu-warm) !important; }
+.edu-workshop-quality-v1 article { border-color: var(--edu-border) !important; border-radius: 21px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-workshop-quality-v1 > .fixed { background: rgba(17,19,17,.56) !important; backdrop-filter: blur(8px); }
+.edu-workshop-quality-v1 > .fixed > div { border-color: var(--edu-border) !important; border-radius: 24px !important; color: var(--edu-ink) !important; background: #fff !important; }
+.edu-workshop-quality-v1 > .fixed > div > div { border-color: #e1e5de !important; background: #fff !important; }
+
+@media (max-width: 700px) {
+    .edu-programs-v1 .atlas-command-header,
+    .edu-program-details-v1 .atlas-command-header,
+    .edu-workshops-v1 .atlas-command-header,
+    .edu-workshop-quality-v1 .atlas-command-header { min-height: 0; padding: 20px !important; }
+    .edu-programs-v1 > .grid:first-of-type > * { min-height: 96px; padding: 14px !important; }
+    .edu-programs-v1 > .space-y-2 > article { padding: 14px !important; }
+    .edu-workshops-v1 > div > div > div[class*='bg-slate-900'] { padding: 14px !important; }
+}

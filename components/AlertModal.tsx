@@ -97,23 +97,23 @@ export const AlertModal: React.FC<AlertModalProps> = ({
         >
             <button
                 type="button"
-                className="absolute inset-0 cursor-default bg-[#08111F]/80"
+                className="atlas-dialog-backdrop absolute inset-0 cursor-default"
                 onClick={onClose}
                 aria-label="Close dialog"
             />
 
             <div
-                className={`relative w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D] shadow-2xl transition duration-200 ${
+                className={`atlas-dialog relative w-full max-w-md overflow-hidden border transition duration-200 ${
                     isOpen ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'
                 }`}
             >
                 <div className={`h-1 w-full ${styles.accent}`} />
-                <div className="flex items-start gap-3 border-b border-white/10 px-4 py-4 sm:px-5">
+                <div className="atlas-dialog-header flex items-start gap-3 border-b px-4 py-4 sm:px-5">
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${styles.iconSurface}`}>
                         {styles.icon}
                     </div>
                     <div className="min-w-0 flex-1 pt-1">
-                        <h3 id="atlas-alert-title" className="text-base font-bold leading-5 text-white">
+                        <h3 id="atlas-alert-title" className="text-base font-black leading-5">
                             {title}
                         </h3>
                     </div>
@@ -121,7 +121,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+                            className="atlas-dialog-close flex h-9 w-9 shrink-0 items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
                             aria-label="Close dialog"
                             title="Close"
                         >
@@ -131,17 +131,17 @@ export const AlertModal: React.FC<AlertModalProps> = ({
                 </div>
 
                 <div className="px-4 py-5 sm:px-5">
-                    <p id="atlas-alert-message" className="whitespace-pre-line text-sm leading-6 text-slate-300">
+                    <p id="atlas-alert-message" className="atlas-text-muted whitespace-pre-line text-sm leading-6">
                         {message}
                     </p>
                 </div>
 
-                <div className="flex flex-col-reverse gap-2 border-t border-white/10 bg-[#08111F]/35 px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
+                <div className="atlas-dialog-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
                     {!isAlert && (
                         <button
                             type="button"
                             onClick={onClose}
-                            className="h-10 rounded-lg border border-white/10 px-4 text-sm font-semibold text-slate-300 transition-colors hover:border-white/20 hover:bg-white/5 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+                            className="atlas-action h-10 border px-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
                         >
                             {cancelText}
                         </button>

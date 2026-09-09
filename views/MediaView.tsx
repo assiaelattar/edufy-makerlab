@@ -37,6 +37,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { GalleryItem } from '../types';
 import { compressImage } from '../utils/helpers';
+import './team-operations/education-team-operations-v1.css';
 
 type MediaVisibility = 'families' | 'staff';
 type SortMode = 'newest' | 'oldest' | 'caption';
@@ -99,6 +100,7 @@ const validateRemoteImageUrl = async (value: string) => {
 };
 
 export const MediaView = () => {
+    const showEducationTeamOperationsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { galleryItems, students, enrollments } = useAppContext();
     const { can, userProfile, user, currentOrganization } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -559,7 +561,7 @@ export const MediaView = () => {
     const inputClass = 'h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/10';
 
     return (
-        <div className="space-y-5 pb-24 md:pb-8">
+        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-media-v1' : ''}`} data-testid={showEducationTeamOperationsV1 ? 'education-media-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Organization media"
                 title={viewMode === 'capture' ? 'Capture Route' : linkedStudent ? `${linkedStudent.name.split(' ')[0]}'s Gallery` : 'Media Library'}

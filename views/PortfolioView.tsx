@@ -6,8 +6,10 @@ import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { config } from '../utils/config';
 import { formatDate } from '../utils/helpers';
+import './learning/education-learning-v1.css';
 
 export const PortfolioView = () => {
+    const showEducationLearningV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { studentProjects, badges, students } = useAppContext();
     const { userProfile } = useAuth();
     const { alert } = useConfirm();
@@ -48,7 +50,7 @@ export const PortfolioView = () => {
     };
 
     return (
-        <div className="space-y-5 pb-24 md:pb-8">
+        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationLearningV1 ? 'edu-v1 edu-portfolio-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-portfolio-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Maker portfolio"
                 title={`${userProfile?.name || 'My'}'s work`}

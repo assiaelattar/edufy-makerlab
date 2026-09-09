@@ -20,23 +20,25 @@ export const AtlasCommandHeader = ({
     badges,
     actions
 }: AtlasCommandHeaderProps) => (
-    <div className="atlas-command-header atlas-surface-raised relative overflow-hidden rounded-xl border atlas-panel-border">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-teal-300/0 via-teal-300/80 to-amber-200/0" />
+    <div className="atlas-command-header atlas-surface-raised relative overflow-hidden border atlas-panel-border">
+        <div className="atlas-command-header__signal" aria-hidden="true" />
         <div className="atlas-command-header__body flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <span className="atlas-text-accent text-[10px] font-black uppercase tracking-[0.18em]">{eyebrow}</span>
-                    {badges}
+            <div className="flex min-w-0 items-start gap-4">
+                <span className="atlas-command-header__icon atlas-accent-well flex h-12 w-12 shrink-0 items-center justify-center border">
+                    <Icon size={22} />
+                </span>
+                <div className="min-w-0 pt-0.5">
+                    <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                        <span className="atlas-text-accent text-[10px] font-black uppercase tracking-[0.18em]">{eyebrow}</span>
+                        {badges}
+                    </div>
+                    <h2 className="atlas-text-strong text-xl font-black leading-tight tracking-[-0.03em] sm:text-2xl md:text-3xl">
+                        <span className="min-w-0 break-words">{title}</span>
+                    </h2>
+                    {description && <p className="atlas-text-muted mt-2 max-w-2xl text-sm leading-6">{description}</p>}
                 </div>
-                <h2 className="atlas-text-strong flex items-center gap-3 text-xl font-black leading-tight tracking-normal sm:text-2xl md:text-3xl">
-                    <span className="atlas-accent-well flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border">
-                        <Icon size={21} />
-                    </span>
-                    <span className="min-w-0 break-words">{title}</span>
-                </h2>
-                {description && <p className="atlas-text-muted mt-2 max-w-2xl text-sm leading-6">{description}</p>}
             </div>
-            {actions && <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">{actions}</div>}
+            {actions && <div className="atlas-command-header__actions flex w-full flex-wrap items-center gap-2 lg:w-auto">{actions}</div>}
         </div>
     </div>
 );
@@ -65,11 +67,13 @@ export const AtlasSignalCard = ({
             type={onClick ? 'button' : undefined}
             onClick={onClick}
             data-atlas-tone={tone}
-            className={`atlas-signal-card atlas-surface min-h-[118px] rounded-lg border p-4 text-left transition-colors ${onClick ? 'atlas-signal-card--interactive' : ''}`}
+            className={`atlas-signal-card atlas-surface min-h-[126px] border p-4 text-left ${onClick ? 'atlas-signal-card--interactive' : ''}`}
         >
             <div className="mb-3 flex items-center justify-between">
                 <span className="atlas-text-subtle text-[10px] font-bold uppercase tracking-wider">{label}</span>
-                <Icon size={15} className="atlas-signal-icon" />
+                <span className="atlas-signal-icon-well flex h-9 w-9 items-center justify-center">
+                    <Icon size={16} className="atlas-signal-icon" />
+                </span>
             </div>
             <div className="atlas-text-strong text-xl font-black">{value}</div>
             {detail && <div className="atlas-signal-detail mt-1 text-xs">{detail}</div>}
@@ -85,9 +89,9 @@ interface AtlasEmptyStateProps {
 }
 
 export const AtlasEmptyState = ({ title, description, icon: Icon, action }: AtlasEmptyStateProps) => (
-    <div className="atlas-empty-state flex min-h-44 flex-col items-center justify-center rounded-lg border border-dashed p-6 text-center">
+    <div className="atlas-empty-state flex min-h-44 flex-col items-center justify-center border border-dashed p-6 text-center">
         {Icon && (
-            <div className="atlas-muted-well mb-3 flex h-11 w-11 items-center justify-center rounded-lg border">
+            <div className="atlas-muted-well mb-3 flex h-11 w-11 items-center justify-center border">
                 <Icon size={20} />
             </div>
         )}
@@ -127,7 +131,7 @@ interface AtlasToolbarProps {
 }
 
 export const AtlasToolbar = ({ children, leading, trailing, className = '' }: AtlasToolbarProps) => (
-    <div className={`atlas-toolbar atlas-surface-muted flex flex-col gap-3 rounded-lg border p-3 lg:flex-row lg:items-center ${className}`}>
+    <div className={`atlas-toolbar atlas-surface-muted flex flex-col gap-3 border p-3 lg:flex-row lg:items-center ${className}`}>
         {leading && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{leading}</div>}
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{children}</div>
         {trailing && <div className="flex flex-wrap items-center gap-2 lg:justify-end">{trailing}</div>}
@@ -153,7 +157,7 @@ export const AtlasActionButton = ({
         {...props}
         type={type}
         data-atlas-variant={variant}
-        className={`atlas-action inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-3.5 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+        className={`atlas-action inline-flex min-h-10 items-center justify-center gap-2 border px-4 py-2 text-sm font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
         {Icon && <Icon size={16} />}
         {children}

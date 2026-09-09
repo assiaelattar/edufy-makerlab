@@ -6,8 +6,10 @@ import { useModuleContext } from '../context/ModuleContext';
 import { getAppById } from '../services/appRegistry';
 import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader } from '../components/atlas/AtlasSurface';
+import './admin/education-admin-tools-v1.css';
 
 export const AppDetailsView = () => {
+    const showEducationAdminToolsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { navigateTo, viewParams } = useAppContext();
     const { getEntitlement, activateItem, requestAddOn } = useModuleContext();
     const { alert: showAlert } = useConfirm();
@@ -43,7 +45,7 @@ export const AppDetailsView = () => {
     };
 
     return (
-        <div className="relative flex h-full flex-col space-y-6 pb-24 md:pb-8">
+        <div className={`relative flex h-full flex-col space-y-6 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-app-details-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-app-details-v1' : undefined}>
 
             {/* Back Button */}
             <AtlasActionButton variant="quiet" icon={ChevronLeft} onClick={() => navigateTo('app-store')} className="w-fit">Back to marketplace</AtlasActionButton>

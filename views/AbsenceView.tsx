@@ -3,6 +3,7 @@ import { addDays, format, parseISO } from 'date-fns';
 import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Filter, MessageCircle, RotateCcw, Search, ShieldCheck, Users, XCircle } from 'lucide-react';
 import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import './school-day/education-school-day-v1.css';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -10,6 +11,7 @@ import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
 
 export const AbsenceView = () => {
+    const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { enrollments, students, attendanceRecords } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -258,7 +260,7 @@ export const AbsenceView = () => {
     };
 
     return (
-        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-attendance-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-attendance-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Learning operations"
                 title="Student attendance"
@@ -345,14 +347,14 @@ export const AbsenceView = () => {
                                     </div>
 
                                     <div className="divide-y divide-white/[0.07]">
-                                        {slot.students.map(student => {
+                                        {slot.students.map((student, studentIndex) => {
                                             const status = getStatus(student.studentId, student.displayTime);
                                             const recordId = getRecordId(student.studentId, student.displayTime);
                                             const isSaving = savingRecordId === recordId;
                                             const initials = (student.studentName || '').split(' ').map(name => name[0]).join('').slice(0, 2);
                                             const studentDetails = students.find(item => item.id === student.studentId);
                                             return (
-                                                <div key={`${student.id}_${student.displayTime}`} className="flex flex-col gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
+                                                <div key={`${student.id}_${student.displayTime}_${student.displayGroup}_${studentIndex}`} className="flex flex-col gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="flex min-w-0 items-center gap-3">
                                                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-[11px] font-black text-slate-300">{initials}</div>
                                                         <div className="min-w-0">

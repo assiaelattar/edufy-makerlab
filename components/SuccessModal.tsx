@@ -28,17 +28,17 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
         >
             <button
                 type="button"
-                className="absolute inset-0 cursor-default bg-[#08111F]/80"
+                className="atlas-dialog-backdrop absolute inset-0 cursor-default"
                 onClick={onClose}
                 aria-label="Close success message"
             />
 
-            <div className="relative w-full max-w-md overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D] shadow-2xl animate-in zoom-in-95 duration-200">
-                <div className="h-1 w-full bg-[#14B8A6]" />
+            <div className="atlas-dialog relative w-full max-w-md overflow-hidden border animate-in zoom-in-95 duration-200">
+                <div className="h-1.5 w-full bg-[var(--atlas-volt)]" />
                 <button
                     type="button"
                     onClick={onClose}
-                    className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
+                    className="atlas-dialog-close absolute right-3 top-3 flex h-9 w-9 items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
                     aria-label="Close success message"
                     title="Close"
                 >
@@ -50,18 +50,18 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
                         <CheckCircle2 className="h-6 w-6 text-[#2DD4BF]" strokeWidth={2.25} />
                     </div>
 
-                    <h3 id="atlas-success-title" className="pr-10 text-xl font-bold leading-7 text-white">
+                    <h3 id="atlas-success-title" className="atlas-text-strong pr-10 text-xl font-black leading-7 tracking-[-0.02em]">
                         {title}
                     </h3>
-                    <p id="atlas-success-message" className="mt-2 text-sm leading-6 text-slate-300">
+                    <p id="atlas-success-message" className="atlas-text-muted mt-2 text-sm leading-6">
                         {message}
                     </p>
 
-                    <div className="mt-6 flex justify-end border-t border-white/10 pt-4">
+                    <div className="mt-6 flex justify-end border-t border-[var(--atlas-border)] pt-4">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="h-10 w-full rounded-lg bg-[#14B8A6] px-5 text-sm font-bold text-[#08111F] transition-colors hover:bg-[#2DD4BF] focus:outline-none focus:ring-2 focus:ring-white/60 sm:w-auto"
+                            className="atlas-action h-10 w-full border border-[var(--atlas-volt-strong)] bg-[var(--atlas-volt)] px-5 text-sm font-bold text-[#111827] focus:outline-none focus:ring-2 focus:ring-white/60 sm:w-auto"
                         >
                             Awesome!
                         </button>

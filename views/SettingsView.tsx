@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import './admin/education-admin-tools-v1.css';
 import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Trash2, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer, Clock, Calendar, Building2, CreditCard, Database, Plug, Boxes, HardDrive, BadgeCheck } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +19,7 @@ import { SettingsField, SettingsMetric, SettingsNavigation, SettingsPanel, Setti
 type SettingsSection = 'general' | 'plan' | 'documents' | 'forms' | 'data' | 'api' | 'team' | 'maintenance';
 
 export const SettingsView = () => {
+    const showEducationAdminToolsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { settings: globalSettings, teamMembers, students, programs, enrollments, payments } = useAppContext();
     const { can, roles: authRoles, createSecondaryUser: createAuthUser, userProfile, user, currentOrganization, isSuperAdmin } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -841,7 +843,7 @@ export const SettingsView = () => {
 
     // --- RENDER: ADMIN SETTINGS ---
     return (
-        <div className="atlas-settings-workspace mx-auto flex w-full max-w-[1320px] min-w-0 flex-col gap-4 pb-24 md:pb-8">
+        <div className={`atlas-settings-workspace mx-auto flex w-full max-w-[1320px] min-w-0 flex-col gap-4 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-settings-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-settings-v1' : undefined}>
             <div className="atlas-settings-commandbar sticky top-0 z-20 flex min-w-0 flex-col gap-4 border-b px-1 py-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-start gap-3">
                     <span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"><Settings size={17} /></span>

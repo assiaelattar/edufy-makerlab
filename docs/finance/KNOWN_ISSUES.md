@@ -7,6 +7,8 @@
 - Existing issued/credited documents are not a payment-allocation ledger. Service invoices preserve this behavior and do not synthesize payments, balances, statuses or participant enrollments.
 - Repository-wide TypeScript has pre-existing failures outside the changed service/Finance files. Production build passes with existing chunk/import warnings.
 - Shared Modal's existing focus behavior is preserved (Escape and focus return); a global focus-trap upgrade is outside this phase.
+- Invoice corrections record the latest revision number and update time but do not yet expose a human-readable field-by-field revision log. Use an avoir for accounting cancellation; credited documents remain locked.
+- Sequence management can safely advance a counter but cannot rewind it. If an incorrect value was advanced too far, recovery needs an audited administrative migration rather than risking reuse of an already reserved number.
 
 ## Phase 1 limits
 

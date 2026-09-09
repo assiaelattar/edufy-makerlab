@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import { db } from '../services/firebase';
+import './learning/education-learning-v1.css';
 
 const QUICK_FEEDBACKS = [
     'Great work. The evidence is clear.',
@@ -17,6 +18,7 @@ const QUICK_FEEDBACKS = [
 ];
 
 export const ReviewView = () => {
+    const showEducationLearningV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { studentProjects, students, navigateTo, viewParams } = useAppContext();
     const { userProfile } = useAuth();
     const { confirm, alert } = useConfirm();
@@ -97,7 +99,7 @@ export const ReviewView = () => {
     };
 
     return (
-        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationLearningV1 ? 'edu-v1 edu-review-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-review-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Coaching workspace"
                 title="Review center"

@@ -11,6 +11,7 @@ import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
 import StudentDirectoryHealth, { type StudentDirectoryFilter } from '../components/students/StudentDirectoryHealth';
 import { normalizePhone, generateParentStatementPrint, formatCurrency } from '../utils/helpers';
 import { buildStudentDirectoryHealth, STUDENT_DIRECTORY_ISSUE_LABELS } from '../utils/studentIdentity';
+import './students/education-students-v1.css';
 
 export const StudentsView = ({
     onAddStudent,
@@ -365,10 +366,36 @@ export const StudentsView = ({
         }
     };
 
+    const showEducationStudentsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+    const attentionCount = Math.max(0, directorySummary.totalRecords - directorySummary.healthyRecords);
+
     return (
-        <div className="atlas-module atlas-students-module flex flex-col space-y-6 pb-24 md:pb-8">
+        <div className={`atlas-module atlas-students-module flex flex-col space-y-6 pb-24 md:pb-8 ${showEducationStudentsV1 ? 'edu-v1 edu-students-v1' : ''}`} data-testid={showEducationStudentsV1 ? 'education-students-v1' : undefined}>
             {/* Header with Actions */}
-            <AtlasCommandHeader
+            {showEducationStudentsV1 ? (
+                <section className="edu-students-v1__hero" aria-labelledby="education-students-title">
+                    <div className="edu-students-v1__hero-copy">
+                        <span className="edu-students-v1__eyebrow"><Users size={15} />Students & families</span>
+                        <h2 id="education-students-title">One directory for every learner journey.</h2>
+                        <p>Find a learner, understand their family context, and move incomplete records toward enrollment readiness.</p>
+                        <div className="edu-students-v1__pulse">
+                            <span><strong>{stats.dataHealth}%</strong> directory ready</span>
+                            <i aria-hidden="true"><u style={{ width: `${stats.dataHealth}%` }} /></i>
+                            <span><strong>{attentionCount}</strong> need attention</span>
+                        </div>
+                    </div>
+                    <div className="edu-students-v1__hero-actions">
+                        <div className="edu-students-v1__view-switch" role="group" aria-label="Directory view">
+                            <button type="button" data-active={viewMode === 'students'} onClick={() => setViewMode('students')}>Students</button>
+                            <button type="button" data-active={viewMode === 'parents'} onClick={() => setViewMode('parents')}>Families</button>
+                        </div>
+                        <div className="edu-students-v1__primary-actions">
+                            {can('students.enroll') && <button type="button" onClick={() => onQuickEnroll()}><Zap size={17} />Quick enroll</button>}
+                            {can('students.edit') && <button type="button" onClick={onAddStudent}><Plus size={18} />Add student</button>}
+                        </div>
+                    </div>
+                </section>
+            ) : <AtlasCommandHeader
                 eyebrow="Core directory"
                 title="Students and parent accounts"
                 description="Manage learner profiles, household balances, enrollment readiness, and contact quality from one tenant-scoped command surface."
@@ -404,10 +431,10 @@ export const StudentsView = ({
                         )}
                     </div>
                 }
-            />
+            />}
 
             {/* Quick Stats Cards */}
-            <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+            <div className="edu-students-v1__stats grid grid-cols-2 gap-4 xl:grid-cols-5">
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                     <div className="text-[11px] font-black uppercase text-slate-500">Active students</div>
                     <div className="mt-2 text-3xl font-black text-white">{stats.active}</div>
@@ -453,7 +480,7 @@ export const StudentsView = ({
             )}
 
             {/* Filters & Search - Only show filters in Students mode */}
-            <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/55 p-3 shadow-lg shadow-black/10 md:flex-row">
+            <div className="edu-students-v1__filters flex flex-col gap-3 rounded-2xl border border-white/10 bg-slate-950/55 p-3 shadow-lg shadow-black/10 md:flex-row">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
                     <input type="search" placeholder={viewMode === 'students' ? "Search students, parents, phone, email, or school..." : "Search by parent name or phone..."} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950/80 pl-10 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/15" />
@@ -517,19 +544,22 @@ export const StudentsView = ({
             {/* Main Content Area */}
             {viewMode === 'students' ? (
                 /* Student List */
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
+                <div className="edu-students-v1__directory bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
                 {/* Desktop Table */}
                 <div className="hidden md:block">
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-950 text-slate-400 font-semibold sticky top-0 z-10 shadow-sm">
                             <tr>
                                 <th className="p-4 w-10 text-center">
-                                    <input 
-                                        type="checkbox" 
-                                        className="w-4 h-4 accent-blue-600 rounded bg-slate-950 border-slate-850 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                        checked={allFilteredSelected}
-                                        onChange={toggleSelectAll}
-                                    />
+                                    <label className="edu-students-v1__checkbox-hit">
+                                        <input
+                                            type="checkbox"
+                                            aria-label="Select all filtered students"
+                                            className="w-4 h-4 accent-blue-600 rounded bg-slate-950 border-slate-850 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                            checked={allFilteredSelected}
+                                            onChange={toggleSelectAll}
+                                        />
+                                    </label>
                                 </th>
                                 <th className="p-4 w-16 text-center">#</th>
                                 <th className="p-4">Student</th>
@@ -556,16 +586,19 @@ export const StudentsView = ({
                                     return (
                                     <tr key={student.id} onClick={() => onViewProfile(student.id)} className={`group hover:bg-slate-800/40 transition-colors cursor-pointer ${isInactive ? 'opacity-60' : ''} ${qIssues.length > 0 && !isInactive ? 'border-l-2 border-amber-600/50' : ''}`}>
                                         <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 accent-blue-600 rounded bg-slate-900 border-slate-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                checked={selectedIds.includes(student.id)}
-                                                onChange={() => {
-                                                    setSelectedIds(prev => 
-                                                        prev.includes(student.id) ? prev.filter(x => x !== student.id) : [...prev, student.id]
-                                                    );
-                                                }}
-                                            />
+                                            <label className="edu-students-v1__checkbox-hit">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`Select ${student.name}`}
+                                                    className="w-4 h-4 accent-blue-600 rounded bg-slate-900 border-slate-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                    checked={selectedIds.includes(student.id)}
+                                                    onChange={() => {
+                                                        setSelectedIds(prev =>
+                                                            prev.includes(student.id) ? prev.filter(x => x !== student.id) : [...prev, student.id]
+                                                        );
+                                                    }}
+                                                />
+                                            </label>
                                         </td>
                                         <td className="p-4 text-center">
                                             <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-500 transition-colors">
@@ -639,16 +672,19 @@ export const StudentsView = ({
                             <div key={student.id} onClick={() => onViewProfile(student.id)} className={`bg-slate-950 border border-slate-800 rounded-xl p-4 active:scale-[0.98] transition-all relative overflow-hidden ${isInactive ? 'opacity-60' : ''} ${qIssues.length > 0 && !isInactive ? 'border-l-2 border-l-amber-500/60' : ''}`}>
                                 <div className="flex items-start gap-3 mb-3">
                                     <div className="flex items-center mt-2.5" onClick={(e) => e.stopPropagation()}>
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 accent-blue-600 rounded bg-slate-900 border-slate-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                            checked={selectedIds.includes(student.id)}
-                                            onChange={() => {
-                                                setSelectedIds(prev => 
-                                                    prev.includes(student.id) ? prev.filter(x => x !== student.id) : [...prev, student.id]
-                                                );
-                                            }}
-                                        />
+                                        <label className="edu-students-v1__checkbox-hit">
+                                            <input
+                                                type="checkbox"
+                                                aria-label={`Select ${student.name}`}
+                                                className="w-4 h-4 accent-blue-600 rounded bg-slate-900 border-slate-800 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                checked={selectedIds.includes(student.id)}
+                                                onChange={() => {
+                                                    setSelectedIds(prev =>
+                                                        prev.includes(student.id) ? prev.filter(x => x !== student.id) : [...prev, student.id]
+                                                    );
+                                                }}
+                                            />
+                                        </label>
                                     </div>
                                     <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-sm font-bold text-slate-400 shrink-0">
                                         {initials}
@@ -693,7 +729,7 @@ export const StudentsView = ({
                 </div>
             ) : (
                 /* Parents View List */
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
+                <div className="edu-students-v1__directory edu-students-v1__families bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg shadow-black/20">
                     <div className="hidden md:block">
                         <table className="w-full text-left text-sm border-collapse">
                             <thead className="bg-slate-950 text-slate-400 font-semibold sticky top-0 z-10 shadow-sm">
@@ -786,7 +822,7 @@ export const StudentsView = ({
             )}
             {/* Bulk Actions Bar */}
             {selectedIds.length > 0 && (
-                <div className="fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 shadow-2xl shadow-black/80">
+                <div className="edu-students-v1__bulk-bar fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 shadow-2xl shadow-black/80">
                     <div className="text-sm text-slate-300 font-medium animate-pulse">
                         <span className="font-bold text-white bg-blue-600/30 px-2.5 py-1 rounded-full border border-blue-500/20 text-xs mr-2">{selectedIds.length}</span> 
                         student{selectedIds.length > 1 ? 's' : ''} selected

@@ -10,9 +10,11 @@ import {
   FileText,
   History,
   Plus,
+  Pencil,
   Printer,
   ReceiptText,
   Search,
+  Settings2,
   Trash2,
   Upload,
   UserRound,
@@ -33,7 +35,9 @@ import { db } from '../../services/firebase';
 import {
   createFullCreditNote,
   issueFinanceInvoice,
+  loadFinanceInvoiceSequences,
   saveAccountingTemplate,
+  saveFinanceInvoiceSequences,
   subscribeAccountingTemplates,
   subscribeFinanceDocuments,
 } from '../../services/financeDocuments';
@@ -125,12 +129,16 @@ export const FinanceDocumentsPanel: React.FC = () => {
   // Match the existing finance ledger's organization-manager persistence boundary.
   const canUseServices = canManage && ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
   const [catalogueOpen, setCatalogueOpen] = useState(false);
+  const [sequenceOpen, setSequenceOpen] = useState(false);
+  const [sequenceYear, setSequenceYear] = useState(String(new Date().getFullYear()));
+  const [sequenceDraft, setSequenceDraft] = useState({ formation: '0', service: '0' });
+  const [isSequenceLoading, setIsSequenceLoading] = useState(false);
   const [catalogueState, setCatalogueState] = useState<{ organizationId: string; services: CatalogueService[]; ready: boolean; error: string }>({ organizationId: '', services: [], ready: false, error: '' });
-  const [serviceInvoice, setServiceInvoice] = useState<{ organizationId: string; initialService?: CatalogueService } | null>(null);
+  const [serviceInvoice, setServiceInvoice] = useState<{ organizationId: string; initialService?: CatalogueService; editingInvoice?: FinanceDocument } | null>(null);
   const servicesReady = catalogueState.organizationId === organizationId && catalogueState.ready;
   const services = servicesReady ? mergeServiceCatalogue(organizationId, catalogueState.services) : [];
   useEffect(() => {
-    setServiceInvoice(null); setCatalogueOpen(false);
+    setServiceInvoice(null); setCatalogueOpen(false); setSequenceOpen(false);
     setDocuments([]); setCustomTemplates([]); setIsInvoiceOpen(false);
     setCatalogueState({ organizationId, services: [], ready: false, error: '' });
     if (!db || !organizationId || !canUseServices) return;
@@ -218,6 +226,47 @@ export const FinanceDocumentsPanel: React.FC = () => {
     setIsInvoiceOpen(true);
   };
 
+  const loadSequenceYear = async (yearValue = sequenceYear) => {
+    if (!db || !organizationId) return;
+    const year = Number(yearValue);
+    try {
+      setIsSequenceLoading(true);
+      const snapshot = await loadFinanceInvoiceSequences(db, organizationId, year);
+      setSequenceYear(String(snapshot.year));
+      setSequenceDraft({ formation: String(snapshot.formation.lastUsed), service: String(snapshot.service.lastUsed) });
+    } catch (error) {
+      await showAlert('Séquences non chargées', error instanceof Error ? error.message : 'Vérifiez l’année et vos permissions.', 'danger');
+    } finally {
+      setIsSequenceLoading(false);
+    }
+  };
+
+  const openSequences = () => {
+    const year = String(new Date().getFullYear());
+    setSequenceYear(year);
+    setSequenceOpen(true);
+    void loadSequenceYear(year);
+  };
+
+  const handleSaveSequences = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!db || !organizationId) return;
+    try {
+      setIsSaving(true);
+      const snapshot = await saveFinanceInvoiceSequences(db, organizationId, Number(sequenceYear), {
+        formation: Number(sequenceDraft.formation),
+        service: Number(sequenceDraft.service),
+      });
+      setSequenceDraft({ formation: String(snapshot.formation.lastUsed), service: String(snapshot.service.lastUsed) });
+      setSequenceOpen(false);
+      await showAlert('Séquences enregistrées', `Prochaines factures : ${snapshot.formation.nextNumber} et ${snapshot.service.nextNumber}.`, 'success');
+    } catch (error) {
+      await showAlert('Séquences non enregistrées', error instanceof Error ? error.message : 'Vérifiez les valeurs et vos permissions.', 'danger');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const selectProgram = (programId: string) => {
     const program = programs.find(item => item.id === programId);
     const billingAudience = program?.billingAudience || 'individual';
@@ -275,6 +324,7 @@ export const FinanceDocumentsPanel: React.FC = () => {
       setIsSaving(true);
       const invoice = await issueFinanceInvoice(db, {
         organizationId,
+        sequenceType: 'formation',
         issueDate: draft.issueDate,
         dueDate: draft.dueDate,
         serviceDate: draft.serviceDate,
@@ -432,9 +482,10 @@ export const FinanceDocumentsPanel: React.FC = () => {
       <section className="relative overflow-hidden rounded-[1.35rem] border border-sky-300/20 bg-[linear-gradient(135deg,rgba(14,116,144,.16),rgba(15,23,42,.45)_58%)] p-5">
         <div className="pointer-events-none absolute -right-14 -top-20 h-52 w-52 rounded-full border-[26px] border-sky-200/[0.05]" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl"><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-200">Registre immuable</p><h3 className="mt-2 text-xl font-black text-white sm:text-2xl">Facturez vos formations et vos services.</h3><p className="mt-2 text-sm leading-6 text-slate-400">Choisissez une formation ou une prestation professionnelle. Retrouvez les factures, avoirs et exports dans le même historique.</p></div>
+          <div className="max-w-2xl"><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-200">Registre suivi</p><h3 className="mt-2 text-xl font-black text-white sm:text-2xl">Facturez vos formations et vos services.</h3><p className="mt-2 text-sm leading-6 text-slate-400">Choisissez une formation ou une prestation professionnelle. Retrouvez, corrigez et exportez vos factures dans le même historique.</p></div>
           <div className="flex flex-wrap gap-2">
             {canExport && <button type="button" onClick={() => setIsExportOpen(true)} className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-slate-950/55 px-4 text-xs font-black text-white transition hover:border-sky-200/30 hover:bg-slate-900"><FileSpreadsheet size={17} className="text-sky-200" /> Export comptable</button>}
+            {canUseServices && <button type="button" onClick={openSequences} className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-slate-950/55 px-4 text-xs font-black text-white transition hover:border-teal-200/30 hover:bg-slate-900"><Settings2 size={17} className="text-teal-200" /> Séquences</button>}
             {canManage && <button type="button" onClick={openInvoice} className="flex min-h-11 items-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><FilePlus2 size={17} /> Facture de formation</button>}
             {canUseServices && <div className="service-workspace"><div className="service-actions"><button onClick={() => setCatalogueOpen(previous => !previous)} aria-expanded={catalogueOpen}>Catalogue de services</button><button className="primary" disabled={!servicesReady} onClick={() => setServiceInvoice({ organizationId })}>Nouvelle facture de services</button></div></div>}
           </div>
@@ -442,7 +493,7 @@ export const FinanceDocumentsPanel: React.FC = () => {
       </section>
       {canUseServices && catalogueState.organizationId === organizationId && catalogueState.error && <p role="alert" className="service-error">{catalogueState.error}</p>}
       {canUseServices && catalogueOpen && (servicesReady ? <ServiceCataloguePanel key={organizationId} organizationId={organizationId} services={services} currency={settings.currency || 'MAD'} onInvoice={initialService => setServiceInvoice({ organizationId, initialService })} /> : <p role="status">Chargement du catalogue…</p>)}
-      {canUseServices && serviceInvoice?.organizationId === organizationId && <ServiceInvoiceModal key={organizationId} organizationId={organizationId} services={services} documents={documents} settings={settings} initialService={serviceInvoice.initialService} onClose={() => setServiceInvoice(null)} onIssued={invoice => { if (currentOrgRef.current === invoice.organizationId) setDocuments(previous => [invoice, ...previous.filter(item => item.id !== invoice.id)]); }} />}
+      {canUseServices && serviceInvoice?.organizationId === organizationId && <ServiceInvoiceModal key={`${organizationId}-${serviceInvoice.editingInvoice?.id || 'new'}`} organizationId={organizationId} services={services} documents={documents} settings={settings} initialService={serviceInvoice.initialService} editingInvoice={serviceInvoice.editingInvoice} onClose={() => setServiceInvoice(null)} onSaved={invoice => { if (currentOrgRef.current === invoice.organizationId) setDocuments(previous => [invoice, ...previous.filter(item => item.id !== invoice.id)]); }} />}
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
@@ -468,7 +519,7 @@ export const FinanceDocumentsPanel: React.FC = () => {
               <div className="min-w-0"><p className="truncate text-sm font-black text-white">{document.customer.name}</p><p className="mt-1 truncate text-xs text-slate-500">{document.customer.type === 'company' ? document.customer.contactName || 'Entreprise facturée' : 'Particulier'} · {document.programName || document.lines[0]?.description || 'Prestation'}</p>{document.beneficiary?.name && <p className="mt-1 truncate text-[10px] font-bold text-sky-200">Formation réalisée pour {document.beneficiary.name}</p>}{document.originalInvoiceNumber && <p className="mt-1 text-[10px] font-bold text-amber-200">Réf. facture {document.originalInvoiceNumber}</p>}</div>
               <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-slate-600">Participants</p><p className="mt-1 truncate text-xs text-slate-300" title={document.participants.map(participant => participant.name).join(', ')}>{document.participants.map(participant => participant.name).join(', ') || '—'}</p></div>
               <div className="lg:text-right"><p className={`font-mono text-sm font-black ${document.kind === 'credit_note' ? 'text-amber-200' : 'text-white'}`}>{document.kind === 'credit_note' ? '−' : ''}{formatMoney(document.total, document.currency)}</p><p className="mt-1 text-[10px] text-slate-500">{document.status === 'credited' ? `Créditée · ${document.creditNoteNumber}` : 'Émise'}</p></div>
-              <div className="flex justify-end gap-1"><button type="button" onClick={() => generateFinanceDocument(document, settings)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/[0.06] hover:text-white" title="Imprimer ou enregistrer en PDF"><Printer size={16} /></button>{canManage && document.kind === 'invoice' && document.status !== 'credited' && <button type="button" onClick={() => requestCreditNote(document)} className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-300/15 px-2.5 text-[10px] font-bold text-amber-200 transition hover:bg-amber-300/10" title="Créer un avoir total"><ReceiptText size={14} /> Avoir</button>}</div>
+              <div className="flex flex-wrap justify-end gap-1"><button type="button" onClick={() => generateFinanceDocument(document, settings)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-white/[0.06] hover:text-white" title="Imprimer ou enregistrer en PDF"><Printer size={16} /></button>{canUseServices && document.kind === 'invoice' && document.status !== 'credited' && <button type="button" onClick={() => setServiceInvoice({ organizationId, editingInvoice: document })} className="flex h-9 items-center gap-1.5 rounded-lg border border-teal-300/15 px-2.5 text-[10px] font-bold text-teal-200 transition hover:bg-teal-300/10" title={`Modifier la facture ${document.number}`}><Pencil size={14} /> Modifier</button>}{canManage && document.kind === 'invoice' && document.status !== 'credited' && <button type="button" onClick={() => requestCreditNote(document)} className="flex h-9 items-center gap-1.5 rounded-lg border border-amber-300/15 px-2.5 text-[10px] font-bold text-amber-200 transition hover:bg-amber-300/10" title="Créer un avoir total"><ReceiptText size={14} /> Avoir</button>}</div>
             </article>
           ))}</div>}
       </section>
@@ -489,6 +540,17 @@ export const FinanceDocumentsPanel: React.FC = () => {
           <div className="border-t border-white/10 pt-5"><div className="mb-3 flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><Clock3 size={17} /></span><div><p className="text-sm font-black text-white">Unité et quantité facturées</p><p className="mt-1 text-xs leading-5 text-slate-500">La durée est enregistrée dans la ligne de facture pour expliquer précisément le montant.</p></div></div><div className="grid gap-4 sm:grid-cols-[minmax(0,1.2fr)_8rem_8rem_8rem]"><div><label className={labelClass}>Unité</label><select className={fieldClass} value={draft.billingUnit} onChange={event => { const unit = BILLING_UNITS.find(item => item.value === event.target.value) || BILLING_UNITS[1]; setDraft(previous => ({ ...previous, billingUnit: unit.value, billingUnitLabel: unit.label, hoursPerUnit: String(unit.hours), sessionsPerUnit: String(unit.sessions) })); }}>{BILLING_UNITS.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select></div><div><label className={labelClass}>Quantité</label><input required type="number" min={draft.billingUnit === 'participant' ? 1 : 0.01} step="0.01" disabled={draft.billingUnit === 'participant'} className={`${fieldClass} disabled:cursor-not-allowed disabled:opacity-60`} value={draft.billingUnit === 'participant' ? participantCount : draft.quantity} onChange={event => setDraft(previous => ({ ...previous, quantity: event.target.value }))} /></div><div><label className={labelClass}>Heures / unité</label><input type="number" min="0" step="0.25" className={fieldClass} value={draft.hoursPerUnit} onChange={event => setDraft(previous => ({ ...previous, hoursPerUnit: event.target.value }))} /></div><div><label className={labelClass}>Séances / unité</label><input type="number" min="0" step="1" className={fieldClass} value={draft.sessionsPerUnit} onChange={event => setDraft(previous => ({ ...previous, sessionsPerUnit: event.target.value }))} /></div></div><div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><div><label className={labelClass}>Désignation</label><input required className={fieldClass} value={draft.description} onChange={event => setDraft(previous => ({ ...previous, description: event.target.value }))} placeholder="Formation — Intelligence artificielle" /></div><div><label className={labelClass}>Calcul</label><select className={fieldClass} value={draft.calculationMode} onChange={event => setDraft(previous => ({ ...previous, calculationMode: event.target.value as BillingCalculationMode }))}><option value="planned">Sessions planifiées</option><option value="delivered">Sessions réalisées</option><option value="manual">Quantité manuelle</option></select></div></div><div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,1fr)_10rem_8rem]"><div><label className={labelClass}>Libellé affiché sur la facture</label><input className={fieldClass} value={draft.billingUnitLabel} onChange={event => setDraft(previous => ({ ...previous, billingUnitLabel: event.target.value }))} placeholder="Atelier / Journée / Forfait" /></div><div><label className={labelClass}>Prix unitaire HT</label><input required type="number" min="0.01" step="0.01" className={fieldClass} value={draft.unitPrice} onChange={event => setDraft(previous => ({ ...previous, unitPrice: event.target.value }))} /></div><div><label className={labelClass}>TVA %</label><input required type="number" min="0" max="100" step="0.01" className={fieldClass} value={draft.taxRate} onChange={event => setDraft(previous => ({ ...previous, taxRate: event.target.value }))} /></div></div></div>
           <div className="flex flex-col gap-3 rounded-lg bg-teal-300/10 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="text-xs text-slate-400">{quantity} {draft.billingUnitLabel.toLowerCase()} · {sessions || 0} séance(s) · {Number(draft.hoursPerUnit) * quantity || 0} h · HT {formatMoney(subtotal, settings.currency || 'MAD')} · TVA {formatMoney(taxAmount, settings.currency || 'MAD')}</div><div className="font-mono text-xl font-black text-teal-100">{formatMoney(total, settings.currency || 'MAD')} TTC</div></div>
           <div className="flex justify-end gap-2"><button type="button" disabled={isSaving} onClick={() => setIsInvoiceOpen(false)} className="min-h-11 rounded-lg px-4 text-sm font-bold text-slate-400 hover:bg-white/[0.05]">Fermer</button><button type="submit" disabled={isSaving || !selectedProgram} className="min-h-11 rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950 hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50">{isSaving ? 'Émission…' : 'Émettre la facture'}</button></div>
+        </form>
+      </Modal>
+
+      <Modal isOpen={sequenceOpen} onClose={() => !isSaving && setSequenceOpen(false)} title="Séquences de facturation" size="md">
+        <form onSubmit={handleSaveSequences} className="space-y-5">
+          <div className="rounded-lg border border-sky-300/20 bg-sky-300/[0.06] p-3 text-xs leading-5 text-sky-100/80">Edufy reprend automatiquement après la dernière facture enregistrée. Pour préserver l’unicité, une séquence peut être avancée, mais jamais ramenée sous un numéro déjà utilisé ou réservé.</div>
+          <div className="flex items-end gap-2"><div className="flex-1"><label className={labelClass}>Année</label><input aria-label="Année des séquences" required type="number" min="2000" max="9999" className={fieldClass} value={sequenceYear} onChange={event => setSequenceYear(event.target.value)} /></div><button type="button" disabled={isSequenceLoading} onClick={() => void loadSequenceYear()} className="min-h-11 rounded-lg border border-white/10 px-4 text-xs font-black text-slate-200 hover:bg-white/[0.05] disabled:opacity-50">{isSequenceLoading ? 'Chargement…' : 'Charger'}</button></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(['formation', 'service'] as const).map(type => <div key={type} className="rounded-xl border border-white/10 bg-slate-950/35 p-4"><div className="mb-3 flex items-center justify-between"><div><p className="text-sm font-black text-white">{type === 'formation' ? 'Formations' : 'Services'}</p><p className="mt-1 font-mono text-xs text-slate-500">Préfixe {sequenceYear}{type === 'formation' ? 'F' : 'S'}</p></div><span className="rounded-lg bg-teal-300/10 px-2.5 py-1 font-mono text-xs font-black text-teal-100">{type === 'formation' ? 'F' : 'S'}</span></div><label className={labelClass}>Dernier numéro utilisé</label><input aria-label={`Dernier numéro ${type === 'formation' ? 'formation' : 'service'}`} required type="number" min="0" max="999999" step="1" className={fieldClass} value={sequenceDraft[type]} onChange={event => setSequenceDraft(previous => ({ ...previous, [type]: event.target.value }))} /><p className="mt-2 text-xs text-slate-500">Prochain numéro : <strong className="font-mono text-slate-200">{Number.isInteger(Number(sequenceDraft[type])) && Number(sequenceDraft[type]) >= 0 && /^\d{4}$/.test(sequenceYear) ? `${sequenceYear}${type === 'formation' ? 'F' : 'S'}${String(Number(sequenceDraft[type]) + 1).padStart(3, '0')}` : '—'}</strong></p></div>)}
+          </div>
+          <div className="flex justify-end gap-2"><button type="button" disabled={isSaving} onClick={() => setSequenceOpen(false)} className="min-h-11 rounded-lg px-4 text-sm font-bold text-slate-400 hover:bg-white/[0.05]">Fermer</button><button type="submit" disabled={isSaving || isSequenceLoading} className="min-h-11 rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950 hover:bg-teal-200 disabled:opacity-50">{isSaving ? 'Enregistrement…' : 'Enregistrer les séquences'}</button></div>
         </form>
       </Modal>
 

@@ -40,10 +40,8 @@ const SortableWorkspaceTab = ({ tab, isActive, canClose, onActivate, onClose }: 
         <div
             ref={setNodeRef}
             style={{ transform: CSS.Transform.toString(transform), transition }}
-            className={`group flex h-9 shrink-0 items-center rounded-lg border transition-colors ${isActive
-                ? 'border-teal-300/30 bg-teal-400/10 text-white'
-                : 'border-white/10 bg-white/[0.035] text-slate-400 hover:border-white/20 hover:text-slate-200'
-                } ${isDragging ? 'z-20 opacity-70 shadow-2xl' : ''}`}
+            data-active={isActive}
+            className={`atlas-school-control group flex h-9 shrink-0 items-center rounded-lg border transition-colors ${isActive ? 'text-teal-600 ring-1 ring-teal-400/20' : 'atlas-text-muted'} ${isDragging ? 'z-20 opacity-70 shadow-2xl' : ''}`}
         >
             <button
                 type="button"
@@ -51,7 +49,7 @@ const SortableWorkspaceTab = ({ tab, isActive, canClose, onActivate, onClose }: 
                 {...listeners}
                 aria-label={`Move ${tab.label} tab`}
                 title={`Drag ${tab.label}`}
-                className="flex h-full w-7 shrink-0 touch-none items-center justify-center rounded-l-lg text-slate-600 transition-colors hover:text-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/60"
+                className="atlas-text-subtle flex h-full w-7 shrink-0 touch-none items-center justify-center rounded-l-lg transition-colors hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400/60"
             >
                 <GripVertical size={13} />
             </button>
@@ -71,7 +69,7 @@ const SortableWorkspaceTab = ({ tab, isActive, canClose, onActivate, onClose }: 
                     onClick={() => onClose(tab.id)}
                     aria-label={`Close ${tab.label} tab`}
                     title={`Close ${tab.label}`}
-                    className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-white/[0.06] hover:text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
+                    className="atlas-text-subtle mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-black/[0.05] hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
                 >
                     <X size={13} />
                 </button>

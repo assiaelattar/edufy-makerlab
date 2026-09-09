@@ -19,6 +19,7 @@ import {
     AtlasSectionHeader,
     AtlasSignalCard
 } from '../components/atlas/AtlasSurface';
+import './programs/education-programs-v1.css';
 
 interface ProgramDetailsViewProps {
     onEnrollLead?: (lead: Lead) => void;
@@ -51,6 +52,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     const [expandedGradeIds, setExpandedGradeIds] = useState<string[]>([]);
     const [pendingLeadAction, setPendingLeadAction] = useState<string | null>(null);
     const workspaceRef = useRef<HTMLDivElement>(null);
+    const showEducationProgramsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     // Get the program (Prioritize Prop -> then URL Param)
     const targetId = programIdProp || viewParams.programId;
@@ -764,7 +766,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     const NextActionIcon = nextAction.icon;
 
     return (
-        <div ref={workspaceRef} tabIndex={-1} className="flex flex-col gap-4 pb-6 outline-none">
+        <div ref={workspaceRef} tabIndex={-1} className={`flex flex-col gap-4 pb-6 outline-none ${showEducationProgramsV1 ? 'edu-v1 edu-program-details-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-program-details-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Program workspace"
                 title={program.name}

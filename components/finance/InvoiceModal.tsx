@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { FormTemplateRenderer } from '../enrollment/FormTemplateRenderer'; // Not needed, remove if unused
 import { Modal } from '../Modal';
 import { Payment, Student, AppSettings, Enrollment } from '../../types';
-import { generateInvoice, ClientDetails } from '../../utils/invoiceGenerator';
+import { ClientDetails } from '../../utils/invoiceGenerator';
+import { generateFinanceDocument } from '../../utils/financeDocumentGenerator';
+import { issueFinanceInvoice } from '../../services/financeDocuments';
+import { db } from '../../services/firebase';
+import { useAuth } from '../../context/AuthContext';
+import { useConfirm } from '../../context/ConfirmContext';
 import { Building, User, MapPin, Hash, FileText } from 'lucide-react';
 
 interface InvoiceModalProps {
@@ -22,7 +26,10 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     student,
     settings
 }) => {
+    const { currentOrganization } = useAuth();
+    const { alert: showAlert } = useConfirm();
     const [clientType, setClientType] = useState<'individual' | 'company'>('individual');
+    const [isGenerating, setIsGenerating] = useState(false);
     const [clientData, setClientData] = useState<ClientDetails>({
         name: '',
         address: '',
@@ -53,10 +60,58 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
         }
     }, [isOpen, clientType, student]);
 
-    const handleGenerate = () => {
-        if (!payment || !enrollment) return;
-        generateInvoice(payment, enrollment, student, clientData, settings);
-        onClose();
+    const handleGenerate = async () => {
+        if (!db || !payment || !enrollment || !student || !currentOrganization?.id) return;
+        if (payment.organizationId !== currentOrganization.id || enrollment.organizationId !== currentOrganization.id) {
+            await showAlert('Facture non créée', "Ce paiement n'appartient pas à l'organisation active.", 'danger');
+            return;
+        }
+        if (!clientData.name.trim()) {
+            await showAlert('Client requis', 'Saisissez le nom du client facturé.', 'warning');
+            return;
+        }
+        try {
+            setIsGenerating(true);
+            const invoice = await issueFinanceInvoice(db, {
+                organizationId: currentOrganization.id,
+                sequenceType: 'formation',
+                issueDate: payment.date,
+                dueDate: payment.date,
+                serviceDate: payment.date,
+                currency: settings.currency || 'MAD',
+                customer: {
+                    type: clientType,
+                    name: clientData.name.trim(),
+                    address: clientData.address.trim() || undefined,
+                    ice: clientType === 'company' ? clientData.ice?.trim() || undefined : undefined,
+                    rc: clientType === 'company' ? clientData.rc?.trim() || undefined : undefined,
+                },
+                participants: [{ id: `student-${student.id}`, name: student.name, studentId: student.id }],
+                programId: enrollment.programId,
+                programName: enrollment.programName,
+                sourcePaymentId: payment.id,
+                idempotencyKey: `payment-${payment.id}`,
+                lines: [{
+                    description: `Formation — ${enrollment.programName}`,
+                    quantity: 1,
+                    unitPrice: payment.amount,
+                    taxRate: 20,
+                    unitKind: 'workshop',
+                    unitLabel: 'Atelier',
+                    hoursPerUnit: 3,
+                    sessionCount: 1,
+                    calculationMode: 'manual',
+                }],
+            });
+            onClose();
+            await showAlert('Facture enregistrée', `La facture ${invoice.number} est maintenant conservée dans l'historique Finance.`, 'success');
+            generateFinanceDocument(invoice, settings);
+        } catch (error) {
+            console.error('Unable to issue invoice from payment', error);
+            await showAlert('Facture non créée', error instanceof Error ? error.message : 'Vérifiez vos permissions et réessayez.', 'danger');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     return (
@@ -142,17 +197,17 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 </div>
 
                 <div className="pt-4 border-t border-slate-200 flex justify-end gap-3">
-                    <button onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg">
+                    <button type="button" disabled={isGenerating} onClick={onClose} className="px-4 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg disabled:opacity-50">
                         Annuler
                     </button>
-                    <button onClick={handleGenerate} className="px-6 py-2 bg-blue-700 text-white font-bold rounded-lg hover:bg-blue-800 shadow-lg shadow-blue-900/20 active:scale-95 transition-all">
-                        Générer Facture
+                    <button type="button" disabled={isGenerating} onClick={handleGenerate} className="px-6 py-2 bg-blue-700 text-white font-bold rounded-lg hover:bg-blue-800 shadow-lg shadow-blue-900/20 active:scale-95 transition-all disabled:cursor-not-allowed disabled:opacity-50">
+                        {isGenerating ? 'Émission…' : 'Émettre la facture'}
                     </button>
                 </div>
 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800 flex gap-2 items-start">
                     <div className="mt-0.5 font-bold">INFO:</div>
-                    <p>La facture générée inclura automatiquement une TVA de 20% en plus du montant du paiement sélectionné. Assurez-vous que le montant du paiement correspond bien à la base HT.</p>
+                    <p>La facture sera enregistrée avec un numéro annuel définitif. Le paiement sélectionné est utilisé comme base HT et une TVA de 20% est ajoutée.</p>
                 </div>
             </div>
         </Modal>

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import './admin/education-admin-tools-v1.css';
 import {
     AlertTriangle,
     Ban,
@@ -133,6 +134,7 @@ const operationRegister = [
 ];
 
 export const ToolsView = () => {
+    const showEducationAdminToolsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { can, currentOrganization } = useAuth();
     const { alert: showAlert, confirm } = useConfirm();
     const [sourceRows, setSourceRows] = useState<unknown[][]>([]);
@@ -402,7 +404,7 @@ export const ToolsView = () => {
     }
 
     return (
-        <div className="flex h-full flex-col gap-4 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col gap-4 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-admin-tools-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-admin-tools-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Maintenance console"
                 title="Admin Tools"

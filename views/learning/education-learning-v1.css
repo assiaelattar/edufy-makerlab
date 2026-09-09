@@ -1,0 +1,59 @@
+.edu-learning-v1,
+.edu-learning-student-v1,
+.edu-portfolio-v1,
+.edu-review-v1 { color: var(--edu-ink); }
+
+.edu-learning-v1 .learning-flightdeck__hero {
+    border-color: #d9ded6 !important;
+    border-radius: 30px !important;
+    background:
+        radial-gradient(circle at 86% -14%, rgba(255,255,255,.78) 0 21%, transparent 21.5%),
+        linear-gradient(132deg, #eff4e9, #e4ecde) !important;
+    box-shadow: var(--edu-shadow-sm) !important;
+}
+.edu-learning-v1 .learning-flightdeck__hero h2,
+.edu-learning-v1 .learning-flightdeck__hero h2 em { color: var(--edu-ink) !important; }
+.edu-learning-v1 .learning-flightdeck__hero h2 em { text-decoration-color: var(--edu-brand); }
+.edu-learning-v1 .learning-flightdeck__hero p { color: var(--edu-muted) !important; }
+.edu-learning-v1 .learning-flightdeck__create { min-height: 50px; border: 1px solid #a7cd36 !important; border-radius: 15px !important; color: var(--edu-ink) !important; background: var(--edu-brand) !important; }
+.edu-learning-v1 .learning-flightdeck__signals { border-color: #dce1d9 !important; background: rgba(255,255,255,.76) !important; }
+.edu-learning-v1 .learning-flightdeck__signals button { min-height: 76px; color: var(--edu-ink) !important; }
+.edu-learning-v1 .learning-flightdeck__signals span { color: var(--edu-muted) !important; }
+
+.edu-learning-v1 .learning-route { padding: 6px !important; border: 1px solid var(--edu-border) !important; border-radius: 19px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-learning-v1 .learning-route button { min-height: 52px; border-radius: 13px !important; color: var(--edu-muted) !important; }
+.edu-learning-v1 .learning-route button.is-active { color: var(--edu-ink) !important; background: var(--edu-brand) !important; }
+
+.edu-learning-v1 .factory-command,
+.edu-learning-v1 [class*='factory-'] { border-color: var(--edu-border); }
+.edu-learning-v1 article,
+.edu-learning-v1 section:not(.learning-flightdeck__hero) { border-color: var(--edu-border) !important; }
+.edu-learning-v1 button { min-height: 44px; }
+
+.edu-portfolio-v1 .atlas-command-header,
+.edu-review-v1 .atlas-command-header { min-height: 142px; align-items: center; padding: 26px !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:first-child { background: var(--edu-warm) !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(2) { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(3) { color: #fff !important; background: var(--edu-ink) !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(3) * { color: inherit !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(4) { background: var(--edu-lilac) !important; }
+.edu-portfolio-v1 > section,
+.edu-portfolio-v1 > .grid:last-child > section { border-color: var(--edu-border) !important; border-radius: 22px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-portfolio-v1 > section:first-of-type { background: var(--edu-brand-soft) !important; }
+
+.edu-review-v1 > .grid .atlas-signal-card:first-child { background: var(--edu-warm) !important; }
+.edu-review-v1 > .grid .atlas-signal-card:nth-child(2) { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.edu-review-v1 > .grid .atlas-signal-card:nth-child(3) { color: #fff !important; background: var(--edu-ink) !important; }
+.edu-review-v1 > .grid .atlas-signal-card:nth-child(3) * { color: inherit !important; }
+.edu-review-v1 > .grid:last-of-type > section { padding: 16px !important; border-color: var(--edu-border) !important; border-radius: 22px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-review-v1 > .grid:last-of-type button { min-height: 44px; }
+
+.edu-learning-student-v1 > div:first-of-type { border-color: var(--edu-border) !important; border-radius: 28px !important; background: linear-gradient(135deg, var(--edu-brand-soft), #fff) !important; }
+.edu-learning-student-v1 button { min-height: 44px; }
+
+@media (max-width: 700px) {
+    .edu-learning-v1 .learning-flightdeck__hero { border-radius: 24px !important; }
+    .edu-learning-v1 .learning-flightdeck__signals { grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .edu-portfolio-v1 .atlas-command-header,
+    .edu-review-v1 .atlas-command-header { min-height: 0; padding: 20px !important; }
+}

@@ -20,7 +20,7 @@ export const StoryGeneratorView = () => {
     const resetPreview = () => setHasStory(false);
 
     return (
-        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy' ? 'edu-v1 edu-marketplace-app-v1' : ''}`}>
             <AtlasCommandHeader
                 eyebrow="Installed app / Learning"
                 title="DreamWeaver Library"

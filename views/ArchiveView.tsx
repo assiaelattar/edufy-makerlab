@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import './resources/education-resources-v1.css';
 import {
     Archive,
     ArchiveRestore,
@@ -122,6 +123,7 @@ const normalizeExistingUrl = (link: ArchiveRecord) => {
 };
 
 export const ArchiveView = () => {
+    const showEducationResourcesV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { archiveLinks = [], loading } = useAppContext();
     const { userProfile, currentOrganization, can } = useAuth();
     const { confirm } = useConfirm();
@@ -411,7 +413,7 @@ export const ArchiveView = () => {
     }
 
     return (
-        <div className="flex h-full flex-col space-y-5 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-archive-v1' : ''}`} data-testid={showEducationResourcesV1 ? 'education-archive-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Organization knowledge"
                 title="Resource Archive"

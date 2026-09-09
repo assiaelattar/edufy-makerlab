@@ -6,6 +6,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import { calculateAge, formatCurrency, generateRosterPrint } from '../utils/helpers';
 import { Enrollment, Student } from '../types';
+import './school-day/education-school-day-v1.css';
 
 export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, gradeId: string, groupId: string) => void }) => {
    const { programs, enrollments, students, viewParams, navigateTo, settings } = useAppContext();
@@ -14,6 +15,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
    const { classId } = viewParams;
    const [activeProgramId, setActiveProgramId] = useState('all');
    const [searchQuery, setSearchQuery] = useState('');
+   const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
    const allPrograms = useMemo(() => programs.filter(program => program.status === 'active' && program.grades?.length > 0), [programs]);
    const totalGroups = useMemo(() => allPrograms.reduce((total, program) => total + program.grades.reduce((sum, grade) => sum + grade.groups.length, 0), 0), [allPrograms]);
@@ -62,7 +64,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       };
 
       return (
-         <div className="atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8">
+         <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-class-roster-v1' : undefined}>
             <AtlasCommandHeader
                eyebrow={`${program.name} / ${grade.name}`}
                title={group.name}
@@ -133,7 +135,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
    })).filter(program => program.grades.length > 0);
 
    return (
-      <div className="atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8">
+      <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-classes-v1' : undefined}>
          <AtlasCommandHeader eyebrow="Academic operations" title="Classes & schedule" description="Move from program structure to the live roster without losing context." icon={School} badges={<span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2.5 py-1 text-[10px] font-bold text-teal-200">{totalGroups} groups</span>} actions={<AtlasActionButton icon={CalendarCheck} onClick={() => navigateTo('schedule')}>Weekly schedule</AtlasActionButton>} />
 
          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

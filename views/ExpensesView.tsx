@@ -10,6 +10,7 @@ import { addDoc, collection, serverTimestamp, deleteDoc, doc, getDoc, updateDoc 
 import { db } from '../services/firebase';
 import { Expense, ExpenseTemplate } from '../types';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import './finance/education-finance-v1.css';
 
 const getRecurringDueDate = (month: string, dayDue?: number) => {
     const [year, monthNumber] = month.split('-').map(Number);
@@ -19,6 +20,7 @@ const getRecurringDueDate = (month: string, dayDue?: number) => {
 };
 
 export const ExpensesView = () => {
+    const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { expenses, expenseTemplates, payments, settings } = useAppContext();
     const { can, currentOrganization } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -460,7 +462,7 @@ export const ExpensesView = () => {
     };
 
     return (
-        <div className="flex flex-col space-y-6 pb-24 md:h-full md:pb-8">
+        <div className={`flex flex-col space-y-6 pb-24 md:h-full md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-expenses-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-expenses-v1' : undefined}>
             
             <AtlasCommandHeader
                 eyebrow="Finance operations"

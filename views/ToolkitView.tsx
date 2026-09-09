@@ -28,6 +28,7 @@ import { Modal } from '../components/Modal';
 import { db } from '../services/firebase';
 import { Asset, ToolLink } from '../types';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import './resources/education-resources-v1.css';
 
 type ToolkitTab = 'digital' | 'inventory';
 type SortOption = 'name' | 'category' | 'newest' | 'status';
@@ -70,6 +71,7 @@ const statusLabel = (status: Asset['status']) => ({
 }[status]);
 
 export const ToolkitView = () => {
+    const showEducationResourcesV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { toolLinks, assets, students } = useAppContext();
     const { currentOrganization, can } = useAuth();
     const { confirm } = useConfirm();
@@ -516,7 +518,7 @@ export const ToolkitView = () => {
     };
 
     return (
-        <div className="flex h-full flex-col space-y-5 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-toolkit-v1' : ''}`} data-testid={showEducationResourcesV1 ? 'education-toolkit-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Organization resources"
                 title="Toolkit"

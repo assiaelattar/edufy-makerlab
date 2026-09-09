@@ -15,8 +15,10 @@ import {
     AtlasSectionHeader,
     AtlasSignalCard
 } from '../components/atlas/AtlasSurface';
+import './finance/education-finance-v1.css';
 
 export const ActivityDetailsView = () => {
+    const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { viewParams, navigateTo, enrollments, payments, students, settings, bookings, workshopTemplates, workshopSlots } = useAppContext();
     const { confirm, alert: showAlert } = useConfirm();
     const { activityId } = viewParams;
@@ -228,7 +230,7 @@ export const ActivityDetailsView = () => {
         const template = workshopTemplates.find(t => t.id === booking.workshopTemplateId);
         const slot = workshopSlots.find(s => s.id === booking.workshopSlotId);
         return (
-            <div className="mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8">
+            <div className={`mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-activity-details-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-activity-details-v1' : undefined}>
                 <AtlasCommandHeader
                     eyebrow="Workshop record"
                     title={booking.kidName}
@@ -265,7 +267,7 @@ export const ActivityDetailsView = () => {
         const enrollment = enrollments.find(e => e.id === activityId.id);
         if (!enrollment) return <AtlasEmptyState icon={BookOpen} title="Enrollment not found" description="This enrollment may have been archived or removed." />;
         return (
-           <div className="mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8">
+           <div className={`mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-activity-details-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-activity-details-v1' : undefined}>
                <AtlasCommandHeader
                    eyebrow="Enrollment record"
                    title={enrollment.studentName}
@@ -304,7 +306,7 @@ export const ActivityDetailsView = () => {
         const student = students.find(s => s.id === enrollment?.studentId);
 
         return (
-            <div className="relative mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8">
+            <div className={`relative mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-activity-details-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-activity-details-v1' : undefined}>
                <AtlasCommandHeader
                    eyebrow="Payment record"
                    title={formatCurrency(payment.amount)}

@@ -1,0 +1,63 @@
+.edu-finance-v1,
+.edu-expenses-v1,
+.edu-activity-details-v1 { color: var(--edu-ink); }
+
+.edu-finance-v1 .atlas-command-header,
+.edu-expenses-v1 .atlas-command-header,
+.edu-activity-details-v1 .atlas-command-header { min-height: 142px; align-items: center; padding: 26px !important; }
+
+.edu-finance-v1 > .space-y-4 > section:first-child {
+    border-color: #c8dd91 !important;
+    border-radius: 23px !important;
+    background: linear-gradient(135deg, var(--edu-brand-soft), #fff) !important;
+    box-shadow: var(--edu-shadow-sm);
+}
+
+.edu-finance-v1 section[aria-label='Finance tasks'] > button {
+    min-height: 176px;
+    padding: 18px !important;
+    border-color: var(--edu-border);
+    border-radius: 22px !important;
+    color: var(--edu-ink) !important;
+    background: #fff;
+    box-shadow: var(--edu-shadow-sm);
+}
+.education-ui-v1-active .edu-finance-v1 section[aria-label='Finance tasks'] > button:first-child { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.education-ui-v1-active .edu-finance-v1 section[aria-label='Finance tasks'] > button:nth-child(2) { background: var(--edu-warm) !important; }
+.education-ui-v1-active .edu-finance-v1 section[aria-label='Finance tasks'] > button:nth-child(3) { background: #e8f1ff !important; }
+.education-ui-v1-active .edu-finance-v1 section[aria-label='Finance tasks'] > button:nth-child(4) { color: #fff !important; background: var(--edu-ink) !important; }
+.education-ui-v1-active .edu-finance-v1 section[aria-label='Finance tasks'] > button:nth-child(4) * { color: inherit !important; }
+.education-ui-v1-active .edu-finance-v1 section[aria-label='Finance tasks'] > button:nth-child(5) { background: var(--edu-lilac) !important; }
+.edu-finance-v1 section[aria-label='Finance tasks'] > button:hover { transform: translateY(-2px); }
+
+.edu-finance-v1 > .space-y-4 > section.grid > div,
+.edu-finance-v1 > .space-y-4 > section.grid > button,
+.edu-finance-v1 > section,
+.edu-finance-v1 > div[class*='overflow-hidden'] { border-color: var(--edu-border) !important; border-radius: 22px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-finance-v1 button { min-height: 44px; }
+.edu-finance-v1 [class*='sticky'][class*='bg-slate'] { border-color: #dfe4dc !important; background: rgba(247,249,245,.96) !important; }
+
+.edu-expenses-v1 > .grid .atlas-signal-card:first-child { background: var(--edu-warm) !important; }
+.edu-expenses-v1 > .grid .atlas-signal-card:nth-child(2) { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.edu-expenses-v1 > .grid .atlas-signal-card:nth-child(3) { color: #fff !important; background: var(--edu-ink) !important; }
+.edu-expenses-v1 > .grid .atlas-signal-card:nth-child(3) * { color: inherit !important; }
+.edu-expenses-v1 > .grid .atlas-signal-card:nth-child(4) { background: var(--edu-lilac) !important; }
+
+.edu-expenses-v1 > .space-y-3 .grid > div { padding: 17px !important; border-color: var(--edu-border) !important; border-radius: 20px !important; color: var(--edu-ink) !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-expenses-v1 > .grid.lg\:grid-cols-3 > div { border-color: var(--edu-border) !important; border-radius: 23px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-expenses-v1 > .grid.lg\:grid-cols-3 > div:last-child { background: var(--edu-warm) !important; }
+.edu-expenses-v1 > .grid.lg\:grid-cols-3 [class*='bg-slate-950'] { background: #f7f9f5 !important; }
+.edu-expenses-v1 button { min-height: 44px; }
+
+.edu-activity-details-v1 > section,
+.edu-activity-details-v1 > div:not(.atlas-command-header) { border-color: var(--edu-border) !important; border-radius: 22px !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-activity-details-v1 table { border-radius: 16px; overflow: hidden; }
+.edu-activity-details-v1 button { min-height: 44px; }
+
+@media (max-width: 700px) {
+    .edu-finance-v1 .atlas-command-header,
+    .edu-expenses-v1 .atlas-command-header,
+    .edu-activity-details-v1 .atlas-command-header { min-height: 0; padding: 20px !important; }
+    .edu-finance-v1 section[aria-label='Finance tasks'] { grid-template-columns: 1fr !important; }
+    .edu-finance-v1 section[aria-label='Finance tasks'] > button { min-height: 144px; }
+}

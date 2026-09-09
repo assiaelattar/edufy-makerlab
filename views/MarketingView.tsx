@@ -15,6 +15,7 @@ import { formatDate, formatCurrency } from '../utils/helpers';
 import { LeadProfileModal } from './marketing/LeadProfileModal'; // New Modal
 import { GrowthWizardModal } from './marketing/GrowthWizardModal'; // New Wizard
 import { CampaignKitModal } from './marketing/CampaignKitModal'; // New Kit Modal
+import './family-journey/education-family-journey-v1.css';
 
 
 interface MarketingViewProps {
@@ -42,6 +43,7 @@ const isWebUrl = (value: string) => {
 };
 
 export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) => {
+    const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { marketingPosts, campaigns, leads, programs, students, bookings } = useAppContext(); // Get students for unified view
     const { currentOrganization, can } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -521,7 +523,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     );
 
     return (
-        <div className="flex min-h-0 flex-col gap-4 pb-24 md:h-full md:pb-8">
+        <div className={`flex min-h-0 flex-col gap-4 pb-24 md:h-full md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-marketing-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-marketing-v1' : undefined}>
             {/* Header */}
             <AtlasCommandHeader
                 eyebrow="Growth engine"

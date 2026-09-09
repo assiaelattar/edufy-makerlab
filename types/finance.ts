@@ -63,6 +63,7 @@ export interface FinanceDocumentLine {
 
 export type FinanceDocumentKind = 'invoice' | 'credit_note';
 export type FinanceDocumentStatus = 'issued' | 'credited';
+export type FinanceInvoiceSequenceType = 'formation' | 'service';
 
 export interface FinanceDocument {
   id: string;
@@ -71,6 +72,7 @@ export interface FinanceDocument {
   number: string;
   sequenceYear: number;
   sequenceNumber: number;
+  sequenceType?: FinanceInvoiceSequenceType;
   status: FinanceDocumentStatus;
   issueDate: string;
   dueDate?: string;
@@ -92,6 +94,7 @@ export interface FinanceDocument {
   subtotal: number;
   taxAmount: number;
   total: number;
+  revision?: number;
   createdAt?: Timestamp | string;
   updatedAt?: Timestamp | string;
   issuedAt?: Timestamp | string;

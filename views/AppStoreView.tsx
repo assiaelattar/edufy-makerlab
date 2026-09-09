@@ -23,6 +23,7 @@ import {
     AtlasSignalCard,
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
+import './admin/education-admin-tools-v1.css';
 
 type CatalogKind = 'all' | 'module' | 'app';
 
@@ -31,16 +32,19 @@ const accessLabel = (entitlement: AtlasEntitlement) => {
     if (entitlement.source === 'add_on') return 'Add-on';
     if (entitlement.source === 'free') return 'Free';
     if (entitlement.source === 'platform') return 'Core';
+    if (entitlement.source === 'legacy') return 'Included in your workspace';
     return 'Upgrade';
 };
 
 export const AppStoreView = () => {
+    const showEducationAdminToolsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { navigateTo } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const {
         currentPlan,
         entitlements,
+        requestedAddOnIds,
         activateItem,
         deactivateItem,
         requestAddOn
@@ -49,7 +53,6 @@ export const AppStoreView = () => {
     const [selectedKind, setSelectedKind] = useState<CatalogKind>('all');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [workingId, setWorkingId] = useState<string | null>(null);
-    const [requestedIds, setRequestedIds] = useState<string[]>([]);
 
     const canManage = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
     const publishedEntitlements = entitlements.filter(entry => entry.item.isPublished);
@@ -122,7 +125,6 @@ export const AppStoreView = () => {
         setWorkingId(entitlement.item.id);
         try {
             await requestAddOn(entitlement.item.id);
-            setRequestedIds(previous => previous.includes(entitlement.item.id) ? previous : [...previous, entitlement.item.id]);
             showAlert('Add-on requested', `The Atlas team can now review ${entitlement.item.name} for this workspace.`, 'success');
         } catch (error) {
             console.error(error);
@@ -133,7 +135,7 @@ export const AppStoreView = () => {
     };
 
     return (
-        <div className="flex min-h-full flex-col gap-5 pb-24 md:pb-8">
+        <div className={`flex min-h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-app-store-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-app-store-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Workspace catalog"
                 title="Modules & apps"
@@ -184,7 +186,7 @@ export const AppStoreView = () => {
                         const item = entitlement.item;
                         const Icon = item.module?.icon || item.app?.icon || Sparkles;
                         const isWorking = workingId === item.id;
-                        const requested = requestedIds.includes(item.id);
+                        const requested = requestedAddOnIds.includes(item.id);
                         const priceLabel = item.priceMonthly > 0 ? `${item.priceMonthly} ${item.currency}/mo` : 'Custom price';
 
                         return (
@@ -215,7 +217,7 @@ export const AppStoreView = () => {
                                     <div className="flex items-center gap-2">
                                         {entitlement.active ? (
                                             <>
-                                                <AtlasActionButton icon={ExternalLink} variant="primary" onClick={() => openItem(entitlement)}>Open</AtlasActionButton>
+                                                <AtlasActionButton icon={ExternalLink} variant="primary" aria-label={`Open ${item.name}`} onClick={() => openItem(entitlement)}>Open</AtlasActionButton>
                                                 {item.canSelfActivate && <button type="button" aria-label={`Remove ${item.name}`} title={`Remove ${item.name}`} disabled={isWorking || !canManage} onClick={() => handleDeactivate(entitlement)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-500 hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"><Unplug size={15} /></button>}
                                             </>
                                         ) : entitlement.entitled ? (

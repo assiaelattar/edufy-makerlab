@@ -1,5 +1,18 @@
 # Finance decisions
 
+## 2026-09-09 — independent invoice sequences
+
+- Use one annual counter for formations (`YYYYFnnn`) and another for services (`YYYYSnnn`); credit-note numbering remains unchanged.
+- Infer the sequence family of legacy invoices from their explicit marker first, then their stored program/payment context, so a missing counter resumes from persisted history.
+- Let organization managers inspect and advance the last-used value. Never allow a manual change to rewind below a persisted or reserved value, preserving uniqueness under concurrent issuance.
+- Keep due date in stored/exportable data for compatibility, but omit it and the generic “Document comptable” eyebrow from the printable PDF.
+
+## 2026-09-09 — controlled invoice correction
+
+- Permit managers to correct an active invoice directly from history without consuming a new annual number.
+- Preserve immutable identity, sequence, currency and linked program/payment context; only customer snapshot, dates within the numbered year, invoice lines and totals are editable.
+- Use an optimistic revision in the existing transaction boundary so stale editors cannot overwrite a newer correction. Credited invoices and credit notes remain locked.
+
 ## 2026-09-09 — service catalogue Phase 1
 
 - Separate tenant catalogue; never create fake training programs for services.

@@ -28,7 +28,8 @@ import { FactoryDashboard } from './learning/FactoryDashboard';
 import { ToastContainer, ToastMessage } from '../components/Toast';
 import { Confetti } from '../components/Confetti';
 import { ProjectSelector } from '../sparkquest/components/ProjectSelector';
-import { AtlasActionButton, AtlasCommandHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { normalizeAcademicYear, projectAcademicYear } from '../sparkquest/utils/academicYear';
+import './learning/education-learning-v1.css';
 
 // Helper to recursively remove undefined values for Firestore
 const cleanData = (obj: any): any => {
@@ -46,21 +47,42 @@ const cleanData = (obj: any): any => {
     return obj;
 };
 
+const normalizeLearnerName = (value?: string) => String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase();
+
+const normalizeGuardianPhone = (value?: string) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    return digits.length >= 9 ? digits.slice(-9) : digits;
+};
+
+const editDistance = (left: string, right: string) => {
+    const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+    for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+        const current = [leftIndex];
+        for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+            current[rightIndex] = Math.min(
+                current[rightIndex - 1] + 1,
+                previous[rightIndex] + 1,
+                previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1)
+            );
+        }
+        previous.splice(0, previous.length, ...current);
+    }
+    return previous[right.length];
+};
+
 export const LearningView = () => {
-    const { projectTemplates, studentProjects, students, settings, programs, sendNotification, teamMembers, processTemplates, stations, badges } = useAppContext();
+    const { projectTemplates, studentProjects, students, enrollments, settings, programs, sendNotification, teamMembers, processTemplates, stations, badges } = useAppContext();
     const { userProfile, currentOrganization, can } = useAuth();
     const { confirm: confirmAction, alert: showAlert } = useConfirm();
+    const showEducationLearningV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     if (!userProfile) return null;
     const tenantOrgId = userProfile.organizationId || currentOrganization?.id || 'makerlab-academy';
-
-    // Debug logging
-    console.log('🔍 LearningView Debug:', {
-        totalProjects: studentProjects.length,
-        userProfileUid: userProfile?.uid,
-        projectsForCurrentUser: studentProjects.filter(p => p.studentId === userProfile?.uid),
-        allProjectStudentIds: studentProjects.map(p => ({ id: p.id, studentId: p.studentId }))
-    });
 
     const isInstructor = can('learning.manage');
     const isStudioTheme = userProfile?.role === 'instructor';
@@ -202,6 +224,75 @@ export const LearningView = () => {
     });
     const [showConfetti, setShowConfetti] = useState(false);
 
+    const reconciliationByProject = useMemo(() => {
+        const matches = new Map<string, { student: typeof students[number]; academicYear: string | null; yearConflict: boolean }>();
+        studentProjects.forEach(project => {
+            const ownerStudent = students.find(student => student.id === project.studentId);
+            const ownerHasEnrollment = enrollments.some(enrollment => enrollment.studentId === project.studentId);
+            if (ownerStudent?.status === 'active' && ownerHasEnrollment) return;
+
+            const projectName = normalizeLearnerName(project.studentName || ownerStudent?.name);
+            const projectFirstName = projectName.split(' ')[0];
+            const legacyGuardianPhone = normalizeGuardianPhone(ownerStudent?.parentPhone);
+            if (!projectName || !projectFirstName) return;
+
+            const explicitProjectYear = normalizeAcademicYear(
+                project.academicYearId || project.academicYear || project.schoolYear || project.session
+            );
+            const candidates = students
+                .filter(student => student.status === 'active')
+                .filter(student => student.id !== project.studentId)
+                .map(student => {
+                    const studentName = normalizeLearnerName(student.name);
+                    const sameFirstName = studentName.split(' ')[0] === projectFirstName;
+                    const sameGuardianPhone = Boolean(legacyGuardianPhone && legacyGuardianPhone === normalizeGuardianPhone(student.parentPhone));
+                    const distance = editDistance(projectName, studentName);
+                    const permittedDistance = Math.max(1, Math.floor(Math.max(projectName.length, studentName.length) * 0.08));
+                    const studentEnrollments = enrollments.filter(enrollment => enrollment.studentId === student.id);
+                    const exactYearEnrollment = explicitProjectYear
+                        ? studentEnrollments.find(enrollment => normalizeAcademicYear(enrollment.session) === explicitProjectYear)
+                        : undefined;
+                    const matchingEnrollment = exactYearEnrollment || (studentEnrollments.length === 1 ? studentEnrollments[0] : undefined);
+                    const yearConflict = Boolean(explicitProjectYear && matchingEnrollment && normalizeAcademicYear(matchingEnrollment.session) !== explicitProjectYear);
+                    return { student, distance, sameFirstName, sameGuardianPhone, permittedDistance, matchingEnrollment, yearConflict };
+                })
+                .filter(candidate => candidate.sameFirstName && candidate.matchingEnrollment && (candidate.sameGuardianPhone || candidate.distance <= candidate.permittedDistance))
+                .sort((left, right) => Number(right.sameGuardianPhone) - Number(left.sameGuardianPhone) || left.distance - right.distance);
+
+            if (candidates.length !== 1) return;
+            matches.set(project.id, {
+                student: candidates[0].student,
+                academicYear: normalizeAcademicYear(candidates[0].matchingEnrollment?.session) || explicitProjectYear,
+                yearConflict: candidates[0].yearConflict
+            });
+        });
+
+        return matches;
+    }, [enrollments, studentProjects, students]);
+
+    const unlinkedProjectCount = useMemo(() => {
+        const studentById = new Map(students.map(student => [student.id, student]));
+        const enrolledStudentIds = new Set(enrollments.map(enrollment => enrollment.studentId));
+        return studentProjects.filter(project => {
+            const owner = studentById.get(project.studentId);
+            return !owner || owner.status !== 'active' || !enrolledStudentIds.has(project.studentId);
+        }).length;
+    }, [enrollments, studentProjects, students]);
+
+    const linkedProjectYearRepair = useMemo(() => {
+        const repairs = new Map<string, { student: typeof students[number]; academicYear: string }>();
+        studentProjects.forEach(project => {
+            const student = students.find(candidate => candidate.id === project.studentId && candidate.status === 'active');
+            if (!student) return;
+            const studentEnrollments = enrollments.filter(enrollment => enrollment.studentId === student.id && normalizeAcademicYear(enrollment.session));
+            if (studentEnrollments.length !== 1) return;
+            const academicYear = normalizeAcademicYear(studentEnrollments[0].session);
+            if (!academicYear || normalizeAcademicYear(projectAcademicYear(project)) === academicYear) return;
+            repairs.set(project.id, { student, academicYear });
+        });
+        return repairs;
+    }, [enrollments, studentProjects, students]);
+
     // --- BADGE STATE ---
     const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
     const [editingBadgeId, setEditingBadgeId] = useState<string | null>(null);
@@ -267,6 +358,84 @@ export const LearningView = () => {
     const addToast = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => {
         const id = Date.now().toString();
         setToasts(prev => [...prev, { id, title, message, type, timestamp: Date.now() }]);
+    };
+
+    const handleLinkLegacyProject = async (project: StudentProject) => {
+        if (!db) return;
+        const match = reconciliationByProject.get(project.id);
+        if (!match) return;
+        const legacyOwner = students.find(student => student.id === project.studentId);
+        const legacyOwnerName = project.studentName || legacyOwner?.name || 'legacy learner record';
+        const relatedProjects = studentProjects.filter(candidate =>
+            candidate.studentId === project.studentId &&
+            reconciliationByProject.get(candidate.id)?.student.id === match.student.id
+        );
+
+        const approved = await confirmAction({
+            title: `Link ${relatedProjects.length} legacy ${relatedProjects.length === 1 ? 'project' : 'projects'}?`,
+            message: `Move all safely matched work from the inactive learner "${legacyOwnerName}" to the verified learner ${match.student.name}? Original owner references will be kept in the audit fields.`,
+            variant: 'warning',
+            confirmText: 'Link matched work'
+        });
+        if (!approved) return;
+
+        try {
+            const batch = writeBatch(db);
+            relatedProjects.forEach(candidate => {
+                const candidateMatch = reconciliationByProject.get(candidate.id)!;
+                const candidateLegacyOwner = students.find(student => student.id === candidate.studentId);
+                batch.update(doc(db, 'student_projects', candidate.id), cleanData({
+                    studentId: candidateMatch.student.id,
+                    studentName: candidateMatch.student.name,
+                    academicYearId: candidateMatch.academicYear || candidate.academicYearId || undefined,
+                    identityLink: {
+                        legacyStudentId: candidate.studentId,
+                        legacyStudentName: candidate.studentName || candidateLegacyOwner?.name || 'Unknown legacy learner',
+                        linkedStudentId: candidateMatch.student.id,
+                        linkedBy: userProfile.uid,
+                        linkedAt: serverTimestamp()
+                    }
+                }));
+            });
+            await batch.commit();
+            addToast('Projects linked', `${relatedProjects.length} ${relatedProjects.length === 1 ? 'project now belongs' : 'projects now belong'} to ${match.student.name}.`, 'success');
+        } catch (error) {
+            console.error('Could not link legacy project:', error);
+            addToast('Link failed', 'The project was not changed. Check your access and try again.', 'error');
+        }
+    };
+
+    const handleRepairLinkedProjectYears = async (project: StudentProject) => {
+        if (!db) return;
+        const repair = linkedProjectYearRepair.get(project.id);
+        if (!repair) return;
+        const relatedProjects = studentProjects.filter(candidate =>
+            candidate.studentId === project.studentId &&
+            linkedProjectYearRepair.get(candidate.id)?.academicYear === repair.academicYear
+        );
+        const approved = await confirmAction({
+            title: `Correct ${relatedProjects.length} project ${relatedProjects.length === 1 ? 'year' : 'years'}?`,
+            message: `Move the linked work into ${repair.academicYear}, the learner's verified enrollment year. Project content and review status will not change.`,
+            variant: 'warning',
+            confirmText: 'Correct school year'
+        });
+        if (!approved) return;
+
+        try {
+            const batch = writeBatch(db);
+            relatedProjects.forEach(candidate => {
+                batch.update(doc(db, 'student_projects', candidate.id), {
+                    academicYearId: repair.academicYear,
+                    academicYearReconciledAt: serverTimestamp(),
+                    academicYearReconciledBy: userProfile.uid
+                });
+            });
+            await batch.commit();
+            addToast('School year corrected', `${relatedProjects.length} projects moved to ${repair.academicYear}.`, 'success');
+        } catch (error) {
+            console.error('Could not correct linked project years:', error);
+            addToast('Year correction failed', 'No project years were changed.', 'error');
+        }
     };
 
     const removeToast = (id: string) => {
@@ -1118,40 +1287,47 @@ export const LearningView = () => {
 
     if (isInstructor) {
         return (
-            <div className="flex h-full flex-col space-y-5 pb-24 md:pb-8 animate-in fade-in duration-200">
+            <div className={`learning-flightdeck flex h-full flex-col space-y-5 pb-24 md:pb-8 animate-in fade-in duration-200 ${showEducationLearningV1 ? 'edu-v1 edu-learning-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-learning-v1' : undefined}>
                 {showConfetti && <Confetti duration={4000} />}
-                <AtlasCommandHeader
-                    eyebrow="Learning operations"
-                    title="Learning studio"
-                    description="Build curriculum, follow project momentum, review learner evidence, and keep portfolios connected."
-                    icon={Brain}
-                    badges={<span className="rounded-md border border-teal-300/20 bg-teal-300/10 px-2 py-1 text-[10px] font-bold text-teal-200">{projectTemplates.length} templates</span>}
-                    actions={<AtlasActionButton icon={Plus} variant="primary" onClick={() => { setTemplateForm({ title: '', description: '', difficulty: 'beginner', skills: [], defaultSteps: [], station: 'general', resources: [], status: 'draft', targetAudience: { grades: [], groups: [] } }); setEditingTemplateId(null); setActiveModalTab('details'); setIsTemplateModalOpen(true); }}>Create project</AtlasActionButton>}
-                />
-
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <AtlasSignalCard label="Curriculum" value={projectTemplates.length} detail="Project templates" icon={BookOpen} tone="teal" onClick={() => setActiveTab('curriculum')} />
-                    <AtlasSignalCard label="Review queue" value={pendingReviews.length} detail="Submitted projects" icon={CheckCircle2} tone={pendingReviews.length > 0 ? 'amber' : 'slate'} onClick={() => setActiveTab('review')} />
-                    <AtlasSignalCard label="Learner projects" value={studentProjects.length} detail="Across the studio" icon={Rocket} tone="blue" onClick={() => setActiveTab('studio')} />
-                    <AtlasSignalCard label="Published work" value={studentProjects.filter(project => project.status === 'published').length} detail="Portfolio-ready projects" icon={Award} tone="emerald" onClick={() => setActiveTab('portfolios')} />
-                </div>
-
-                <AtlasToolbar>
-                    <div className="flex w-full gap-1 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/70 p-1">
-                        <button onClick={() => setActiveTab('curriculum')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'curriculum' ? theme.tabActive : theme.tabInactive}`}>
-                            <Brain size={16} /> Curriculum
-                        </button>
-                        <button onClick={() => setActiveTab('studio')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'studio' ? theme.tabActive : theme.tabInactive}`}>
-                            <Rocket size={16} /> Studio
-                        </button>
-                        <button onClick={() => setActiveTab('review')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'review' ? theme.tabActive : theme.tabInactive}`}>
-                            <CheckCircle2 size={16} /> Review
-                            {pendingReviews.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 rounded-full">{pendingReviews.length}</span>}
-                        </button>
-                        <button onClick={() => setActiveTab('portfolios')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'portfolios' ? theme.tabActive : theme.tabInactive}`}><Award size={16} /> Portfolios</button>
-                        <button onClick={() => setActiveTab('setup')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'setup' ? theme.tabActive : theme.tabInactive}`}><Beaker size={16} /> Setup</button>
+                <section className="learning-flightdeck__hero">
+                    <div className="learning-flightdeck__intro">
+                        <span className="learning-flightdeck__kicker"><Brain size={15} /> MakerLab learning route</span>
+                        <h2>Projects move here.<br /><em>Evidence stays connected.</em></h2>
+                        <p>Plan the curriculum, follow every build, review proof, and publish the story families will see.</p>
                     </div>
-                </AtlasToolbar>
+                    <button
+                        type="button"
+                        className="learning-flightdeck__create"
+                        onClick={() => { setTemplateForm({ title: '', description: '', difficulty: 'beginner', skills: [], defaultSteps: [], station: 'general', resources: [], status: 'draft', targetAudience: { grades: [], groups: [] } }); setEditingTemplateId(null); setActiveModalTab('details'); setIsTemplateModalOpen(true); }}
+                    >
+                        <Plus size={18} /> Create a mission
+                    </button>
+                    <div className="learning-flightdeck__signals">
+                        <button type="button" onClick={() => setActiveTab('curriculum')}><strong>{projectTemplates.length}</strong><span>mission templates</span></button>
+                        <button type="button" onClick={() => setActiveTab('studio')}><strong>{studentProjects.length}</strong><span>learner projects</span></button>
+                        <button type="button" onClick={() => setActiveTab('review')} data-attention={pendingReviews.length > 0}><strong>{pendingReviews.length}</strong><span>waiting for review</span></button>
+                        <button type="button" onClick={() => setActiveTab('portfolios')}><strong>{studentProjects.filter(project => project.status === 'published').length}</strong><span>ready for families</span></button>
+                        <button type="button" onClick={() => setActiveTab('review')} data-attention={unlinkedProjectCount > 0}><strong>{unlinkedProjectCount}</strong><span>identity checks</span></button>
+                    </div>
+                </section>
+
+                <nav className="learning-route" aria-label="Learning workflow">
+                    {[
+                        { id: 'curriculum', label: 'Plan', detail: 'Curriculum', icon: Brain },
+                        { id: 'studio', label: 'Build', detail: 'Studio', icon: Rocket },
+                        { id: 'review', label: 'Check', detail: `${pendingReviews.length} reviews`, icon: CheckCircle2 },
+                        { id: 'portfolios', label: 'Share', detail: 'Portfolios', icon: Award },
+                        { id: 'setup', label: 'Tune', detail: 'Setup', icon: Beaker }
+                    ].map(item => {
+                        const Icon = item.icon;
+                        return (
+                            <button key={item.id} type="button" onClick={() => setActiveTab(item.id as typeof activeTab)} className={activeTab === item.id ? 'is-active' : ''}>
+                                <Icon size={17} />
+                                <span><small>{item.label}</small>{item.detail}</span>
+                            </button>
+                        );
+                    })}
+                </nav>
 
                 {/* CURRICULUM TAB */}
                 {/* CURRICULUM TAB - The Factory */}
@@ -1686,6 +1862,19 @@ export const LearningView = () => {
                                 {pendingReviews.length === 0 ? <div className="p-8 text-center text-slate-500 italic bg-slate-900/50 rounded-xl border border-slate-800">No projects waiting for review.</div> :
                                     pendingReviews.map(p => {
                                         const theme = getTheme(p.station);
+                                        const linkedStudent = students.find(student =>
+                                            student.id === p.studentId &&
+                                            student.status === 'active' &&
+                                            enrollments.some(enrollment => enrollment.studentId === student.id)
+                                        );
+                                        const reconciliation = reconciliationByProject.get(p.id);
+                                        const relatedLegacyCount = reconciliation
+                                            ? studentProjects.filter(project => project.studentId === p.studentId && reconciliationByProject.get(project.id)?.student.id === reconciliation.student.id).length
+                                            : 0;
+                                        const yearRepair = linkedProjectYearRepair.get(p.id);
+                                        const relatedYearRepairCount = yearRepair
+                                            ? studentProjects.filter(project => project.studentId === p.studentId && linkedProjectYearRepair.get(project.id)?.academicYear === yearRepair.academicYear).length
+                                            : 0;
                                         return (
                                             <div key={p.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:border-slate-700 transition-colors">
                                                 <div className="flex items-start gap-4">
@@ -1696,8 +1885,40 @@ export const LearningView = () => {
                                                     )}
                                                     <div>
                                                         <h4 className="font-bold text-white">{p.title}</h4>
-                                                        <p className="text-sm text-slate-400">by <span className="text-cyan-400">{p.studentName}</span></p>
+                                                        <p className="text-sm text-slate-400">by <span className="text-cyan-400">{linkedStudent?.name || p.studentName}</span></p>
+                                                        <span className="mt-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">School year · {projectAcademicYear(p)}</span>
                                                         <span className={`text-[10px] uppercase font-bold ${theme.text} mt-1 block`}>{theme.label}</span>
+                                                        {!linkedStudent && (
+                                                            <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 px-3 py-2 text-xs text-amber-100">
+                                                                <div className="flex items-center gap-2 font-bold">
+                                                                    <AlertCircle size={14} /> Unlinked legacy owner
+                                                                </div>
+                                                                {reconciliation ? (
+                                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                        <span>Possible verified match: {reconciliation.student.name}</span>
+                                                                        {reconciliation.yearConflict && <span className="rounded bg-red-950/60 px-2 py-1 text-red-200">School year needs correction</span>}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleLinkLegacyProject(p)}
+                                                                            className="rounded-md bg-amber-400 px-2 py-1 font-bold text-slate-950 hover:bg-amber-300"
+                                                                        >
+                                                                            Review &amp; link {relatedLegacyCount} {relatedLegacyCount === 1 ? 'project' : 'projects'}
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="mt-1 block text-amber-200/80">No unique safe match found. Compare the learner directory before linking.</span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {yearRepair && (
+                                                            <div className="mt-3 rounded-lg border border-orange-700/60 bg-orange-950/40 px-3 py-2 text-xs text-orange-100">
+                                                                <div className="flex items-center gap-2 font-bold"><Clock size={14} /> Linked account, wrong school year</div>
+                                                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                    <span>Move {relatedYearRepairCount} {relatedYearRepairCount === 1 ? 'project' : 'projects'} to {yearRepair.academicYear}.</span>
+                                                                    <button type="button" onClick={() => handleRepairLinkedProjectYears(p)} className="rounded-md bg-orange-400 px-2 py-1 font-bold text-slate-950 hover:bg-orange-300">Correct school year</button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <button onClick={() => { setSelectedSubmission(p); setReviewModalOpen(true); }} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-medium shadow-lg shadow-cyan-900/20">Review</button>
@@ -1715,6 +1936,7 @@ export const LearningView = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-4">
                             {students.filter(s => s.status === 'active').map(student => {
                                 const workCount = studentProjects.filter(p => p.studentId === student.id && p.status === 'published').length;
+                                const possibleLegacyProjects = studentProjects.filter(project => reconciliationByProject.get(project.id)?.student.id === student.id);
                                 return (
                                     <div key={student.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center text-center hover:border-slate-700 transition-colors group">
                                         <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-400 mb-3 group-hover:bg-cyan-900/20 group-hover:text-cyan-400 transition-colors">
@@ -1722,6 +1944,11 @@ export const LearningView = () => {
                                         </div>
                                         <h3 className="font-bold text-white">{student.name}</h3>
                                         <p className="text-xs text-slate-500 mb-3">{workCount} Published Projects</p>
+                                        {possibleLegacyProjects.length > 0 && (
+                                            <div className="rounded-lg border border-amber-800/70 bg-amber-950/40 px-3 py-2 text-xs font-medium text-amber-200">
+                                                {possibleLegacyProjects.length} possible legacy {possibleLegacyProjects.length === 1 ? 'project' : 'projects'} to review
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             })}
@@ -2533,7 +2760,7 @@ export const LearningView = () => {
 
     // --- LEGACY / INSTRUCTOR VIEW FALLBACK ---
     return (
-        <div className="space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4">
+        <div className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationLearningV1 ? 'edu-v1 edu-learning-student-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-learning-student-v1' : undefined}>
             {showConfetti && <Confetti duration={5000} />}
             {/* Student Header */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 relative overflow-hidden shadow-sm group">

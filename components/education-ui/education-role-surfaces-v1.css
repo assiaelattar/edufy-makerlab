@@ -1,0 +1,162 @@
+.education-ui-v1-active {
+  background: #eef2eb;
+}
+
+/* Instructor: the same one-sidebar workspace language, scoped to teaching tasks. */
+.education-ui-v1-active .edu-instructor-shell-v1 {
+  background: #eef2eb !important;
+  color: #20251f !important;
+}
+
+.education-ui-v1-active .edu-instructor-shell-v1 > aside {
+  width: 278px !important;
+  border-right: 1px solid #dce2d8 !important;
+  background: #fff !important;
+  color: #667064 !important;
+  box-shadow: none !important;
+}
+
+.education-ui-v1-active .edu-instructor-shell-v1 > aside > div > div:first-child {
+  border-color: #e4e8e1 !important;
+}
+
+.education-ui-v1-active .edu-instructor-shell-v1 > aside :is(.text-white, .text-slate-200, .text-slate-300) { color: #20251f !important; }
+.education-ui-v1-active .edu-instructor-shell-v1 > aside :is(.text-slate-400, .text-slate-500) { color: #667064 !important; }
+.education-ui-v1-active .edu-instructor-shell-v1 > aside button[aria-current='page'] {
+  background: #c7ff35 !important;
+  color: #141713 !important;
+}
+.education-ui-v1-active .edu-instructor-shell-v1 > aside button:not([aria-current='page']):hover { background: #f1f4ef !important; color: #20251f !important; }
+
+.education-ui-v1-active .edu-instructor-shell-v1 > main {
+  background: #eef2eb !important;
+}
+
+.education-ui-v1-active .edu-instructor-shell-v1 > main > header {
+  border-color: #dce2d8 !important;
+  background: rgba(255, 255, 255, .94) !important;
+}
+
+.education-ui-v1-active .edu-instructor-shell-v1 > main > header :is(h1, .text-white) { color: #20251f !important; }
+
+/* Student: calm learning cockpit rather than a second dark admin skin. */
+.education-ui-v1-active .edu-student-shell-v1 { background: #eef2eb !important; }
+.education-ui-v1-active .edu-student-shell-v1 > aside {
+  width: 264px !important;
+  border-right: 1px solid #dce2d8 !important;
+  background: #fff !important;
+  color: #667064 !important;
+}
+.education-ui-v1-active .edu-student-shell-v1 > aside > div:first-child { border-color: #e4e8e1 !important; }
+.education-ui-v1-active .edu-student-shell-v1 > aside :is(h2, .text-white, .text-slate-300, .text-slate-400) { color: #20251f !important; }
+.education-ui-v1-active .edu-student-shell-v1 > aside button[aria-current='page'] { background: #c7ff35 !important; color: #141713 !important; }
+.education-ui-v1-active .edu-student-shell-v1 > aside button:not([aria-current='page']):hover { background: #f1f4ef !important; color: #20251f !important; }
+.education-ui-v1-active .edu-student-shell-v1 main > header { border-color: #dce2d8 !important; border-radius: 18px !important; }
+
+.education-ui-v1-active .edu-student-shell-v1 .fixed.bottom-3 > div {
+  border: 1px solid #dce2d8 !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, .96) !important;
+  box-shadow: 0 18px 44px rgba(35, 43, 31, .15) !important;
+}
+.education-ui-v1-active .edu-student-shell-v1 .fixed.bottom-3 button { color: #667064 !important; }
+.education-ui-v1-active .edu-student-shell-v1 .fixed.bottom-3 button[aria-current='page'] { background: #c7ff35 !important; color: #141713 !important; }
+
+/* Family: warmer expression of the same system, with a single clear top bar. */
+.education-ui-v1-active .edu-parent-dashboard-v1 { background: #f1f4ef !important; }
+.education-ui-v1-active .edu-parent-dashboard-v1 > header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-color: #dce2d8 !important;
+  background: rgba(255, 255, 255, .94) !important;
+  color: #20251f !important;
+  backdrop-filter: blur(16px);
+}
+.education-ui-v1-active .edu-parent-dashboard-v1 > header :is(.text-white, .text-slate-300, .text-slate-400) { color: #667064 !important; }
+.education-ui-v1-active .edu-parent-dashboard-v1 main section:first-of-type > div:first-child {
+  background: linear-gradient(120deg, #171a17 0%, #2c3327 100%) !important;
+}
+.education-ui-v1-active .edu-parent-dashboard-v1 nav button[class*='bg-\[#08111F\]'] { background: #c7ff35 !important; color: #141713 !important; }
+
+/* Entry points: editorial cards with the education lime as the primary action. */
+.education-ui-v1-active .edu-login-v1 {
+  background: radial-gradient(circle at 18% 16%, rgba(199, 255, 53, .28), transparent 28%), #eef2eb !important;
+  color: #20251f !important;
+}
+.education-ui-v1-active .edu-login-v1 .atlas-grid-field { opacity: .08 !important; }
+.education-ui-v1-active .edu-login-v1 :is(h1, h2, h3, .text-white, .text-slate-200, .text-slate-300) { color: #20251f !important; }
+.education-ui-v1-active .edu-login-v1 :is(.text-slate-400, .text-slate-500) { color: #667064 !important; }
+.education-ui-v1-active .edu-login-v1 :is(.bg-slate-900\/70, .bg-slate-900, .bg-slate-950) {
+  border-color: #dce2d8 !important;
+  background: #fff !important;
+  box-shadow: 0 18px 52px rgba(35, 43, 31, .09) !important;
+}
+.education-ui-v1-active .edu-login-v1 .text-transparent { color: #20251f !important; -webkit-text-fill-color: currentColor; }
+
+.education-ui-v1-active .edu-parent-login-v1 { background: #eef2eb !important; }
+.education-ui-v1-active .edu-parent-login-v1 > div { border-radius: 30px !important; border-color: #dce2d8 !important; }
+.education-ui-v1-active .edu-parent-login-v1 section:first-child { background: #171a17 !important; }
+
+/* Public conversion routes keep MakerLab content while adopting the same surfaces and actions. */
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) {
+  --ml-orange: #567112;
+  --ml-orange-deep: #2f3f0c;
+  --ml-page: #eef2eb;
+  --ml-ink: #20251f;
+  background: #eef2eb !important;
+}
+
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) > header {
+  border-color: #dce2d8 !important;
+  background: rgba(255, 255, 255, .95) !important;
+  color: #20251f !important;
+}
+
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) :is(.ml-trial-intro, .ml-enroll-intro) {
+  border-color: #dce2d8 !important;
+  background: linear-gradient(120deg, #fff 0%, #f4ffda 100%) !important;
+  color: #20251f !important;
+}
+
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) form,
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) main > section {
+  border-color: #dce2d8 !important;
+  border-radius: 24px !important;
+  box-shadow: 0 18px 52px rgba(35, 43, 31, .08) !important;
+}
+
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) button[class*='bg-\[#C64F12\]'],
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) button[type='submit'] {
+  background: #c7ff35 !important;
+  color: #141713 !important;
+}
+
+.education-ui-v1-active :is(.edu-public-booking-v1, .edu-public-enrollment-v1) :is(input, select, textarea):focus {
+  border-color: #8daf28 !important;
+  box-shadow: 0 0 0 3px rgba(199, 255, 53, .22) !important;
+}
+
+/* Installed apps inherit the marketplace promise instead of returning to legacy chrome. */
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-command-header {
+  min-height: 148px;
+  border-color: #dce2d8;
+  background: linear-gradient(120deg, #fff 0%, #f8f4ff 64%, #eadcff 100%);
+  box-shadow: 0 18px 46px rgba(35, 43, 31, .07);
+}
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card:nth-child(4n + 1) { background: #171a17 !important; border-color: #171a17 !important; }
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card:nth-child(4n + 1) :is(p, span, svg) { color: #fff !important; }
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card:nth-child(4n + 2) { background: #c7ff35 !important; border-color: #a9dc24 !important; }
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card:nth-child(4n + 3) { background: #e4efff !important; border-color: #c5d8f2 !important; }
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card:nth-child(4n + 4) { background: #eadcff !important; border-color: #d5c0ec !important; }
+.education-ui-v1-active .edu-marketplace-app-v1 :is(section, aside, article) { border-color: #dce2d8 !important; }
+
+@media (max-width: 767px) {
+  .education-ui-v1-active .edu-marketplace-app-v1 .atlas-command-header { min-height: 0; }
+}
+
+@media (max-width: 767px) {
+  .education-ui-v1-active .edu-instructor-shell-v1 > aside { width: min(320px, calc(100vw - 28px)) !important; }
+  .education-ui-v1-active .edu-instructor-shell-v1 > main > div:last-child { padding: 12px 12px 92px !important; }
+  .education-ui-v1-active .edu-parent-dashboard-v1 main { padding-top: 18px !important; }
+}

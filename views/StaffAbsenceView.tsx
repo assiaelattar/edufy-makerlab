@@ -9,6 +9,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { StaffAttendanceRecord } from '../types';
 import { calculateDuration, formatDuration, timeToMinutes } from '../utils/timeUtils';
+import './team-operations/education-team-operations-v1.css';
 
 type StaffStatus = StaffAttendanceRecord['status'];
 
@@ -21,6 +22,7 @@ const statusStyles: Record<string, string> = {
 };
 
 export const StaffAbsenceView = () => {
+    const showEducationTeamOperationsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { teamMembers, staffAttendanceRecords, settings } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -270,7 +272,7 @@ export const StaffAbsenceView = () => {
     );
 
     return (
-        <div className="flex h-full flex-col gap-5 pb-24 md:pb-8">
+        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-staff-attendance-v1' : ''}`} data-testid={showEducationTeamOperationsV1 ? 'education-staff-attendance-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Team operations"
                 title="Staff attendance"

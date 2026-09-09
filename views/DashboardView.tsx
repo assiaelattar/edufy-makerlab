@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { LayoutDashboard, Calendar, DollarSign, Briefcase, Users, UserPlus, Zap, BookOpen, CreditCard, Activity, CheckCircle2, ChevronRight, Hourglass, Building, ClipboardCheck, CalendarCheck, BarChart3, Filter, Phone, MessageCircle, ArrowUpRight, CheckSquare, PieChart, Megaphone, Clock, AlertTriangle, TrendingUp, ArrowRight, Trophy, Rocket, Star, Target, Award, ShieldAlert, ShieldCheck, Info } from 'lucide-react';
+import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, getDaysDifference, formatDate, getUpcomingBirthdays } from '../utils/helpers';
@@ -449,11 +450,32 @@ const AtlasStudentDashboard = () => {
 
 // --- ADMIN DASHBOARD COMPONENT ---
 import { WorkshopActionCenter } from './dashboard/WorkshopActionCenter';
+import { EducationDashboardV1 } from './dashboard/EducationDashboardV1';
+
+const dashboardContainerVariants: Variants = {
+    hidden: { opacity: 0 },
+    show: {
+        opacity: 1,
+        transition: { delayChildren: 0.06, staggerChildren: 0.075 }
+    }
+};
+
+const dashboardItemVariants: Variants = {
+    hidden: { opacity: 0, y: 20 },
+    show: {
+        opacity: 1,
+        y: 0,
+        transition: { duration: 0.48, ease: [0.2, 0.78, 0.2, 1] }
+    }
+};
+
+const dashboardChartPalette = ['#25d0bd', '#43bfff', '#7c5cff', '#f052a7', '#ff9f43', '#ff6262'];
 
 const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const { students, payments, enrollments, workshopTemplates, workshopSlots, attendanceRecords, tasks, leads, programs, settings, navigateTo, t, studentProjects, expenses, expenseTemplates, bookings } = useAppContext();
 
     const { userProfile } = useAuth();
+    const reduceMotion = useReducedMotion();
 
     // Birthday Logic
     const upcomingBirthdays = useMemo(() => getUpcomingBirthdays(students, 21).slice(0, 3), [students]);
@@ -830,503 +852,285 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
 
     const totalActiveAlerts = actionAlerts.reduce((sum, a) => sum + a.count, 0) + totalPendingActions + incompleteStudents.length;
     const alertHealth = Math.max(0, 100 - (totalActiveAlerts * 5));
+    const scheduledLearners = todaySchedule.reduce((total, item) => total + (item.type === 'class' ? 10 : item.count), 0);
+    const markedAttendance = attendanceRecords.filter(record => record.date === new Date().toISOString().split('T')[0]).length;
+    const todayAttendanceRate = todaySchedule.length > 0 ? Math.round((markedAttendance / (scheduledLearners || 1)) * 100) : 0;
+    const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+    const conversionRate = leads.length > 0
+        ? Math.round((leads.filter(lead => lead.status === 'converted' || lead.status === 'closed').length / leads.length) * 100)
+        : 0;
+
+    const showEducationDashboardV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+
+    if (showEducationDashboardV1) {
+        return (
+            <EducationDashboardV1
+                greeting={greeting}
+                firstName={firstName}
+                academyName={settings.academyName}
+                todayLabel={todayLabel}
+                selectedSession={selectedSession}
+                availableSessions={availableSessions}
+                activeStudentsCount={activeStudentsCount}
+                newStudentsThisMonth={newStudentsThisMonth}
+                todayAttendanceRate={todayAttendanceRate}
+                todaySchedule={todaySchedule}
+                financialStats={financialStats}
+                totalActiveAlerts={totalActiveAlerts}
+                checksToDeposit={checksToDeposit}
+                pendingTransfers={pendingTransfers}
+                myTasks={myTasks}
+                actionAlerts={actionAlerts}
+                dataQualityScore={dataQualityScore}
+                incompleteStudentsCount={incompleteStudents.length}
+                conversionRate={conversionRate}
+                newLeads={newLeads}
+                actionHealth={actionHealth}
+                alertHealth={alertHealth}
+                upcomingBirthdays={upcomingBirthdays}
+                formatCurrency={formatCurrency}
+                onSessionChange={setSelectedSession}
+                onRecordPayment={() => onRecordPayment()}
+                navigateTo={navigateTo}
+                workshopActionCenter={<WorkshopActionCenter />}
+            />
+        );
+    }
 
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 animate-in fade-in slide-in-from-bottom-4">
-            <AtlasCommandHeader
-                eyebrow="Home operations"
-                title={`${greeting}, ${firstName}`}
-                description={`Your live service desk for ${settings.academyName}: today's sessions, financial follow-up, families, and learning operations.`}
-                icon={LayoutDashboard}
-                badges={<><span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold text-slate-300">{selectedSession}</span><span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold ${totalActiveAlerts > 0 ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : 'border-teal-300/20 bg-teal-300/10 text-teal-200'}`}>{totalActiveAlerts} open actions</span></>}
-                actions={<><AtlasActionButton icon={CreditCard} variant="primary" onClick={() => onRecordPayment()}>Record payment</AtlasActionButton><AtlasActionButton icon={UserPlus} onClick={() => navigateTo('students')}>Add student</AtlasActionButton></>}
-            />
-
-            <AtlasToolbar
-                leading={
-                    <label className="relative block min-w-[170px]">
-                        <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <select value={selectedSession} onChange={event => setSelectedSession(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-9 pr-8 text-sm font-bold text-white outline-none focus:border-teal-400/60">
-                            {availableSessions.map(session => <option key={session} value={session}>{session}</option>)}
-                        </select>
-                    </label>
-                }
-                trailing={<><AtlasActionButton icon={Megaphone} variant="quiet" onClick={() => navigateTo('marketing')}>Add lead</AtlasActionButton><AtlasActionButton icon={CheckSquare} variant="quiet" onClick={() => navigateTo('team')}>New task</AtlasActionButton><AtlasActionButton icon={MessageCircle} variant="quiet" onClick={() => navigateTo('communications')}>Message</AtlasActionButton></>}
-            >
-                <span className="inline-flex items-center gap-1.5 text-xs text-slate-400"><ShieldCheck size={13} className="text-teal-300" /> Tenant scoped</span>
-                <span className="inline-flex items-center gap-1.5 text-xs text-slate-400"><Activity size={13} className="text-amber-200" /> {todaySchedule.length} sessions today</span>
-            </AtlasToolbar>
-
-            {checksToDeposit > 0 && <button onClick={() => navigateTo('finance', { filter: 'check_received' })} className="flex w-full items-center justify-between rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-4 py-3 text-left text-sm font-bold text-amber-200 transition-colors hover:bg-amber-300/10"><span className="flex items-center gap-2"><AlertTriangle size={16} /> {checksToDeposit} checks are ready to deposit</span><ArrowRight size={15} /></button>}
-
-            {/* WORKSHOP ACTION CENTER */}
-            <WorkshopActionCenter />
-
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <AtlasSignalCard label="Session revenue" value={formatCurrency(financialStats.totalRevenue)} detail="Paid and verified receipts" icon={DollarSign} tone="teal" onClick={() => navigateTo('finance')} />
-                <AtlasSignalCard label="Active students" value={activeStudentsCount} detail={`+${newStudentsThisMonth} this month`} icon={Users} tone="blue" onClick={() => navigateTo('students')} />
-                <AtlasSignalCard label="Attendance today" value={`${todaySchedule.length > 0 ? Math.round((attendanceRecords.filter(record => record.date === new Date().toISOString().split('T')[0]).length / (todaySchedule.reduce((total, item) => total + (item.type === 'class' ? 10 : item.count), 0) || 1)) * 100) : 0}%`} detail={`${todaySchedule.length} scheduled sessions`} icon={ClipboardCheck} tone="emerald" onClick={() => navigateTo('attendance')} />
-                <AtlasSignalCard label="Operations health" value={`${alertHealth}%`} detail={`${totalActiveAlerts} open actions`} icon={Activity} tone={alertHealth > 75 ? 'emerald' : alertHealth > 45 ? 'amber' : 'red'} />
-            </div>
-
-            {/* KPI CARDS */}
-            <div className="hidden">
-                {/* Revenue */}
-                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center ${theme.card}`}>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
-                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{formatCurrency(financialStats.totalRevenue)}</h3>
+        <motion.div
+            className="atlas-school-dashboard space-y-6 pb-24 md:pb-8"
+            variants={dashboardContainerVariants}
+            initial={reduceMotion ? false : 'hidden'}
+            animate="show"
+        >
+            <motion.section variants={dashboardItemVariants} className="atlas-school-hero relative overflow-hidden rounded-[30px] border p-5 sm:p-7 lg:p-8">
+                <motion.div
+                    aria-hidden="true"
+                    className="atlas-school-hero__orb atlas-school-hero__orb--one"
+                    animate={reduceMotion ? undefined : { x: [0, 18, 0], y: [0, -12, 0], scale: [1, 1.08, 1] }}
+                    transition={{ duration: 11, repeat: Infinity, ease: 'easeInOut' }}
+                />
+                <motion.div
+                    aria-hidden="true"
+                    className="atlas-school-hero__orb atlas-school-hero__orb--two"
+                    animate={reduceMotion ? undefined : { x: [0, -16, 0], y: [0, 10, 0], scale: [1, 1.06, 1] }}
+                    transition={{ duration: 13, repeat: Infinity, ease: 'easeInOut', delay: 0.8 }}
+                />
+                <div className="relative z-10 flex flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="min-w-0">
+                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <span className="atlas-school-hero__date rounded-full border px-3 py-1 text-xs font-bold">{todayLabel}</span>
+                            <label className="atlas-school-context relative rounded-full border">
+                                <span className="sr-only">Academic session</span>
+                                <select value={selectedSession} onChange={event => setSelectedSession(event.target.value)} className="atlas-text-muted h-8 appearance-none bg-transparent pl-3 pr-8 text-xs font-semibold outline-none">
+                                    {availableSessions.map(session => <option key={session} value={session}>{session}</option>)}
+                                </select>
+                                <ChevronRight size={12} className="atlas-text-subtle pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90" />
+                            </label>
                         </div>
-                        <div className={`p-2 rounded-lg ${theme.iconBg('emerald')}`}><DollarSign size={20} /></div>
+                        <p className="atlas-school-kicker mb-2">Your school day</p>
+                        <h2 className="atlas-text-strong max-w-3xl text-3xl font-black leading-[1.08] tracking-[-0.035em] sm:text-4xl lg:text-5xl">
+                            {greeting}, {firstName}.
+                        </h2>
+                        <p className="atlas-text-muted mt-3 max-w-2xl text-sm leading-6 sm:text-base">
+                            Here is what is happening at {settings.academyName} today, and what needs your attention next.
+                        </p>
                     </div>
-                    <div className="mt-4 h-10 flex items-end gap-1">
-                        {financialStats.chartData.map((d, i) => (
-                            <div key={i} className={`flex-1 rounded-t transition-colors ${isInstructor ? 'bg-teal-100 hover:bg-teal-200' : 'bg-slate-800 hover:bg-teal-500/50'}`} style={{ height: `${(d.value / financialStats.maxRevenue) * 100}%` }} title={`${d.month}: ${formatCurrency(d.value)}`}></div>
+                    <div className="flex flex-wrap gap-2 lg:max-w-xs lg:justify-end">
+                        <AtlasActionButton icon={CreditCard} variant="primary" onClick={() => onRecordPayment()}>Record payment</AtlasActionButton>
+                        <AtlasActionButton icon={UserPlus} onClick={() => navigateTo('students')}>Add student</AtlasActionButton>
+                        <AtlasActionButton icon={MessageCircle} variant="quiet" onClick={() => navigateTo('communications')}>Message families</AtlasActionButton>
+                    </div>
+                </div>
+            </motion.section>
+
+            <motion.section variants={dashboardContainerVariants} aria-label="School overview" className="atlas-school-overview">
+                {[
+                    { label: 'Students', value: activeStudentsCount, detail: `+${newStudentsThisMonth} this month`, icon: Users, tone: 'mint', iconTone: 'mint', size: 'regular', action: () => navigateTo('students') },
+                    { label: 'Today’s attendance', value: `${todayAttendanceRate}%`, detail: `${todaySchedule.length} sessions`, icon: ClipboardCheck, tone: 'sky', iconTone: 'sky', size: 'regular', action: () => navigateTo('attendance') },
+                    { label: 'Payments received', value: formatCurrency(financialStats.totalRevenue), detail: selectedSession, icon: DollarSign, tone: 'ink', iconTone: 'pink', size: 'wide', action: () => navigateTo('finance') },
+                    { label: 'Needs attention', value: totalActiveAlerts, detail: totalActiveAlerts === 1 ? 'open follow-up' : 'open follow-ups', icon: Activity, tone: totalActiveAlerts > 0 ? 'peach' : 'mint', iconTone: totalActiveAlerts > 0 ? 'peach' : 'mint', size: 'compact', action: () => navigateTo('team') }
+                ].map(item => {
+                    const Icon = item.icon;
+                    return (
+                        <motion.button
+                            key={item.label}
+                            type="button"
+                            onClick={item.action}
+                            variants={dashboardItemVariants}
+                            whileHover={reduceMotion ? undefined : { y: -6, scale: 1.015 }}
+                            whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+                            transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+                            data-tone={item.tone}
+                            data-size={item.size}
+                            className="atlas-school-metric min-h-[144px] border p-4 text-left sm:min-h-[158px] sm:p-5"
+                        >
+                            <div className="mb-5 flex items-center justify-between">
+                                <span className="atlas-school-kicker">{item.label}</span>
+                                <span className="atlas-school-tone flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/45 shadow-sm" data-tone={item.iconTone}><Icon size={18} /></span>
+                            </div>
+                            <p className="atlas-text-strong break-words text-2xl font-black tracking-[-0.035em] sm:text-[2rem]">{item.value}</p>
+                            <p className="atlas-text-muted mt-1 text-xs font-semibold">{item.detail}</p>
+                        </motion.button>
+                    );
+                })}
+            </motion.section>
+
+            <motion.div variants={dashboardContainerVariants} className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+                <motion.section variants={dashboardItemVariants} className="atlas-school-card overflow-hidden rounded-[30px] border xl:col-span-7">
+                    <div className="atlas-school-divider flex flex-col gap-3 border-b p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                        <div>
+                            <p className="atlas-school-kicker">The school day</p>
+                            <h3 className="atlas-text-strong mt-1 text-xl font-black">Today’s classes and workshops</h3>
+                            <p className="atlas-text-muted mt-1 text-sm">A simple timeline of where learners and staff need to be.</p>
+                        </div>
+                        <AtlasActionButton variant="quiet" icon={ArrowRight} onClick={() => navigateTo('attendance')}>Open attendance</AtlasActionButton>
+                    </div>
+                    <div className="p-4 sm:p-6">
+                        {todaySchedule.length === 0 ? (
+                            <AtlasEmptyState title="The school day is clear" description="There are no classes or workshops scheduled today." icon={Calendar} />
+                        ) : (
+                            <div className="atlas-school-dayline space-y-3">
+                                {todaySchedule.map((item, index) => (
+                                    <motion.button
+                                        key={`${item.title}-${item.time}-${index}`}
+                                        onClick={() => navigateTo('attendance')}
+                                        initial={reduceMotion ? false : { opacity: 0, x: -14 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: 0.25 + index * 0.07, duration: 0.4 }}
+                                        whileHover={reduceMotion ? undefined : { x: 5, scale: 1.006 }}
+                                        data-tone={['mint', 'sky', 'peach', 'lilac'][index % 4]}
+                                        className="atlas-school-row atlas-school-schedule-row flex w-full items-center gap-4 rounded-[22px] border p-3.5 text-left sm:p-4"
+                                    >
+                                        <span className={`atlas-school-dayline__dot ${index === 0 ? 'atlas-school-dayline__dot--current' : ''} flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${item.type === 'class' ? 'bg-teal-500 text-white' : 'bg-amber-400 text-amber-950'}`}>
+                                            <Clock size={16} />
+                                        </span>
+                                        <span className="w-16 shrink-0 text-sm font-black tabular-nums sm:w-20">{item.time}</span>
+                                        <span className="min-w-0 flex-1">
+                                            <span className="atlas-text-strong block truncate text-sm font-bold sm:text-base">{item.title}</span>
+                                            <span className="atlas-text-muted mt-0.5 block text-xs">{item.count} students · {item.type === 'class' ? 'Class' : 'Workshop'}</span>
+                                        </span>
+                                        <ChevronRight size={17} className="atlas-text-subtle shrink-0" />
+                                    </motion.button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </motion.section>
+
+                <motion.section variants={dashboardItemVariants} className="atlas-school-card overflow-hidden rounded-[30px] border xl:col-span-5">
+                    <div className="atlas-school-divider flex items-center justify-between border-b p-5 sm:p-6">
+                        <div>
+                            <p className="atlas-school-kicker">Your attention</p>
+                            <h3 className="atlas-text-strong mt-1 text-xl font-black">What needs a decision</h3>
+                        </div>
+                        <span className={`flex h-10 min-w-10 items-center justify-center rounded-full px-3 text-sm font-black ${totalActiveAlerts > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>{totalActiveAlerts}</span>
+                    </div>
+                    <div className="space-y-2 p-4 sm:p-5">
+                        {checksToDeposit > 0 && (
+                            <motion.button whileHover={reduceMotion ? undefined : { x: 4, scale: 1.006 }} onClick={() => navigateTo('finance', { filter: 'check_received' })} data-tone="sun" className="atlas-school-row atlas-school-attention-row flex w-full items-center gap-3 rounded-[22px] border p-3.5 text-left">
+                                <span className="atlas-school-tone flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-amber-700" data-tone="sun"><Building size={17} /></span>
+                                <span className="min-w-0 flex-1"><span className="atlas-text-strong block text-sm font-bold">Deposit {checksToDeposit} {checksToDeposit === 1 ? 'check' : 'checks'}</span><span className="atlas-text-muted block text-xs">Received payments are waiting for deposit.</span></span>
+                                <ArrowRight size={16} className="atlas-text-subtle" />
+                            </motion.button>
+                        )}
+                        {pendingTransfers > 0 && (
+                            <motion.button whileHover={reduceMotion ? undefined : { x: 4, scale: 1.006 }} onClick={() => navigateTo('finance', { filter: 'pending_verification' })} data-tone="lilac" className="atlas-school-row atlas-school-attention-row flex w-full items-center gap-3 rounded-[22px] border p-3.5 text-left">
+                                <span className="atlas-school-tone flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-violet-700" data-tone="lilac"><CreditCard size={17} /></span>
+                                <span className="min-w-0 flex-1"><span className="atlas-text-strong block text-sm font-bold">Verify {pendingTransfers} {pendingTransfers === 1 ? 'transfer' : 'transfers'}</span><span className="atlas-text-muted block text-xs">Confirm the funds before clearing balances.</span></span>
+                                <ArrowRight size={16} className="atlas-text-subtle" />
+                            </motion.button>
+                        )}
+                        {myTasks.slice(0, 2).map(task => (
+                            <motion.button key={task.id} whileHover={reduceMotion ? undefined : { x: 4, scale: 1.006 }} onClick={() => navigateTo('team')} data-tone="sky" className="atlas-school-row atlas-school-attention-row flex w-full items-center gap-3 rounded-[22px] border p-3.5 text-left">
+                                <span className="atlas-school-tone flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sky-700" data-tone="sky"><CheckSquare size={17} /></span>
+                                <span className="min-w-0 flex-1"><span className="atlas-text-strong block truncate text-sm font-bold">{task.title}</span><span className="atlas-text-muted block text-xs">{task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : 'No due date'}</span></span>
+                                <ArrowRight size={16} className="atlas-text-subtle" />
+                            </motion.button>
+                        ))}
+                        {actionAlerts.slice(0, 3).map((alert: any, index) => {
+                            const AlertIcon = alert.icon;
+                            return (
+                                <motion.button key={`${alert.label}-${index}`} whileHover={reduceMotion ? undefined : { x: 4, scale: 1.006 }} onClick={() => navigateTo(alert.route, alert.params)} data-tone={index % 2 === 0 ? 'peach' : 'pink'} className="atlas-school-row atlas-school-attention-row flex w-full items-center gap-3 rounded-[22px] border p-3.5 text-left">
+                                    <span className="atlas-school-tone flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-rose-600" data-tone="peach"><AlertIcon size={17} /></span>
+                                    <span className="min-w-0 flex-1"><span className="atlas-text-strong block text-sm font-bold">{alert.count} {alert.label}</span><span className="atlas-text-muted block truncate text-xs">{alert.subLabel}</span></span>
+                                    <ArrowRight size={16} className="atlas-text-subtle" />
+                                </motion.button>
+                            );
+                        })}
+                        {totalActiveAlerts === 0 && <AtlasEmptyState title="You’re all caught up" description="There are no school follow-ups waiting right now." icon={CheckCircle2} />}
+                    </div>
+                </motion.section>
+            </motion.div>
+
+            <motion.div variants={dashboardContainerVariants} className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+                <motion.section variants={dashboardItemVariants} className="atlas-school-card atlas-school-finance-card rounded-[30px] border p-5 sm:p-6 lg:col-span-2">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <p className="atlas-school-kicker">Payments</p>
+                            <h3 className="atlas-text-strong mt-1 text-xl font-black">{formatCurrency(financialStats.totalRevenue)} received</h3>
+                            <p className="atlas-text-muted mt-1 text-sm">Verified payments for {selectedSession}.</p>
+                        </div>
+                        <AtlasActionButton variant="quiet" icon={ArrowRight} onClick={() => navigateTo('finance')}>View finance</AtlasActionButton>
+                    </div>
+                    <div className="mt-7 flex h-28 items-end gap-2" aria-label="Monthly payment activity">
+                        {financialStats.chartData.map((point, index) => (
+                            <div key={`${point.month}-${index}`} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-2">
+                                <div className="atlas-school-progress flex h-20 w-full items-end overflow-hidden rounded-[14px]">
+                                    <motion.div
+                                        initial={reduceMotion ? false : { height: 0 }}
+                                        animate={{ height: `${Math.max(10, (point.value / (financialStats.maxRevenue || 1)) * 100)}%` }}
+                                        transition={{ delay: 0.42 + index * 0.07, duration: 0.72, ease: [0.2, 0.78, 0.2, 1] }}
+                                        className="atlas-school-chart-bar w-full rounded-[14px]"
+                                        style={{ background: `linear-gradient(180deg, ${dashboardChartPalette[index % dashboardChartPalette.length]}, color-mix(in srgb, ${dashboardChartPalette[index % dashboardChartPalette.length]} 66%, #111827))` }}
+                                        title={`${point.month}: ${formatCurrency(point.value)}`}
+                                    />
+                                </div>
+                                <span className="atlas-text-subtle truncate text-[10px] font-bold">{point.month}</span>
+                            </div>
                         ))}
                     </div>
-                </div>
+                    <div className="mt-6 grid grid-cols-2 gap-3">
+                        <motion.button whileHover={reduceMotion ? undefined : { y: -4 }} onClick={() => navigateTo('finance', { filter: 'check_received' })} className="atlas-school-tone rounded-[22px] p-4 text-left text-slate-900" data-tone="sun"><span className="block text-2xl font-black">{checksToDeposit}</span><span className="mt-1 block text-xs font-semibold">Checks to deposit</span></motion.button>
+                        <motion.button whileHover={reduceMotion ? undefined : { y: -4 }} onClick={() => navigateTo('finance', { filter: 'pending_verification' })} className="atlas-school-tone rounded-[22px] p-4 text-left text-slate-900" data-tone="lilac"><span className="block text-2xl font-black">{pendingTransfers}</span><span className="mt-1 block text-xs font-semibold">Transfers to verify</span></motion.button>
+                    </div>
+                </motion.section>
 
-                {/* Active Students */}
-                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center ${theme.card}`}>
-                    <div className="flex justify-between items-start">
+                <motion.section variants={dashboardItemVariants} className="atlas-school-card atlas-school-community-card rounded-[30px] border p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-3">
                         <div>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Students</p>
-                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{activeStudentsCount}</h3>
+                            <p className="atlas-school-kicker">School community</p>
+                            <h3 className="atlas-text-strong mt-1 text-xl font-black">People and families</h3>
                         </div>
-                        <div className={`p-2 rounded-lg ${theme.iconBg('blue')}`}><Users size={20} /></div>
+                        <span className="atlas-school-tone flex h-10 w-10 items-center justify-center rounded-xl text-violet-700" data-tone="lilac"><Users size={18} /></span>
                     </div>
-                    <div className={`mt-4 flex w-fit items-center rounded-lg px-2 py-1 text-xs ${isInstructor ? 'bg-teal-100 text-teal-700' : 'bg-teal-950/30 text-teal-300'}`}>
-                        <ArrowUpRight size={12} className="mr-1" /> +{newStudentsThisMonth} this month
-                    </div>
-                </div>
-
-                {/* Attendance Rate */}
-                <div className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center ${theme.card}`}>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Attendance</p>
-                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>
-                                {todaySchedule.length > 0 ? Math.round((attendanceRecords.filter(r => r.date === new Date().toISOString().split('T')[0]).length / (todaySchedule.reduce((a, b) => a + (b.type === 'class' ? 10 : b.count), 0) || 1)) * 100) : 0}%
-                            </h3>
-                        </div>
-                        <div className={`p-2 rounded-lg ${theme.iconBg('pink')}`}><ClipboardCheck size={20} /></div>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-4">{todaySchedule.length} sessions today</p>
-                </div>
-
-                {/* Leads */}
-                <div onClick={() => navigateTo('marketing')} className={`min-w-[260px] md:min-w-0 p-5 rounded-lg flex flex-col justify-between snap-center cursor-pointer transition-colors group ${theme.card} ${theme.cardHover}`}>
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <p className="text-xs font-bold uppercase tracking-wider text-slate-500 transition-colors group-hover:text-amber-200">New Leads</p>
-                            <h3 className={`text-2xl font-bold mt-1 ${theme.text}`}>{newLeads}</h3>
-                        </div>
-                        <div className={`p-2 rounded-lg ${theme.iconBg('purple')}`}><Megaphone size={20} /></div>
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
-                        <span>Pipeline Active</span>
-                        <ChevronRight size={14} />
-                    </div>
-                </div>
-            </div>
-
-            {/* DESKTOP GRID LAYOUT */}
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-
-                {/* LEFT COLUMN: SCHEDULE & FINANCE */}
-                <div className="space-y-5 lg:col-span-2">
-
-                    {/* Today's Schedule */}
-                    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
-                        <div className="p-4 md:p-5"><AtlasSectionHeader title="Today's schedule" description="Classes and workshops that need the team today." icon={Clock} actions={<AtlasActionButton variant="quiet" icon={ArrowRight} onClick={() => navigateTo('attendance')}>Manage attendance</AtlasActionButton>} /></div>
-                        <div className="p-4">
-                            {todaySchedule.length === 0 ? (
-                                <AtlasEmptyState title="The schedule is clear" description="No classes or workshops are scheduled today." icon={Calendar} />
-                            ) : (
-                                <div className="space-y-3">
-                                    {todaySchedule.map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3 transition-colors hover:border-teal-300/20">
-                                            <div className="w-16 text-center">
-                                                <span className={`block text-sm font-bold ${theme.text}`}>{item.time}</span>
-                                            </div>
-                                            <div className="h-8 w-1 rounded-full bg-teal-400/40"></div>
-                                            <div className="flex-1">
-                                                <h4 className={`text-sm font-bold ${isInstructor ? 'text-slate-700' : 'text-slate-200'}`}>{item.title}</h4>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${item.type === 'class' ? 'border-teal-300/20 bg-teal-300/10 text-teal-200' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>{item.type}</span>
-                                                    <span className="text-xs text-slate-500">{item.count} Students</span>
-                                                </div>
-                                            </div>
-                                            <button onClick={() => navigateTo('attendance')} className={`p-2 rounded-full transition-colors ${isInstructor ? 'text-slate-400 hover:bg-slate-100' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><ChevronRight size={16} /></button>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Program Distribution (Mini) */}
-                    <div className="rounded-lg border border-white/10 bg-slate-900/80 p-4 md:p-5">
-                        <AtlasSectionHeader title="Student distribution" description="Active enrollment across the academy's programs." icon={BarChart3} />
-                        <div className="mt-4 space-y-3">
-                            {programs.slice(0, 4).map(prog => {
-                                const count = students.filter(s => enrollments.some(e => e.studentId === s.id && e.programId === prog.id && e.status === 'active')).length;
-                                const pct = (count / (activeStudentsCount || 1)) * 100;
-                                return (
-                                    <div key={prog.id}>
-                                        <div className="flex justify-between text-xs text-slate-500 mb-1">
-                                            <span>{prog.name}</span>
-                                            <span>{count}</span>
-                                        </div>
-                                        <div className={`h-2 rounded-full overflow-hidden ${isInstructor ? 'bg-slate-100' : 'bg-slate-950'}`}>
-                                            <div className="h-full rounded-full bg-teal-400" style={{ width: `${pct}%` }}></div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-
-                    {/* Upcoming Birthdays Widget */}
+                    <button onClick={() => navigateTo('students')} className="atlas-school-row atlas-school-row--interactive mt-5 flex w-full items-center justify-between rounded-2xl border p-4 text-left">
+                        <span><span className="atlas-text-strong block text-sm font-bold">Student records</span><span className="atlas-text-muted mt-1 block text-xs">{dataQualityScore}% ready for daily work</span></span>
+                        <span className="atlas-text-strong text-lg font-black">{incompleteStudents.length}</span>
+                    </button>
+                    <button onClick={() => navigateTo('marketing')} className="atlas-school-row atlas-school-row--interactive mt-2 flex w-full items-center justify-between rounded-2xl border p-4 text-left">
+                        <span><span className="atlas-text-strong block text-sm font-bold">New family interest</span><span className="atlas-text-muted mt-1 block text-xs">{conversionRate}% current conversion</span></span>
+                        <span className="atlas-text-strong text-lg font-black">{newLeads}</span>
+                    </button>
                     {upcomingBirthdays.length > 0 && (
-                        <div className="rounded-lg border border-white/10 bg-slate-900/80 p-4 md:p-5">
-                            <AtlasSectionHeader title="Upcoming birthdays" description="Small moments for thoughtful family care." icon={Users} />
-                            <div className="mt-4 space-y-2">
-                                {upcomingBirthdays.map(s => (
-                                    <button key={s.id} onClick={() => navigateTo('student-details', { studentId: s.id })} className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3 text-left transition-colors hover:border-amber-300/20">
-                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-xs font-bold text-amber-200">
-                                            {s.name.charAt(0)}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className={`text-sm font-bold truncate ${theme.text}`}>{s.name}</p>
-                                            <p className="text-xs font-medium text-amber-200">{s.daysUntilBirthday === 0 ? 'Today' : `${s.daysUntilBirthday} days left`}</p>
-                                            <p className="hidden">
-                                                {s.daysUntilBirthday === 0 ? "🎉 Today!" : `${s.daysUntilBirthday} days left`}
-                                            </p>
-                                        </div>
-                                        <div className="rounded border border-white/10 bg-white/[0.04] px-2 py-1 text-xs font-medium text-slate-400">
-                                            {new Date(s.birthDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                                        </div>
+                        <div className="atlas-school-divider mt-5 border-t pt-5">
+                            <p className="atlas-school-kicker mb-3">Upcoming birthdays</p>
+                            <div className="flex -space-x-2">
+                                {upcomingBirthdays.map(student => (
+                                    <button key={student.id} onClick={() => navigateTo('student-details', { studentId: student.id })} title={`${student.name} · ${student.daysUntilBirthday === 0 ? 'Today' : `${student.daysUntilBirthday} days`}`} className="atlas-school-avatar flex h-11 w-11 items-center justify-center rounded-full border-2 text-sm font-black shadow-sm">
+                                        {student.name.charAt(0)}
                                     </button>
                                 ))}
                             </div>
                         </div>
                     )}
-                </div>
+                </motion.section>
+            </motion.div>
 
-                {/* RIGHT COLUMN: ACTIONS & ALERTS */}
-                <div className="space-y-5">
-
-                    {/* Review Queue (Instructor Only) */}
-                    {isInstructor && (
-                        <div className={`overflow-hidden rounded-lg ${theme.card} border border-teal-300/20`}>
-                            <div className={`flex items-center justify-between border-b bg-teal-300/[0.04] p-4 ${theme.divider}`}>
-                                <h3 className={`flex items-center gap-2 text-sm font-bold ${theme.text}`}><Rocket size={16} className="text-teal-300" /> Mission Control</h3>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold uppercase text-teal-300">Live</span>
-                                    <button onClick={() => navigateTo('review')} className="rounded border border-teal-300/30 bg-teal-500 px-2 py-1 text-xs text-slate-950 transition-colors hover:bg-teal-400">Open Queue</button>
-                                </div>
-                            </div>
-                            <div className="p-4">
-                                {pendingReviews.length === 0 ? (
-                                    <div className="text-center py-6 text-slate-400">
-                                        <CheckCircle2 size={32} className="mx-auto mb-2 text-teal-300/50" />
-                                        <p className="text-xs">No pending submissions.</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-3">
-                                        {pendingReviews.slice(0, 3).map((item, i) => (
-                                            <div key={i} className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-slate-950/50 p-3 transition-colors hover:border-teal-300/30" onClick={() => navigateTo('review', { projectId: item.projectId })}>
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-300/10 text-xs font-bold text-teal-300">
-                                                    {item.studentName.charAt(0)}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex justify-between items-start">
-                                                        <p className="text-sm font-bold text-slate-700 truncate">{item.step.title}</p>
-                                                        <span className="text-[10px] text-slate-400 whitespace-nowrap">Now</span>
-                                                    </div>
-                                                    <p className="text-xs text-slate-500 truncate">{item.studentName} • {item.projectTitle}</p>
-
-                                                    {isInstructor && (
-                                                        <div className="mt-2 flex gap-2">
-                                                            <button className="flex-1 rounded bg-teal-300/10 py-1 text-[10px] font-bold text-teal-300 hover:bg-teal-300/15">Approve</button>
-                                                            <button className="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded hover:bg-slate-200">View</button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {pendingReviews.length > 3 && (
-                                            <button onClick={() => navigateTo('review')} className="w-full rounded-lg py-2 text-xs font-bold text-teal-300 transition-colors hover:bg-teal-300/10">
-                                                View {pendingReviews.length - 3} more
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Quick Actions Grid (Desktop) */}
-                    <div className="hidden">
-                        <button onClick={() => onRecordPayment()} className="rounded-lg border border-teal-300/30 bg-teal-500 p-4 text-center text-slate-950 transition-colors hover:bg-teal-400">
-                            <CreditCard size={24} className="mx-auto mb-2" />
-                            <span className="text-xs font-bold">Record Pay</span>
-                        </button>
-                        <button onClick={() => navigateTo('students')} className="rounded-lg border border-white/10 bg-white/[0.05] p-4 text-center text-slate-200 transition-colors hover:bg-white/[0.08]">
-                            <UserPlus size={24} className="mx-auto mb-2" />
-                            <span className="text-xs font-bold">New Student</span>
-                        </button>
-                        <button onClick={() => navigateTo('marketing')} className="p-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 hover:text-white text-center transition-all border border-slate-700">
-                            <UserPlus size={24} className="mx-auto mb-2" />
-                            <span className="text-xs font-bold">Add Lead</span>
-                        </button>
-                        <button onClick={() => navigateTo('team')} className="p-4 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-300 hover:text-white text-center transition-all border border-slate-700">
-                            <CheckSquare size={24} className="mx-auto mb-2" />
-                            <span className="text-xs font-bold">New Task</span>
-                        </button>
-                        <button onClick={() => navigateTo('communications')} className="col-span-2 rounded-lg border border-white/10 bg-white/[0.05] p-4 text-center text-slate-200 transition-colors hover:bg-white/[0.08] md:col-span-1">
-                            <MessageCircle size={24} className="mx-auto mb-2" />
-                            <span className="text-xs font-bold">Send Message</span>
-                        </button>
-                    </div>
-
-                    {/* Action Center (Alerts) */}
-                    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
-                        <div className="p-4"><AtlasSectionHeader title="Action center" description="Follow-ups that need a decision or a handoff." icon={Activity} meta={totalActiveAlerts > 0 ? <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{totalActiveAlerts} open</span> : undefined} /></div>
-
-                        <div className="p-5">
-                            <div className="flex items-center gap-6 mb-6">
-                                {/* Operational Health Donut Chart */}
-                                <div className="relative w-20 h-20 flex items-center justify-center">
-                                    <svg className="w-full h-full transform -rotate-90">
-                                        <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" className={isInstructor ? "text-slate-100" : "text-slate-800"} />
-                                        <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={36 * 2 * Math.PI} strokeDashoffset={36 * 2 * Math.PI - (actionHealth / 100) * (36 * 2 * Math.PI)} className={`${actionHealth > 75 ? 'text-emerald-500' : actionHealth > 40 ? 'text-amber-500' : 'text-red-500'} transition-all duration-1000 ease-out`} strokeLinecap="round" />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className={`text-lg font-bold ${theme.text}`}>{actionHealth}%</span>
-                                        <span className="text-[8px] text-slate-500 uppercase font-bold">Health</span>
-                                    </div>
-                                </div>
-                                <div className="flex-1">
-                                    <p className={`text-sm mb-1 ${theme.text}`}>System Status</p>
-                                    <p className="text-xs text-slate-500">
-                                        {checksToDeposit > 0 || pendingTransfers > 0 ? "Financial actions pending." : "Operations running smoothly."}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                {checksToDeposit > 0 && (
-                                    <div onClick={() => navigateTo('finance', { filter: 'check_received' })} className="group flex items-center justify-between p-3 bg-amber-950/10 border border-amber-900/30 rounded-xl cursor-pointer hover:bg-amber-900/20 transition-colors">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500"><Building size={16} /></div>
-                                            <div>
-                                                <p className="text-sm font-bold text-amber-400">{checksToDeposit} Checks</p>
-                                                <p className="text-[10px] text-amber-300/70">Waiting for deposit</p>
-                                            </div>
-                                        </div>
-                                        <div className="bg-amber-500 text-amber-950 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight size={12} /></div>
-                                    </div>
-                                )}
-                                {pendingTransfers > 0 && (
-                                    <div onClick={() => navigateTo('finance', { filter: 'pending_verification' })} className="group flex cursor-pointer items-center justify-between rounded-lg border border-amber-300/15 bg-amber-300/[0.04] p-3 transition-colors hover:bg-amber-300/[0.08]">
-                                        <div className="flex items-center gap-3">
-                                            <div className="rounded-lg bg-amber-300/10 p-2 text-amber-200"><Building size={16} /></div>
-                                            <div>
-                                                <p className="text-sm font-bold text-amber-100">{pendingTransfers} Transfers</p>
-                                                <p className="text-[10px] text-amber-200/60">Verification needed</p>
-                                            </div>
-                                        </div>
-                                        <div className="rounded bg-amber-300 p-1 text-slate-950 opacity-0 transition-opacity group-hover:opacity-100"><ArrowRight size={12} /></div>
-                                    </div>
-                                )}
-                                {myTasks.slice(0, 3).map(task => (
-                                    <div key={task.id} onClick={() => navigateTo('team')} className="group flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition-colors">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-slate-800 rounded-lg text-slate-400"><CheckSquare size={16} /></div>
-                                            <div>
-                                                <p className="text-sm font-medium text-slate-300 truncate max-w-[120px]">{task.title}</p>
-                                                <p className="text-[10px] text-slate-500">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'No due date'}</p>
-                                            </div>
-                                        </div>
-                                        <div className="bg-slate-800 text-slate-400 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"><ArrowRight size={12} /></div>
-                                    </div>
-                                ))}
-
-                                {/* DYNAMIC ALERTS */}
-                                {actionAlerts.map((alert: any, idx) => {
-                                    const tone = alertTone[alert.color] || alertTone[alert.type] || alertTone.slate;
-                                    const AlertIcon = alert.icon;
-                                    return (
-                                        <div key={idx} onClick={() => navigateTo(alert.route, alert.params)} className={`group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-colors ${tone.row}`}>
-                                            <div className="flex items-center gap-3">
-                                                <div className={`p-2 rounded-lg ${tone.icon}`}><AlertIcon size={16} /></div>
-                                                <div>
-                                                    <p className={`text-sm font-bold ${tone.title}`}>{alert.count} {alert.label}</p>
-                                                    <p className={`text-[10px] ${tone.subtitle}`}>{alert.subLabel}</p>
-                                                </div>
-                                            </div>
-                                            <div className={`${tone.action} p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity`}><ArrowRight size={12} /></div>
-                                        </div>
-                                    );
-                                })}
-                                {totalActiveAlerts === 0 && <AtlasEmptyState title="All caught up" description="There are no operational follow-ups waiting right now." icon={CheckCircle2} />}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* DATA QUALITY PANEL */}
-                    {incompleteStudents.length > 0 && (
-                        <div className={`overflow-hidden rounded-lg border ${
-                            dataQualityScore < 70
-                                ? 'border-red-500/30 bg-red-950/10'
-                                : 'border-amber-500/30 bg-amber-950/10'
-                        }`}>
-                            {/* Header */}
-                            <div className={`p-4 border-b flex justify-between items-center ${
-                                dataQualityScore < 70 ? 'border-red-900/30 bg-red-950/20' : 'border-amber-900/30 bg-amber-950/20'
-                            }`}>
-                                <h3 className={`font-bold text-sm flex items-center gap-2 ${
-                                    dataQualityScore < 70 ? 'text-red-400' : 'text-amber-400'
-                                }`}>
-                                    <ShieldAlert size={16} />
-                                    Data Quality Guard
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                                        dataQualityScore < 70
-                                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                                            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                    }`}>
-                                        {incompleteStudents.length} students
-                                    </span>
-                                </h3>
-                                {/* Score donut */}
-                                <div className="relative w-10 h-10 flex items-center justify-center">
-                                    <svg className="w-full h-full -rotate-90">
-                                        <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
-                                        <circle cx="20" cy="20" r="16" stroke="currentColor" strokeWidth="4" fill="transparent"
-                                            strokeDasharray={16 * 2 * Math.PI}
-                                            strokeDashoffset={16 * 2 * Math.PI - (dataQualityScore / 100) * (16 * 2 * Math.PI)}
-                                            className={dataQualityScore >= 80 ? 'text-emerald-500' : dataQualityScore >= 60 ? 'text-amber-500' : 'text-red-500'}
-                                            strokeLinecap="round" />
-                                    </svg>
-                                    <span className="absolute text-[9px] font-bold text-white">{dataQualityScore}%</span>
-                                </div>
-                            </div>
-
-                            <div className="p-4 space-y-2 max-h-72 overflow-y-auto custom-scrollbar">
-                                {incompleteStudents.slice(0, 8).map(({ student, issues, ageDays }) => (
-                                    <div
-                                        key={student.id}
-                                        className="group flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-slate-950/60 p-3 transition-colors hover:border-amber-300/30"
-                                        onClick={() => navigateTo('student-details', { studentId: student.id })}
-                                    >
-                                        {/* Avatar */}
-                                        <div className="w-9 h-9 rounded-full bg-slate-800 border-2 border-amber-700/40 flex items-center justify-center text-amber-400 font-bold text-sm shrink-0">
-                                            {student.name.charAt(0)}
-                                        </div>
-
-                                        {/* Info */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex justify-between items-start gap-2">
-                                                <p className="text-sm font-bold text-white truncate">{student.name}</p>
-                                                <span className="text-[9px] text-slate-500 whitespace-nowrap shrink-0">{ageDays}d ago</span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1 mt-1">
-                                                {issues.map((issue, i) => (
-                                                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-800/40 font-medium">
-                                                        {issue}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Arrow */}
-                                        <div className="text-slate-600 group-hover:text-amber-400 transition-colors mt-1">
-                                            <ChevronRight size={14} />
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {incompleteStudents.length > 8 && (
-                                    <button
-                                        onClick={() => navigateTo('students')}
-                                        className="w-full py-2 text-xs text-amber-400 font-bold hover:bg-amber-900/20 rounded-lg transition-colors border border-amber-900/30"
-                                    >
-                                        + {incompleteStudents.length - 8} more incomplete records
-                                    </button>
-                                )}
-                            </div>
-
-                            {/* Footer with shortcut */}
-                            <div className={`px-4 py-2.5 border-t flex items-center justify-between ${
-                                dataQualityScore < 70 ? 'border-red-900/30' : 'border-amber-900/30'
-                            }`}>
-                                <p className="text-[10px] text-slate-500 flex items-center gap-1">
-                                    <Info size={10} /> Registered &gt; 7 days with missing data
-                                </p>
-                                <button
-                                    onClick={() => navigateTo('students')}
-                                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1"
-                                >
-                                    Fix all <ArrowRight size={10} />
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {incompleteStudents.length === 0 && (
-                        <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-950/20 border border-emerald-800/30">
-                            <ShieldCheck size={20} className="text-emerald-500 shrink-0" />
-                            <div>
-                                <p className="text-sm font-bold text-emerald-400">Data Quality: 100%</p>
-                                <p className="text-[10px] text-slate-500">All student records are complete.</p>
-                            </div>
-                        </div>
-                    )}
-
-
-                    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/80">
-                        <div className="p-4"><AtlasSectionHeader title="Admissions pipeline" description="New interest and current conversion pace." icon={Megaphone} actions={<AtlasActionButton variant="quiet" icon={ArrowRight} onClick={() => navigateTo('marketing')}>View pipeline</AtlasActionButton>} /></div>
-
-                        <div className="p-5">
-                            <div className="flex items-end justify-between mb-4">
-                                <div>
-                                    <div className={`text-3xl font-bold ${theme.text}`}>{newLeads}</div>
-                                    <div className="text-xs text-slate-500">Last 7 Days</div>
-                                </div>
-                                <div className="text-right">
-                                    {/* Calculate simplified conversion rate */}
-                                    <div className="text-sm font-bold text-emerald-500">
-                                        {leads.length > 0 ? Math.round((leads.filter(l => l.status === 'converted' || l.status === 'closed').length / leads.length) * 100) : 0}%
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold">Conv. Rate</div>
-                                </div>
-                            </div>
-
-                            {/* Sparkline Graph */}
-                            <div className="h-16 w-full relative">
-                                <svg className="w-full h-full overflow-visible" preserveAspectRatio="none">
-                                    {/* Line Path */}
-                                    <path
-                                        d={`M0,${64 - (leadTrendData[0] || 0) * 10} ${leadTrendData.map((val, i) => `L${(i / (leadTrendData.length - 1)) * 100}%,${64 - val * 10}`).join(' ')}`}
-                                        fill="none"
-                                        stroke="#2dd4bf"
-                                        strokeWidth="2"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className="drop-shadow-lg"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+            <motion.div variants={dashboardItemVariants}><WorkshopActionCenter /></motion.div>
+        </motion.div>
     );
 };
 

@@ -1,6 +1,8 @@
 import {
   collection,
   doc,
+  getDoc,
+  getDocs,
   onSnapshot,
   runTransaction,
   serverTimestamp,
@@ -16,6 +18,7 @@ import type {
   FinanceDocument,
   FinanceDocumentLine,
   FinanceParticipant,
+  FinanceInvoiceSequenceType,
 } from '../types';
 
 export interface IssueFinanceInvoiceInput {
@@ -30,8 +33,26 @@ export interface IssueFinanceInvoiceInput {
   programId?: string;
   programName?: string;
   sourcePaymentId?: string;
+  sequenceType?: FinanceInvoiceSequenceType;
   idempotencyKey?: string;
   lines: Array<Pick<FinanceDocumentLine, 'description' | 'quantity' | 'unitPrice' | 'taxRate'> & Partial<Pick<FinanceDocumentLine, 'details' | 'serviceId' | 'serviceName' | 'serviceVersion' | 'unitKind' | 'unitLabel' | 'hoursPerUnit' | 'sessionCount' | 'calculationMode'>>>;
+}
+
+export interface FinanceInvoiceSequenceSnapshot {
+  year: number;
+  formation: { lastUsed: number; nextNumber: string };
+  service: { lastUsed: number; nextNumber: string };
+}
+
+export interface UpdateFinanceInvoiceInput {
+  organizationId: string;
+  invoiceId: string;
+  expectedRevision: number;
+  issueDate: string;
+  dueDate?: string;
+  serviceDate?: string;
+  customer: FinanceCustomerSnapshot;
+  lines: IssueFinanceInvoiceInput['lines'];
 }
 
 const cleanId = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -65,11 +86,92 @@ export const normalizeLines = (lines: IssueFinanceInvoiceInput['lines']): Financ
   };
 });
 
-const nextNumber = (kind: 'invoice' | 'credit_note', year: number, sequence: number) => (
+const nextNumber = (kind: 'invoice' | 'credit_note', year: number, sequence: number, sequenceType: FinanceInvoiceSequenceType = 'service') => (
   kind === 'invoice'
-    ? `${year}${String(sequence).padStart(4, '0')}`
+    ? `${year}${sequenceType === 'formation' ? 'F' : 'S'}${String(sequence).padStart(3, '0')}`
     : `AV${year}${String(sequence).padStart(4, '0')}`
 );
+
+const invoiceSequenceType = (document: Pick<FinanceDocument, 'kind' | 'number' | 'programId' | 'sourcePaymentId' | 'lines' | 'sequenceType'>): FinanceInvoiceSequenceType | null => {
+  if (document.kind !== 'invoice') return null;
+  if (document.sequenceType === 'formation' || document.sequenceType === 'service') return document.sequenceType;
+  const marker = document.number.match(/^\d{4}([FS])\d+$/)?.[1];
+  if (marker === 'F') return 'formation';
+  if (marker === 'S') return 'service';
+  return document.programId || document.sourcePaymentId ? 'formation' : 'service';
+};
+
+const documentSequenceMaxima = (documents: FinanceDocument[], year: number) => documents.reduce((maxima, document) => {
+  if (document.sequenceYear !== year) return maxima;
+  const type = invoiceSequenceType(document);
+  if (type) maxima[type] = Math.max(maxima[type], Math.max(0, Number(document.sequenceNumber) || 0));
+  return maxima;
+}, { formation: 0, service: 0 } as Record<FinanceInvoiceSequenceType, number>);
+
+const invoiceCounterRef = (firestore: Firestore, organizationId: string, type: FinanceInvoiceSequenceType, year: number) => (
+  doc(firestore, 'organizations', organizationId, 'financeCounters', `invoice-${type}-${year}`)
+);
+
+export const loadFinanceInvoiceSequences = async (
+  firestore: Firestore,
+  organizationId: string,
+  year: number,
+): Promise<FinanceInvoiceSequenceSnapshot> => {
+  if (!Number.isInteger(year) || year < 2000 || year > 9999) throw new Error('Choose a valid sequence year.');
+  const [documentsSnapshot, formationCounter, serviceCounter] = await Promise.all([
+    getDocs(collection(firestore, 'organizations', organizationId, 'financeDocuments')),
+    getDoc(invoiceCounterRef(firestore, organizationId, 'formation', year)),
+    getDoc(invoiceCounterRef(firestore, organizationId, 'service', year)),
+  ]);
+  const maxima = documentSequenceMaxima(documentsSnapshot.docs.map(item => ({ id: item.id, ...item.data() } as FinanceDocument)), year);
+  const formation = Math.max(maxima.formation, Math.max(0, Number(formationCounter.data()?.value) || 0));
+  const service = Math.max(maxima.service, Math.max(0, Number(serviceCounter.data()?.value) || 0));
+  return {
+    year,
+    formation: { lastUsed: formation, nextNumber: nextNumber('invoice', year, formation + 1, 'formation') },
+    service: { lastUsed: service, nextNumber: nextNumber('invoice', year, service + 1, 'service') },
+  };
+};
+
+export const saveFinanceInvoiceSequences = async (
+  firestore: Firestore,
+  organizationId: string,
+  year: number,
+  values: Record<FinanceInvoiceSequenceType, number>,
+): Promise<FinanceInvoiceSequenceSnapshot> => {
+  if (!Number.isInteger(year) || year < 2000 || year > 9999) throw new Error('Choisissez une année valide.');
+  for (const type of ['formation', 'service'] as const) {
+    if (!Number.isInteger(values[type]) || values[type] < 0 || values[type] > 999999) throw new Error('Le dernier numéro utilisé doit être un entier positif.');
+  }
+  const documentsSnapshot = await getDocs(collection(firestore, 'organizations', organizationId, 'financeDocuments'));
+  const maxima = documentSequenceMaxima(documentsSnapshot.docs.map(item => ({ id: item.id, ...item.data() } as FinanceDocument)), year);
+  await runTransaction(firestore, async transaction => {
+    const refs = {
+      formation: invoiceCounterRef(firestore, organizationId, 'formation', year),
+      service: invoiceCounterRef(firestore, organizationId, 'service', year),
+    };
+    const [formationCounter, serviceCounter] = await Promise.all([transaction.get(refs.formation), transaction.get(refs.service)]);
+    const counters = {
+      formation: Math.max(0, Number(formationCounter.data()?.value) || 0),
+      service: Math.max(0, Number(serviceCounter.data()?.value) || 0),
+    };
+    for (const type of ['formation', 'service'] as const) {
+      const protectedMinimum = Math.max(maxima[type], counters[type]);
+      if (values[type] < protectedMinimum) {
+        throw new Error(`La séquence ${type === 'formation' ? 'formation' : 'service'} ne peut pas revenir sous ${protectedMinimum}, déjà réservé ou utilisé.`);
+      }
+      transaction.set(refs[type], {
+        organizationId,
+        kind: 'invoice',
+        sequenceType: type,
+        year,
+        value: values[type],
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    }
+  });
+  return loadFinanceInvoiceSequences(firestore, organizationId, year);
+};
 
 export const subscribeFinanceDocuments = (
   firestore: Firestore,
@@ -113,19 +215,22 @@ export const issueFinanceInvoice = async (
   const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
   const taxAmount = roundMoney(lines.reduce((sum, line) => sum + line.taxAmount, 0));
   const total = roundMoney(subtotal + taxAmount);
+  const sequenceType: FinanceInvoiceSequenceType = input.sequenceType || (input.programId || input.sourcePaymentId ? 'formation' : 'service');
   const documentsCollection = collection(firestore, 'organizations', input.organizationId, 'financeDocuments');
   const documentRef = input.idempotencyKey
     ? doc(documentsCollection, cleanId(input.idempotencyKey))
     : doc(documentsCollection);
-  const counterRef = doc(firestore, 'organizations', input.organizationId, 'financeCounters', `invoice-${year}`);
+  const counterRef = invoiceCounterRef(firestore, input.organizationId, sequenceType, year);
+  const documentsSnapshot = await getDocs(documentsCollection);
+  const latestDocumentSequence = documentSequenceMaxima(documentsSnapshot.docs.map(item => ({ id: item.id, ...item.data() } as FinanceDocument)), year)[sequenceType];
 
   return runTransaction(firestore, async transaction => {
     const existing = await transaction.get(documentRef);
     if (existing.exists()) return { id: existing.id, ...existing.data() } as FinanceDocument;
 
     const counter = await transaction.get(counterRef);
-    const sequenceNumber = Math.max(0, Number(counter.data()?.value) || 0) + 1;
-    const number = nextNumber('invoice', year, sequenceNumber);
+    const sequenceNumber = Math.max(latestDocumentSequence, Math.max(0, Number(counter.data()?.value) || 0)) + 1;
+    const number = nextNumber('invoice', year, sequenceNumber, sequenceType);
 
     let corporateEnrollmentId: string | undefined;
     if (input.customer.type === 'company' && input.programId && input.programName) {
@@ -156,6 +261,7 @@ export const issueFinanceInvoice = async (
       number,
       sequenceYear: year,
       sequenceNumber,
+      sequenceType,
       status: 'issued',
       issueDate: input.issueDate,
       dueDate: input.dueDate || input.issueDate,
@@ -172,6 +278,7 @@ export const issueFinanceInvoice = async (
       subtotal,
       taxAmount,
       total,
+      revision: 0,
     };
 
     const serializableDocument = JSON.parse(JSON.stringify(document));
@@ -184,12 +291,60 @@ export const issueFinanceInvoice = async (
     transaction.set(counterRef, {
       organizationId: input.organizationId,
       kind: 'invoice',
+      sequenceType,
       year,
       value: sequenceNumber,
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
     return document as FinanceDocument;
+  });
+};
+
+export const updateFinanceInvoice = async (
+  firestore: Firestore,
+  input: UpdateFinanceInvoiceInput,
+): Promise<FinanceDocument> => {
+  const year = Number(input.issueDate.slice(0, 4));
+  if (!Number.isInteger(year) || year < 2000 || year > 9999) throw new Error('Choose a valid invoice date.');
+  if (!input.customer.name.trim()) throw new Error('Choose a customer for this invoice.');
+  if (input.dueDate && input.dueDate < input.issueDate) throw new Error('The due date cannot be before the invoice date.');
+
+  const lines = normalizeLines(input.lines);
+  if (!lines.length || lines.some(line => !line.description)) {
+    throw new Error('Every invoice line needs a description, quantity, and positive unit price.');
+  }
+
+  const subtotal = roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
+  const taxAmount = roundMoney(lines.reduce((sum, line) => sum + line.taxAmount, 0));
+  const total = roundMoney(subtotal + taxAmount);
+  const invoiceRef = doc(firestore, 'organizations', input.organizationId, 'financeDocuments', input.invoiceId);
+
+  return runTransaction(firestore, async transaction => {
+    const snapshot = await transaction.get(invoiceRef);
+    if (!snapshot.exists()) throw new Error('The invoice no longer exists.');
+    const current = { id: snapshot.id, ...snapshot.data() } as FinanceDocument;
+    if (current.organizationId !== input.organizationId || current.kind !== 'invoice') throw new Error('Only an invoice from this workspace can be edited.');
+    if (current.status === 'credited' || current.creditNoteId) throw new Error('A credited invoice can no longer be edited.');
+    if (year !== current.sequenceYear) throw new Error('The invoice date must stay in the year of its existing number.');
+
+    const currentRevision = Math.max(0, Number(current.revision) || 0);
+    if (currentRevision !== input.expectedRevision) throw new Error('This invoice was modified elsewhere. Close it and reopen the latest version.');
+    const revision = currentRevision + 1;
+    const editable = JSON.parse(JSON.stringify({
+      issueDate: input.issueDate,
+      dueDate: input.dueDate || input.issueDate,
+      serviceDate: input.serviceDate || input.issueDate,
+      customer: { ...input.customer, name: input.customer.name.trim() },
+      lines,
+      subtotal,
+      taxAmount,
+      total,
+      revision,
+    }));
+
+    transaction.update(invoiceRef, { ...editable, updatedAt: serverTimestamp() });
+    return { ...current, ...editable } as FinanceDocument;
   });
 };
 

@@ -35,6 +35,7 @@ export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) 
     const { currentView, navigateTo, settings } = useAppContext();
     const { userProfile, signOut } = useAuth();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const showEducationUiV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     const academyName = settings.academyName || 'MakerLab Academy';
     const instructorName = userProfile?.name || 'Instructor';
@@ -43,7 +44,7 @@ export const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) 
     const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
     return (
-        <div className="flex min-h-[100dvh] bg-[#08111f] font-sans text-slate-200">
+        <div className={`flex min-h-[100dvh] bg-[#08111f] font-sans text-slate-200 ${showEducationUiV1 ? 'edu-v1 edu-instructor-shell-v1' : ''}`} data-testid={showEducationUiV1 ? 'education-instructor-shell-v1' : undefined}>
             {isMobileMenuOpen && (
                 <button
                     type="button"

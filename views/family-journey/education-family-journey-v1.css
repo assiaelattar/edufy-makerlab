@@ -1,0 +1,123 @@
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) {
+  --family-border: #dce2d8;
+  --family-surface: #fff;
+  --family-muted: #667064;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) > header,
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) > div:first-child {
+  border-radius: 28px;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-command-header {
+  min-height: 148px;
+  background: linear-gradient(120deg, #fff 0%, #fbfff4 62%, #f1ffd7 100%);
+  border-color: var(--family-border);
+  box-shadow: 0 18px 46px rgba(35, 43, 31, .07);
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-signal-card:nth-child(4n + 1) {
+  background: #c7ff35 !important;
+  border-color: #a9dc24 !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-signal-card:nth-child(4n + 2) {
+  background: #ffe8c8 !important;
+  border-color: #efcda1 !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-signal-card:nth-child(4n + 3) {
+  background: #e4efff !important;
+  border-color: #c5d8f2 !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-signal-card:nth-child(4n + 4) {
+  background: #171a17 !important;
+  border-color: #171a17 !important;
+  color: #fff !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-signal-card:nth-child(4n + 4) :is(p, span, svg) {
+  color: #fff !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1) [role='tablist'] {
+  position: sticky;
+  top: 0;
+  border: 1px solid var(--family-border) !important;
+  border-radius: 16px !important;
+  background: rgba(247, 249, 244, .94) !important;
+  box-shadow: 0 8px 20px rgba(35, 43, 31, .06);
+  backdrop-filter: blur(14px);
+}
+
+.education-ui-v1-active .edu-communications-v1 > .sticky {
+  margin-inline: 0 !important;
+  padding-inline: 0 !important;
+  background: transparent !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1) [role='tab'][aria-selected='true'] {
+  background: #c7ff35 !important;
+  color: #141713 !important;
+  box-shadow: none !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1) [role='tab'][aria-selected='false'] {
+  color: #667064 !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) article,
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) section > .rounded-lg,
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1) [role='tabpanel'] > div > div,
+.education-ui-v1-active .edu-enrollment-forms-v1 section article {
+  border-color: var(--family-border) !important;
+  background: var(--family-surface) !important;
+  box-shadow: 0 10px 28px rgba(35, 43, 31, .055);
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) article:hover {
+  border-color: #abc96a !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) :is(h2, h3, strong, .text-white, .text-slate-100, .text-slate-200, .text-slate-300) {
+  color: #20251f !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) :is(.text-slate-400, .text-slate-500, .text-slate-600) {
+  color: var(--family-muted) !important;
+}
+
+.education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) :is(.bg-slate-950, .bg-slate-950\/50, .bg-slate-950\/55, .bg-slate-950\/60, .bg-slate-950\/70, .bg-slate-900, .bg-slate-900\/45, .bg-slate-900\/70) {
+  background-color: #f7f9f4 !important;
+}
+
+.education-ui-v1-active .edu-marketing-v1 > div:nth-of-type(2),
+.education-ui-v1-active .edu-communications-v1 > div:nth-of-type(2),
+.education-ui-v1-active .edu-pickup-v1 > div:nth-of-type(2) {
+  gap: 10px;
+}
+
+.education-ui-v1-active .edu-pickup-v1 .fixed.inset-0 {
+  background: #171a17 !important;
+}
+
+.education-ui-v1-active .edu-pickup-v1 .fixed.inset-0 :is(h1, h2, h3, .text-white, .text-slate-100, .text-slate-200, .text-slate-300) {
+  color: #fff !important;
+}
+
+.education-ui-v1-active .edu-pickup-v1 .fixed.inset-0 :is(article, section, .bg-slate-950, .bg-slate-900\/70) {
+  background: #222722 !important;
+  border-color: rgba(255, 255, 255, .14) !important;
+}
+
+@media (max-width: 767px) {
+  .education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1, .edu-pickup-v1, .edu-enrollment-forms-v1) .atlas-command-header {
+    min-height: 0;
+    border-radius: 20px;
+  }
+
+  .education-ui-v1-active :is(.edu-marketing-v1, .edu-communications-v1) [role='tablist'] {
+    border-radius: 14px !important;
+  }
+}
