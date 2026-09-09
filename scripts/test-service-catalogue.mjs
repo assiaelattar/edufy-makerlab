@@ -1,0 +1,10 @@
+import { build } from 'esbuild';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const kind = process.argv.includes('--emulator') ? 'emulator' : 'smoke';
+const output = `${root}/node_modules/.cache/services/${kind}.mjs`;
+await build({ absWorkingDir: root, entryPoints: [`components/finance/serviceCatalogue.${kind}.ts`], outfile: output, bundle: true, platform: 'node', format: 'esm', packages: 'external' });
+const result = spawnSync(process.execPath, [output], { cwd: root, env: process.env, stdio: 'inherit' });
+if (result.error) throw result.error;
+process.exitCode = result.status ?? 1;

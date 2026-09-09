@@ -5,7 +5,7 @@ import {
     FileText, Building, Calendar, AlertCircle, CheckCircle2, Users,
     ArrowRight, Phone, BarChart2, Download, MessageCircle, Wrench, ShieldCheck,
     Upload, Image as ImageIcon, RefreshCw, ArrowLeft, WalletCards, UserRoundSearch,
-    History, Sparkles, SlidersHorizontal, ChevronRight
+    History, Sparkles, SlidersHorizontal, ChevronRight, ReceiptText
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useAppContext } from '../context/AppContext';
@@ -17,6 +17,7 @@ import { db } from '../services/firebase';
 import { doc, writeBatch, collection, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Modal } from '../components/Modal';
 import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
+import { FinanceDocumentsPanel } from '../components/finance/FinanceDocumentsPanel';
 
 // --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
@@ -94,7 +95,8 @@ export const computeAcademicYear = (d: Date = new Date()): string => {
 
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const { payments, enrollments, students, programs, navigateTo, settings, viewParams, fetchDashboardData } = useAppContext();
-    const { can, currentOrganization } = useAuth();
+    const { can, currentOrganization, userProfile } = useAuth();
+    const canManageInvoices = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
     const { confirm, alert: showAlert } = useConfirm();
     const financeTopRef = useRef<HTMLDivElement>(null);
 
@@ -121,7 +123,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     const [isSubmittingTransactionEdit, setIsSubmittingTransactionEdit] = useState(false);
 
     // --- State ---
-    const [viewMode, setViewMode] = useState<'home' | 'transactions' | 'balances' | 'upcoming' | 'reports'>('home');
+    const [viewMode, setViewMode] = useState<'home' | 'transactions' | 'balances' | 'upcoming' | 'reports' | 'invoices'>('home');
     const [showFinanceTools, setShowFinanceTools] = useState(false);
     const [showHistoryFilters, setShowHistoryFilters] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -1264,7 +1266,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         return { badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20', dot: 'bg-blue-500', label: 'Due this month' };
     };
 
-    const openFinanceTask = (task: 'families' | 'verify' | 'history' | 'follow-up' | 'reports') => {
+    const openFinanceTask = (task: 'families' | 'verify' | 'history' | 'follow-up' | 'reports' | 'invoices') => {
         setSearchQuery('');
         setSelectedMonth('');
         setShowFinanceTools(false);
@@ -1295,6 +1297,10 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             setViewMode('upcoming');
             return;
         }
+        if (task === 'invoices') {
+            setViewMode('invoices');
+            return;
+        }
         setViewMode('reports');
         setFilterAudience('all');
     };
@@ -1318,7 +1324,8 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             ? { icon: ShieldCheck, title: 'Verify payments', description: 'Only payments that need a decision are shown.' }
             : { icon: History, title: 'Payment history', description: 'Find a payment, print its receipt, or correct a mistake.' },
         upcoming: { icon: MessageCircle, title: 'Needs follow-up', description: 'Families with a late or upcoming instalment.' },
-        reports: { icon: BarChart2, title: 'Payment reports', description: 'Review one month at a time and print when needed.' }
+        reports: { icon: BarChart2, title: 'Payment reports', description: 'Review one month at a time and print when needed.' },
+        invoices: { icon: ReceiptText, title: 'Invoices and accounting', description: 'Issue invoices, preserve credit notes, and export journal entries.' }
     } as const;
 
     return (
@@ -1412,7 +1419,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </div>
                     </section>
 
-                    <section aria-label="Finance tasks" className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                    <section aria-label="Finance tasks" className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                         {can('finance.record_payment') && (
                             <button type="button" onClick={() => onRecordPayment()} className="group min-h-40 rounded-lg border border-teal-300/25 bg-teal-300/[0.06] p-4 text-left transition duration-200 hover:border-teal-200/50 hover:bg-teal-300/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60 motion-safe:hover:-translate-y-1">
                                 <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-teal-300 text-slate-950"><CreditCard size={21} className="transition-transform duration-200 motion-safe:group-hover:-rotate-6 motion-safe:group-hover:scale-110" /></span>
@@ -1438,6 +1445,12 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Payment history</span><ChevronRight size={18} className="shrink-0 text-slate-300 transition-transform motion-safe:group-hover:translate-x-1" /></span>
                             <span className="mt-1 block text-xs leading-5 text-slate-400">Search receipts, print documents, or correct a mistake.</span>
                         </button>
+
+                        {canManageInvoices && <button type="button" onClick={() => openFinanceTask('invoices')} className="group min-h-40 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] p-4 text-left transition duration-200 hover:border-violet-200/40 hover:bg-violet-300/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50 motion-safe:hover:-translate-y-1">
+                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-violet-300/15 text-violet-200"><ReceiptText size={21} /></span>
+                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Invoices &amp; accounting</span><ChevronRight size={18} className="shrink-0 text-violet-200" /></span>
+                            <span className="mt-1 block text-xs leading-5 text-slate-400">Training and service invoices, credit notes, and accounting exports.</span>
+                        </button>}
                     </section>
 
                     <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
@@ -1477,8 +1490,10 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     <section className="flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/45 p-3 sm:flex-row sm:items-center">
                         <button type="button" onClick={goFinanceHome} className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-300 transition hover:bg-white/[0.05] hover:text-white"><ArrowLeft size={16} /> Finance home</button>
                         {(() => { const WorkspaceIcon = focusedWorkspace[viewMode].icon; return <div className="flex min-w-0 flex-1 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-300/10 text-teal-200"><WorkspaceIcon size={19} /></span><div className="min-w-0"><h2 className="truncate text-base font-black text-white">{focusedWorkspace[viewMode].title}</h2><p className="truncate text-xs text-slate-500">{focusedWorkspace[viewMode].description}</p></div></div>; })()}
-                        {can('finance.record_payment') && viewMode !== 'reports' && <button type="button" onClick={() => onRecordPayment()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><CreditCard size={16} /> Record payment</button>}
+                        {can('finance.record_payment') && viewMode !== 'reports' && viewMode !== 'invoices' && <button type="button" onClick={() => onRecordPayment()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><CreditCard size={16} /> Record payment</button>}
                     </section>
+
+            {viewMode === 'invoices' && <FinanceDocumentsPanel />}
 
  {/*  Monthly Revenue Chart  */}
             {viewMode === 'reports' && can('finance.view_totals') && monthlyChartData.length > 0 && (
@@ -1567,7 +1582,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             )}
 
  {/*  Main Table Panel  */}
-            <div className="rounded-lg border border-white/10 bg-slate-950/45">
+            {viewMode !== 'invoices' && <div className="rounded-lg border border-white/10 bg-slate-950/45">
 
                 {/* Toolbar */}
                 <div className="sticky top-0 z-20 space-y-3 border-b border-white/10 bg-slate-950 p-3">
@@ -2258,7 +2273,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         )}
                     </div>
                 )}
-            </div>
+            </div>}
                 </>
             )}
 

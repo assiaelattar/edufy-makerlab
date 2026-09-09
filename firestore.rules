@@ -346,8 +346,35 @@ service cloud.firestore {
         allow write: if canManageTenantOrg(orgId);
       }
 
-      match /{allSubcollections=**} {
-        allow read, write: if canManageTenantOrg(orgId);
+      // Keep the existing organization-manager boundary for service billing.
+      // This explicit exclusion prevents the legacy recursive grant bypassing validation.
+      match /{subcollection}/{allSubcollections=**} {
+        allow read, write: if subcollection != 'serviceCatalogue' && canManageTenantOrg(orgId);
+      }
+
+      match /serviceCatalogue/{serviceId} {
+        function serviceOperator() {
+          return canManageTenantOrg(orgId) && currentUser().data.get('status', '') == 'active';
+        }
+        function validService() {
+          let value = request.resource.data;
+          return value.keys().hasOnly(['organizationId', 'name', 'description', 'category', 'unitLabel', 'quantity', 'unitPrice', 'taxRate', 'status', 'source', 'version', 'createdAt', 'updatedAt']) &&
+            value.organizationId == orgId &&
+            value.name is string && value.name.size() > 0 && value.name.size() <= 160 &&
+            value.description is string && value.description.size() <= 4000 &&
+            value.category is string && value.category.size() <= 80 &&
+            value.unitLabel is string && value.unitLabel.size() > 0 && value.unitLabel.size() <= 80 &&
+            value.quantity is number && value.quantity > 0 && value.quantity <= 1000000 &&
+            (value.unitPrice == null || (value.unitPrice is number && value.unitPrice >= 0 && value.unitPrice <= 1000000000)) &&
+            value.taxRate is number && value.taxRate >= 0 && value.taxRate <= 100 &&
+            value.status in ['active', 'archived'] &&
+            value.source is string && value.source.size() <= 200 &&
+            value.version is int && value.updatedAt == request.time;
+        }
+        allow read: if serviceOperator();
+        allow create: if serviceOperator() && validService() && request.resource.data.version == 1 && request.resource.data.createdAt == request.time;
+        allow update: if serviceOperator() && validService() && resource.data.organizationId == orgId && request.resource.data.version == resource.data.version + 1 && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if false;
       }
     }
 

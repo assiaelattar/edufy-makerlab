@@ -1,6 +1,25 @@
 
 import { Timestamp } from 'firebase/firestore';
 import type { ProgramFormatPreset, RegistrationMode } from './programOperations';
+import type { BillingAudience, FinanceBillingProfile } from './finance';
+
+export type {
+  AccountingEntry,
+  AccountingExportField,
+  AccountingExportTemplate,
+  BillingAudience,
+  BillingCalculationMode,
+  BillingUnitKind,
+  CorporateEnrollment,
+  FinanceBeneficiarySnapshot,
+  FinanceBillingProfile,
+  FinanceCustomerSnapshot,
+  FinanceDocument,
+  FinanceDocumentKind,
+  FinanceDocumentLine,
+  FinanceDocumentStatus,
+  FinanceParticipant,
+} from './finance';
 
 export interface ProgramScheduleSlot {
   id: string;
@@ -113,6 +132,8 @@ export interface Program {
   description: string;
   status: 'draft' | 'active' | 'archived';
   targetAudience?: 'kids' | 'adults';
+  billingAudience?: BillingAudience;
+  billingProfile?: FinanceBillingProfile;
   formatPreset?: ProgramFormatPreset;
   runSetup?: ProgramRunSetupDraft;
   registrationSetup?: ProgramRegistrationSetupDraft;
