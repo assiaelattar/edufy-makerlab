@@ -402,7 +402,7 @@ export const EducationDashboardV1 = ({
                 <div className="edu-dashboard-v1__workshop-live">{workshopActionCenter}</div>
             </section>
 
-            <footer className="edu-dashboard-v1__footer"><span>Education UI preview</span><span>Development only · Existing dashboard remains the fallback</span></footer>
+            <footer className="edu-dashboard-v1__footer"><span>Interface Edufy</span><span>Design opérationnel · Données en temps réel</span></footer>
         </div>
     );
 };
