@@ -106,7 +106,7 @@ const ENROLLMENT_POLICIES: Array<{
   helper: string;
   icon: LucideIcon;
 }> = [
-  { id: 'fixed_run', label: 'One shared run', helper: 'Everyone follows the same start and end dates.', icon: CalendarDays },
+  { id: 'fixed_run', label: 'One shared run', helper: 'One cohort starts together, such as semester 1 or semester 2.', icon: CalendarDays },
   { id: 'rolling_membership', label: 'Join anytime', helper: 'Each learner starts when they enroll and gets their own end date.', icon: Clock3 },
   { id: 'modular', label: 'Choose parts', helper: 'Families select weeks, modules, or other program parts.', icon: Layers3 },
 ];
@@ -201,10 +201,11 @@ const inferPreset = (program: Partial<Program>): ProgramFormatPreset => {
 
 const createDraft = (program: Partial<Program>, organizationId: string): WizardDraft => {
   const source = program as ProgramSetupSource;
-  const sourcePolicy = typeof source.enrollmentPolicy === 'string'
+  const preset = inferPreset(program);
+  const savedPolicy = typeof source.enrollmentPolicy === 'string'
     ? source.enrollmentPolicy
     : source.enrollmentPolicy?.mode || 'fixed_run';
-  const preset = inferPreset(program);
+  const sourcePolicy = preset === 'school_term' ? 'fixed_run' : savedPolicy;
   return {
     ...program,
     id: program.id,
@@ -217,7 +218,7 @@ const createDraft = (program: Partial<Program>, organizationId: string): WizardD
     targetAudience: program.targetAudience || 'kids',
     enrollmentPolicy: sourcePolicy,
     membershipDurationMonths: source.membershipDurationMonths || (typeof source.enrollmentPolicy === 'object' ? source.enrollmentPolicy.membershipDurationMonths : undefined) || 12,
-    allowJoinAnytime: sourcePolicy === 'rolling_membership' ? true : (source.allowJoinAnytime ?? (typeof source.enrollmentPolicy === 'object' ? source.enrollmentPolicy.allowJoinAnytime : false)),
+    allowJoinAnytime: preset === 'school_term' ? false : sourcePolicy === 'rolling_membership' ? true : (source.allowJoinAnytime ?? (typeof source.enrollmentPolicy === 'object' ? source.enrollmentPolicy.allowJoinAnytime : false)),
     moduleLabel: source.moduleLabel || (typeof source.enrollmentPolicy === 'object' ? source.enrollmentPolicy.moduleLabel : undefined) || 'Module',
     runSetup: {
       name: program.runSetup?.name || '',
@@ -330,6 +331,9 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       allowJoinAnytime: enrollmentPolicy === 'rolling_membership' ? true : enrollmentPolicy === 'modular',
       membershipDurationMonths: previous.membershipDurationMonths || 12,
       moduleLabel: previous.moduleLabel || 'Module',
+      runSetup: enrollmentPolicy === 'rolling_membership' && !isEditing
+        ? { ...previous.runSetup, endDate: '' }
+        : previous.runSetup,
     }));
   };
 
@@ -342,7 +346,12 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
   };
 
   const choosePreset = (preset: typeof PRESETS[number]) => {
-    setDraft(previous => ({ ...previous, formatPreset: preset.id, type: preset.type }));
+    setDraft(previous => ({
+      ...previous,
+      formatPreset: preset.id,
+      type: preset.type,
+      ...(preset.id === 'school_term' ? { enrollmentPolicy: 'fixed_run' as const, allowJoinAnytime: false } : {}),
+    }));
   };
 
   const applyMakerLabCampTemplate = () => {
@@ -509,8 +518,9 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       if (!draft.description.trim()) return 'Add a short description so families understand the program.';
     }
     if (targetStep === 2) {
-      if (!draft.runSetup.startDate || !draft.runSetup.endDate) return 'Choose the first and last day of this run.';
-      if (draft.runSetup.endDate < draft.runSetup.startDate) return 'The last day must be after the first day.';
+      if (!draft.runSetup.startDate) return draft.enrollmentPolicy === 'rolling_membership' ? 'Choose when this permanent membership program opens.' : 'Choose the first day of this run.';
+      if (draft.enrollmentPolicy !== 'rolling_membership' && !draft.runSetup.endDate) return 'Choose the last day of this run.';
+      if (draft.enrollmentPolicy !== 'rolling_membership' && draft.runSetup.endDate < draft.runSetup.startDate) return 'The last day must be after the first day.';
       if (draft.runSetup.enrollmentOpenDate && draft.runSetup.enrollmentCloseDate && draft.runSetup.enrollmentCloseDate < draft.runSetup.enrollmentOpenDate) return 'Registration must close after it opens.';
       if (!draft.runSetup.timezone.trim()) return 'Choose the timezone used for this timetable.';
       if (draft.enrollmentPolicy === 'rolling_membership' && (draft.membershipDurationMonths < 1 || draft.membershipDurationMonths > 36)) return 'Choose a membership duration between 1 and 36 months.';
@@ -555,18 +565,19 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
 
   const normalizeDraft = (): Partial<Program> => {
     const { enrollmentPolicy, membershipDurationMonths, allowJoinAnytime, moduleLabel, ...programDraft } = draft;
+    const effectiveEnrollmentPolicy: EnrollmentPolicy = draft.formatPreset === 'school_term' ? 'fixed_run' : enrollmentPolicy;
     return {
     ...programDraft,
     organizationId: draft.organizationId || organizationId,
     name: draft.name.trim(),
     description: draft.description.trim(),
     enrollmentPolicy: {
-      mode: enrollmentPolicy,
-      membershipDurationMonths: enrollmentPolicy === 'rolling_membership'
+      mode: effectiveEnrollmentPolicy,
+      membershipDurationMonths: effectiveEnrollmentPolicy === 'rolling_membership'
         ? Math.min(36, Math.max(1, Number(membershipDurationMonths) || 12))
         : undefined,
-      allowJoinAnytime: enrollmentPolicy === 'rolling_membership' ? true : allowJoinAnytime,
-      moduleLabel: enrollmentPolicy === 'modular' ? (moduleLabel.trim() || 'Module') : undefined,
+      allowJoinAnytime: effectiveEnrollmentPolicy === 'rolling_membership' ? true : draft.formatPreset === 'school_term' ? false : allowJoinAnytime,
+      moduleLabel: effectiveEnrollmentPolicy === 'modular' ? (moduleLabel.trim() || 'Module') : undefined,
     },
     runSetup: {
       ...draft.runSetup,
@@ -776,13 +787,15 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                     {ENROLLMENT_POLICIES.map(policy => {
                       const Icon = policy.icon;
                       const selected = draft.enrollmentPolicy === policy.id;
+                      const disabled = draft.formatPreset === 'school_term' && policy.id !== 'fixed_run';
                       return (
                         <button
                           key={policy.id}
                           type="button"
                           onClick={() => chooseEnrollmentPolicy(policy.id)}
                           aria-pressed={selected}
-                          className={`flex min-h-[7.5rem] flex-col items-start rounded-lg border p-3 text-left transition active:scale-[0.99] ${selected ? 'border-teal-300/45 bg-teal-300/10' : 'border-white/10 bg-slate-950/35 hover:border-white/20 hover:bg-white/[0.03]'}`}
+                          disabled={disabled}
+                          className={`flex min-h-[7.5rem] flex-col items-start rounded-lg border p-3 text-left transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35 ${selected ? 'border-teal-300/45 bg-teal-300/10' : 'border-white/10 bg-slate-950/35 hover:border-white/20 hover:bg-white/[0.03]'}`}
                         >
                           <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${selected ? 'bg-teal-300 text-slate-950' : 'bg-white/[0.05] text-slate-400'}`}><Icon size={17} /></span>
                           <span className="mt-3 text-sm font-black text-white">{policy.label}</span>
@@ -793,13 +806,25 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                   </div>
                 </div>
 
+                {draft.formatPreset === 'school_term' && (
+                  <div className="rounded-lg border border-teal-300/20 bg-teal-300/[0.07] p-3">
+                    <div className="flex items-start gap-3">
+                      <School size={18} className="mt-0.5 shrink-0 text-teal-300" />
+                      <div>
+                        <p className="text-sm font-black text-teal-100">One school cohort, one semester start</p>
+                        <p className="mt-1 text-xs leading-5 text-teal-100/65">Choose the dates for semester 1 or semester 2 below. Every learner in this school run receives the same start and end dates, even when their record is added later.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {draft.enrollmentPolicy === 'rolling_membership' && (
                   <div className="rounded-lg border border-sky-300/20 bg-sky-300/[0.07] p-3">
                     <div className="flex items-start gap-3">
                       <Clock3 size={18} className="mt-0.5 shrink-0 text-sky-300" />
                       <div>
                         <p className="text-sm font-black text-sky-100">StemQuest-style rolling dates</p>
-                        <p className="mt-1 text-xs leading-5 text-sky-100/65">The dates below show when the program operates. A learner can join during that window, and Edufy gives them a personal end date based on the day they join.</p>
+                        <p className="mt-1 text-xs leading-5 text-sky-100/65">This program stays open without a global end date. Each learner receives a personal end date from the day they join; existing legacy program dates remain stored but do not expire memberships.</p>
                       </div>
                     </div>
                     <div className="mt-3 max-w-[13rem]">
@@ -816,7 +841,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                   </div>
                 )}
 
-                {draft.enrollmentPolicy !== 'rolling_membership' && (
+                {draft.enrollmentPolicy !== 'rolling_membership' && draft.formatPreset !== 'school_term' && (
                   <Toggle
                     checked={draft.allowJoinAnytime}
                     onChange={checked => setDraft(previous => ({ ...previous, allowJoinAnytime: checked }))}
@@ -858,8 +883,12 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2"><label className={labelClass}>Run name <span className="font-medium text-slate-600">Optional</span></label><input className={fieldClass} value={draft.runSetup.name || ''} onChange={event => updateRun({ name: event.target.value })} placeholder="Spring 2027 / Week 1 / Cohort A" /></div>
-                  <div><label className={labelClass}>{draft.enrollmentPolicy === 'rolling_membership' ? 'Program available from' : 'Starts'}</label><input type="date" className={fieldClass} value={draft.runSetup.startDate} onChange={event => updateRun({ startDate: event.target.value })} /></div>
-                  <div><label className={labelClass}>{draft.enrollmentPolicy === 'rolling_membership' ? 'Program available until' : 'Ends'}</label><input type="date" className={fieldClass} value={draft.runSetup.endDate} onChange={event => updateRun({ endDate: event.target.value })} /></div>
+                  <div><label className={labelClass}>{draft.enrollmentPolicy === 'rolling_membership' ? 'Program opens' : 'Starts'}</label><input type="date" className={fieldClass} value={draft.runSetup.startDate} onChange={event => updateRun({ startDate: event.target.value })} /></div>
+                  {draft.enrollmentPolicy === 'rolling_membership' ? (
+                    <div className="rounded-lg border border-teal-300/20 bg-teal-300/[0.07] px-3 py-2.5"><p className="text-xs font-black uppercase tracking-wide text-teal-200">No program end date</p><p className="mt-1 text-xs leading-5 text-teal-100/65">Memberships end individually after {draft.membershipDurationMonths} months.</p></div>
+                  ) : (
+                    <div><label className={labelClass}>Ends</label><input type="date" className={fieldClass} value={draft.runSetup.endDate} onChange={event => updateRun({ endDate: event.target.value })} /></div>
+                  )}
                 </div>
 
                 <div className="grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-2">
@@ -990,7 +1019,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
               <div className="space-y-5">
                 <div className="grid gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-2">
                   <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Program</p><p className="mt-2 font-black text-white">{draft.name}</p><p className="mt-1 text-xs text-slate-500">{selectedPreset.label} for {draft.targetAudience === 'kids' ? 'children' : 'adults'}</p></div>
-                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Run</p><p className="mt-2 font-black text-white">{draft.runSetup.name || 'Main run'}</p><p className="mt-1 text-xs text-slate-500">{draft.runSetup.startDate} to {draft.runSetup.endDate}</p></div>
+                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Run</p><p className="mt-2 font-black text-white">{draft.runSetup.name || 'Main run'}</p><p className="mt-1 text-xs text-slate-500">{draft.enrollmentPolicy === 'rolling_membership' ? `Open from ${draft.runSetup.startDate}, no global end` : `${draft.runSetup.startDate} to ${draft.runSetup.endDate}`}</p></div>
                   <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Learning rhythm</p><p className="mt-2 font-black text-white">{totalGroups} {totalGroups === 1 ? 'group' : 'groups'}, {totalCapacity} seats</p><p className="mt-1 text-xs text-slate-500">{draft.grades.length} {draft.grades.length === 1 ? 'level' : 'levels'} and {totalBlocks} scheduled class {totalBlocks === 1 ? 'time' : 'times'}</p></div>
                   <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Offer</p><p className="mt-2 font-black text-white">{draft.packs.length} price {draft.packs.length === 1 ? 'option' : 'options'}</p><p className="mt-1 text-xs text-slate-500">{recurringPrice ? 'Annual and term pricing' : 'One-time pricing'}</p></div>
                   <div className="bg-slate-950/90 p-4 sm:col-span-2"><p className="text-[10px] font-black uppercase text-slate-600">Enrollment timing</p><p className="mt-2 font-black text-white">{selectedEnrollmentPolicy.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{draft.enrollmentPolicy === 'rolling_membership' ? `Each learner ends ${draft.membershipDurationMonths} months after joining.` : draft.enrollmentPolicy === 'modular' ? `Families choose the ${draft.moduleLabel.trim() || 'Module'} options that fit them.${draft.allowJoinAnytime ? ' They can join after the program starts.' : ''}` : `Everyone follows the shared run dates.${draft.allowJoinAnytime ? ' Late joining is allowed.' : ''}`}</p></div>

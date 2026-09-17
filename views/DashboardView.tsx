@@ -8,6 +8,7 @@ import { formatCurrency, getDaysDifference, formatDate, getUpcomingBirthdays } f
 import { db } from '../services/firebase';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
 
 // --- HELPER: Safe Date Conversion ---
 const getDate = (date: any): Date => {
@@ -573,7 +574,11 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
 
         // A. Regular Classes
         const classes = enrollments
-            .filter(e => e.status === 'active' && (e.groupTime?.includes(dayName) || e.secondGroupTime?.includes(dayName)))
+            .filter(enrollment => {
+                const program = programs.find(item => item.id === enrollment.programId);
+                return isEnrollmentEligibleForAttendance(enrollment, program, dateStr)
+                    && (enrollment.groupTime?.includes(dayName) || enrollment.secondGroupTime?.includes(dayName));
+            })
             .reduce((acc, curr) => {
                 // Determine which slot is today
                 let time = "", group = "", type = "";
@@ -601,7 +606,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
             });
 
         return [...Object.values(classes), ...workshops].sort((a, b) => a.time.localeCompare(b.time));
-    }, [enrollments, workshopSlots, workshopTemplates]);
+    }, [enrollments, programs, workshopSlots, workshopTemplates]);
 
     // 4. Alerts & Actionable Items
     const checksToDeposit = sessionPayments.filter(p => p.status === 'check_received').length;

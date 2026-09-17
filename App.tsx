@@ -8,7 +8,7 @@ import { ConfirmProvider, useConfirm } from './context/ConfirmContext';
 import { NotificationProvider, useNotifications } from './context/NotificationContext';
 import { getModuleById } from './services/moduleRegistry';
 import { ModuleProvider, useModuleContext } from './context/ModuleContext';
-import { Lead } from './types'; // Import Lead type
+import { Lead, type Enrollment } from './types'; // Import Lead type
 import { DashboardView } from './views/DashboardView';
 import { StudentsView } from './views/StudentsView';
 import { ClassesView } from './views/ClassesView';
@@ -58,6 +58,8 @@ import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'fir
 import { db } from './services/firebase';
 import { formatCurrency, compressImage, normalizePhone } from './utils/helpers';
 import { resolveEnrollmentServicePeriod } from './utils/programLifecycle';
+import { getProgramReadiness } from './utils/program-readiness';
+import { getEnrollmentCoverageState } from './utils/membershipLifecycle';
 import { isPublicEnrollmentRequest } from './utils/publicEnrollment';
 import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
@@ -757,8 +759,8 @@ const AppContent = () => {
             return;
         }
 
-        if (selectedProgram.status !== 'active') {
-            await showAlert('Program unavailable', `This program is ${selectedProgram.status} and cannot accept a new enrollment.`, 'warning');
+        if (!getProgramReadiness(selectedProgram).isAcceptingEnrollments) {
+            await showAlert('Program finished', 'This fixed program has reached its end date. Its history is preserved, but it cannot accept a new enrollment.', 'warning');
             return;
         }
 
@@ -801,9 +803,13 @@ const AppContent = () => {
             return;
         }
 
+        const enrollmentReferenceDate = new Date().toISOString().slice(0, 10);
+        const hasCurrentCoverage = (enrollment: Enrollment) =>
+            getEnrollmentCoverageState(enrollment, selectedProgram, enrollmentReferenceDate) === 'active';
+
         if (quickEnrollStudentId) {
             const duplicateClassEnrollment = enrollments.find(enrollment =>
-                enrollment.status === 'active'
+                hasCurrentCoverage(enrollment)
                 && enrollment.studentId === quickEnrollStudentId
                 && enrollment.programId === selectedProgram.id
                 && enrollment.groupId === enrollmentGroup.id
@@ -814,7 +820,7 @@ const AppContent = () => {
             }
 
             const existingProgramEnrollment = enrollments.find(enrollment =>
-                enrollment.status === 'active'
+                hasCurrentCoverage(enrollment)
                 && enrollment.studentId === quickEnrollStudentId
                 && enrollment.programId === selectedProgram.id
             );
@@ -831,7 +837,7 @@ const AppContent = () => {
         }
 
         const groupRosterSize = enrollments.filter(enrollment =>
-            enrollment.status === 'active'
+            hasCurrentCoverage(enrollment)
             && enrollment.programId === selectedProgram.id
             && enrollment.groupId === enrollmentGroup.id
         ).length;
@@ -996,12 +1002,14 @@ const AppContent = () => {
                 balance: negotiatedPrice - initialCleared,
                 paymentPromises: enrollPaymentPromises.map(p => ({ month: p.month, amount: Number(p.amount) })),
                 status: 'active',
-                startDate: joinedAt,
+                // Fixed school cohorts share the program start date; rolling
+                // memberships still resolve to the learner's actual join date.
+                startDate: servicePeriod.startDate,
                 serviceStartDate: servicePeriod.startDate,
                 ...(servicePeriod.endDate ? { endDate: servicePeriod.endDate, serviceEndDate: servicePeriod.endDate } : {}),
                 enrollmentMode: servicePeriod.mode,
-                // Auto-detect session from enrollment date (Sept-June rule)
-                session: computeAcademicYear(new Date()),
+                // Keep the academic session aligned with the shared run start.
+                session: computeAcademicYear(new Date(servicePeriod.startDate)),
                 organizationId: currentOrganization.id,
                 createdAt: serverTimestamp()
             });

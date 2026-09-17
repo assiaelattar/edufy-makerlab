@@ -10,6 +10,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import './school-day/education-school-day-v1.css';
 import { Modal } from '../components/Modal';
+import { getProgramOperationalState } from '../utils/programLifecycle';
 
 const addMinutesToTime = (time: string, minutesToAdd: number) => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -94,7 +95,6 @@ export const CalendarView = () => {
 
             // A. Check Programs
             programs.forEach(program => {
-                if (program.status !== 'active') return;
                 program.grades.forEach(grade => {
                     grade.groups.forEach(group => {
                         const englishDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -112,8 +112,10 @@ export const CalendarView = () => {
 
                         const targetDate = weekDays.find(d => getDay(d) === dayIndex);
                         if (targetDate) {
-                            debugGroupsFound++;
                             const dateStr = format(targetDate, 'yyyy-MM-dd');
+                            const operationalState = getProgramOperationalState(program, dateStr);
+                            if (!['running', 'evergreen'].includes(operationalState)) return;
+                            debugGroupsFound++;
                             
                             // Does this session already exist?
                             const exists = classSessions.some(c => c.groupId === group.id && c.date === dateStr);

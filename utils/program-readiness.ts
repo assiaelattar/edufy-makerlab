@@ -1,13 +1,16 @@
 import { Group, Program } from '../types';
+import { getProgramOperationalState, isProgramAcceptingEnrollments, type ProgramOperationalState } from './programLifecycle';
 
 export interface ProgramReadiness {
   hasPricing: boolean;
   hasSchedule: boolean;
   validGroups: Group[];
+  operationalState: ProgramOperationalState;
+  isAcceptingEnrollments: boolean;
   isReady: boolean;
 }
 
-export const getProgramReadiness = (program: Program): ProgramReadiness => {
+export const getProgramReadiness = (program: Program, referenceDate?: string): ProgramReadiness => {
   const hasPricing = (program.packs || []).some(pack =>
     Math.max(pack.priceAnnual || 0, pack.priceTrimester || 0, pack.price || 0, pack.promoPrice || 0) > 0
   );
@@ -15,11 +18,15 @@ export const getProgramReadiness = (program: Program): ProgramReadiness => {
     Boolean(group.name?.trim() && group.day?.trim() && group.time?.trim())
   );
   const hasSchedule = validGroups.length > 0;
+  const operationalState = getProgramOperationalState(program, referenceDate);
+  const isAccepting = isProgramAcceptingEnrollments(program, referenceDate);
 
   return {
     hasPricing,
     hasSchedule,
     validGroups,
-    isReady: program.status === 'active' && hasPricing && hasSchedule
+    operationalState,
+    isAcceptingEnrollments: isAccepting,
+    isReady: isAccepting && hasPricing && hasSchedule
   };
 };

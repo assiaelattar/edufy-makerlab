@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
-import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Filter, MessageCircle, RotateCcw, Search, ShieldCheck, Users, XCircle } from 'lucide-react';
+import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Filter, MessageCircle, RotateCcw, Search, ShieldCheck, UserRound, Users, XCircle } from 'lucide-react';
 import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import './school-day/education-school-day-v1.css';
@@ -9,10 +9,11 @@ import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
+import { findMembershipRenewalsDue, isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
 
 export const AbsenceView = () => {
     const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { enrollments, students, attendanceRecords } = useAppContext();
+    const { enrollments, students, programs, attendanceRecords, navigateTo } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const today = format(new Date(), 'yyyy-MM-dd');
@@ -34,9 +35,20 @@ export const AbsenceView = () => {
     const isToday = selectedDate === today;
     const isFutureDate = selectedDate > today;
 
+    const programById = useMemo(
+        () => new Map(programs.map(program => [program.id, program])),
+        [programs]
+    );
+
+    const renewalsDue = useMemo(
+        () => findMembershipRenewalsDue(enrollments, programs, students, today),
+        [enrollments, programs, students, today]
+    );
+
     const allScheduledStudents = useMemo(() => {
         return enrollments.filter(enrollment => {
-            if (enrollment.status !== 'active') return false;
+            const program = programById.get(enrollment.programId);
+            if (!isEnrollmentEligibleForAttendance(enrollment, program, selectedDate)) return false;
 
             const student = students.find(item => item.id === enrollment.studentId);
             if (!student || student.status === 'inactive') return false;
@@ -66,7 +78,7 @@ export const AbsenceView = () => {
 
             return slots;
         });
-    }, [enrollments, students, dayOfWeek]);
+    }, [enrollments, students, programById, selectedDate, dayOfWeek]);
 
     const scheduledStudents = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -164,6 +176,7 @@ export const AbsenceView = () => {
             await showAlert('Organization required', 'Select an organization before confirming this session.', 'warning');
             return;
         }
+        const firestore = db;
         if (isFutureDate) {
             await showAlert('Future attendance is locked', 'Sessions can only be confirmed on or after their scheduled date.', 'warning');
             return;
@@ -186,10 +199,10 @@ export const AbsenceView = () => {
 
         setIsConfirmingSession(true);
         try {
-            const batch = writeBatch(db);
+            const batch = writeBatch(firestore);
             unmarked.forEach(student => {
                 const recordId = getRecordId(student.studentId, student.displayTime);
-                batch.set(doc(db, 'attendance', recordId), {
+                batch.set(doc(firestore, 'attendance', recordId), {
                     date: selectedDate,
                     studentId: student.studentId,
                     enrollmentId: student.id,
@@ -242,12 +255,11 @@ export const AbsenceView = () => {
 
     const uniqueGroups = useMemo(() => {
         const groups = new Set<string>();
-        enrollments.forEach(enrollment => {
-            if (enrollment.groupName) groups.add(enrollment.groupName);
-            if (enrollment.secondGroupName) groups.add(enrollment.secondGroupName);
+        allScheduledStudents.forEach(enrollment => {
+            if (enrollment.displayGroup) groups.add(enrollment.displayGroup);
         });
         return Array.from(groups).sort();
-    }, [enrollments]);
+    }, [allScheduledStudents]);
 
     const handleWhatsAppAlert = (studentName: string, parentPhone: string, status: string) => {
         const cleanPhone = parentPhone.replace(/[^0-9]/g, '');
@@ -294,6 +306,39 @@ export const AbsenceView = () => {
                 <AtlasSignalCard label="Late" value={dailyStats.late} detail="Needs follow-up" icon={AlertCircle} tone="amber" />
                 <AtlasSignalCard label="Absent" value={dailyStats.absent} detail={`${dailyStats.excused} excused`} icon={XCircle} tone="red" />
             </div>
+
+            {renewalsDue.length > 0 && (
+                <section className="overflow-hidden rounded-xl border border-amber-300/25 bg-amber-400/[0.06]" aria-labelledby="membership-renewals-title">
+                    <div className="flex flex-col gap-2 border-b border-amber-300/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-300/15 text-amber-200"><RotateCcw size={17} /></span>
+                            <div>
+                                <h2 id="membership-renewals-title" className="text-sm font-black text-white">Membership renewals</h2>
+                                <p className="mt-0.5 text-xs leading-5 text-amber-100/65">{renewalsDue.length} {renewalsDue.length === 1 ? 'learner is' : 'learners are'} hidden from today’s attendance until a new rolling membership is created.</p>
+                            </div>
+                        </div>
+                        <span className="w-fit rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-100">{renewalsDue.length} due</span>
+                    </div>
+                    <div className="divide-y divide-amber-300/10">
+                        {renewalsDue.map(renewal => (
+                            <div key={renewal.key} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-slate-950/40 text-amber-100"><UserRound size={15} /></span>
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-bold text-white">{renewal.studentName}</p>
+                                        <p className="mt-0.5 text-[11px] text-slate-400">
+                                            <span>{renewal.programName}{renewal.groupName ? ` · ${renewal.groupName}` : ''}</span>
+                                            <span className="mx-1.5 text-slate-600" aria-hidden="true">·</span>
+                                            <span className="text-amber-200">Ended {format(parseISO(renewal.endDate), 'dd MMM yyyy')} ({renewal.daysOverdue}d ago)</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <AtlasActionButton icon={UserRound} onClick={() => navigateTo('student-details', { studentId: renewal.studentId })}>Open student</AtlasActionButton>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             <AtlasToolbar>
                 <div className="relative min-w-[220px] flex-1">

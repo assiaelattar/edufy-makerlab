@@ -28,6 +28,7 @@ import {
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
 import { getProgramReadiness } from '../utils/program-readiness';
+import { getProgramOperationalState } from '../utils/programLifecycle';
 import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
 import './family-journey/education-family-journey-v1.css';
 
@@ -50,7 +51,9 @@ export const EnrollmentFormsView: React.FC<EnrollmentFormsViewProps> = () => {
         documentTitle: `Inscription_${selectedProgram?.name || 'Form'}`,
     });
 
-    const activePrograms = programs.filter(program => program.status === 'active');
+    const activePrograms = programs.filter(program =>
+        ['running', 'upcoming', 'evergreen'].includes(getProgramOperationalState(program))
+    );
     const kidsPrograms = activePrograms.filter(program => program.targetAudience !== 'adults').length;
     const adultPrograms = activePrograms.filter(program => program.targetAudience === 'adults').length;
     const isProgramReady = (program: Program) => getProgramReadiness(program).isReady;

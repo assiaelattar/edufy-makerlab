@@ -23,8 +23,9 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../services/firebase';
 import { compressImage } from '../utils/image-compression';
 import { getProgramReadiness } from '../utils/program-readiness';
-import { buildProgramDuplicateDraft, getNextAcademicPeriod } from '../utils/programLifecycle';
+import { buildProgramDuplicateDraft, getNextAcademicPeriod, getProgramOperationalState } from '../utils/programLifecycle';
 import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
+import { getEnrollmentCoverageState } from '../utils/membershipLifecycle';
 import { Upload, Loader2, Image as ImageIcon } from 'lucide-react';
 
 interface ProgramsViewProps {
@@ -40,7 +41,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const [isEditingProgram, setIsEditingProgram] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | Program['status'] | 'needs_setup'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | Program['status'] | 'active' | 'finished' | 'needs_setup'>('active');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [isRolloverOpen, setIsRolloverOpen] = useState(false);
@@ -122,6 +123,10 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       await showAlert('Enrollment link disabled', 'Activate the program before sharing its public enrollment form.', 'warning');
       return;
     }
+    if (!getProgramReadiness(program).isAcceptingEnrollments) {
+      await showAlert('Program finished', 'This fixed program has reached its end date. Its history is preserved, but new enrollments are closed.', 'warning');
+      return;
+    }
     try {
       await navigator.clipboard.writeText(buildPublicEnrollmentUrl(program.id));
       setCopiedProgramId(program.id);
@@ -137,6 +142,10 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const openEnrollmentAccess = async (program: Program) => {
     if (program.status !== 'active') {
       await showAlert('Enrollment link disabled', 'Activate the program before opening its public enrollment form.', 'warning');
+      return;
+    }
+    if (!getProgramReadiness(program).isAcceptingEnrollments) {
+      await showAlert('Program finished', 'This fixed program has reached its end date. Its history is preserved, but new enrollments are closed.', 'warning');
       return;
     }
     const groupCount = (program.grades || []).reduce((sum, grade) => sum + (grade.groups?.length || 0), 0);
@@ -408,8 +417,9 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     }
 
     if (draft.runSetup) {
-      if (!draft.runSetup.startDate || !draft.runSetup.endDate || draft.runSetup.endDate < draft.runSetup.startDate) {
-        setFormError('Choose valid run dates. The end date must be on or after the start date.');
+      const rollingMembership = draft.enrollmentPolicy?.mode === 'rolling_membership';
+      if (!draft.runSetup.startDate || (!rollingMembership && (!draft.runSetup.endDate || draft.runSetup.endDate < draft.runSetup.startDate))) {
+        setFormError(rollingMembership ? 'Choose when this permanent membership program opens.' : 'Choose valid run dates. The end date must be on or after the start date.');
         return;
       }
       if (draft.runSetup.enrollmentOpenDate && draft.runSetup.enrollmentCloseDate && draft.runSetup.enrollmentCloseDate < draft.runSetup.enrollmentOpenDate) {
@@ -551,13 +561,15 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     { id: 'cyan', hex: '#06B6D4' },
     { id: 'slate', hex: '#64748B' }
   ] as const;
-  const activePrograms = programs.filter(program => program.status === 'active');
+  const activePrograms = programs.filter(program => ['running', 'upcoming', 'evergreen'].includes(getProgramOperationalState(program)));
   const totalPacks = programs.reduce((sum, program) => sum + (program.packs?.length || 0), 0);
   const canCreatePrograms = can('programs.create');
   const canEditPrograms = can('programs.edit');
   const canDeletePrograms = can('programs.delete');
   const programOperations = useMemo(() => programs.map(program => {
     const readiness = getProgramReadiness(program);
+    const operationalState = readiness.operationalState;
+    const today = new Date().toISOString().slice(0, 10);
     const groups = readiness.validGroups;
     const enrollmentHistory = enrollments.filter(enrollment =>
       enrollment.organizationId === currentOrganization?.id
@@ -566,6 +578,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     const activeEnrollments = enrollmentHistory.filter(enrollment =>
       enrollment.status === 'active'
       && (!enrollment.session || enrollment.session === settings.academicYear)
+      && getEnrollmentCoverageState(enrollment, program, today) === 'active'
     );
     const activeGroupIds = new Set(activeEnrollments.flatMap(enrollment => [enrollment.groupId, enrollment.secondGroupId]).filter(Boolean));
     const openLeads = leads.filter(lead =>
@@ -574,12 +587,13 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       && lead.status !== 'closed'
     );
     const { hasPricing, hasSchedule } = readiness;
-    const needsSetup = program.status === 'active' && (!hasPricing || !hasSchedule);
+    const needsSetup = ['running', 'upcoming', 'evergreen'].includes(operationalState) && (!hasPricing || !hasSchedule);
     const emptyGroupCount = groups.filter(group => !activeGroupIds.has(group.id)).length;
     const nextGroup = groups[0];
 
     return {
       program,
+      operationalState,
       groups,
       activeEnrollments,
       enrollmentHistoryCount: enrollmentHistory.length,
@@ -598,7 +612,13 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     return programOperations.filter(item => {
       const { program } = item;
       const matchesStatus = statusFilter === 'all'
-        || (statusFilter === 'needs_setup' ? item.needsSetup : program.status === statusFilter);
+        || (statusFilter === 'needs_setup'
+          ? item.needsSetup
+          : statusFilter === 'finished'
+            ? item.operationalState === 'finished'
+            : statusFilter === 'active'
+              ? ['running', 'upcoming', 'evergreen'].includes(item.operationalState)
+              : program.status === statusFilter);
       const matchesQuery = !query || [program.name, program.type, program.description, program.partnerName]
         .some(value => value?.toLowerCase().includes(query));
       return matchesStatus && matchesQuery;
@@ -690,6 +710,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
             <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="bg-transparent font-bold outline-none">
               <option value="all">All statuses</option>
               <option value="active">Active</option>
+              <option value="finished">Finished</option>
               <option value="draft">Draft</option>
               <option value="needs_setup">Needs setup</option>
               <option value="archived">Archived</option>
@@ -716,10 +737,12 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
         <div className="space-y-2">
           <AnimatePresence>
             {filteredPrograms.map((item, index) => {
-              const { program, groups, activeEnrollments, enrollmentHistoryCount, openLeads, hasPricing, hasSchedule, needsSetup, emptyGroupCount, nextGroup } = item;
+              const { program, operationalState, groups, activeEnrollments, enrollmentHistoryCount, openLeads, hasPricing, hasSchedule, needsSetup, emptyGroupCount, nextGroup } = item;
               const actionLabel = needsSetup && canEditPrograms ? 'Complete setup' : 'Open program';
               const action = needsSetup && canEditPrograms ? () => openEditProgram(program) : () => setViewDetailProgramId(program.id);
-              const attentionText = program.status === 'draft'
+              const attentionText = operationalState === 'finished'
+                ? `Finished ${program.runSetup?.endDate || ''} · enrollment closed automatically`
+                : program.status === 'draft'
                 ? 'Draft setup - not open for enrollment'
                 : !hasPricing
                 ? 'Add a pricing plan'
@@ -753,6 +776,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                           {program.enrollmentPolicy && <span className="rounded-md border border-sky-300/15 bg-sky-300/[0.06] px-1.5 py-0.5 text-[10px] font-bold text-sky-200">{program.enrollmentPolicy.mode === 'rolling_membership' ? `${program.enrollmentPolicy.membershipDurationMonths || 12} mo rolling` : program.enrollmentPolicy.mode === 'modular' ? `By ${program.enrollmentPolicy.moduleLabel || 'module'}` : 'Fixed dates'}</span>}
                           {program.status === 'draft' && <span className="rounded-md border border-sky-300/20 bg-sky-300/10 px-1.5 py-0.5 text-[10px] font-bold text-sky-200">Draft</span>}
                           {program.status === 'archived' && <span className="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-bold text-slate-500">Archived</span>}
+                          {operationalState === 'finished' && <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-200">Finished</span>}
+                          {operationalState === 'evergreen' && program.enrollmentPolicy?.mode === 'rolling_membership' && <span className="rounded-md border border-teal-300/20 bg-teal-300/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-200">Always open</span>}
                         </span>
                         <span className="mt-1 block truncate text-xs text-slate-500">{program.description || 'Add a short description for staff and families.'}</span>
                       </span>

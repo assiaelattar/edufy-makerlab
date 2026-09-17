@@ -6,6 +6,8 @@ import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import { calculateAge, formatCurrency, generateRosterPrint } from '../utils/helpers';
 import { Enrollment, Student } from '../types';
+import { getProgramOperationalState } from '../utils/programLifecycle';
+import { isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
 import './school-day/education-school-day-v1.css';
 
 export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, gradeId: string, groupId: string) => void }) => {
@@ -17,7 +19,8 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
    const [searchQuery, setSearchQuery] = useState('');
    const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
-   const allPrograms = useMemo(() => programs.filter(program => program.status === 'active' && program.grades?.length > 0), [programs]);
+   const today = new Date().toISOString().slice(0, 10);
+   const allPrograms = useMemo(() => programs.filter(program => ['running', 'upcoming', 'evergreen'].includes(getProgramOperationalState(program, today)) && program.grades?.length > 0), [programs, today]);
    const totalGroups = useMemo(() => allPrograms.reduce((total, program) => total + program.grades.reduce((sum, grade) => sum + grade.groups.length, 0), 0), [allPrograms]);
    const activeEnrollments = useMemo(() => enrollments.filter(enrollment => enrollment.status === 'active').length, [enrollments]);
 
@@ -31,7 +34,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       }
 
       const enrolledStudents = enrollments
-         .filter(enrollment => enrollment.status === 'active' && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id))
+         .filter(enrollment => isEnrollmentEligibleForAttendance(enrollment, program, today) && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id))
          .map(enrollment => {
             const student = students.find(item => item.id === enrollment.studentId);
             return student ? { ...student, enrollment } : null;

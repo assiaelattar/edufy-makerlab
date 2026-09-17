@@ -111,6 +111,51 @@ export interface EnrollmentServicePeriod {
   endDate?: string;
 }
 
+export type ProgramOperationalState = 'draft' | 'archived' | 'upcoming' | 'running' | 'finished' | 'evergreen';
+
+const localISODate = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export const getProgramOperationalState = (
+  program: Program,
+  referenceDate = localISODate()
+): ProgramOperationalState => {
+  if (program.status === 'draft') return 'draft';
+  if (program.status === 'archived') return 'archived';
+
+  // Rolling programs such as StemQuest MakerLab are permanent containers.
+  // Their learner memberships expire individually; legacy run end dates are
+  // intentionally preserved in storage but never close the program.
+  if (program.enrollmentPolicy?.mode === 'rolling_membership') return 'evergreen';
+  const normalizedName = program.name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ');
+  const legacyRollingStemQuest = !program.enrollmentPolicy
+    && (normalizedName.includes('stemquest') || normalizedName.includes('stem quest'))
+    && program.formatPreset !== 'school_term'
+    && program.billingAudience !== 'company'
+    && !program.partnerName;
+  if (legacyRollingStemQuest) return 'evergreen';
+
+  const onDate = toDateOnly(referenceDate);
+  const startDate = program.runSetup?.startDate ? toDateOnly(program.runSetup.startDate) : undefined;
+  const endDate = program.runSetup?.endDate ? toDateOnly(program.runSetup.endDate) : undefined;
+  if (startDate && onDate < startDate) return 'upcoming';
+  if (endDate && onDate > endDate) return 'finished';
+  return 'running';
+};
+
+export const isProgramAcceptingEnrollments = (program: Program, referenceDate?: string) => {
+  const state = getProgramOperationalState(program, referenceDate);
+  return state === 'running' || state === 'upcoming' || state === 'evergreen';
+};
+
 export const resolveEnrollmentServicePeriod = (program: Program, joinedAt: string): EnrollmentServicePeriod => {
   const policy = program.enrollmentPolicy || {
     mode: 'fixed_run' as const,
