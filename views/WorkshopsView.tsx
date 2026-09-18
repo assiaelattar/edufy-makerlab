@@ -11,6 +11,7 @@ import { WorkshopTemplate, Booking } from '../types';
 import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { WorkshopReportModal } from '../components/WorkshopReportModal';
 import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, getWorkshopShareVersion, normalizeWorkshopDays, normalizeWorkshopImageUrl, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
+import './programs/education-programs-v1.css';
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
     const { workshopTemplates, workshopSlots, bookings } = useAppContext();
@@ -40,6 +41,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     const [isEvaluationModalOpen, setIsEvaluationModalOpen] = useState(false);
     const [evaluationTarget, setEvaluationTarget] = useState({ title: '', sessionId: '', date: '' });
     const evaluatorAvailable = Boolean(import.meta.env.VITE_GOOGLE_API_KEY);
+    const showEducationProgramsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     const resetTemplateForm = () => {
         setTemplateForm({
@@ -496,7 +498,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     }, [virtualSlots, bookings, workshopTemplates]);
 
     return (
-        <div className="space-y-6 pb-24 md:pb-8 h-full flex flex-col">
+        <div className={`space-y-6 pb-24 md:pb-8 h-full flex flex-col ${showEducationProgramsV1 ? 'edu-v1 edu-workshops-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-workshops-v1' : undefined}>
             {/* Header */}
             <AtlasCommandHeader
                 eyebrow="Experience ops"

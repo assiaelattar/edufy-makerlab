@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import './admin/education-admin-tools-v1.css';
 import {
     Activity,
     BadgeCheck,
@@ -11,6 +12,7 @@ import {
     CreditCard,
     Edit3,
     EyeOff,
+    Inbox,
     KeyRound,
     LayoutDashboard,
     Loader2,
@@ -25,10 +27,11 @@ import {
     Trash2,
     UserPlus,
     Users,
-    X
+    X,
+    XCircle
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { collection, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, collectionGroup, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch, type Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -47,11 +50,26 @@ import {
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
 
-type AdminTab = 'dashboard' | 'tenants' | 'catalog' | 'plans';
+type AdminTab = 'dashboard' | 'requests' | 'tenants' | 'catalog' | 'plans';
 type CatalogDrafts = Record<string, string>;
+
+type AddOnRequestRecord = {
+    id: string;
+    path: string;
+    organizationId: string;
+    organizationName?: string;
+    itemId: string;
+    itemName: string;
+    status: 'requested' | 'approved' | 'rejected';
+    requestedBy: string;
+    requestedAt?: Timestamp;
+    resolvedAt?: Timestamp;
+    resolvedBy?: string;
+};
 
 const tabs: Array<{ id: AdminTab; label: string; icon: typeof LayoutDashboard }> = [
     { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+    { id: 'requests', label: 'Requests', icon: Inbox },
     { id: 'tenants', label: 'Tenants', icon: Building2 },
     { id: 'catalog', label: 'Catalog', icon: Boxes },
     { id: 'plans', label: 'Plans', icon: CreditCard }
@@ -79,13 +97,19 @@ const planIncludesCatalogItem = (plan: SubscriptionPlan | undefined, item: Atlas
 const formatMoney = (value: number, currency = 'MAD') =>
     new Intl.NumberFormat('fr-MA', { maximumFractionDigits: 0 }).format(value || 0) + ` ${currency}`;
 
+const formatRequestDate = (value?: Timestamp) => value?.toDate
+    ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(value.toDate())
+    : 'Recently';
+
 export const SaasAdminView: React.FC = () => {
+    const showEducationAdminToolsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { isSuperAdmin, isPlatformBootstrapAdmin, createSecondaryUser, switchOrganization, currentOrganization, userProfile } = useAuth();
     const { navigateTo } = useAppContext();
     const { confirm, alert: showAlert } = useConfirm();
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
     const [catalogPolicies, setCatalogPolicies] = useState<AtlasCatalogPolicy[]>([]);
+    const [addOnRequests, setAddOnRequests] = useState<AddOnRequestRecord[]>([]);
     const [catalogPriceDrafts, setCatalogPriceDrafts] = useState<CatalogDrafts>({});
     const [catalogSaving, setCatalogSaving] = useState<string | null>(null);
     const [catalogSearch, setCatalogSearch] = useState('');
@@ -108,6 +132,7 @@ export const SaasAdminView: React.FC = () => {
     const [creating, setCreating] = useState(false);
     const [expandedOrg, setExpandedOrg] = useState<string | null>(null);
     const [updatingEntitlement, setUpdatingEntitlement] = useState<string | null>(null);
+    const [resolvingRequest, setResolvingRequest] = useState<string | null>(null);
     const [platformAdminName, setPlatformAdminName] = useState('');
     const [platformAdminEmail, setPlatformAdminEmail] = useState('');
     const [platformAdminPass, setPlatformAdminPass] = useState('');
@@ -125,14 +150,33 @@ export const SaasAdminView: React.FC = () => {
     const fetchData = async () => {
         if (!db) return;
         try {
-            const [orgsSnap, plansSnap, catalogSnap] = await Promise.all([
+            const [orgsSnap, plansSnap, catalogSnap, requestsSnap] = await Promise.all([
                 getDocs(collection(db, 'organizations')),
                 getDocs(collection(db, 'subscriptionPlans')),
-                getDocs(collection(db, 'moduleCatalog'))
+                getDocs(collection(db, 'moduleCatalog')),
+                getDocs(collectionGroup(db, 'addonRequests'))
             ]);
-            setOrganizations(orgsSnap.docs.map(item => ({ id: item.id, ...item.data() } as Organization)));
+            const loadedOrganizations = orgsSnap.docs.map(item => ({ id: item.id, ...item.data() } as Organization));
+            setOrganizations(loadedOrganizations);
             setPlans(plansSnap.docs.map(item => ({ id: item.id, ...item.data() } as SubscriptionPlan)));
             setCatalogPolicies(catalogSnap.docs.map(item => ({ id: item.id, ...item.data() } as AtlasCatalogPolicy)));
+            setAddOnRequests(requestsSnap.docs.map(requestDoc => {
+                const request = requestDoc.data();
+                const organizationId = request.organizationId || requestDoc.ref.parent.parent?.id || '';
+                return {
+                    id: requestDoc.id,
+                    path: requestDoc.ref.path,
+                    organizationId,
+                    organizationName: request.organizationName || loadedOrganizations.find(org => org.id === organizationId)?.name,
+                    itemId: request.itemId || requestDoc.id,
+                    itemName: request.itemName || request.itemId || 'Unknown add-on',
+                    status: request.status || 'requested',
+                    requestedBy: request.requestedBy || 'Unknown user',
+                    requestedAt: request.requestedAt,
+                    resolvedAt: request.resolvedAt,
+                    resolvedBy: request.resolvedBy
+                } as AddOnRequestRecord;
+            }));
         } catch (error) {
             console.error('Error fetching SaaS data:', error);
             showAlert('Platform data unavailable', 'Tenants, plans, or catalog policy could not be loaded. Check the connection and try again.', 'danger');
@@ -164,6 +208,8 @@ export const SaasAdminView: React.FC = () => {
     const activeTenants = tenantOrganizations.filter(org => org.status === 'active').length;
     const trialTenants = tenantOrganizations.filter(org => org.subscription?.status === 'trial').length;
     const publishedCatalogCount = catalog.filter(item => item.isPublished).length;
+    const pendingAddOnRequests = useMemo(() => addOnRequests.filter(request => request.status === 'requested'), [addOnRequests]);
+    const resolvedAddOnRequests = useMemo(() => addOnRequests.filter(request => request.status !== 'requested').slice(0, 8), [addOnRequests]);
 
     const filteredOrganizations = useMemo(() => {
         const query = tenantSearch.trim().toLowerCase();
@@ -352,13 +398,29 @@ export const SaasAdminView: React.FC = () => {
     };
 
     const togglePaidAddOn = async (org: Organization, itemId: string) => {
-        if (!db || !org.subscription) return;
+        const firestore = db;
+        if (!firestore || !org.subscription) return;
         const currentAddOns = org.subscription.addOns || [];
         const isGranted = currentAddOns.includes(itemId);
         const nextAddOns = isGranted ? currentAddOns.filter(id => id !== itemId) : [...currentAddOns, itemId];
         setUpdatingEntitlement(`${org.id}:${itemId}:grant`);
         try {
-            await updateDoc(doc(db, 'organizations', org.id), { 'subscription.addOns': nextAddOns });
+            const matchingRequests = addOnRequests.filter(request => request.organizationId === org.id && request.itemId === itemId && request.status === 'requested');
+            if (!isGranted && matchingRequests.length) {
+                const batch = writeBatch(firestore);
+                batch.update(doc(firestore, 'organizations', org.id), { 'subscription.addOns': nextAddOns });
+                matchingRequests.forEach(request => batch.update(doc(firestore, 'organizations', request.organizationId, 'addonRequests', request.id), {
+                    status: 'approved',
+                    resolvedAt: serverTimestamp(),
+                    resolvedBy: userProfile?.uid || userProfile?.email || 'platform-admin'
+                }));
+                await batch.commit();
+                setAddOnRequests(previous => previous.map(request => matchingRequests.some(match => match.path === request.path)
+                    ? { ...request, status: 'approved' }
+                    : request));
+            } else {
+                await updateDoc(doc(firestore, 'organizations', org.id), { 'subscription.addOns': nextAddOns });
+            }
             setOrganizations(previous => previous.map(candidate => candidate.id === org.id
                 ? { ...candidate, subscription: { ...candidate.subscription!, addOns: nextAddOns } }
                 : candidate));
@@ -367,6 +429,74 @@ export const SaasAdminView: React.FC = () => {
             showAlert('Add-on unchanged', error.message || 'The paid add-on grant could not be updated.', 'danger');
         } finally {
             setUpdatingEntitlement(null);
+        }
+    };
+
+    const resolveAddOnRequest = async (request: AddOnRequestRecord, decision: 'approved' | 'rejected') => {
+        if (!db) return;
+        const organization = organizations.find(org => org.id === request.organizationId);
+        const catalogItem = catalog.find(item => item.id === request.itemId);
+        if (!organization || !catalogItem) {
+            showAlert('Request cannot be resolved', 'The tenant or catalog item no longer exists.', 'warning');
+            return;
+        }
+        if (decision === 'approved' && !organization.subscription) {
+            showAlert('Subscription required', 'Assign a subscription plan before granting this paid add-on.', 'warning');
+            return;
+        }
+        if (decision === 'rejected') {
+            const approved = await confirm({
+                title: `Decline ${catalogItem.name}?`,
+                message: `${organization.name} will be able to request this add-on again later.`,
+                confirmText: 'Decline request',
+                cancelText: 'Keep pending',
+                variant: 'danger'
+            });
+            if (!approved) return;
+        }
+
+        setResolvingRequest(request.path);
+        try {
+            const batch = writeBatch(db);
+            if (decision === 'approved') {
+                batch.update(doc(db, 'organizations', organization.id), {
+                    'subscription.addOns': arrayUnion(request.itemId)
+                });
+            }
+            batch.update(doc(db, 'organizations', request.organizationId, 'addonRequests', request.id), {
+                organizationId: organization.id,
+                organizationName: organization.name,
+                status: decision,
+                resolvedAt: serverTimestamp(),
+                resolvedBy: userProfile?.uid || userProfile?.email || 'platform-admin'
+            });
+            await batch.commit();
+
+            setAddOnRequests(previous => previous.map(candidate => candidate.path === request.path
+                ? { ...candidate, status: decision, organizationId: organization.id, organizationName: organization.name }
+                : candidate));
+            if (decision === 'approved') {
+                setOrganizations(previous => previous.map(candidate => candidate.id === organization.id
+                    ? {
+                        ...candidate,
+                        subscription: {
+                            ...candidate.subscription!,
+                            addOns: Array.from(new Set([...(candidate.subscription?.addOns || []), request.itemId]))
+                        }
+                    }
+                    : candidate));
+            }
+            showAlert(
+                decision === 'approved' ? 'Access approved' : 'Request declined',
+                decision === 'approved'
+                    ? `${catalogItem.name} is now available for ${organization.name} to add to its workspace.`
+                    : `${catalogItem.name} remains unavailable to ${organization.name}.`,
+                decision === 'approved' ? 'success' : 'warning'
+            );
+        } catch (error: any) {
+            showAlert('Request unchanged', error.message || 'The add-on request could not be updated.', 'danger');
+        } finally {
+            setResolvingRequest(null);
         }
     };
 
@@ -443,7 +573,7 @@ export const SaasAdminView: React.FC = () => {
     const toggleClass = (enabled: boolean) => `relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${enabled ? 'bg-teal-500' : 'bg-white/10'}`;
 
     return (
-        <div className="flex min-h-full flex-col gap-5 pb-24 text-white md:pb-8">
+        <div className={`flex min-h-full flex-col gap-5 pb-24 text-white md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-saas-admin-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-saas-admin-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Atlas platform"
                 title="SaaS control plane"
@@ -460,7 +590,7 @@ export const SaasAdminView: React.FC = () => {
                 <AtlasSignalCard label="Monthly revenue" value={formatMoney(mrr)} detail="Active recurring revenue" icon={CircleDollarSign} tone="emerald" />
                 <AtlasSignalCard label="Active tenants" value={activeTenants} detail={`${tenantOrganizations.length} customer organizations`} icon={Building2} tone="teal" />
                 <AtlasSignalCard label="Published catalog" value={publishedCatalogCount} detail={`${catalog.length} modules and apps`} icon={Boxes} tone="blue" />
-                <AtlasSignalCard label="Trials" value={trialTenants} detail="Currently evaluating" icon={Activity} tone="amber" />
+                <AtlasSignalCard label="Pending requests" value={pendingAddOnRequests.length} detail={`${trialTenants} tenants currently in trial`} icon={Inbox} tone="amber" onClick={() => setActiveTab('requests')} />
             </div>
 
             <nav aria-label="Platform sections" className="flex gap-1 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/55 p-1">
@@ -503,6 +633,55 @@ export const SaasAdminView: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                </div>
+            ) : activeTab === 'requests' ? (
+                <div className="space-y-5">
+                    <AtlasSectionHeader
+                        title="Add-on requests"
+                        description="Review tenant requests, grant commercial access, and keep each decision visible."
+                        icon={Inbox}
+                        meta={pendingAddOnRequests.length > 0 ? <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[9px] font-bold text-amber-200">{pendingAddOnRequests.length} pending</span> : undefined}
+                    />
+                    {pendingAddOnRequests.length ? (
+                        <div className="grid gap-3 xl:grid-cols-2">
+                            {pendingAddOnRequests.map(request => {
+                                const organization = organizations.find(org => org.id === request.organizationId);
+                                const item = catalog.find(candidate => candidate.id === request.itemId);
+                                const busy = resolvingRequest === request.path;
+                                return (
+                                    <article key={request.path} className="flex flex-col gap-4 rounded-lg border border-amber-300/15 bg-slate-900/70 p-4 sm:flex-row sm:items-center">
+                                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-amber-300/10 text-amber-200"><Sparkles size={18} /></span>
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-sm font-black text-white">{item?.name || request.itemName}</h3><span className="rounded bg-amber-300/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">Pending</span></div>
+                                                <p className="mt-1 text-xs font-bold text-slate-300">{organization?.name || request.organizationName || request.organizationId}</p>
+                                                <p className="mt-1 text-[10px] leading-4 text-slate-600">Requested {formatRequestDate(request.requestedAt)} by {request.requestedBy}</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                                            <AtlasActionButton icon={XCircle} variant="danger" disabled={busy} onClick={() => void resolveAddOnRequest(request, 'rejected')}>Decline</AtlasActionButton>
+                                            <AtlasActionButton icon={busy ? Loader2 : BadgeCheck} variant="primary" disabled={busy} className={busy ? '[&_svg]:animate-spin' : ''} onClick={() => void resolveAddOnRequest(request, 'approved')}>{busy ? 'Approving...' : 'Approve access'}</AtlasActionButton>
+                                        </div>
+                                    </article>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <AtlasEmptyState title="No requests waiting" description="New tenant add-on requests will appear here and in the platform overview count." icon={BadgeCheck} action={<AtlasActionButton icon={Building2} onClick={() => setActiveTab('tenants')}>Manage tenant access</AtlasActionButton>} />
+                    )}
+
+                    {resolvedAddOnRequests.length > 0 && (
+                        <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+                            <div className="border-b border-white/10 px-4 py-3"><h3 className="text-xs font-black text-slate-300">Recent decisions</h3></div>
+                            {resolvedAddOnRequests.map(request => (
+                                <div key={request.path} className="grid gap-2 border-b border-white/[0.06] px-4 py-3 last:border-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center">
+                                    <div className="min-w-0"><p className="truncate text-xs font-bold text-slate-300">{catalog.find(item => item.id === request.itemId)?.name || request.itemName}</p><p className="mt-1 truncate text-[10px] text-slate-600">{request.organizationName || organizations.find(org => org.id === request.organizationId)?.name || request.organizationId}</p></div>
+                                    <p className="truncate text-[10px] text-slate-600">Resolved {formatRequestDate(request.resolvedAt)}</p>
+                                    <span className={`w-fit rounded px-2 py-1 text-[9px] font-bold ${request.status === 'approved' ? 'bg-emerald-300/10 text-emerald-200' : 'bg-red-300/10 text-red-200'}`}>{request.status === 'approved' ? 'Approved' : 'Declined'}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             ) : activeTab === 'catalog' ? (
                 <div className="space-y-5">
@@ -566,17 +745,18 @@ export const SaasAdminView: React.FC = () => {
                                                     const includedByPlatform = item.billing === 'included';
                                                     const isFree = item.billing === 'free';
                                                     const isAddOn = addOns.includes(item.id);
+                                                    const hasPendingRequest = pendingAddOnRequests.some(request => request.organizationId === org.id && request.itemId === item.id);
                                                     const entitled = item.isPublished && (includedByPlan || includedByPlatform || isFree || isAddOn);
                                                     const active = item.kind === 'module' ? Boolean(org.modules?.[item.id]) : Boolean(org.installedApps?.includes(item.id));
                                                     const grantBusy = updatingEntitlement === `${org.id}:${item.id}:grant`;
                                                     const activeBusy = updatingEntitlement === `${org.id}:${item.id}:active`;
-                                                    const sourceLabel = includedByPlan ? 'In plan' : includedByPlatform ? 'Platform' : isFree ? 'Free' : isAddOn ? 'Paid add-on' : item.isPublished ? 'Not granted' : 'Unpublished';
+                                                    const sourceLabel = includedByPlan ? 'In plan' : includedByPlatform ? 'Platform' : isFree ? 'Free' : isAddOn ? 'Paid add-on' : hasPendingRequest ? 'Requested' : item.isPublished ? 'Not granted' : 'Unpublished';
                                                     return (
                                                         <div key={item.id} className={`flex min-w-0 items-center gap-3 rounded-lg border p-3 ${entitled ? 'border-white/10 bg-slate-950/45' : 'border-white/[0.06] bg-slate-950/20 opacity-75'}`}>
                                                             <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${entitled ? 'bg-teal-300/10 text-teal-200' : 'bg-white/[0.04] text-slate-600'}`}>{item.kind === 'app' ? <Sparkles size={14} /> : <Package size={14} />}</div>
-                                                            <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-2"><p className="truncate text-xs font-bold text-slate-200">{item.name}</p><span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${isAddOn ? 'bg-amber-300/10 text-amber-200' : entitled ? 'bg-teal-300/10 text-teal-200' : 'bg-white/[0.05] text-slate-600'}`}>{sourceLabel}</span></div><p className="mt-1 text-[10px] text-slate-600">{item.kind === 'module' ? (active ? 'Active in navigation' : entitled ? 'Available, not active' : 'Locked') : (active ? 'Installed' : entitled ? 'Available to install' : 'Locked')}</p></div>
+                                                            <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-2"><p className="truncate text-xs font-bold text-slate-200">{item.name}</p><span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold ${isAddOn || hasPendingRequest ? 'bg-amber-300/10 text-amber-200' : entitled ? 'bg-teal-300/10 text-teal-200' : 'bg-white/[0.05] text-slate-600'}`}>{sourceLabel}</span></div><p className="mt-1 text-[10px] text-slate-600">{item.kind === 'module' ? (active ? 'Active in navigation' : entitled ? 'Available, not active' : 'Locked') : (active ? 'Installed' : entitled ? 'Available to install' : 'Locked')}</p></div>
                                                             <div className="flex shrink-0 items-center gap-2">
-                                                                {item.billing === 'paid' && !includedByPlan && !includedByPlatform && <button type="button" disabled={!item.isPublished || grantBusy || !org.subscription} onClick={() => togglePaidAddOn(org, item.id)} className={`h-8 rounded-md border px-2 text-[10px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${isAddOn ? 'border-red-300/20 text-red-200 hover:bg-red-300/10' : 'border-amber-300/20 text-amber-200 hover:bg-amber-300/10'}`}>{grantBusy ? <Loader2 size={12} className="animate-spin" /> : isAddOn ? 'Revoke' : 'Grant'}</button>}
+                                                                {item.billing === 'paid' && !includedByPlan && !includedByPlatform && <button type="button" disabled={!item.isPublished || grantBusy || !org.subscription} onClick={() => togglePaidAddOn(org, item.id)} className={`h-8 rounded-md border px-2 text-[10px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${isAddOn ? 'border-red-300/20 text-red-200 hover:bg-red-300/10' : 'border-amber-300/20 text-amber-200 hover:bg-amber-300/10'}`}>{grantBusy ? <Loader2 size={12} className="animate-spin" /> : isAddOn ? 'Revoke' : hasPendingRequest ? 'Approve' : 'Grant'}</button>}
                                                                 {item.kind === 'module' && entitled && <button type="button" role="switch" aria-checked={active} disabled={activeBusy} aria-label={`Toggle ${item.name} for ${org.name}`} onClick={() => toggleModule(org.id, item.id, active)} className={toggleClass(active)}><span className={`absolute left-1 top-1 h-3 w-3 rounded-full bg-white transition-transform ${active ? 'translate-x-4' : ''}`} /></button>}
                                                             </div>
                                                         </div>

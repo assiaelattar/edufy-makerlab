@@ -11,7 +11,7 @@ import {
     UserCheck,
     X
 } from 'lucide-react';
-import { arrayUnion, doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { Modal } from '../../components/Modal';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +19,14 @@ import { db } from '../../services/firebase';
 import { Lead } from '../../types';
 import { formatDate } from '../../utils/helpers';
 import { ChatImporterModal } from './ChatImporterModal';
+import { getGeneratedSlots, type VirtualSlot } from '../../utils/helpers';
+import { toLocalDateKey } from '../../utils/workshops';
+
+const isBookingLinkedToLead = (booking: { admissionCaseId?: string; crmLeadId?: string; leadId?: string; phoneNumber?: string }, lead: Lead) => {
+    if ([booking.admissionCaseId, booking.crmLeadId, booking.leadId].includes(lead.id)) return true;
+    const cleanPhone = (value = '') => value.replace(/[^0-9]/g, '');
+    return Boolean(cleanPhone(lead.phone)) && cleanPhone(booking.phoneNumber) === cleanPhone(lead.phone);
+};
 
 interface LeadProfileModalProps {
     isOpen: boolean;
@@ -45,6 +53,15 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
     const [callNote, setCallNote] = useState('');
     const [activeTab, setActiveTab] = useState<'timeline' | 'workshops'>('timeline');
     const [isBookingMode, setIsBookingMode] = useState(false);
+    const [bookingPath, setBookingPath] = useState<'available' | 'custom'>('available');
+    const [customDemo, setCustomDemo] = useState({
+        title: 'Demo workshop',
+        date: toLocalDateKey(new Date()),
+        startTime: '',
+        duration: 60,
+        location: 'MakerLab Academy',
+        notes: ''
+    });
     const [isCallMode, setIsCallMode] = useState(false);
     const [isChatImportOpen, setIsChatImportOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<'booking' | 'note' | 'call' | null>(null);
@@ -56,19 +73,16 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
         if (!isOpen) return;
         setIsCallMode(initialAction === 'call');
         setIsBookingMode(initialAction === 'booking');
+        setBookingPath('available');
         setActiveTab('timeline');
         setFeedback(null);
     }, [initialAction, isOpen, lead.id]);
 
     const leadBookings = useMemo(() => {
-        const cleanPhone = (phone: string) => phone.replace(/[^0-9]/g, '');
-        const leadPhone = cleanPhone(lead.phone);
-
-        if (!leadPhone) return [];
         return bookings
-            .filter(booking => booking.organizationId === lead.organizationId && cleanPhone(booking.phoneNumber) === leadPhone)
+            .filter(booking => booking.organizationId === lead.organizationId && isBookingLinkedToLead(booking, lead))
             .sort((a, b) => (b.bookedAt?.toMillis?.() || 0) - (a.bookedAt?.toMillis?.() || 0));
-    }, [bookings, lead.organizationId, lead.phone]);
+    }, [bookings, lead.id, lead.organizationId]);
 
     const timelineEvents = useMemo(() => {
         return [...(lead.timeline || [])].sort(
@@ -77,22 +91,24 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
     }, [lead.timeline]);
 
     const upcomingSlots = useMemo(() => {
-        return workshopSlots
-            .filter(slot => slot.organizationId === lead.organizationId && slot.status === 'available' && slot.bookedCount < slot.capacity && new Date(`${slot.date}T23:59:59`) >= new Date())
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [lead.organizationId, workshopSlots]);
+        const tenantTemplates = workshopTemplates.filter(template => template.organizationId === lead.organizationId && template.isActive !== false);
+        const templateIds = new Set(tenantTemplates.map(template => template.id));
+        return getGeneratedSlots(tenantTemplates, workshopSlots.filter(slot => slot.organizationId === lead.organizationId), new Date(), 60)
+            .filter(slot => templateIds.has(slot.workshopTemplateId) && slot.status === 'available' && slot.bookedCount < slot.capacity)
+            .slice(0, 40);
+    }, [lead.organizationId, workshopSlots, workshopTemplates]);
 
-    const handleBookDemo = async (slotId: string) => {
+    const handleBookDemo = async (slot: VirtualSlot) => {
         if (!db || pendingAction) return;
         if (!canManageMarketing || !isCurrentTenant) {
             setFeedback({ kind: 'error', message: 'This lead is view-only for your current organization.' });
             return;
         }
-        const slot = workshopSlots.find(item => item.id === slotId);
-        const template = workshopTemplates.find(item => item.id === slot?.workshopTemplateId);
-        const orgId = lead.organizationId || slot?.organizationId || template?.organizationId;
+        const existingSlot = slot.slotId ? workshopSlots.find(item => item.id === slot.slotId) : undefined;
+        const template = workshopTemplates.find(item => item.id === slot.workshopTemplateId);
+        const orgId = lead.organizationId || existingSlot?.organizationId || template?.organizationId;
 
-        if (!slot || !orgId || orgId !== currentOrganization?.id || slot.organizationId !== orgId) {
+        if (!template || !orgId || orgId !== currentOrganization?.id || template.organizationId !== orgId) {
             setFeedback({ kind: 'error', message: 'Select a valid workshop slot before booking.' });
             return;
         }
@@ -100,11 +116,10 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
             setFeedback({ kind: 'error', message: 'This workshop is now full or unavailable. Choose another session.' });
             return;
         }
-        const cleanPhone = (phone: string) => phone.replace(/\D/g, '');
         const duplicateBooking = bookings.some(booking =>
             booking.organizationId === orgId &&
-            booking.workshopSlotId === slotId &&
-            cleanPhone(booking.phoneNumber) === cleanPhone(lead.phone) &&
+            booking.workshopSlotId === slot.slotId &&
+            isBookingLinkedToLead(booking, lead) &&
             booking.status !== 'cancelled'
         );
         if (duplicateBooking) {
@@ -115,25 +130,45 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
         setPendingAction('booking');
         setFeedback(null);
         try {
-            const slotRef = doc(db, 'workshop_slots', slot.id);
-            const bookingRef = doc(db, 'bookings', `crm_${slot.id}_${lead.id}`);
+            const slotRef = slot.slotId ? doc(db, 'workshop_slots', slot.slotId) : doc(collection(db, 'workshop_slots'));
+            const bookingRef = doc(db, 'bookings', `crm_${slotRef.id}_${lead.id}`);
             const leadRef = doc(db, 'leads', lead.id);
             await runTransaction(db, async transaction => {
                 const [freshSlot, existingBooking] = await Promise.all([transaction.get(slotRef), transaction.get(bookingRef)]);
-                if (!freshSlot.exists()) throw new Error('slot-missing');
-                const slotData = freshSlot.data();
-                if (slotData.organizationId !== orgId || slotData.status !== 'available' || Number(slotData.bookedCount || 0) >= Number(slotData.capacity || 0)) throw new Error('slot-full');
+                const slotData = freshSlot.exists() ? freshSlot.data() : null;
+                if (slotData && (slotData.organizationId !== orgId || slotData.status !== 'available' || Number(slotData.bookedCount || 0) >= Number(slotData.capacity || 0))) throw new Error('slot-full');
                 if (existingBooking.exists() && existingBooking.data().status !== 'cancelled') throw new Error('duplicate-booking');
+
+                if (slotData) {
+                    const nextBookedCount = Number(slotData.bookedCount || 0) + 1;
+                    transaction.update(slotRef, {
+                        bookedCount: nextBookedCount,
+                        status: nextBookedCount >= Number(slotData.capacity || 0) ? 'full' : 'available'
+                    });
+                }
+                else transaction.set(slotRef, {
+                    organizationId: orgId,
+                    workshopTemplateId: slot.workshopTemplateId,
+                    date: slot.dateStr,
+                    startTime: slot.startTime,
+                    endTime: slot.endTime,
+                    capacity: slot.capacity,
+                    bookedCount: 1,
+                    status: slot.capacity <= 1 ? 'full' : 'available',
+                    source: 'template'
+                });
 
                 transaction.set(bookingRef, {
                     organizationId: orgId,
-                    workshopSlotId: slotId,
+                    workshopSlotId: slotRef.id,
                     workshopTemplateId: slot.workshopTemplateId,
                     kidName: lead.name,
                     kidAge: 0,
                     parentName: lead.parentName,
                     phoneNumber: lead.phone,
                     email: lead.email || '',
+                    admissionCaseId: lead.id,
+                    crmLeadId: lead.id,
                     status: 'confirmed',
                     bookedAt: serverTimestamp(),
                     notes: 'Booked via CRM Lead Profile',
@@ -141,9 +176,8 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                 });
                 transaction.update(leadRef, {
                     status: 'workshop_booked',
-                    timeline: arrayUnion({ date: new Date().toISOString(), type: 'workshop', details: `Booked workshop: ${template?.title || 'Workshop'} on ${slot.date} at ${slot.startTime}`, author: userProfile?.name || 'Team member' })
+                    timeline: arrayUnion({ date: new Date().toISOString(), type: 'workshop', details: `Booked workshop: ${template.title} on ${slot.dateStr} at ${slot.startTime}`, author: userProfile?.name || 'Team member' })
                 });
-                transaction.update(slotRef, { bookedCount: Number(slotData.bookedCount || 0) + 1 });
             });
 
             setIsBookingMode(false);
@@ -157,6 +191,89 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                     ? 'This workshop is now full or unavailable. Choose another session.'
                     : 'The workshop could not be booked. Try again.';
             setFeedback({ kind: 'error', message });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleCreateCustomDemo = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!db || pendingAction || !currentOrganization?.id) return;
+        if (!canManageMarketing || !isCurrentTenant) {
+            setFeedback({ kind: 'error', message: 'This lead is view-only for your current organization.' });
+            return;
+        }
+
+        const title = customDemo.title.trim();
+        const duration = Number(customDemo.duration);
+        const today = toLocalDateKey(new Date());
+        if (!title || !customDemo.date || customDemo.date < today || !/^\d{2}:\d{2}$/.test(customDemo.startTime) || !Number.isInteger(duration) || duration < 15 || duration > 480) {
+            setFeedback({ kind: 'error', message: 'Add a title, today or a future date, a start time, and a duration from 15 to 480 minutes.' });
+            return;
+        }
+
+        const [hours, minutes] = customDemo.startTime.split(':').map(Number);
+        const endMinutes = hours * 60 + minutes + duration;
+        if (endMinutes >= 24 * 60) {
+            setFeedback({ kind: 'error', message: 'The demo must finish on the same calendar day.' });
+            return;
+        }
+        const endTime = `${String(Math.floor(endMinutes / 60)).padStart(2, '0')}:${String(endMinutes % 60).padStart(2, '0')}`;
+
+        setPendingAction('booking');
+        setFeedback(null);
+        try {
+            const slotRef = doc(collection(db, 'workshop_slots'));
+            const bookingRef = doc(db, 'bookings', `crm_${slotRef.id}_${lead.id}`);
+            const leadRef = doc(db, 'leads', lead.id);
+            await runTransaction(db, async transaction => {
+                transaction.set(slotRef, {
+                    organizationId: currentOrganization.id,
+                    workshopTemplateId: `ad-hoc:${lead.id}`,
+                    date: customDemo.date,
+                    startTime: customDemo.startTime,
+                    endTime,
+                    capacity: 1,
+                    bookedCount: 1,
+                    status: 'full',
+                    source: 'ad_hoc',
+                    title,
+                    crmLeadId: lead.id,
+                    location: customDemo.location.trim(),
+                    notes: customDemo.notes.trim()
+                });
+                transaction.set(bookingRef, {
+                    organizationId: currentOrganization.id,
+                    workshopSlotId: slotRef.id,
+                    workshopTemplateId: `ad-hoc:${lead.id}`,
+                    kidName: lead.name,
+                    kidAge: 0,
+                    parentName: lead.parentName,
+                    phoneNumber: lead.phone,
+                    email: lead.email || '',
+                    admissionCaseId: lead.id,
+                    crmLeadId: lead.id,
+                    status: 'confirmed',
+                    bookedAt: serverTimestamp(),
+                    notes: [customDemo.location.trim(), customDemo.notes.trim()].filter(Boolean).join(' · ') || 'Custom demo booked from CRM',
+                    paymentStatus: 'waived'
+                });
+                transaction.update(leadRef, {
+                    status: 'demo_booked',
+                    timeline: arrayUnion({
+                        date: new Date().toISOString(),
+                        type: 'workshop',
+                        details: `Custom demo: ${title} on ${customDemo.date} at ${customDemo.startTime}${customDemo.location.trim() ? ` · ${customDemo.location.trim()}` : ''}`,
+                        author: userProfile?.name || 'Team member'
+                    })
+                });
+            });
+            setIsBookingMode(false);
+            setActiveTab('workshops');
+            setFeedback({ kind: 'success', message: 'Custom demo added to the workshop calendar and lead timeline.' });
+        } catch (error) {
+            console.error('Custom demo booking failed', error);
+            setFeedback({ kind: 'error', message: 'The custom demo could not be saved. Check the connection and try again.' });
         } finally {
             setPendingAction(null);
         }
@@ -389,26 +506,30 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                                 <section className="rounded-lg border border-[#F2C766]/60 bg-amber-50 p-3">
                                     <div className="mb-3 flex items-start justify-between gap-3">
                                         <div>
-                                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Clock size={15} className="text-amber-600" /> Upcoming workshops</h3>
-                                            <p className="mt-0.5 text-xs text-slate-600">Choose a session to create a confirmed booking.</p>
+                                            <h3 className="flex items-center gap-2 text-sm font-bold text-slate-900"><Clock size={15} className="text-amber-600" /> Book a demo workshop</h3>
+                                            <p className="mt-0.5 text-xs text-slate-600">Use an available template slot or schedule an urgent one-off demo.</p>
                                         </div>
                                         <button type="button" onClick={() => setIsBookingMode(false)} className="rounded-lg p-2 text-slate-500 hover:bg-white" aria-label="Close workshop selection"><X size={16} /></button>
                                     </div>
-                                    <div className="max-h-56 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
+                                    <div className="mb-3 grid grid-cols-2 gap-1 rounded-lg border border-amber-200 bg-white p-1" role="tablist" aria-label="Demo booking type">
+                                        <button type="button" role="tab" aria-selected={bookingPath === 'available'} onClick={() => setBookingPath('available')} className={`h-9 rounded-md text-xs font-bold ${bookingPath === 'available' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Available slots</button>
+                                        <button type="button" role="tab" aria-selected={bookingPath === 'custom'} onClick={() => setBookingPath('custom')} className={`h-9 rounded-md text-xs font-bold ${bookingPath === 'custom' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Quick custom demo</button>
+                                    </div>
+                                    {bookingPath === 'available' && <div className="max-h-56 space-y-2 overflow-y-auto pr-1 custom-scrollbar">
                                         {upcomingSlots.map(slot => {
                                             const template = workshopTemplates.find(item => item.id === slot.workshopTemplateId);
                                             return (
                                                 <button
-                                                    key={slot.id}
+                                                    key={`${slot.workshopTemplateId}_${slot.dateStr}_${slot.startTime}`}
                                                     type="button"
-                                                    onClick={() => handleBookDemo(slot.id)}
+                                                    onClick={() => handleBookDemo(slot)}
                                                     disabled={pendingAction !== null}
                                                     className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-left transition-colors hover:border-amber-400 disabled:opacity-50"
                                                 >
                                                     <span className="min-w-0">
                                                         <span className="block truncate text-sm font-bold text-slate-900">{template?.title || 'Workshop'}</span>
                                                         <span className="mt-0.5 flex flex-wrap gap-3 text-xs text-slate-500">
-                                                            <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(slot.date)}</span>
+                                                            <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(slot.dateStr)}</span>
                                                             <span className="flex items-center gap-1"><Clock size={12} /> {slot.startTime}</span>
                                                             <span>{Math.max(0, slot.capacity - slot.bookedCount)} seats left</span>
                                                         </span>
@@ -420,10 +541,21 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                                         {upcomingSlots.length === 0 && (
                                             <div className="rounded-lg border border-dashed border-amber-300 px-4 py-6 text-center">
                                                 <p className="text-sm font-bold text-slate-800">No workshops scheduled</p>
-                                                <p className="mt-1 text-xs text-slate-500">Add a workshop slot before booking this lead.</p>
+                                                <p className="mt-1 text-xs text-slate-500">Choose Quick custom demo to add an urgent one-off session today.</p>
                                             </div>
                                         )}
-                                    </div>
+                                    </div>}
+                                    {bookingPath === 'custom' && (
+                                        <form onSubmit={handleCreateCustomDemo} className="grid gap-3 sm:grid-cols-2">
+                                            <label className="space-y-1 sm:col-span-2"><span className="text-[11px] font-bold text-slate-600">Demo title</span><input required value={customDemo.title} onChange={event => setCustomDemo(previous => ({ ...previous, title: event.target.value }))} className="h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500" /></label>
+                                            <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">Date</span><input required type="date" min={toLocalDateKey(new Date())} value={customDemo.date} onChange={event => setCustomDemo(previous => ({ ...previous, date: event.target.value }))} className="h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500" /></label>
+                                            <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">Start time</span><input required type="time" value={customDemo.startTime} onChange={event => setCustomDemo(previous => ({ ...previous, startTime: event.target.value }))} className="h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500" /></label>
+                                            <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">Duration</span><select value={customDemo.duration} onChange={event => setCustomDemo(previous => ({ ...previous, duration: Number(event.target.value) }))} className="h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500"><option value={30}>30 min</option><option value={45}>45 min</option><option value={60}>1 hour</option><option value={90}>1 h 30</option><option value={120}>2 hours</option></select></label>
+                                            <label className="space-y-1"><span className="text-[11px] font-bold text-slate-600">Location</span><input value={customDemo.location} onChange={event => setCustomDemo(previous => ({ ...previous, location: event.target.value }))} className="h-10 w-full rounded-lg border border-amber-200 bg-white px-3 text-sm outline-none focus:border-amber-500" /></label>
+                                            <label className="space-y-1 sm:col-span-2"><span className="text-[11px] font-bold text-slate-600">Internal note <span className="font-normal text-slate-400">Optional</span></span><textarea value={customDemo.notes} onChange={event => setCustomDemo(previous => ({ ...previous, notes: event.target.value }))} rows={2} className="w-full resize-y rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" /></label>
+                                            <button type="submit" disabled={!customDemo.title.trim() || !customDemo.startTime || pendingAction !== null} className="h-10 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50 sm:col-span-2">{pendingAction === 'booking' ? 'Scheduling...' : 'Add to calendar and confirm'}</button>
+                                        </form>
+                                    )}
                                 </section>
                             )}
 
@@ -462,7 +594,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                                         <div className="flex min-w-0 items-center gap-3">
                                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700"><Calendar size={18} /></div>
                                             <div className="min-w-0">
-                                                <h3 className="truncate text-sm font-bold text-slate-900">{template?.title || 'Workshop'}</h3>
+                                                <h3 className="truncate text-sm font-bold text-slate-900">{template?.title || slot?.title || 'Custom demo workshop'}</h3>
                                                 <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
                                                     <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(slot?.date || '')}</span>
                                                     <span className="flex items-center gap-1"><Clock size={12} /> {slot?.startTime}</span>

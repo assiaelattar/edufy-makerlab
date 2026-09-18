@@ -5,8 +5,9 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday } from '../utils/helpers';
-import { updateDoc, doc, deleteDoc, increment, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../services/firebase';
+import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth, db } from '../services/firebase';
 import { Modal } from '../components/Modal';
 import { Enrollment, Payment, StudentProject } from '../types';
 import { getTheme } from '../utils/theme';
@@ -16,6 +17,7 @@ import { FinanceTab } from './student-details/FinanceTab';
 import { PortfolioTab } from './student-details/PortfolioTab';
 import { AttendanceTab } from './student-details/AttendanceTab';
 import { AccessAndAccountsTab } from './student-details/AccessAndAccountsTab';
+import './student-details/education-student-details-v1.css';
 
 export const StudentDetailsView = ({
     onEditStudent,
@@ -57,6 +59,7 @@ export const StudentDetailsView = ({
     const [isEditingStudent, setIsEditingStudent] = useState(false);
     const [editFormData, setEditFormData] = useState<Record<string, any>>({});
     const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+    const showEducationStudentDetailsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     const badgeTone: Record<string, string> = {
         blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
@@ -232,7 +235,7 @@ export const StudentDetailsView = ({
         const xp = publishedProjects.length * 100;
 
         return (
-            <div className="space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4">
+            <div className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-portal-v1' : ''}`}>
                 {!isStudentRole && (
                     <div className="bg-indigo-600 text-white px-4 py-3 rounded-xl flex justify-between items-center shadow-lg border border-indigo-400/50">
                         <div className="flex items-center gap-2 text-sm font-bold"><Eye size={18} /> Preview Mode: Viewing as Student</div>
@@ -381,7 +384,8 @@ export const StudentDetailsView = ({
             }
             const domain = currentOrganization?.slug ? `${currentOrganization.slug}.edu` : 'edufy.local';
 
-            const password = Math.random().toString(36).slice(-8);
+            const passwordBytes = crypto.getRandomValues(new Uint8Array(18));
+            const password = Array.from(passwordBytes, value => value.toString(36)).join('').slice(0, 20);
             let uid = '';
             let finalEmail = '';
 
@@ -442,6 +446,7 @@ export const StudentDetailsView = ({
     // NEW: Create Parent Access (Accepts real email)
     const handleCreateParentAccess = async (parentEmail: string) => {
         if (!db || !student) return;
+        const firestore = db;
         if (!parentEmail || !parentEmail.includes('@')) {
             await showAlert('Invalid email', 'Enter a valid parent email address.', 'warning');
             return;
@@ -483,12 +488,12 @@ export const StudentDetailsView = ({
             } catch (e: any) {
                 if (e.message?.includes('already exists') || e.code === 'auth/email-already-in-use') {
                     // User exists. Find their UID from Firestore 'users' collection
-                    const q = (await import('firebase/firestore')).query(
-                        (await import('firebase/firestore')).collection(db, 'users'),
-                        (await import('firebase/firestore')).where('email', '==', normalizedParentEmail),
-                        (await import('firebase/firestore')).where('organizationId', '==', organizationId)
+                    const q = query(
+                        collection(db, 'users'),
+                        where('email', '==', normalizedParentEmail),
+                        where('organizationId', '==', organizationId)
                     );
-                    const querySnap = await (await import('firebase/firestore')).getDocs(q);
+                    const querySnap = await getDocs(q);
 
                     if (!querySnap.empty) {
                         uid = querySnap.docs[0].id;
@@ -510,13 +515,12 @@ export const StudentDetailsView = ({
             }
 
             // 2. Update Student Record
-            const newParentLoginInfo = {
-                email: normalizedParentEmail,
-                initialPassword: isExistingUser ? '********' : password,
-                uid
-            };
+            const newParentLoginInfo = { email: normalizedParentEmail, uid };
 
-            await updateDoc(doc(db, 'students', student.id), { parentLoginInfo: newParentLoginInfo });
+            await updateDoc(doc(db, 'students', student.id), {
+                parentLoginInfo: newParentLoginInfo,
+                parentUids: arrayUnion(uid)
+            });
 
             // 3. Ensure User Profile Exists/Is Updated
             await setDoc(doc(db, 'users', uid), {
@@ -530,14 +534,25 @@ export const StudentDetailsView = ({
                 ...(isExistingUser ? {} : { createdAt: serverTimestamp() })
             }, { merge: true });
 
-            if (isExistingUser) {
-                await showAlert('Parent account linked', `Existing parent account ${normalizedParentEmail} is now linked. The parent can log in with their existing password.`, 'success');
-            } else {
-                setCredentialsModal({
-                    isOpen: true,
-                    data: { name: parentName, email: normalizedParentEmail, pass: password, role: 'Parent' }
-                });
-            }
+            const guardianSubjects = Array.from(new Set([student.id, student.loginInfo?.uid].filter(Boolean) as string[]));
+            await Promise.all(guardianSubjects.map(subjectId => setDoc(doc(firestore, 'guardian_links', `${uid}_${subjectId}`), {
+                organizationId,
+                parentUid: uid,
+                studentId: student.id,
+                subjectId,
+                status: 'active',
+                permissions: ['portfolio', 'enrollments', 'payments', 'gallery', 'pickup'],
+                updatedAt: serverTimestamp(),
+                ...(!isExistingUser ? { createdAt: serverTimestamp() } : {})
+            }, { merge: true })));
+
+            if (!auth) throw new Error('Authentication is unavailable.');
+            await sendPasswordResetEmail(auth, normalizedParentEmail);
+            await showAlert(
+                isExistingUser ? 'Parent account linked' : 'Parent invitation sent',
+                `${normalizedParentEmail} can use the secure email link to set or reset the password and open the family portal.`,
+                'success'
+            );
 
         } catch (err: any) {
             console.error(err);
@@ -715,8 +730,30 @@ export const StudentDetailsView = ({
     ];
 
     return (
-        <div className="flex flex-col gap-5 pb-8">
-            <AtlasCommandHeader
+        <div className={`flex flex-col gap-5 pb-8 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-details-v1' : ''}`} data-testid={showEducationStudentDetailsV1 ? 'education-student-details-v1' : undefined}>
+            {showEducationStudentDetailsV1 ? (
+                <section className="edu-student-details-v1__hero" aria-labelledby="education-student-name">
+                    <button type="button" className="edu-student-details-v1__back" onClick={() => navigateTo('students')} aria-label="Back to students"><ArrowLeft size={18} /></button>
+                    <div className="edu-student-details-v1__identity">
+                        <div className="edu-student-details-v1__avatar" aria-hidden="true">{student.name.charAt(0)}</div>
+                        <div className="min-w-0">
+                            <span className="edu-student-details-v1__eyebrow"><GraduationCap size={15} />Learner command center</span>
+                            <div className="edu-student-details-v1__title-line">
+                                <h2 id="education-student-name">{student.name}</h2>
+                                <span data-status={student.status === 'inactive' ? 'inactive' : 'active'}>{student.status === 'inactive' ? 'Inactive' : 'Active'}</span>
+                            </div>
+                            <p>{student.school || 'School not listed'} <i /> {student.parentName || 'Parent not listed'} {student.birthDate && <><i /> {calculateAge(student.birthDate)} years old</>}</p>
+                            {membershipEndStr && <span className="edu-student-details-v1__membership">STEM program until {membershipEndStr}</span>}
+                        </div>
+                    </div>
+                    <div className="edu-student-details-v1__actions">
+                        <button type="button" onClick={() => setViewMode('student_preview')}><Eye size={17} />Student view</button>
+                        <button type="button" onClick={() => generateStudentSchedulePrint(student, studentEnrollments, settings)}><Printer size={17} />Schedule</button>
+                        <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>
+                        <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>
+                    </div>
+                </section>
+            ) : <AtlasCommandHeader
                 eyebrow="Student service record"
                 title={student.name}
                 description={`${student.school || 'School not listed'} / ${student.parentName || 'Parent not listed'}${student.birthDate ? ` / ${calculateAge(student.birthDate)} years old` : ''}`}
@@ -735,25 +772,25 @@ export const StudentDetailsView = ({
                     <AtlasActionButton icon={Pencil} onClick={handleEditClick}>Edit</AtlasActionButton>
                     <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('students')} title="Back to students" aria-label="Back to students" />
                 </>}
-            />
+            />}
 
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <div className="edu-student-details-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Academics')} />
                 <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
                 <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'red' : 'blue'} onClick={() => setActiveTab('Attendance')} />
                 <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => setActiveTab('Portfolio')} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-white/10 py-3 text-xs text-slate-400">
+            <div className="edu-student-details-v1__contact flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-white/10 py-3 text-xs text-slate-400">
                 <span className="flex min-w-0 items-center gap-2"><Mail size={14} className="shrink-0 text-teal-300" /><span className="truncate">{student.email || 'No email added'}</span></span>
                 <span className="flex items-center gap-2"><Phone size={14} className="text-teal-300" />{student.parentPhone || 'No parent phone'}</span>
                 <span className="flex items-center gap-2"><Calendar size={14} className="text-teal-300" />{student.birthDate || 'No birth date'}</span>
                 <span className={`flex items-center gap-2 ${student.medicalInfo ? 'text-red-300' : 'text-slate-500'}`}><Shield size={14} />{student.medicalInfo ? `Medical: ${student.medicalInfo}` : 'No medical alerts'}</span>
             </div>
 
-            <div className="grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="edu-student-details-v1__workspace grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
                 <main className="min-w-0">
-                    <div className="mb-4 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/55 p-1.5">
+                    <div className="edu-student-details-v1__tabs mb-4 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/55 p-1.5">
                         <div className="flex min-w-max items-center gap-1" role="tablist" aria-label="Student record sections">
                             {studentTabs.map((tab, index) => {
                                 const Icon = tab.icon;
@@ -791,7 +828,7 @@ export const StudentDetailsView = ({
                         </div>
                     </div>
 
-                    <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="min-w-0" tabIndex={0}>
+                    <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="edu-student-details-v1__panel min-w-0" tabIndex={0}>
                         {activeTab === 'Academics' && <AcademicsTab
                             studentEnrollments={studentEnrollments}
                             onQuickEnroll={onQuickEnroll}
@@ -825,7 +862,7 @@ export const StudentDetailsView = ({
                     </div>
                 </main>
 
-                <aside className="min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
+                <aside className="edu-student-details-v1__access min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
                     <div className="flex items-center gap-2 border-b border-white/10 pb-3">
                         <UserRoundCog size={17} className="text-teal-300" />
                         <div>

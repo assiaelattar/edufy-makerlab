@@ -449,6 +449,29 @@ export const getGeneratedSlots = (
     }
   });
 
+  // One-off internal demos are real slots without a reusable/public template.
+  // Keep them on the operator calendar while leaving the public catalogue untouched.
+  const knownTemplateIds = new Set(templates.map(template => template.id));
+  existingSlots
+    .filter(slot => !knownTemplateIds.has(slot.workshopTemplateId) && slot.status !== 'cancelled')
+    .forEach(slot => {
+      const slotDate = parseLocalDateKey(slot.date);
+      const rangeEnd = new Date(start);
+      rangeEnd.setDate(rangeEnd.getDate() + daysAhead);
+      if (!slotDate || slotDate < start || slotDate >= rangeEnd) return;
+      slots.push({
+        workshopTemplateId: slot.workshopTemplateId,
+        templateTitle: slot.title || 'Custom demo workshop',
+        dateStr: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        capacity: slot.capacity,
+        bookedCount: slot.bookedCount,
+        status: slot.status,
+        slotId: slot.id
+      });
+    });
+
   return slots.sort((a, b) => {
     const da = new Date(`${a.dateStr}T${a.startTime}`);
     const db = new Date(`${b.dateStr}T${b.startTime}`);

@@ -268,6 +268,12 @@ export const EducationAdminShellV1 = ({
                             <span className="edu-shell-v1__title-icon">{activeModule ? React.createElement(activeModule.icon, { size: 19, strokeWidth: 2.2 }) : <Grid2X2 size={19} />}</span>
                             <div><span>{tenantName}<ChevronRight size={13} />{activeCategory.label}</span><h1>{activeViewLabel}</h1></div>
                         </div>
+                        {workspaceTabs.length > 0 && (
+                            <div className="edu-shell-v1__workspace-tabs">
+                                <span>Working set</span>
+                                <AtlasWorkspaceTabs tabs={workspaceTabs} activeId={currentView} onActivate={id => navigateTo(id)} onClose={onCloseWorkspaceTab} onReorder={onReorderWorkspaceTabs} />
+                            </div>
+                        )}
                         <div className="edu-shell-v1__top-actions">
                             <button type="button" aria-label={isSidebarCompact ? 'Expand navigation' : 'Collapse navigation'} title={isSidebarCompact ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setIsSidebarCompact(value => !value)}>{isSidebarCompact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button>
                             <button type="button" data-active={density === 'compact'} aria-label={density === 'compact' ? 'Use comfortable spacing' : 'Use compact spacing'} title={density === 'compact' ? 'Use comfortable spacing' : 'Use compact spacing'} onClick={() => setDensity(value => value === 'compact' ? 'comfortable' : 'compact')}><Rows3 size={18} /></button>
@@ -276,12 +282,6 @@ export const EducationAdminShellV1 = ({
                             <button type="button" className="edu-shell-v1__top-avatar" aria-label={`${userName}, ${roleLabel}`} title={`${userName} · ${roleLabel}`}>{userInitial}</button>
                         </div>
                     </div>
-                    {workspaceTabs.length > 0 && (
-                        <div className="edu-shell-v1__tabs-row">
-                            <span>Open</span>
-                            <AtlasWorkspaceTabs tabs={workspaceTabs} activeId={currentView} onActivate={id => navigateTo(id)} onClose={onCloseWorkspaceTab} onReorder={onReorderWorkspaceTabs} />
-                        </div>
-                    )}
                 </header>
 
                 <div ref={moduleContentRef} className="edu-shell-v1__content custom-scrollbar" tabIndex={-1} aria-label={`${activeModule?.label || 'Workspace'} content`}>

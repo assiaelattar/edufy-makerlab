@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
-import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, FileSpreadsheet, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, FileSpreadsheet, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { Program, Lead } from '../types';
 import { formatCurrency } from '../utils/helpers';
 import { useConfirm } from '../context/ConfirmContext';
@@ -29,6 +29,7 @@ interface ProgramDetailsViewProps {
     onEditProgram?: (program: Program) => void;
     onQuoteProgram?: (program: Program) => void;
     onOpenEnrollmentAccess?: (program: Program) => void;
+    onTogglePause?: (program: Program) => void;
 }
 
 type ProgramGroupWithCapacity = Program['grades'][number]['groups'][number] & {
@@ -43,11 +44,11 @@ const toExportFileSegment = (value: string) => value
     .replace(/^-+|-+$/g, '')
     .toLowerCase();
 
-export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnrollLead, programIdProp, onClose, onPrintProgram, onEditProgram, onQuoteProgram, onOpenEnrollmentAccess }) => {
+export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnrollLead, programIdProp, onClose, onPrintProgram, onEditProgram, onQuoteProgram, onOpenEnrollmentAccess, onTogglePause }) => {
     const { programs, viewParams, navigateTo, leads, enrollments, students, settings } = useAppContext();
     const { currentOrganization, userProfile, can } = useAuth();
     const { alert: showAlert, confirm } = useConfirm();
-    const [activeTab, setActiveTab] = useState<'operations' | 'overview' | 'classes' | 'students' | 'waiting-list' | 'financials' | 'resources'>('operations');
+    const [activeTab, setActiveTab] = useState<'operations' | 'overview' | 'classes' | 'students' | 'waiting-list' | 'financials' | 'resources'>('overview');
     const [linkCopied, setLinkCopied] = useState(false);
     const [expandedGradeIds, setExpandedGradeIds] = useState<string[]>([]);
     const [pendingLeadAction, setPendingLeadAction] = useState<string | null>(null);
@@ -67,9 +68,11 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
         if (!workspace) return;
 
         const frame = window.requestAnimationFrame(() => {
-            setActiveTab('operations');
+            setActiveTab('overview');
             setExpandedGradeIds(program.grades?.length === 1 ? [program.grades[0].id] : []);
-            workspace.scrollIntoView({ block: 'start' });
+            const contentScroller = workspace.closest<HTMLElement>('.edu-shell-v1__content');
+            if (contentScroller) contentScroller.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            else workspace.scrollIntoView({ block: 'start', behavior: 'auto' });
             workspace.focus({ preventScroll: true });
         });
 
@@ -604,7 +607,24 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                             {programEnrollments.length === 0 ? (
                                 <div className="p-5 pt-0"><AtlasEmptyState title="No active enrollment balances" description="Financial rows appear when learners are enrolled in this program." icon={DollarSign} /></div>
                             ) : (
-                                <div className="overflow-x-auto">
+                                <>
+                                <div className="edu-program-details-v1__mobile-balances md:hidden">
+                                    {programEnrollments.map(enrollment => (
+                                        <article key={enrollment.id}>
+                                            <div>
+                                                <strong>{enrollment.studentName}</strong>
+                                                <span>{enrollment.groupName || 'Group not assigned'} · {enrollment.packName || 'Plan not set'}</span>
+                                            </div>
+                                            <dl>
+                                                <div><dt>Tuition</dt><dd>{formatCurrency(enrollment.totalAmount || 0)}</dd></div>
+                                                <div><dt>Paid</dt><dd data-tone="paid">{formatCurrency(enrollment.paidAmount || 0)}</dd></div>
+                                                <div><dt>Balance</dt><dd data-tone={enrollment.balance > 0 ? 'due' : 'clear'}>{formatCurrency(enrollment.balance || 0)}</dd></div>
+                                            </dl>
+                                            <button type="button" onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })}>Open learner account <ArrowRight size={16} /></button>
+                                        </article>
+                                    ))}
+                                </div>
+                                <div className="hidden overflow-x-auto md:block">
                                     <table className="w-full min-w-[680px] text-left">
                                         <thead className="border-y border-white/10 bg-slate-950/70 text-[10px] font-bold uppercase text-slate-500">
                                             <tr><th className="p-3">Learner</th><th className="p-3">Plan</th><th className="p-3 text-right">Tuition</th><th className="p-3 text-right">Paid</th><th className="p-3 text-right">Balance</th><th className="p-3 text-right">Action</th></tr>
@@ -623,6 +643,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                         </tbody>
                                     </table>
                                 </div>
+                                </>
                             )}
                         </section>
                     </div>
@@ -767,7 +788,57 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
 
     return (
         <div ref={workspaceRef} tabIndex={-1} className={`flex flex-col gap-4 pb-6 outline-none ${showEducationProgramsV1 ? 'edu-v1 edu-program-details-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-program-details-v1' : undefined}>
-            <AtlasCommandHeader
+            {showEducationProgramsV1 ? (
+                <section className="edu-program-details-v1__command" aria-labelledby="education-program-detail-title">
+                    <div className="edu-program-details-v1__topline">
+                        <button type="button" onClick={() => programIdProp ? onClose?.() : navigateTo('programs')}>
+                            {programIdProp ? <X size={16} /> : <ArrowLeft size={16} />}
+                            {programIdProp ? 'Close' : 'All programs'}
+                        </button>
+                        <div className="edu-program-details-v1__badges">
+                            <span>{program.type}</span>
+                            <span data-status={program.status}>{program.status}</span>
+                            {program.partnerName && <span>{program.partnerName}</span>}
+                        </div>
+                    </div>
+                    <div className="edu-program-details-v1__identity">
+                        <div>
+                            <span className="edu-program-details-v1__eyebrow"><BookOpen size={15} />Program workspace · {settings.academicYear}</span>
+                            <h2 id="education-program-detail-title">{program.name}</h2>
+                            <p>{program.description || 'Keep the offer, teaching groups, schedule, and learner journey ready from one workspace.'}</p>
+                        </div>
+                        <div className="edu-program-details-v1__actions">
+                            <button type="button" onClick={() => setActiveTab('students')}><Users size={17} />Open roster</button>
+                            {onTogglePause && can('programs.edit') && ['active', 'paused'].includes(program.status) && <button type="button" onClick={() => onTogglePause(program)}>{program.status === 'paused' ? <PlayCircle size={17} /> : <PauseCircle size={17} />}{program.status === 'paused' ? 'Resume' : 'Pause'}</button>}
+                            {onEditProgram && <button type="button" className="is-primary" onClick={() => onEditProgram(program)}><Pencil size={17} />Edit setup</button>}
+                        </div>
+                    </div>
+                    <div className="edu-program-details-v1__metrics" aria-label="Program operating summary">
+                        {[
+                            { label: 'Readiness', value: `${readinessPercent}%`, detail: `${readinessCompleted}/${readinessChecks.length} checks`, icon: CheckCircle2, tab: 'overview' as const, attention: readinessPercent < 100 },
+                            { label: 'Groups', value: activeClassesCount, detail: `${scheduledGroupsCount} scheduled`, icon: CalendarDays, tab: 'classes' as const, attention: scheduledGroupsCount < activeClassesCount },
+                            { label: 'Learners', value: programEnrollments.length, detail: unassignedEnrollments.length ? `${unassignedEnrollments.length} unplaced` : 'All placed', icon: Users, tab: 'students' as const, attention: unassignedEnrollments.length > 0 },
+                            { label: 'Waiting', value: programLeads.length, detail: programLeads.length ? 'Need follow-up' : 'Queue clear', icon: List, tab: 'waiting-list' as const, attention: programLeads.length > 0 }
+                        ].map(item => (
+                            <button key={item.label} type="button" onClick={() => setActiveTab(item.tab)} data-attention={item.attention}>
+                                <item.icon size={17} />
+                                <span><small>{item.label}</small><strong>{item.value}</strong><em>{item.detail}</em></span>
+                            </button>
+                        ))}
+                    </div>
+                    {program.status === 'active' && (
+                        <div className="edu-program-details-v1__priority">
+                            <span className="edu-program-details-v1__priority-icon"><NextActionIcon size={19} /></span>
+                            <span className="edu-program-details-v1__priority-copy">
+                                <small>Next best action</small>
+                                <strong>{nextAction.title}</strong>
+                                <em>{nextAction.detail}</em>
+                            </span>
+                            <button type="button" className="is-primary" onClick={nextAction.action} disabled={nextAction.disabled}>{nextAction.label}<ArrowRight size={16} /></button>
+                        </div>
+                    )}
+                </section>
+            ) : <AtlasCommandHeader
                 eyebrow="Program workspace"
                 title={program.name}
                 description="Keep the offer, teaching groups, schedule, and learner roster ready from one workspace."
@@ -790,10 +861,10 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                         {onEditProgram && <AtlasActionButton icon={Pencil} variant="primary" onClick={() => onEditProgram(program)}>Edit setup</AtlasActionButton>}
                     </>
                 }
-            />
+            />}
 
-            {program.status === 'active' && (
-                <section className="relative overflow-hidden rounded-lg border border-teal-400/20 bg-slate-900/70 p-4 sm:p-5">
+            {!showEducationProgramsV1 && program.status === 'active' && (
+                <section className="edu-program-details-v1__next relative overflow-hidden rounded-lg border border-teal-400/20 bg-slate-900/70 p-4 sm:p-5">
                     <div className="absolute inset-y-0 left-0 w-1 bg-teal-400" />
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-start gap-3">
@@ -810,7 +881,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
             )}
 
             {program.status === 'archived' && (
-                <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-slate-900/60 p-4">
+                <div className="edu-program-details-v1__notice flex items-start gap-3 rounded-lg border border-white/10 bg-slate-900/60 p-4">
                     <AlertCircle className="mt-0.5 shrink-0 text-slate-400" size={18} />
                     <div>
                         <p className="text-sm font-black text-white">This program is archived</p>
@@ -819,8 +890,18 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                 </div>
             )}
 
+            {program.status === 'paused' && (
+                <div className="edu-program-details-v1__notice flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4">
+                    <PauseCircle className="mt-0.5 shrink-0 text-amber-200" size={18} />
+                    <div>
+                        <p className="text-sm font-black text-white">This program is paused</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-400">It is hidden from current attendance, classes, enrollment, and collection queues. Historical records remain intact and the program can be resumed.</p>
+                    </div>
+                </div>
+            )}
+
             {program.status === 'draft' && (
-                <div className="flex items-start gap-3 rounded-lg border border-sky-300/20 bg-sky-300/[0.06] p-4">
+                <div className="edu-program-details-v1__notice flex items-start gap-3 rounded-lg border border-sky-300/20 bg-sky-300/[0.06] p-4">
                     <AlertCircle className="mt-0.5 shrink-0 text-sky-300" size={18} />
                     <div>
                         <p className="text-sm font-black text-white">This program is a draft</p>
@@ -829,7 +910,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                 </div>
             )}
 
-            <section className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-900/55 lg:grid-cols-4">
+            {!showEducationProgramsV1 && <section className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-900/55 lg:grid-cols-4">
                 {[
                     { label: 'Readiness', value: `${readinessPercent}%`, detail: `${readinessCompleted} of ${readinessChecks.length} complete`, icon: CheckCircle2, tab: 'overview' as const, attention: readinessPercent < 100 },
                     { label: 'Groups', value: activeClassesCount, detail: `${scheduledGroupsCount} scheduled`, icon: CalendarDays, tab: 'classes' as const, attention: scheduledGroupsCount < activeClassesCount },
@@ -841,12 +922,12 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                         <span className="min-w-0"><span className="block text-lg font-black text-white">{item.value}</span><span className="block text-[10px] font-bold uppercase text-slate-500">{item.label}</span><span className={`mt-0.5 block truncate text-xs ${item.attention ? 'text-amber-200' : 'text-slate-500'}`}>{item.detail}</span></span>
                     </button>
                 ))}
-            </section>
+            </section>}
 
             <div role="tablist" aria-label="Program workspace" className="custom-scrollbar sticky top-0 z-20 flex gap-1 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/95 p-1.5 shadow-lg shadow-slate-950/20 backdrop-blur">
                 {[
-                    { id: 'operations', label: 'Program plan', icon: CalendarDays },
                     { id: 'overview', label: 'Overview', icon: LayoutGrid },
+                    { id: 'operations', label: 'Run plan', icon: CalendarDays },
                     { id: 'classes', label: 'Groups & schedule', icon: CalendarDays, count: activeClassesCount },
                     { id: 'students', label: 'Roster', icon: Users, count: programEnrollments.length },
                     { id: 'waiting-list', label: 'Waiting', icon: List, count: programLeads.length },

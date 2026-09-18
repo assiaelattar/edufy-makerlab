@@ -112,6 +112,39 @@ const StudentDirectoryHealth: React.FC<StudentDirectoryHealthProps> = ({
     unassignedGroup: Math.max(0, unassignedGroup),
     duplicateGroups: Math.max(0, duplicateGroups),
   };
+  const showEducationUiV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+
+  if (showEducationUiV1) {
+    return (
+      <section aria-labelledby="student-directory-health-title" className="edu-directory-command">
+        <div className="edu-directory-command__summary">
+          <span className="edu-directory-command__icon"><ShieldCheck size={19} aria-hidden={true} /></span>
+          <div>
+            <span>Record readiness</span>
+            <strong id="student-directory-health-title">{healthRate}% ready</strong>
+            <small>{safeHealthy} of {safeTotal} active records can support daily operations.</small>
+          </div>
+          <div className="edu-directory-command__progress" role="progressbar" aria-label="Student directory health" aria-valuemin={0} aria-valuemax={100} aria-valuenow={healthRate}>
+            <i style={{ width: `${healthRate}%` }} />
+          </div>
+        </div>
+        <div className="edu-directory-command__queues" aria-label="Student record queues">
+          {FILTERS.map(filter => {
+            const Icon = filter.icon;
+            const count = values[filter.countKey];
+            const isActive = activeFilter === filter.id;
+            return (
+              <button key={filter.id} type="button" onClick={() => onFilter(filter.id)} aria-pressed={isActive} title={filter.description}>
+                <Icon size={15} aria-hidden={true} />
+                <span>{filter.label}</span>
+                <strong>{count}</strong>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

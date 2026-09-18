@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   BookOpen,
+  Building2,
   CalendarDays,
   Check,
   CheckCircle2,
@@ -29,10 +30,14 @@ import type {
   Group,
   Program,
   ProgramDocumentSetupDraft,
+  ProgramDeliveryModel,
   ProgramPack,
   ProgramRegistrationSetupDraft,
   ProgramRunSetupDraft,
   ProgramScheduleSlot,
+  FinanceBillingProfile,
+  BillingUnitKind,
+  BillingCalculationMode,
 } from '../../types';
 import type { ProgramFormatPreset } from '../../types/programOperations';
 import { buildMakerLabSummerCampTemplate } from '../../utils/programTemplates';
@@ -50,7 +55,7 @@ interface ProgramSetupWizardProps {
 }
 
 type EnrollmentPolicy = 'fixed_run' | 'rolling_membership' | 'modular';
-type ProgramPublicationStatus = 'draft' | 'active';
+type ProgramPublicationStatus = 'draft' | 'active' | 'paused';
 
 interface ProgramEnrollmentPolicyFields {
   enrollmentPolicy: EnrollmentPolicy;
@@ -70,6 +75,9 @@ type WizardDraft = Omit<Partial<Program>, 'status' | 'enrollmentPolicy'> & Progr
   description: string;
   formatPreset: ProgramFormatPreset;
   targetAudience: 'kids' | 'adults';
+  billingAudience: 'individual' | 'company';
+  deliveryModel: ProgramDeliveryModel;
+  billingProfile: FinanceBillingProfile;
   runSetup: ProgramRunSetupDraft;
   grades: Grade[];
   packs: ProgramPack[];
@@ -83,6 +91,24 @@ type WizardDraft = Omit<Partial<Program>, 'status' | 'enrollmentPolicy'> & Progr
 type ProgramType = NonNullable<Program['type']>;
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const BILLING_UNITS: Array<{ value: BillingUnitKind; label: string; helper: string; hours: number; sessions: number }> = [
+  { value: 'hour', label: 'À l’heure', helper: 'Le prix correspond à une heure de formation.', hours: 1, sessions: 1 },
+  { value: 'workshop', label: 'Par atelier', helper: 'Une séance indépendante, par exemple 3 heures.', hours: 3, sessions: 1 },
+  { value: 'half_day', label: 'Demi-journée', helper: 'Une ou plusieurs séances regroupées sur une demi-journée.', hours: 3, sessions: 1 },
+  { value: 'day', label: 'Journée', helper: 'Une journée métier configurable, par exemple 2 ateliers de 3 heures.', hours: 6, sessions: 2 },
+  { value: 'package', label: 'Forfait', helper: 'Un montant fixe, sans calcul automatique de durée.', hours: 0, sessions: 0 },
+  { value: 'participant', label: 'Par participant', helper: 'Le nombre de participants devient la quantité facturée.', hours: 0, sessions: 1 },
+  { value: 'group', label: 'Par groupe', helper: 'Un prix pour un groupe complet de participants.', hours: 0, sessions: 1 },
+];
+
+const defaultBillingProfile = (): FinanceBillingProfile => ({
+  unitKind: 'workshop',
+  unitLabel: 'Atelier',
+  hoursPerUnit: 3,
+  sessionsPerUnit: 1,
+  calculationMode: 'planned',
+});
 
 const PRESETS: Array<{
   id: ProgramFormatPreset;
@@ -212,10 +238,21 @@ const createDraft = (program: Partial<Program>, organizationId: string): WizardD
     organizationId: program.organizationId || organizationId,
     name: program.name || '',
     description: program.description || '',
-    status: source.status === 'draft' ? 'draft' : 'active',
+    status: source.status === 'draft' || source.status === 'paused' ? source.status : 'active',
     type: program.type || PRESETS.find(item => item.id === preset)?.type || 'Regular Program',
     formatPreset: preset,
     targetAudience: program.targetAudience || 'kids',
+    billingAudience: program.billingAudience || 'individual',
+    deliveryModel: program.deliveryModel || 'scheduled',
+    billingProfile: {
+      ...defaultBillingProfile(),
+      ...(program.billingProfile || {}),
+      unitLabel: program.billingProfile?.unitLabel || defaultBillingProfile().unitLabel,
+      unitKind: program.billingProfile?.unitKind || defaultBillingProfile().unitKind,
+      hoursPerUnit: Number.isFinite(program.billingProfile?.hoursPerUnit) ? program.billingProfile!.hoursPerUnit : defaultBillingProfile().hoursPerUnit,
+      sessionsPerUnit: Number.isFinite(program.billingProfile?.sessionsPerUnit) ? program.billingProfile!.sessionsPerUnit : defaultBillingProfile().sessionsPerUnit,
+      calculationMode: program.billingProfile?.calculationMode || defaultBillingProfile().calculationMode,
+    },
     enrollmentPolicy: sourcePolicy,
     membershipDurationMonths: source.membershipDurationMonths || (typeof source.enrollmentPolicy === 'object' ? source.enrollmentPolicy.membershipDurationMonths : undefined) || 12,
     allowJoinAnytime: preset === 'school_term' ? false : sourcePolicy === 'rolling_membership' ? true : (source.allowJoinAnytime ?? (typeof source.enrollmentPolicy === 'object' ? source.enrollmentPolicy.allowJoinAnytime : false)),
@@ -229,15 +266,15 @@ const createDraft = (program: Partial<Program>, organizationId: string): WizardD
       timezone: program.runSetup?.timezone || 'Africa/Casablanca',
       locationName: program.runSetup?.locationName || '',
     },
-    grades: cloneGrades(program.grades, program.organizationId || organizationId),
+    grades: (program.deliveryModel || 'scheduled') === 'on_demand' ? [] : cloneGrades(program.grades, program.organizationId || organizationId),
     packs: program.packs?.length ? program.packs.map(pack => ({ ...pack })) : [{ name: 'Standard' }],
     paymentTerms: [...(program.paymentTerms || [])],
     registrationSetup: {
-      enabled: program.registrationSetup?.enabled ?? true,
+      enabled: (program.deliveryModel || 'scheduled') === 'on_demand' ? false : (program.registrationSetup?.enabled ?? true),
       mode: program.registrationSetup?.mode || 'fast',
       allowWaitlist: program.registrationSetup?.allowWaitlist ?? true,
       requiresReview: program.registrationSetup?.requiresReview ?? true,
-      qrEnabled: program.registrationSetup?.qrEnabled ?? true,
+      qrEnabled: (program.deliveryModel || 'scheduled') === 'on_demand' ? false : (program.registrationSetup?.qrEnabled ?? true),
     },
     documentSetup: {
       registrationConfirmation: program.documentSetup?.registrationConfirmation ?? true,
@@ -319,9 +356,47 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
   const selectedPreset = PRESETS.find(preset => preset.id === draft.formatPreset) || PRESETS[0];
   const selectedEnrollmentPolicy = ENROLLMENT_POLICIES.find(policy => policy.id === draft.enrollmentPolicy) || ENROLLMENT_POLICIES[0];
   const recurringPrice = isRecurringPrice(draft.formatPreset);
+  const visibleSteps = draft.deliveryModel === 'on_demand' ? STEPS.filter(item => item.id !== 2 && item.id !== 3) : STEPS;
+  const currentStepIndex = Math.max(0, visibleSteps.findIndex(item => item.id === step));
 
   const updateRun = (patch: Partial<ProgramRunSetupDraft>) => {
     setDraft(previous => ({ ...previous, runSetup: { ...previous.runSetup, ...patch } }));
+  };
+
+  const chooseDeliveryModel = (deliveryModel: ProgramDeliveryModel) => {
+    setDraft(previous => ({
+      ...previous,
+      deliveryModel,
+      grades: deliveryModel === 'on_demand'
+        ? []
+        : previous.grades.length ? previous.grades : [emptyGrade(previous.organizationId || organizationId)],
+      runSetup: deliveryModel === 'on_demand'
+        ? { ...previous.runSetup, name: '', startDate: '', endDate: '', enrollmentOpenDate: '', enrollmentCloseDate: '' }
+        : previous.runSetup,
+      registrationSetup: deliveryModel === 'on_demand'
+        ? { ...previous.registrationSetup, enabled: false, qrEnabled: false }
+        : previous.registrationSetup,
+    }));
+  };
+
+  const chooseBillingAudience = (billingAudience: 'individual' | 'company') => {
+    setDraft(previous => {
+      const deliveryModel: ProgramDeliveryModel = billingAudience === 'company'
+        ? (previous.billingAudience === 'company' ? previous.deliveryModel : 'on_demand')
+        : (previous.deliveryModel === 'on_demand' ? 'scheduled' : previous.deliveryModel);
+      return {
+        ...previous,
+        billingAudience,
+        deliveryModel,
+        grades: deliveryModel === 'on_demand' ? [] : previous.grades.length ? previous.grades : [emptyGrade(previous.organizationId || organizationId)],
+        runSetup: deliveryModel === 'on_demand'
+          ? { ...previous.runSetup, name: '', startDate: '', endDate: '', enrollmentOpenDate: '', enrollmentCloseDate: '' }
+          : previous.runSetup,
+        registrationSetup: deliveryModel === 'on_demand'
+          ? { ...previous.registrationSetup, enabled: false, qrEnabled: false }
+          : previous.registrationSetup,
+      };
+    });
   };
 
   const chooseEnrollmentPolicy = (enrollmentPolicy: EnrollmentPolicy) => {
@@ -517,7 +592,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       if (!draft.name.trim()) return 'Give the program a clear name to continue.';
       if (!draft.description.trim()) return 'Add a short description so families understand the program.';
     }
-    if (targetStep === 2) {
+    if (targetStep === 2 && draft.deliveryModel !== 'on_demand') {
       if (!draft.runSetup.startDate) return draft.enrollmentPolicy === 'rolling_membership' ? 'Choose when this permanent membership program opens.' : 'Choose the first day of this run.';
       if (draft.enrollmentPolicy !== 'rolling_membership' && !draft.runSetup.endDate) return 'Choose the last day of this run.';
       if (draft.enrollmentPolicy !== 'rolling_membership' && draft.runSetup.endDate < draft.runSetup.startDate) return 'The last day must be after the first day.';
@@ -526,7 +601,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       if (draft.enrollmentPolicy === 'rolling_membership' && (draft.membershipDurationMonths < 1 || draft.membershipDurationMonths > 36)) return 'Choose a membership duration between 1 and 36 months.';
       if (draft.enrollmentPolicy === 'modular' && !draft.moduleLabel.trim()) return 'Name the parts families can choose, such as Week or Module.';
     }
-    if (targetStep === 3) {
+    if (targetStep === 3 && draft.deliveryModel !== 'on_demand') {
       if (!draft.grades.length) return 'Add at least one level.';
       for (const grade of draft.grades) {
         if (!grade.name.trim()) return 'Name every level before continuing.';
@@ -543,6 +618,8 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       }
     }
     if (targetStep === 4) {
+      if (!draft.billingProfile.unitLabel.trim()) return 'Name the billing unit so invoices stay clear.';
+      if (draft.billingProfile.hoursPerUnit < 0 || draft.billingProfile.sessionsPerUnit < 0) return 'Billing duration and session counts cannot be negative.';
       if (!draft.packs.length) return 'Add at least one price option.';
       for (const pack of draft.packs) {
         if (!pack.name.trim()) return 'Name every price option.';
@@ -560,7 +637,13 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       setStepError(error);
       return;
     }
-    setStep(previous => Math.min(6, previous + 1));
+    const next = visibleSteps[currentStepIndex + 1];
+    if (next) setStep(next.id);
+  };
+
+  const goBack = () => {
+    const previous = visibleSteps[currentStepIndex - 1];
+    if (previous) setStep(previous.id);
   };
 
   const normalizeDraft = (): Partial<Program> => {
@@ -579,7 +662,8 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       allowJoinAnytime: effectiveEnrollmentPolicy === 'rolling_membership' ? true : draft.formatPreset === 'school_term' ? false : allowJoinAnytime,
       moduleLabel: effectiveEnrollmentPolicy === 'modular' ? (moduleLabel.trim() || 'Module') : undefined,
     },
-    runSetup: {
+    academicPeriod: draft.deliveryModel === 'on_demand' ? undefined : draft.academicPeriod,
+    runSetup: draft.deliveryModel === 'on_demand' ? undefined : {
       ...draft.runSetup,
       name: draft.runSetup.name?.trim() || undefined,
       timezone: draft.runSetup.timezone.trim(),
@@ -587,7 +671,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       enrollmentOpenDate: draft.runSetup.enrollmentOpenDate || undefined,
       enrollmentCloseDate: draft.runSetup.enrollmentCloseDate || undefined,
     },
-    grades: draft.grades.map(grade => ({
+    grades: draft.deliveryModel === 'on_demand' ? [] : draft.grades.map(grade => ({
       ...grade,
       organizationId: grade.organizationId || organizationId,
       name: grade.name.trim(),
@@ -618,6 +702,12 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
       priceTrimester: pack.priceTrimester ? Number(pack.priceTrimester) : undefined,
       promoPrice: pack.promoPrice ? Number(pack.promoPrice) : undefined,
     })),
+    billingProfile: {
+      ...draft.billingProfile,
+      unitLabel: draft.billingProfile.unitLabel.trim(),
+      hoursPerUnit: Math.max(0, Number(draft.billingProfile.hoursPerUnit) || 0),
+      sessionsPerUnit: Math.max(0, Number(draft.billingProfile.sessionsPerUnit) || 0),
+    },
     paymentTerms: draft.paymentTerms.map(term => term.trim()).filter(Boolean),
     discountAvailable: draft.packs.some(pack => Number(pack.promoPrice || 0) > 0),
     discountPromoPrice: undefined,
@@ -628,7 +718,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
   };
 
   const finish = () => {
-    for (let targetStep = 1; targetStep <= 4; targetStep += 1) {
+    for (const targetStep of visibleSteps.filter(item => item.id <= 4).map(item => item.id)) {
       const error = validateStep(targetStep);
       if (error) {
         setStep(targetStep);
@@ -640,9 +730,9 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
   };
 
   const reviewWarnings = [
-    !draft.runSetup.locationName?.trim() ? 'Add a location before publishing so families know where to arrive.' : '',
+    draft.deliveryModel !== 'on_demand' && !draft.runSetup.locationName?.trim() ? 'Add a location before publishing so families know where to arrive.' : '',
     draft.registrationSetup.enabled && !draft.registrationSetup.qrEnabled ? 'Online registration is on, but QR access is off.' : '',
-    !draft.documentSetup.registrationConfirmation ? 'Families will not receive a registration confirmation from this setup.' : '',
+    draft.deliveryModel !== 'on_demand' && !draft.documentSetup.registrationConfirmation ? 'Families will not receive a registration confirmation from this setup.' : '',
     !draft.thumbnailUrl.trim() ? 'A cover image can make the registration page easier to recognize.' : '',
   ].filter(Boolean);
 
@@ -650,7 +740,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
     <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit program setup' : 'Create a program'} size="xl">
       <div className="min-h-[34rem]">
         <div className="mb-5 flex gap-2 overflow-x-auto border-b border-white/10 pb-3 lg:hidden">
-          {STEPS.map(item => {
+          {visibleSteps.map(item => {
             const Icon = item.icon;
             const isActive = item.id === step;
             const isDone = item.id < step;
@@ -674,7 +764,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
           <aside className="hidden border-r border-white/10 pr-4 lg:block">
             <div className="sticky top-0">
               <div className="space-y-1">
-                {STEPS.map(item => {
+                {visibleSteps.map(item => {
                   const Icon = item.icon;
                   const isActive = item.id === step;
                   const isDone = item.id < step;
@@ -704,9 +794,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                 <p className="mt-2 truncate text-sm font-black text-white" title={draft.name}>{draft.name || 'Untitled program'}</p>
                 <p className="mt-1 text-xs text-teal-300">{selectedPreset.label}</p>
                 <div className="mt-3 space-y-2 text-xs text-slate-500">
-                  <p className="flex items-center gap-2"><CalendarDays size={13} /> {draft.runSetup.startDate || 'Dates not set'}</p>
-                  <p className="flex items-center gap-2"><UsersRound size={13} /> {totalGroups} {totalGroups === 1 ? 'group' : 'groups'} / {totalCapacity} seats</p>
-                  <p className="flex items-center gap-2"><Clock3 size={13} /> {totalBlocks} class {totalBlocks === 1 ? 'time' : 'times'}</p>
+                  {draft.deliveryModel === 'on_demand' ? <p className="flex items-center gap-2"><Building2 size={13} /> Dates and groups added per client</p> : <><p className="flex items-center gap-2"><CalendarDays size={13} /> {draft.runSetup.startDate || 'Dates not set'}</p><p className="flex items-center gap-2"><UsersRound size={13} /> {totalGroups} {totalGroups === 1 ? 'group' : 'groups'} / {totalCapacity} seats</p><p className="flex items-center gap-2"><Clock3 size={13} /> {totalBlocks} class {totalBlocks === 1 ? 'time' : 'times'}</p></>}
                   <p className="flex items-center gap-2"><CircleDollarSign size={13} /> {draft.packs.length} price {draft.packs.length === 1 ? 'option' : 'options'}</p>
                 </div>
               </div>
@@ -715,13 +803,13 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
 
           <section className="min-w-0 lg:pl-5">
             <div className="mb-5">
-              <p className="text-[10px] font-black uppercase text-teal-300">Step {step} of 6</p>
+              <p className="text-[10px] font-black uppercase text-teal-300">Step {currentStepIndex + 1} of {visibleSteps.length}</p>
               <h2 ref={stepHeadingRef} tabIndex={-1} className="mt-1 text-xl font-black text-white outline-none sm:text-2xl">
                 {step === 1 && 'What are you running?'}
                 {step === 2 && 'When and where?'}
                 {step === 3 && 'Build the learning rhythm'}
                 {step === 4 && 'Make the offer clear'}
-                {step === 5 && 'How can families join?'}
+                {step === 5 && (draft.deliveryModel === 'on_demand' ? 'Prepare client delivery' : 'How can families join?')}
                 {step === 6 && 'Ready for your team'}
               </h2>
               <p className="mt-1 text-sm leading-6 text-slate-500">
@@ -729,7 +817,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                 {step === 2 && 'Define this run without changing the reusable program idea.'}
                 {step === 3 && 'Create levels, groups, capacity, and every class shift in one place.'}
                 {step === 4 && 'Give families simple choices with prices they can understand.'}
-                {step === 5 && 'Choose the registration route and documents this program prepares.'}
+                {step === 5 && (draft.deliveryModel === 'on_demand' ? 'Keep the reusable program separate from each future client mission.' : 'Choose the registration route and documents this program prepares.')}
                 {step === 6 && 'Review the plain-language plan before saving it.'}
               </p>
             </div>
@@ -776,6 +864,26 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                   <div><label className={labelClass}>For</label><select className={fieldClass} value={draft.targetAudience} onChange={event => setDraft(previous => ({ ...previous, targetAudience: event.target.value as 'kids' | 'adults' }))}><option value="kids">Children</option><option value="adults">Adults</option></select></div>
                   <div className="sm:col-span-2"><label className={labelClass}>Short description</label><textarea className={`${fieldClass} h-24 resize-none py-3 leading-6`} value={draft.description} onChange={event => setDraft(previous => ({ ...previous, description: event.target.value }))} placeholder="What will learners make, practice, or achieve?" /></div>
                 </div>
+
+                <div className="border-t border-white/10 pt-5">
+                  <p className={labelClass}>Who receives the invoice?</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button type="button" onClick={() => chooseBillingAudience('individual')} aria-pressed={draft.billingAudience === 'individual'} className={`flex min-h-24 items-start gap-3 rounded-lg border p-3 text-left transition ${draft.billingAudience === 'individual' ? 'border-teal-300/45 bg-teal-300/10' : 'border-white/10 bg-slate-950/35 hover:border-white/20'}`}>
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${draft.billingAudience === 'individual' ? 'bg-teal-300 text-slate-950' : 'bg-white/[0.05] text-slate-400'}`}><UsersRound size={18} /></span>
+                      <span><span className="block text-sm font-black text-white">Particulier</span><span className="mt-1 block text-xs leading-5 text-slate-500">The learner or family is the customer shown on the invoice.</span></span>
+                    </button>
+                    <button type="button" onClick={() => chooseBillingAudience('company')} aria-pressed={draft.billingAudience === 'company'} className={`flex min-h-24 items-start gap-3 rounded-lg border p-3 text-left transition ${draft.billingAudience === 'company' ? 'border-sky-300/45 bg-sky-300/10' : 'border-white/10 bg-slate-950/35 hover:border-white/20'}`}>
+                      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${draft.billingAudience === 'company' ? 'bg-sky-300 text-slate-950' : 'bg-white/[0.05] text-slate-400'}`}><Building2 size={18} /></span>
+                      <span><span className="block text-sm font-black text-white">Entreprise</span><span className="mt-1 block text-xs leading-5 text-slate-500">The company receives one invoice while each attendee remains named separately.</span></span>
+                    </button>
+                  </div>
+                </div>
+
+                {draft.billingAudience === 'company' && <div className="rounded-lg border border-sky-300/20 bg-sky-300/[0.05] p-4"><div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/15 text-sky-200"><Building2 size={17} /></span><div><p className="text-sm font-black text-white">When are dates and groups known?</p><p className="mt-1 text-xs leading-5 text-slate-400">Company programs can stay reusable. Client-specific dates, groups, and participants can be added later.</p></div></div><div className="mt-4 grid gap-2 sm:grid-cols-3">{([
+                  { value: 'on_demand', label: 'Sur demande', helper: 'No dates or groups now. Plan them for each client mission.' },
+                  { value: 'scheduled', label: 'Déjà planifié', helper: 'Dates, groups, and timetable are already known.' },
+                  { value: 'hybrid', label: 'Hybride', helper: 'Keep a standard schedule and also sell custom missions.' },
+                ] as Array<{ value: ProgramDeliveryModel; label: string; helper: string }>).map(option => <button key={option.value} type="button" onClick={() => chooseDeliveryModel(option.value)} aria-pressed={draft.deliveryModel === option.value} className={`min-h-24 rounded-lg border p-3 text-left transition ${draft.deliveryModel === option.value ? 'border-sky-300/45 bg-sky-300/10' : 'border-white/10 bg-slate-950/30 hover:border-white/20'}`}><span className="block text-sm font-black text-white">{option.label}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{option.helper}</span></button>)}</div>{draft.deliveryModel === 'on_demand' && <p className="mt-3 rounded-md border border-teal-300/15 bg-teal-300/[0.05] px-3 py-2 text-xs leading-5 text-teal-100/75">This program will be saved as a reusable service catalog. Edufy will skip the Dates and Groups steps.</p>}</div>}
               </div>
             )}
 
@@ -948,6 +1056,17 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                   <div><p className="text-sm font-black text-white">{recurringPrice ? 'Recurring program prices' : 'One-time program prices'}</p><p className="mt-0.5 text-xs text-slate-500">{recurringPrice ? 'Offer annual and term choices for each pack.' : 'Set one clear price for each option.'}</p></div>
                 </div>
 
+                <div className="rounded-lg border border-sky-300/20 bg-sky-300/[0.06] p-4">
+                  <div className="flex items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-300/15 text-sky-200"><Clock3 size={17} /></span><div><p className="text-sm font-black text-white">How should this program be billed?</p><p className="mt-1 text-xs leading-5 text-slate-400">This becomes the default for invoices. It can be adjusted for a specific company contract later.</p></div></div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_9rem]">
+                    <div><label className={labelClass}>Billing unit</label><select className={fieldClass} value={draft.billingProfile.unitKind} onChange={event => { const unit = BILLING_UNITS.find(item => item.value === event.target.value) || BILLING_UNITS[1]; setDraft(previous => ({ ...previous, billingProfile: { ...previous.billingProfile, unitKind: unit.value, unitLabel: unit.label, hoursPerUnit: unit.hours, sessionsPerUnit: unit.sessions } })); }}>{BILLING_UNITS.map(unit => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select><p className="mt-1 text-[11px] leading-5 text-slate-500">{BILLING_UNITS.find(unit => unit.value === draft.billingProfile.unitKind)?.helper}</p></div>
+                    <div><label className={labelClass}>Hours / unit</label><input type="number" min={0} step="0.25" className={fieldClass} value={draft.billingProfile.hoursPerUnit} onChange={event => setDraft(previous => ({ ...previous, billingProfile: { ...previous.billingProfile, hoursPerUnit: Number(event.target.value) } }))} /></div>
+                    <div><label className={labelClass}>Sessions / unit</label><input type="number" min={0} step="1" className={fieldClass} value={draft.billingProfile.sessionsPerUnit} onChange={event => setDraft(previous => ({ ...previous, billingProfile: { ...previous.billingProfile, sessionsPerUnit: Number(event.target.value) } }))} /></div>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"><div><label className={labelClass}>Invoice label</label><input className={fieldClass} value={draft.billingProfile.unitLabel} onChange={event => setDraft(previous => ({ ...previous, billingProfile: { ...previous.billingProfile, unitLabel: event.target.value } }))} placeholder="Atelier / Journée / Forfait" /></div><div><label className={labelClass}>Calculate from</label><select className={fieldClass} value={draft.billingProfile.calculationMode} onChange={event => setDraft(previous => ({ ...previous, billingProfile: { ...previous.billingProfile, calculationMode: event.target.value as BillingCalculationMode } }))}><option value="planned">Sessions planifiées</option><option value="delivered">Sessions réalisées</option><option value="manual">Quantité saisie manuellement</option></select></div></div>
+                  {draft.billingProfile.unitKind === 'day' && <p className="mt-3 rounded-md border border-amber-300/15 bg-amber-300/[0.05] px-3 py-2 text-xs leading-5 text-amber-100/75">Exemple : 1 journée = {draft.billingProfile.sessionsPerUnit || 0} atelier(s), {draft.billingProfile.hoursPerUnit || 0} heure(s). Cette définition reste propre à votre organisation.</p>}
+                </div>
+
                 <div className="space-y-4">
                   {draft.packs.map((pack, packIndex) => (
                     <div key={packIndex} className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/30 p-3 sm:grid-cols-2">
@@ -983,7 +1102,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
 
             {step === 5 && (
               <div className="space-y-6">
-                <div>
+                {draft.deliveryModel === 'on_demand' ? <div className="rounded-lg border border-sky-300/20 bg-sky-300/[0.06] p-4"><div className="flex items-start gap-3"><Building2 size={19} className="mt-0.5 shrink-0 text-sky-200" /><div><p className="text-sm font-black text-white">Client mission created later</p><p className="mt-1 text-xs leading-5 text-slate-400">When a company orders this program, Edufy will record the company to invoice, an optional beneficiary company, participants, negotiated format, and dates as they become known. No public registration or fixed group is created now.</p></div></div></div> : <div>
                   <div className="flex items-center gap-3 border-b border-white/10 pb-3"><QrCode size={18} className="text-teal-300" /><div><p className="text-sm font-black text-white">Registration</p><p className="text-xs text-slate-500">Control how families discover and request a place.</p></div></div>
                   <div>
                     <Toggle checked={draft.registrationSetup.enabled} onChange={checked => updateRegistration({ enabled: checked })} label="Online registration page" helper="Prepare a mobile page for this program." icon={GraduationCap} />
@@ -999,7 +1118,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                       </>
                     )}
                   </div>
-                </div>
+                </div>}
 
                 <div>
                   <div className="flex items-center gap-3 border-b border-white/10 pb-3"><FileBadge2 size={18} className="text-sky-300" /><div><p className="text-sm font-black text-white">Documents</p><p className="text-xs text-slate-500">Prepare documents the team can issue later.</p></div></div>
@@ -1019,24 +1138,28 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
               <div className="space-y-5">
                 <div className="grid gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-2">
                   <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Program</p><p className="mt-2 font-black text-white">{draft.name}</p><p className="mt-1 text-xs text-slate-500">{selectedPreset.label} for {draft.targetAudience === 'kids' ? 'children' : 'adults'}</p></div>
-                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Run</p><p className="mt-2 font-black text-white">{draft.runSetup.name || 'Main run'}</p><p className="mt-1 text-xs text-slate-500">{draft.enrollmentPolicy === 'rolling_membership' ? `Open from ${draft.runSetup.startDate}, no global end` : `${draft.runSetup.startDate} to ${draft.runSetup.endDate}`}</p></div>
-                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Learning rhythm</p><p className="mt-2 font-black text-white">{totalGroups} {totalGroups === 1 ? 'group' : 'groups'}, {totalCapacity} seats</p><p className="mt-1 text-xs text-slate-500">{draft.grades.length} {draft.grades.length === 1 ? 'level' : 'levels'} and {totalBlocks} scheduled class {totalBlocks === 1 ? 'time' : 'times'}</p></div>
+                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Billing</p><p className="mt-2 font-black text-white">{draft.billingAudience === 'company' ? 'Entreprise' : 'Particulier'} · {draft.billingProfile.unitLabel}</p><p className="mt-1 text-xs text-slate-500">{draft.billingAudience === 'company' ? 'One company invoice, named participants' : 'Invoice addressed to the learner or family'} · {draft.billingProfile.hoursPerUnit || 0} h / unit</p></div>
+                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Delivery</p><p className="mt-2 font-black text-white">{draft.deliveryModel === 'on_demand' ? 'Sur demande' : draft.deliveryModel === 'hybrid' ? 'Hybride' : 'Déjà planifié'}</p><p className="mt-1 text-xs text-slate-500">{draft.deliveryModel === 'on_demand' ? 'Dates and groups will be defined per client mission' : draft.enrollmentPolicy === 'rolling_membership' ? `Open from ${draft.runSetup.startDate}, no global end` : `${draft.runSetup.startDate} to ${draft.runSetup.endDate}`}</p></div>
+                  <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Learning rhythm</p><p className="mt-2 font-black text-white">{draft.deliveryModel === 'on_demand' ? 'Defined per client' : `${totalGroups} ${totalGroups === 1 ? 'group' : 'groups'}, ${totalCapacity} seats`}</p><p className="mt-1 text-xs text-slate-500">{draft.deliveryModel === 'on_demand' ? 'No inherited StemQuest groups or timetable' : `${draft.grades.length} ${draft.grades.length === 1 ? 'level' : 'levels'} and ${totalBlocks} scheduled class ${totalBlocks === 1 ? 'time' : 'times'}`}</p></div>
                   <div className="bg-slate-950/90 p-4"><p className="text-[10px] font-black uppercase text-slate-600">Offer</p><p className="mt-2 font-black text-white">{draft.packs.length} price {draft.packs.length === 1 ? 'option' : 'options'}</p><p className="mt-1 text-xs text-slate-500">{recurringPrice ? 'Annual and term pricing' : 'One-time pricing'}</p></div>
-                  <div className="bg-slate-950/90 p-4 sm:col-span-2"><p className="text-[10px] font-black uppercase text-slate-600">Enrollment timing</p><p className="mt-2 font-black text-white">{selectedEnrollmentPolicy.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{draft.enrollmentPolicy === 'rolling_membership' ? `Each learner ends ${draft.membershipDurationMonths} months after joining.` : draft.enrollmentPolicy === 'modular' ? `Families choose the ${draft.moduleLabel.trim() || 'Module'} options that fit them.${draft.allowJoinAnytime ? ' They can join after the program starts.' : ''}` : `Everyone follows the shared run dates.${draft.allowJoinAnytime ? ' Late joining is allowed.' : ''}`}</p></div>
+                  <div className="bg-slate-950/90 p-4 sm:col-span-2"><p className="text-[10px] font-black uppercase text-slate-600">{draft.deliveryModel === 'on_demand' ? 'Client mission' : 'Enrollment timing'}</p><p className="mt-2 font-black text-white">{draft.deliveryModel === 'on_demand' ? 'Created when ordered' : selectedEnrollmentPolicy.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{draft.deliveryModel === 'on_demand' ? 'The billed company, optional beneficiary, participants, and workshop dates belong to the mission—not this program.' : draft.enrollmentPolicy === 'rolling_membership' ? `Each learner ends ${draft.membershipDurationMonths} months after joining.` : draft.enrollmentPolicy === 'modular' ? `Families choose the ${draft.moduleLabel.trim() || 'Module'} options that fit them.${draft.allowJoinAnytime ? ' They can join after the program starts.' : ''}` : `Everyone follows the shared run dates.${draft.allowJoinAnytime ? ' Late joining is allowed.' : ''}`}</p></div>
                 </div>
 
                 <div className="flex flex-col gap-3 border-y border-white/10 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div><p className="text-sm font-black text-white">Program status</p><p className="mt-1 text-xs text-slate-500">Keep future-year copies private until the team is ready.</p></div>
-                  <div className="grid h-10 w-full grid-cols-2 rounded-lg border border-white/10 bg-slate-950/60 p-1 sm:w-52">
+                  <div className="grid h-10 w-full grid-cols-3 rounded-lg border border-white/10 bg-slate-950/60 p-1 sm:w-72">
                     <button type="button" onClick={() => setDraft(previous => ({ ...previous, status: 'draft' }))} aria-pressed={draft.status === 'draft'} className={`rounded-md text-xs font-black transition ${draft.status === 'draft' ? 'bg-white text-slate-950' : 'text-slate-400 hover:text-white'}`}>Draft</button>
                     <button type="button" onClick={() => setDraft(previous => ({ ...previous, status: 'active' }))} aria-pressed={draft.status === 'active'} className={`rounded-md text-xs font-black transition ${draft.status === 'active' ? 'bg-teal-300 text-slate-950' : 'text-slate-400 hover:text-white'}`}>Active</button>
+                    <button type="button" onClick={() => setDraft(previous => ({ ...previous, status: 'paused' }))} aria-pressed={draft.status === 'paused'} className={`rounded-md text-xs font-black transition ${draft.status === 'paused' ? 'bg-amber-300 text-slate-950' : 'text-slate-400 hover:text-white'}`}>Paused</button>
                   </div>
                 </div>
 
                 <div className="border-b border-white/10 pb-4">
-                  <p className="text-xs font-black uppercase text-slate-600">The family experience</p>
+                  <p className="text-xs font-black uppercase text-slate-600">{draft.deliveryModel === 'on_demand' ? 'Client mission workflow' : 'The family experience'}</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {draft.registrationSetup.enabled
+                    {draft.deliveryModel === 'on_demand'
+                      ? 'This program stays reusable. Your team creates a separate mission when a company orders it, then adds dates, groups, and participants only when they are known.'
+                      : draft.registrationSetup.enabled
                       ? `Families can use a ${draft.registrationSetup.mode} registration form${draft.registrationSetup.qrEnabled ? ' or scan its QR code' : ''}. ${draft.registrationSetup.requiresReview ? 'Your team reviews each request before enrollment.' : 'Requests can move ahead without staff review.'}`
                       : 'Online registration is off. Your team will enroll learners from inside Edufy.'}
                   </p>
@@ -1066,8 +1189,8 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
             {(stepError || externalError) && <div role="alert" className="mt-5 rounded-lg border border-red-400/25 bg-red-400/10 px-3 py-2.5 text-sm font-bold text-red-200">{stepError || externalError}</div>}
 
             <footer className="sticky bottom-0 mt-6 flex items-center justify-between gap-3 border-t border-white/10 bg-[#0F1B2D]/95 py-4 backdrop-blur">
-              {step > 1 ? (
-                <button type="button" onClick={() => setStep(previous => previous - 1)} disabled={isSaving} className="flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white disabled:opacity-50"><ArrowLeft size={16} /> Back</button>
+              {currentStepIndex > 0 ? (
+                <button type="button" onClick={goBack} disabled={isSaving} className="flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white disabled:opacity-50"><ArrowLeft size={16} /> Back</button>
               ) : (
                 <button type="button" onClick={onClose} disabled={isSaving} className="h-11 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white disabled:opacity-50">Cancel</button>
               )}

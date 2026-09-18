@@ -759,6 +759,11 @@ const AppContent = () => {
             return;
         }
 
+        if (selectedProgram.status !== 'active') {
+            await showAlert('Program unavailable', `This program is ${selectedProgram.status} and cannot accept a new enrollment.`, 'warning');
+            return;
+        }
+
         if (!getProgramReadiness(selectedProgram).isAcceptingEnrollments) {
             await showAlert('Program finished', 'This fixed program has reached its end date. Its history is preserved, but it cannot accept a new enrollment.', 'warning');
             return;

@@ -17,7 +17,9 @@ import { db } from '../services/firebase';
 import { doc, writeBatch, collection, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Modal } from '../components/Modal';
 import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
+import './finance/education-finance-v1.css';
 import { FinanceDocumentsPanel } from '../components/finance/FinanceDocumentsPanel';
+import { getProgramOperationalState } from '../utils/programLifecycle';
 
 // --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
@@ -94,6 +96,7 @@ export const computeAcademicYear = (d: Date = new Date()): string => {
 };
 
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
+    const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { payments, enrollments, students, programs, navigateTo, settings, viewParams, fetchDashboardData } = useAppContext();
     const { can, currentOrganization, userProfile } = useAuth();
     const canManageInvoices = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
@@ -304,6 +307,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         const eFiltered = enrollments.filter(e => {
             const student = students.find(item => item.id === e.studentId);
             return e.status === 'active'
+                && isCurrentProgramVisible(e.programId)
                 && matchesSession(e.session)
                 && matchesSearch([e.studentName, student?.parentName, student?.parentPhone, e.programName, e.groupName].filter(Boolean).join(' '))
                 && matchesProgram(e.programId)
@@ -316,7 +320,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
         return { filteredPayments: pFiltered, filteredEnrollments: eFiltered };
     }, [payments, enrollments, searchQuery, selectedSession, selectedMonth, selectedProgram, dateRange,
-        balanceFilter, transactionStatusFilter, paymentMethodFilter, datePresetFilter, settings.academicYear, filterAudience, students]);
+        balanceFilter, transactionStatusFilter, paymentMethodFilter, datePresetFilter, settings.academicYear, filterAudience, students, programs]);
 
     useEffect(() => {
         const visibleIds = new Set(filteredPayments.map(payment => payment.id));
@@ -408,6 +412,11 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             console.error(err);
             await showAlert('Proof upload failed', 'Use a supported image and try again.', 'danger');
         }
+    };
+    const isCurrentProgramVisible = (programId: string) => {
+        const program = programs.find(item => item.id === programId);
+        if (!program) return true;
+        return ['running', 'upcoming', 'evergreen'].includes(getProgramOperationalState(program));
     };
 
     const handleTransactionProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -642,7 +651,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             const ms = e.session ? e.session === selectedSession : selectedSession === settings.academicYear;
             const mp = selectedProgram === 'All' || e.programId === selectedProgram;
             const ma = audienceMatchesProg(e.programId);
-            return e.status === 'active' && ms && mp && ma;
+            return e.status === 'active' && isCurrentProgramVisible(e.programId) && ms && mp && ma;
         });
 
         const totalExpected = baseEnrollments.reduce((sum, e) => sum + (e.totalAmount || 0), 0);
@@ -674,7 +683,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             .reduce((sum, p) => sum + p.amount, 0);
 
         return { totalExpected, totalPaid, totalOutstanding, paidCount, unpaidCount, totalStudents, collectionRate, realizedRevenue };
-    }, [enrollments, payments, selectedSession, selectedMonth, selectedProgram, settings.academicYear, filterAudience, currentOrganization?.id]);
+    }, [enrollments, payments, selectedSession, selectedMonth, selectedProgram, settings.academicYear, filterAudience, currentOrganization?.id, programs]);
 
  //  Derived: Monthly Revenue Chart Data 
     // Counts ALL non-bounced payments (cleared + pending/in-transit) to show real activity
@@ -735,7 +744,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             const matchesProgram = selectedProgram === 'All' || e.programId === selectedProgram;
             const matchesAudience = audienceMatchesProg(e.programId);
             const matchesSearch = !searchQuery || (e.studentName || '').toLowerCase().includes(searchQuery.toLowerCase());
-            return e.status === 'active' && ms && (e.balance || 0) > 0
+            return e.status === 'active' && isCurrentProgramVisible(e.programId) && ms && (e.balance || 0) > 0
                 && matchesProgram && matchesAudience && matchesSearch
                 && ['monthly', 'trimester', 'semestre'].includes(e.paymentPlan);
         });
@@ -748,7 +757,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             })
             .filter(item => item.urgency !== 'paid' && item.urgency !== 'future' && item.dueDate !== null)
             .sort((a, b) => (a.dueDate!.getTime()) - (b.dueDate!.getTime()));
-    }, [enrollments, payments, selectedSession, settings.academicYear, selectedProgram, filterAudience, searchQuery]);
+    }, [enrollments, payments, selectedSession, settings.academicYear, selectedProgram, filterAudience, searchQuery, programs]);
 
     const financeCommandStats = useMemo(() => {
         const visiblePayments = payments.filter(p => {
@@ -836,7 +845,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             const mp = selectedProgram === 'All' || e.programId === selectedProgram;
             const ma = audienceMatchesProg(e.programId);
             const matchSearch = !searchQuery || (e.studentName || '').toLowerCase().includes(searchQuery.toLowerCase());
-            return e.status === 'active' && ms && mp && ma && matchSearch && !paidIds.has(e.id);
+            return e.status === 'active' && isCurrentProgramVisible(e.programId) && ms && mp && ma && matchSearch && !paidIds.has(e.id);
         });
 
         // Installment plans: monthly/trimester/semestre &middot; these students SHOULD pay periodically
@@ -867,7 +876,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             .sort((a, b) => (a.enrollment.studentName || '').localeCompare(b.enrollment.studentName || ''));
 
         return { installmentUnpaidRows, annualUnpaidRows, fullyPaidRows, paidRows };
-    }, [selectedMonth, enrollments, payments, selectedSession, selectedProgram, searchQuery, settings.academicYear, filterAudience]);
+    }, [selectedMonth, enrollments, payments, selectedSession, selectedProgram, searchQuery, settings.academicYear, filterAudience, programs]);
 
     // --- Handlers ---
     const handleRecalculateBalances = async () => {
@@ -1329,10 +1338,25 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     } as const;
 
     return (
-        <div ref={financeTopRef} className="atlas-module atlas-finance-module flex flex-col gap-4 pb-24 md:pb-8">
+        <div ref={financeTopRef} className={`atlas-module atlas-finance-module flex flex-col gap-4 pb-24 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-finance-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-finance-v1' : undefined}>
 
  {/*  Header  */}
-            <AtlasCommandHeader
+            {showEducationFinanceV1 ? (
+                <section className="edu-finance-v1__command" aria-labelledby="education-finance-title">
+                    <div className="edu-finance-v1__command-copy">
+                        <span><WalletCards size={15} />School finance <b>{selectedSession}</b></span>
+                        <h2 id="education-finance-title">Finance workspace</h2>
+                        <p>Start from the job in front of you—receive money, follow up, verify, find a receipt, or prepare accounting.</p>
+                    </div>
+                    <label className="edu-finance-v1__session-picker">
+                        <Calendar size={16} />
+                        <span>Academic session</span>
+                        <select value={selectedSession} onChange={(e) => { setSelectedSession(e.target.value); setSelectedMonth(''); }}>
+                            {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                    </label>
+                </section>
+            ) : <AtlasCommandHeader
                 eyebrow="Your daily finance helper"
                 title="Finance assistant"
                 description="Choose what you need to do. Edufy will guide the rest."
@@ -1361,12 +1385,12 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </div>
                     </>
                 }
-            />
+            />}
 
  {/*  KPI Cards  */}
             {/* ── Session Data Fix Banner (admin only, auto-detected) ── */}
             {can('settings.manage') && sessionMismatch.total > 0 && !fixDone && (
-                <div className="flex flex-col gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.04] p-3 sm:flex-row sm:items-center">
+                <div className="edu-finance-v1__alert flex flex-col gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.04] p-3 sm:flex-row sm:items-center">
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                         <div className="shrink-0 text-amber-200">
                             <Wrench size={18} />
@@ -1392,7 +1416,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
             {/* Success message after fix */}
             {fixDone && (
-                <div className="flex items-center gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.04] p-3">
+                <div className="edu-finance-v1__alert flex items-center gap-3 rounded-lg border border-emerald-300/20 bg-emerald-300/[0.04] p-3">
                     <ShieldCheck size={18} className="text-emerald-400 shrink-0" />
                     <div>
                         <p className="text-sm font-bold text-emerald-300">Session data corrected!</p>
@@ -1403,14 +1427,14 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
             {viewMode === 'home' ? (
                 <div className="space-y-4">
-                    <section className="relative overflow-hidden rounded-lg border border-teal-300/20 bg-teal-300/[0.05] p-5 sm:p-6">
+                    <section className="edu-finance-v1__focus relative overflow-hidden rounded-lg border border-teal-300/20 bg-teal-300/[0.05] p-5 sm:p-6">
                         <div className="relative">
                             <div className="max-w-2xl">
                                 <div className="flex items-center gap-2 text-xs font-bold text-teal-200">
                                     <Sparkles size={15} className="motion-safe:animate-pulse" /> Today
                                 </div>
                                 <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">
-                                    {attentionCount > 0 ? `${attentionCount} finance task${attentionCount === 1 ? '' : 's'} need attention` : 'Everything is up to date'}
+                                    {attentionCount > 0 ? `${attentionCount} finance task${attentionCount === 1 ? ' needs' : 's need'} attention` : 'Everything is up to date'}
                                 </h2>
                                 <p className="mt-1 text-sm leading-6 text-slate-400">
                                     {attentionCount > 0 ? 'Start with the first task below, or record a payment when a family arrives.' : 'There are no payment exceptions waiting. You can still record a payment or review history.'}
@@ -1447,14 +1471,14 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </button>
 
                         {canManageInvoices && <button type="button" onClick={() => openFinanceTask('invoices')} className="group min-h-40 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] p-4 text-left transition duration-200 hover:border-violet-200/40 hover:bg-violet-300/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50 motion-safe:hover:-translate-y-1">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-violet-300/15 text-violet-200"><ReceiptText size={21} /></span>
-                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Invoices &amp; accounting</span><ChevronRight size={18} className="shrink-0 text-violet-200" /></span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-400">Training and service invoices, credit notes, and accounting exports.</span>
+                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-violet-300/15 text-violet-200"><ReceiptText size={21} className="transition-transform duration-200 motion-safe:group-hover:scale-110" /></span>
+                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Invoices &amp; accounting</span><ChevronRight size={18} className="shrink-0 text-violet-200 transition-transform motion-safe:group-hover:translate-x-1" /></span>
+                            <span className="mt-1 block text-xs leading-5 text-slate-400">Company billing, annual sequences, credit notes, and Excel exports.</span>
                         </button>}
                     </section>
 
                     <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-                        <div className="rounded-lg border border-white/10 bg-slate-950/45">
+                        <div className="edu-finance-v1__next rounded-lg border border-white/10 bg-slate-950/45">
                             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                                 <div><h3 className="text-sm font-black text-white">Next steps</h3><p className="mt-0.5 text-xs text-slate-500">Only items that need a human decision.</p></div>
                                 <span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-400">{attentionCount} open</span>
@@ -1467,7 +1491,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             </div>
                         </div>
 
-                        <div className="rounded-lg border border-white/10 bg-slate-950/45 p-4">
+                        <div className="edu-finance-v1__session rounded-lg border border-white/10 bg-slate-950/45 p-4">
                             <p className="text-[10px] font-bold uppercase text-slate-500">This session</p>
                             <p className="mt-2 font-mono text-2xl font-black text-white">{formatCurrency(stats.realizedRevenue)}</p>
                             <p className="mt-1 text-xs text-slate-500">Received and cleared</p>
@@ -1478,7 +1502,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     </section>
 
                     {showFinanceTools && (
-                        <section className="grid gap-2 rounded-lg border border-white/10 bg-slate-950/70 p-3 sm:grid-cols-3">
+                        <section className="edu-finance-v1__tools grid gap-2 rounded-lg border border-white/10 bg-slate-950/70 p-3 sm:grid-cols-3">
                             <button type="button" onClick={() => openFinanceTask('reports')} className="flex min-h-12 items-center gap-3 rounded-lg px-3 text-left text-sm font-bold text-slate-200 transition hover:bg-white/[0.05]"><BarChart2 size={17} className="text-teal-200" /> Payment reports</button>
                             <button type="button" onClick={() => { setViewMode('balances'); setBalanceFilter('all'); setBalanceGrouping('student'); setShowFinanceTools(false); }} className="flex min-h-12 items-center gap-3 rounded-lg px-3 text-left text-sm font-bold text-slate-200 transition hover:bg-white/[0.05]"><Users size={17} className="text-sky-200" /> All student accounts</button>
                             {can('settings.manage') && <button type="button" onClick={handleRecalculateBalances} disabled={isFixingSession} className="flex min-h-12 items-center gap-3 rounded-lg px-3 text-left text-sm font-bold text-slate-200 transition hover:bg-white/[0.05] disabled:opacity-50"><RefreshCw size={17} className={`text-amber-200 ${isFixingSession ? 'animate-spin' : ''}`} /> Check balance records</button>}
@@ -1487,17 +1511,17 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 </div>
             ) : (
                 <>
-                    <section className="flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/45 p-3 sm:flex-row sm:items-center">
+                    <section className="edu-finance-v1__workspace-header flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/45 p-3 sm:flex-row sm:items-center">
                         <button type="button" onClick={goFinanceHome} className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-300 transition hover:bg-white/[0.05] hover:text-white"><ArrowLeft size={16} /> Finance home</button>
                         {(() => { const WorkspaceIcon = focusedWorkspace[viewMode].icon; return <div className="flex min-w-0 flex-1 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-300/10 text-teal-200"><WorkspaceIcon size={19} /></span><div className="min-w-0"><h2 className="truncate text-base font-black text-white">{focusedWorkspace[viewMode].title}</h2><p className="truncate text-xs text-slate-500">{focusedWorkspace[viewMode].description}</p></div></div>; })()}
                         {can('finance.record_payment') && viewMode !== 'reports' && viewMode !== 'invoices' && <button type="button" onClick={() => onRecordPayment()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><CreditCard size={16} /> Record payment</button>}
                     </section>
 
-            {viewMode === 'invoices' && <FinanceDocumentsPanel />}
+            {viewMode === 'invoices' && <div className="edu-finance-v1__documents"><FinanceDocumentsPanel /></div>}
 
  {/*  Monthly Revenue Chart  */}
             {viewMode === 'reports' && can('finance.view_totals') && monthlyChartData.length > 0 && (
-                <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-950/55">
+                <div className="edu-finance-v1__report-chart overflow-hidden rounded-lg border border-white/10 bg-slate-950/55">
                     <div className="flex items-center justify-between p-4">
                         <div className="flex items-center gap-2 text-sm font-bold text-white">
                             <BarChart2 size={16} className="text-emerald-400" />
@@ -1582,7 +1606,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             )}
 
  {/*  Main Table Panel  */}
-            {viewMode !== 'invoices' && <div className="rounded-lg border border-white/10 bg-slate-950/45">
+            {viewMode !== 'invoices' && <div className="edu-finance-v1__ledger rounded-lg border border-white/10 bg-slate-950/45">
 
                 {/* Toolbar */}
                 <div className="sticky top-0 z-20 space-y-3 border-b border-white/10 bg-slate-950 p-3">
@@ -1617,7 +1641,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5" />
                                 <select value={selectedProgram} onChange={(e) => setSelectedProgram(e.target.value)} className="pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg appearance-none focus:border-emerald-500 outline-none cursor-pointer">
                                     <option value="All">All Programs</option>
-                                    {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                    {programs.filter(p => isCurrentProgramVisible(p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                             </div>
                             {viewMode === 'transactions' && (
@@ -1826,7 +1850,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                             <div className="font-bold text-red-400 font-mono">{formatCurrency(enrollment.balance || 0)}</div>
                                         </div>
                                         <div className="flex shrink-0 gap-1">
-                                            <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded-lg text-emerald-500 border border-slate-700 transition-colors" title="Send reminder"><Phone size={15} /></button>
+                                            <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded-lg text-emerald-500 border border-slate-700 transition-colors" title="Open WhatsApp reminder"><Phone size={15} /></button>
                                             {can('finance.record_payment') && <button onClick={() => onRecordPayment(enrollment.studentId)} className="p-2 hover:bg-slate-800 rounded-lg text-blue-400 border border-slate-700 transition-colors" title="Record payment"><CreditCard size={15} /></button>}
                                             <button onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white border border-slate-700 transition-colors" title="View profile"><Eye size={15} /></button>
                                         </div>
@@ -1863,7 +1887,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                             <div className="font-bold text-amber-400 font-mono">{formatCurrency(enrollment.balance || 0)}</div>
                                         </div>
                                         <div className="flex shrink-0 gap-1">
-                                            <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded-lg text-emerald-500 border border-slate-700 transition-colors" title="Send reminder"><Phone size={15} /></button>
+                                            <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded-lg text-emerald-500 border border-slate-700 transition-colors" title="Open WhatsApp reminder"><Phone size={15} /></button>
                                             {can('finance.record_payment') && <button onClick={() => onRecordPayment(enrollment.studentId)} className="p-2 hover:bg-slate-800 rounded-lg text-blue-400 border border-slate-700 transition-colors" title="Record payment"><CreditCard size={15} /></button>}
                                             <button onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white border border-slate-700 transition-colors" title="View profile"><Eye size={15} /></button>
                                         </div>
@@ -1958,7 +1982,52 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
  {/*  DATA: BALANCES (normal mode, no month selected)  */}
                 {viewMode === 'balances' && !selectedMonth && (
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="edu-finance-v1__mobile-list md:hidden">
+                        {balanceGrouping === 'student' ? (
+                            filteredEnrollments.length === 0 ? (
+                                <div className="edu-finance-v1__mobile-empty"><strong>No student balances match</strong><span>Reset the filters to restore the ledger.</span><button type="button" onClick={resetLedgerFilters}>Reset filters</button></div>
+                            ) : filteredEnrollments.map(enrollment => (
+                                <article key={enrollment.id}>
+                                    <div className="edu-finance-v1__mobile-card-head">
+                                        <div><strong>{enrollment.studentName}</strong><span>{enrollment.programName} · {enrollment.gradeName || 'No level'}</span></div>
+                                        <b data-open={(enrollment.balance || 0) > 0}>{formatCurrency(enrollment.balance || 0)}<small>remaining</small></b>
+                                    </div>
+                                    <dl><div><dt>Plan</dt><dd>{enrollment.packName || enrollment.paymentPlan || 'Not set'}</dd></div><div><dt>Received</dt><dd>{formatCurrency(enrollment.paidAmount || 0)}</dd></div></dl>
+                                    <div className="edu-finance-v1__mobile-actions">
+                                        {enrollment.balance > 0 && <button type="button" onClick={() => handleWhatsApp(enrollment)}><Phone size={15} />Open reminder</button>}
+                                        {can('finance.record_payment') && <button type="button" className="is-primary" onClick={() => onRecordPayment(enrollment.studentId)}><CreditCard size={15} />Record payment</button>}
+                                        <button type="button" onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })}><Eye size={15} />Profile</button>
+                                    </div>
+                                </article>
+                            ))
+                        ) : (
+                            parentAccounts.length === 0 ? (
+                                <div className="edu-finance-v1__mobile-empty"><strong>No family accounts match</strong><span>Reset the filters to restore the family ledger.</span><button type="button" onClick={resetLedgerFilters}>Reset filters</button></div>
+                            ) : parentAccounts.map((account, index) => (
+                                <article key={`${account.phone || account.parentName}-${index}`}>
+                                    <div className="edu-finance-v1__mobile-card-head">
+                                        <div><strong>{account.parentName || 'Family account'}</strong><span>{account.children.map((child: any) => child.student.name).join(', ') || account.phone || 'No children linked'}</span></div>
+                                        <b data-open={account.totalBalance > 0}>{formatCurrency(account.totalBalance)}<small>remaining</small></b>
+                                    </div>
+                                    <dl><div><dt>Children</dt><dd>{account.children.length}</dd></div><div><dt>Received</dt><dd>{formatCurrency(account.totalPaid)}</dd></div></dl>
+                                    <div className="edu-finance-v1__mobile-actions">
+                                        <button type="button" onClick={() => { setStatementAccount(account); setIsStatementModalOpen(true); }}><FileText size={15} />Statement</button>
+                                        {account.totalBalance > 0 && can('finance.record_payment') && <button type="button" className="is-primary" onClick={() => {
+                                            if (account.children.length > 1) {
+                                                setParentPaymentAccount(account);
+                                                setParentPaymentForm(prev => ({ ...prev, amount: account.totalBalance.toString() as any }));
+                                                setIsParentPaymentModalOpen(true);
+                                                return;
+                                            }
+                                            onRecordPayment(account.children[0].student.id);
+                                        }}><CreditCard size={15} />Record payment</button>}
+                                    </div>
+                                </article>
+                            ))
+                        )}
+                    </div>
+                    <div className="hidden overflow-x-auto md:block">
                     <table className="w-full table-fixed border-collapse text-left text-sm">
                         <thead className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
                             <tr>
@@ -2001,7 +2070,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                             <td className="p-4 text-right">
                                                 <div className="flex justify-end gap-1">
                                                     {enrollment.balance > 0 && (
-                                                        <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded text-emerald-500 transition-colors" title="Send Reminder (WhatsApp)">
+                                                        <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded text-emerald-500 transition-colors" title="Open WhatsApp reminder">
                                                             <Phone size={16} />
                                                         </button>
                                                     )}
@@ -2081,11 +2150,40 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </tbody>
                     </table>
                     </div>
+                    </>
                 )}
 
  {/*  DATA: TRANSACTIONS  */}
                 {viewMode === 'transactions' && (
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="edu-finance-v1__mobile-list md:hidden">
+                        {filteredPayments.length === 0 ? (
+                            <div className="edu-finance-v1__mobile-empty"><strong>No transactions match</strong><span>Change the period or payment filters to restore the ledger.</span><button type="button" onClick={resetLedgerFilters}>Reset filters</button></div>
+                        ) : filteredPayments.map(payment => {
+                            const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
+                            const student = students.find(s => s.id === enrollment?.studentId);
+                            const lifecycleAction = getLifecycleAction(payment);
+                            return (
+                                <article key={payment.id} data-selected={selectedTransactionIds.has(payment.id)}>
+                                    <div className="edu-finance-v1__mobile-card-head">
+                                        <div className="edu-finance-v1__mobile-payment-title">
+                                            <input type="checkbox" aria-label={`Select payment from ${payment.studentName}`} checked={selectedTransactionIds.has(payment.id)} onChange={() => toggleTransactionSelection(payment.id)} />
+                                            <span><strong>{payment.studentName}</strong><span>{formatDate(payment.date)} · {payment.method === 'virement' ? 'Transfer' : payment.method}</span></span>
+                                        </div>
+                                        <b>{can('finance.view_totals') ? formatCurrency(payment.amount) : '***'}<small>{payment.status.replace(/_/g, ' ')}</small></b>
+                                    </div>
+                                    <p className="edu-finance-v1__mobile-program">{enrollment?.programName || 'Program not linked'}</p>
+                                    <div className="edu-finance-v1__mobile-actions">
+                                        {lifecycleAction && can('finance.record_payment') && <button type="button" className="is-primary" onClick={() => openTransactionEditor(payment, lifecycleAction.status)}>{lifecycleAction.label}</button>}
+                                        <button type="button" onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })}><Eye size={15} />Details</button>
+                                        {can('finance.record_payment') && <button type="button" onClick={() => openTransactionEditor(payment)}><Wrench size={15} />Edit</button>}
+                                        <button type="button" disabled={!['paid', 'verified'].includes(payment.status)} onClick={() => generateReceipt(payment, enrollment, student, settings)}><Printer size={15} />Receipt</button>
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                    <div className="hidden overflow-x-auto md:block">
                     <table className="w-full table-fixed border-collapse text-left text-sm">
                         <thead className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
                             <tr>
@@ -2174,6 +2272,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </tbody>
                     </table>
                     </div>
+                    </>
                 )}
 
  {/*  DATA: UPCOMING PAYMENTS  */}
@@ -2253,7 +2352,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                 <button
                                                     onClick={() => handleWhatsAppUpcoming({ enrollment, dueDate, dueAmount, source, urgency })}
                                                     className="p-2 hover:bg-slate-700 rounded-lg text-emerald-500 hover:text-emerald-400 transition-colors border border-slate-700"
-                                                    title="Send payment reminder via WhatsApp"
+                                                    title="Open payment reminder in WhatsApp"
                                                 >
                                                     <MessageCircle size={16} />
                                                 </button>

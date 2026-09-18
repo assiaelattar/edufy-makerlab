@@ -1,7 +1,8 @@
 import type { Enrollment, Program, ProgramEnrollmentMode, Student } from '../types';
-import { addMonthsClamped } from './programLifecycle';
+import { addMonthsClamped, getProgramOperationalState } from './programLifecycle';
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
+
 const dateOnly = (value?: string) => value && ISO_DATE_PATTERN.test(value) ? value.slice(0, 10) : undefined;
 
 const normalizeName = (value: string) => value
@@ -21,6 +22,15 @@ const isSchoolCohort = (program?: Program) => Boolean(
   || program?.billingAudience === 'company'
   || program?.partnerName
 );
+
+const academicPeriodFromLabel = (value?: string) => {
+  const years = value?.match(/(20\d{2})\D+(20\d{2})/);
+  if (!years) return undefined;
+  return {
+    startDate: `${years[1]}-09-01`,
+    endDate: `${years[2]}-08-31`
+  };
+};
 
 export interface EnrollmentCoverage {
   mode?: ProgramEnrollmentMode;
@@ -46,18 +56,26 @@ export interface MembershipRenewalDue {
 export const resolveEnrollmentCoverage = (enrollment: Enrollment, program?: Program): EnrollmentCoverage => {
   let mode = enrollment.enrollmentMode || program?.enrollmentPolicy?.mode;
 
+  // Older StemQuest records predate enrollmentMode. Individual programs are
+  // rolling memberships; school/company programs remain shared cohorts.
   if (!mode && isLegacyStemQuest(enrollment, program)) {
     mode = isSchoolCohort(program) ? 'fixed_run' : 'rolling_membership';
   }
   if (!mode && program?.runSetup?.endDate) mode = 'fixed_run';
 
   const fixedRun = mode === 'fixed_run' || program?.formatPreset === 'school_term';
+  const academicPeriod = program?.academicPeriod
+    || academicPeriodFromLabel(enrollment.session)
+    || academicPeriodFromLabel(program?.name);
   const startDate = fixedRun
-    ? dateOnly(program?.runSetup?.startDate) || dateOnly(enrollment.serviceStartDate) || dateOnly(enrollment.startDate)
+    ? dateOnly(program?.runSetup?.startDate) || dateOnly(academicPeriod?.startDate) || dateOnly(enrollment.serviceStartDate) || dateOnly(enrollment.startDate)
     : dateOnly(enrollment.serviceStartDate) || dateOnly(enrollment.startDate);
 
+  // Fixed cohorts are governed by the shared Program dates, even when an old
+  // enrollment contains a later personal date. Rolling memberships do the
+  // opposite: they ignore any legacy Program end date and use learner dates.
   let endDate = fixedRun
-    ? dateOnly(program?.runSetup?.endDate) || dateOnly(enrollment.serviceEndDate) || dateOnly(enrollment.endDate)
+    ? dateOnly(program?.runSetup?.endDate) || dateOnly(academicPeriod?.endDate) || dateOnly(enrollment.serviceEndDate) || dateOnly(enrollment.endDate)
     : dateOnly(enrollment.serviceEndDate) || dateOnly(enrollment.endDate);
 
   if (!endDate && mode === 'rolling_membership' && startDate) {
@@ -89,7 +107,17 @@ export const isEnrollmentEligibleForAttendance = (
   enrollment: Enrollment,
   program: Program | undefined,
   attendanceDate: string
-) => getEnrollmentCoverageState(enrollment, program, attendanceDate) === 'active';
+) => {
+  if (program) {
+    const state = getProgramOperationalState(program, attendanceDate);
+    if (state === 'draft' || state === 'archived' || state === 'finished' || state === 'upcoming') return false;
+    if (state === 'paused') {
+      const pausedOn = dateOnly(program.pausedAt);
+      if (!pausedOn || attendanceDate.slice(0, 10) >= pausedOn) return false;
+    }
+  }
+  return getEnrollmentCoverageState(enrollment, program, attendanceDate) === 'active';
+};
 
 const differenceInCalendarDays = (later: string, earlier: string) => {
   const laterTime = Date.parse(`${later}T00:00:00.000Z`);

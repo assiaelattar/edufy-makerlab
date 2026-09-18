@@ -558,12 +558,13 @@ export const ExpensesView = () => {
                                 </div>
                                 
                                 {(status === 'due' || status === 'scheduled') && (
-                                    <button 
+                                    <AtlasActionButton
                                         onClick={() => handlePayTemplateOpen(template)}
-                                        className={`w-full mt-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${status === 'due' ? 'bg-amber-600 hover:bg-amber-500 text-white' : 'border border-sky-400/20 bg-sky-400/10 text-sky-300 hover:bg-sky-400/15'}`}
+                                        variant={status === 'due' ? 'primary' : 'secondary'}
+                                        className="mt-3 w-full text-xs"
                                     >
                                         {status === 'due' ? 'Record payment' : 'Record early'} <ArrowRight size={12}/>
-                                    </button>
+                                    </AtlasActionButton>
                                 )}
                                 {status === 'paid' && (
                                     <div className="mt-3 text-center text-[10px] text-emerald-500 font-medium bg-emerald-950/30 py-1.5 rounded border border-emerald-900/30 flex items-center justify-center gap-1">
@@ -571,14 +572,15 @@ export const ExpensesView = () => {
                                     </div>
                                 )}
                                 {status === 'manual' && (
-                                    <button
+                                    <AtlasActionButton
                                         type="button"
                                         onClick={() => handlePayTemplateOpen(template)}
-                                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-sky-400/20 bg-sky-400/10 py-2 text-xs font-bold text-sky-300 transition-colors hover:bg-sky-400/15"
+                                        variant="secondary"
+                                        className="mt-3 w-full text-xs"
                                         title="Weekly templates need a weekday or occurrence count before automatic tracking is reliable"
                                     >
                                         Review limitation <Info size={12} />
-                                    </button>
+                                    </AtlasActionButton>
                                 )}
                             </div>
                         ))}

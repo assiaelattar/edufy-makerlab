@@ -160,3 +160,39 @@
   .education-ui-v1-active .edu-instructor-shell-v1 > main > div:last-child { padding: 12px 12px 92px !important; }
   .education-ui-v1-active .edu-parent-dashboard-v1 main { padding-top: 18px !important; }
 }
+
+/*
+ * Product-wide coherence pass
+ * ----------------------------
+ * Module colors remain useful as small status signals. Large KPI cards and
+ * command surfaces stay neutral so moving between modules feels like one app.
+ * This intentionally comes after the module styles in App.tsx.
+ */
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-v1 .atlas-command-header {
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-v1 .atlas-signal-card,
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card {
+  color: var(--edu-ink) !important;
+  border-color: var(--edu-border) !important;
+  background: #fff !important;
+}
+
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-v1 .atlas-signal-card .atlas-text-strong,
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card .atlas-text-strong {
+  color: var(--edu-ink) !important;
+}
+
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-v1 .atlas-signal-card > div:first-child > span:first-child,
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card > div:first-child > span:first-child {
+  color: var(--edu-subtle) !important;
+}
+
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-v1 .atlas-signal-card .atlas-signal-detail,
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-v1 .atlas-signal-card .atlas-signal-icon,
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card .atlas-signal-detail,
+.education-ui-v1-active .edu-marketplace-app-v1 .atlas-signal-card .atlas-signal-icon {
+  color: var(--atlas-signal) !important;
+}

@@ -2,8 +2,9 @@
  * Education UI v1 compatibility layer
  * -----------------------------------
  * Gives every administrative route a complete light-system baseline while its
- * workflow receives a deeper module-specific redesign. It is activated only
- * by the development preview shell and does not affect the production UI.
+ * workflow receives a deeper module-specific redesign. The Education shell is
+ * now the default product surface, so these rules intentionally cover every
+ * administrative module that has not yet received a dedicated stylesheet.
  */
 
 .education-ui-v1-active {
@@ -86,28 +87,49 @@
 
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header {
     border: 1px solid #d9ded6 !important;
-    border-radius: 28px !important;
+    border-radius: 20px !important;
     color: var(--edu-ink) !important;
     background:
         radial-gradient(circle at 87% -15%, rgba(255,255,255,.78) 0 22%, transparent 22.5%),
         linear-gradient(132deg, #eff4e9, #e4ecde) !important;
-    box-shadow: var(--edu-shadow-sm) !important;
+    box-shadow: 0 8px 24px rgba(17, 19, 17, .045) !important;
 }
 
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header::after { border-color: rgba(171,194,154,.42); }
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__signal { background: var(--edu-brand); }
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__icon { color: var(--edu-ink); background: var(--edu-brand); }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action { min-height: 44px; border-radius: 14px; }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__body { gap: 16px; padding: 17px 18px; }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__icon { width: 42px; height: 42px; border-radius: 13px; box-shadow: none; }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header h2 { font-size: clamp(1.25rem, 2vw, 1.65rem); }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header p { margin-top: 5px; line-height: 1.45; }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action { min-height: 40px; border-radius: 12px; box-shadow: none; }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='primary'] { border-color: #9dc127; background: var(--edu-brand); }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='primary']:hover { background: #b9ed35; }
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='secondary'] { color: var(--edu-ink-soft); background: #fff; border-color: #d9ded6; }
 
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-signal-card {
-    border-radius: 22px !important;
-    box-shadow: var(--edu-shadow-sm) !important;
+    min-height: 112px;
+    border-color: #dfe4dc !important;
+    border-radius: 18px !important;
+    background: #fff !important;
+    box-shadow: 0 6px 20px rgba(17, 19, 17, .04) !important;
+}
+
+.education-ui-v1-active .edu-shell-v1__content-inner .atlas-signal-card::before {
+    position: absolute;
+    top: 0;
+    right: 16px;
+    left: 16px;
+    height: 3px;
+    content: '';
+    border-radius: 0 0 999px 999px;
+    background: var(--atlas-signal);
 }
 
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-toolbar,
 .education-ui-v1-active .edu-shell-v1__content-inner .atlas-empty-state {
     border-color: var(--edu-border) !important;
-    border-radius: 20px !important;
+    border-radius: 16px !important;
     background: #fff !important;
     box-shadow: var(--edu-shadow-sm);
 }
@@ -148,6 +170,8 @@
 .education-ui-v1-active .atlas-dialog textarea { min-height: 44px; border-color: #d9ded6 !important; border-radius: 13px !important; color: #111311 !important; background: #f7f9f5 !important; }
 
 @media (max-width: 700px) {
-    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header { border-radius: 22px !important; }
+    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header { border-radius: 16px !important; }
+    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__body { padding: 14px; }
+    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__signal { display: none; }
     .education-ui-v1-active .atlas-dialog { border-radius: 22px 22px 0 0; }
 }

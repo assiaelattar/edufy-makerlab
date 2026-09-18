@@ -111,7 +111,7 @@ export interface EnrollmentServicePeriod {
   endDate?: string;
 }
 
-export type ProgramOperationalState = 'draft' | 'archived' | 'upcoming' | 'running' | 'finished' | 'evergreen';
+export type ProgramOperationalState = 'draft' | 'paused' | 'archived' | 'upcoming' | 'running' | 'finished' | 'evergreen';
 
 const localISODate = (date = new Date()) => {
   const year = date.getFullYear();
@@ -125,12 +125,14 @@ export const getProgramOperationalState = (
   referenceDate = localISODate()
 ): ProgramOperationalState => {
   if (program.status === 'draft') return 'draft';
+  if (program.status === 'paused') return 'paused';
   if (program.status === 'archived') return 'archived';
 
   // Rolling programs such as StemQuest MakerLab are permanent containers.
   // Their learner memberships expire individually; legacy run end dates are
   // intentionally preserved in storage but never close the program.
   if (program.enrollmentPolicy?.mode === 'rolling_membership') return 'evergreen';
+  if (program.deliveryModel === 'on_demand') return 'evergreen';
   const normalizedName = program.name
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')

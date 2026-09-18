@@ -125,15 +125,20 @@ export interface ProgramAcademicPeriod {
   endDate: string;
 }
 
+export type ProgramDeliveryModel = 'scheduled' | 'on_demand' | 'hybrid';
+
 export interface Program {
   id: string;
   organizationId: string;
   name: string;
   type: 'Regular Program' | 'Holiday Camp' | 'Workshop' | 'Internship' | 'Camp';
   description: string;
-  status: 'draft' | 'active' | 'archived';
+  status: 'draft' | 'active' | 'paused' | 'archived';
+  pausedAt?: string;
+  pausedBy?: string;
   targetAudience?: 'kids' | 'adults';
   billingAudience?: BillingAudience;
+  deliveryModel?: ProgramDeliveryModel;
   billingProfile?: FinanceBillingProfile;
   formatPreset?: ProgramFormatPreset;
   runSetup?: ProgramRunSetupDraft;
@@ -527,6 +532,11 @@ export interface WorkshopSlot {
   capacity: number;
   bookedCount: number;
   status: 'available' | 'full' | 'cancelled';
+  source?: 'template' | 'ad_hoc';
+  title?: string;
+  crmLeadId?: string;
+  location?: string;
+  notes?: string;
 }
 
 export interface Booking {
@@ -541,6 +551,11 @@ export interface Booking {
   kidInterests?: string;
   status: 'confirmed' | 'attended' | 'no-show' | 'cancelled' | 'reminder_sent' | 'feedback_requested' | 'converted';
   bookedAt: Timestamp;
+  admissionCaseId?: string;
+  crmLeadId?: string;
+  leadId?: string;
+  email?: string;
+  paymentStatus?: 'pending' | 'paid' | 'waived';
   notes?: string;
   feedbackNotes?: string;
   programInterest?: string;

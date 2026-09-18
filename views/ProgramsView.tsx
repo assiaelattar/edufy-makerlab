@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays, Percent, Printer, Tablet, FileText, Search, AlertCircle, Save, Settings2, ChevronRight, Users, Layers3 } from 'lucide-react';
+import { Plus, Pencil, Clock, Trash2, X, Palette, Check, CalendarDays, Percent, Printer, Tablet, FileText, Search, AlertCircle, Save, Settings2, ChevronRight, Users, Layers3, PauseCircle, PlayCircle } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,7 @@ import { buildProgramDuplicateDraft, getNextAcademicPeriod, getProgramOperationa
 import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
 import { getEnrollmentCoverageState } from '../utils/membershipLifecycle';
 import { Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+import './programs/education-programs-v1.css';
 
 interface ProgramsViewProps {
   onEnrollLead?: (lead: Lead) => void;
@@ -34,7 +35,7 @@ interface ProgramsViewProps {
 
 export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const { programs, enrollments, navigateTo, leads, settings, viewParams } = useAppContext();
-  const { currentOrganization, can } = useAuth();
+  const { currentOrganization, can, userProfile } = useAuth();
   const { alert: showAlert, confirm } = useConfirm();
   const [isProgramModalOpen, setProgramModalOpen] = useState(false);
   const [viewDetailProgramId, setViewDetailProgramId] = useState<string | null>(viewParams.programId || null);
@@ -47,6 +48,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const [isRolloverOpen, setIsRolloverOpen] = useState(false);
   const [isPreparingYear, setIsPreparingYear] = useState(false);
   const reduceMotion = useReducedMotion();
+  const showEducationProgramsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
   useEffect(() => {
     setViewDetailProgramId(viewParams.programId || null);
@@ -222,6 +224,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     description: '',
     status: 'active',
     targetAudience: 'kids',
+    billingAudience: 'individual',
+    deliveryModel: 'scheduled',
     formatPreset: 'weekly_academy',
     runSetup: defaultRunSetup,
     academicPeriod: { label: settings.academicYear, startDate: defaultRunSetup.startDate, endDate: defaultRunSetup.endDate },
@@ -317,6 +321,37 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     } catch (error) {
       console.error('Unable to delete program', error);
       await showAlert('Program not deleted', 'The program could not be deleted. Check your permission and connection, then try again.', 'danger');
+    }
+  };
+
+  const handleToggleProgramPause = async (program: Program) => {
+    if (!db || !currentOrganization?.id || !can('programs.edit') || program.organizationId !== currentOrganization.id) return;
+    const isPaused = program.status === 'paused';
+    const approved = await confirm({
+      title: isPaused ? 'Resume this program?' : 'Pause this program?',
+      message: isPaused
+        ? `${program.name} will return to current classes, attendance, enrollment, and collection queues. Existing history is unchanged.`
+        : `${program.name} will be removed from current classes, attendance, enrollment, and collection queues. All learner, attendance, and finance history will be preserved and the program can be resumed later.`,
+      confirmText: isPaused ? 'Resume program' : 'Pause program',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    });
+    if (!approved) return;
+
+    try {
+      await updateDoc(doc(db, 'programs', program.id), isPaused
+        ? { status: 'active', pausedAt: null, pausedBy: null, updatedAt: new Date().toISOString() }
+        : { status: 'paused', pausedAt: new Date().toISOString(), pausedBy: userProfile?.uid || '', updatedAt: new Date().toISOString() });
+      await showAlert(
+        isPaused ? 'Program resumed' : 'Program paused',
+        isPaused
+          ? `${program.name} is active again in operational workspaces.`
+          : `${program.name} is hidden from current operations. No historical data was deleted.`,
+        'success'
+      );
+    } catch (error) {
+      console.error('Unable to change program status', error);
+      await showAlert('Program status not changed', 'The program could not be updated. Check your permission and connection, then try again.', 'danger');
     }
   };
 
@@ -469,7 +504,11 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       if (draft.status === 'draft') setStatusFilter('draft');
       await showAlert(
         isEditingProgram ? 'Program updated' : 'Program created',
-        draft.status === 'draft' ? `${name} is saved as a draft and remains closed for enrollment.` : `${name} is active in the enrollment catalog.`,
+        draft.status === 'draft'
+          ? `${name} is saved as a draft and remains closed for enrollment.`
+          : draft.status === 'paused'
+            ? `${name} is paused. Its history is preserved while current operations remain hidden.`
+            : `${name} is active in the enrollment catalog.`,
         'success'
       );
     } catch (err) {
@@ -587,7 +626,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       && lead.status !== 'closed'
     );
     const { hasPricing, hasSchedule } = readiness;
-    const needsSetup = ['running', 'upcoming', 'evergreen'].includes(operationalState) && (!hasPricing || !hasSchedule);
+    const needsSetup = ['running', 'upcoming', 'evergreen'].includes(operationalState) && (!hasPricing || (program.deliveryModel !== 'on_demand' && !hasSchedule));
     const emptyGroupCount = groups.filter(group => !activeGroupIds.has(group.id)).length;
     const nextGroup = groups[0];
 
@@ -646,15 +685,32 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
           setViewDetailProgramId(null);
           openEditProgram(program);
         }}
+        onTogglePause={handleToggleProgramPause}
       />
     );
   }
 
   return (
-    <div className="atlas-module atlas-programs-module flex flex-col gap-5 pb-8">
+    <div className={`atlas-module atlas-programs-module flex flex-col gap-5 pb-8 ${showEducationProgramsV1 ? 'edu-v1 edu-programs-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-programs-v1' : undefined}>
 
       {/* Header Section */}
-      <AtlasCommandHeader
+      {showEducationProgramsV1 ? (
+        <section className="edu-programs-v1__command" aria-labelledby="education-programs-title">
+          <div className="edu-programs-v1__command-copy">
+            <span><Palette size={15} />Program operations <b>{settings.academicYear}</b></span>
+            <h2 id="education-programs-title">Program portfolio</h2>
+            <p>Run the catalog from setup to enrollment: see demand, delivery readiness, and the next action for every offer.</p>
+          </div>
+          <div className="edu-programs-v1__command-actions">
+            {canCreatePrograms ? (
+              <>
+                <button type="button" onClick={() => setIsRolloverOpen(true)}><CalendarDays size={17} />Prepare next year</button>
+                <button type="button" className="is-primary" onClick={openAddProgram}><Plus size={18} />New program</button>
+              </>
+            ) : <span>View-only catalog access</span>}
+          </div>
+        </section>
+      ) : <AtlasCommandHeader
         eyebrow="Academy programs"
         title="Programs"
         description="See what is running, what needs setup, and where families are waiting."
@@ -673,9 +729,9 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
         ) : (
           <span className="text-xs font-bold text-slate-500">View-only catalog access</span>
         )}
-      />
+      />}
 
-      <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10">
+      <div className="edu-programs-v1__summary grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10">
         <button type="button" onClick={() => setStatusFilter('active')} className="bg-slate-950 px-3 py-3 text-left transition-colors hover:bg-white/[0.04] sm:px-4">
           <span className="flex items-center gap-2 text-[10px] font-bold uppercase text-slate-500"><Check size={13} className="text-emerald-300" /> Running</span>
           <span className="mt-1 block text-lg font-black text-white sm:text-xl">{activePrograms.length}</span>
@@ -691,6 +747,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       </div>
 
       <AtlasToolbar
+        className="edu-programs-v1__toolbar"
         leading={(
           <label className="relative min-w-0 flex-1 sm:max-w-sm">
             <span className="sr-only">Search programs</span>
@@ -710,6 +767,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
             <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="bg-transparent font-bold outline-none">
               <option value="all">All statuses</option>
               <option value="active">Active</option>
+              <option value="paused">Paused</option>
               <option value="finished">Finished</option>
               <option value="draft">Draft</option>
               <option value="needs_setup">Needs setup</option>
@@ -734,7 +792,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
               : undefined}
         />
       ) : (
-        <div className="space-y-2">
+        <div className="edu-programs-v1__list grid gap-3 xl:grid-cols-2">
           <AnimatePresence>
             {filteredPrograms.map((item, index) => {
               const { program, operationalState, groups, activeEnrollments, enrollmentHistoryCount, openLeads, hasPricing, hasSchedule, needsSetup, emptyGroupCount, nextGroup } = item;
@@ -742,10 +800,14 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
               const action = needsSetup && canEditPrograms ? () => openEditProgram(program) : () => setViewDetailProgramId(program.id);
               const attentionText = operationalState === 'finished'
                 ? `Finished ${program.runSetup?.endDate || ''} · enrollment closed automatically`
+                : program.status === 'paused'
+                ? 'Paused · hidden from current operations'
                 : program.status === 'draft'
                 ? 'Draft setup - not open for enrollment'
                 : !hasPricing
                 ? 'Add a pricing plan'
+                : program.deliveryModel === 'on_demand'
+                  ? 'Ready for client missions'
                 : !hasSchedule
                   ? 'Add the first class schedule'
                   : openLeads.length > 0
@@ -762,19 +824,21 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
                   transition={{ duration: reduceMotion ? 0 : 0.18, delay: reduceMotion ? 0 : Math.min(index * 0.025, 0.12) }}
-                  className="group rounded-lg border border-white/10 bg-slate-900/55 p-4 transition-colors hover:border-teal-300/25 hover:bg-slate-900/75"
+                  className="edu-programs-v1__program group rounded-lg border border-white/10 bg-slate-900/55 p-4 transition-colors hover:border-teal-300/25 hover:bg-slate-900/75"
                 >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-                    <button type="button" onClick={() => setViewDetailProgramId(program.id)} className="flex min-w-0 flex-1 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
-                      <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${needsSetup ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : program.status === 'archived' ? 'border-white/10 bg-white/[0.04] text-slate-500' : 'border-teal-300/20 bg-teal-300/10 text-teal-200'}`}>
+                  <div className="edu-programs-v1__program-layout">
+                    <button type="button" onClick={() => setViewDetailProgramId(program.id)} className="edu-programs-v1__program-title flex min-w-0 items-start gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                      <span className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${needsSetup ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : ['paused', 'archived'].includes(program.status) ? 'border-white/10 bg-white/[0.04] text-slate-500' : 'border-teal-300/20 bg-teal-300/10 text-teal-200'}`}>
                         {needsSetup ? <AlertCircle size={18} /> : <Layers3 size={18} />}
                       </span>
                       <span className="min-w-0">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="text-base font-black text-white transition-colors group-hover:text-teal-100">{program.name}</span>
                           <span className="rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-bold text-slate-500">{program.type}</span>
-                          {program.enrollmentPolicy && <span className="rounded-md border border-sky-300/15 bg-sky-300/[0.06] px-1.5 py-0.5 text-[10px] font-bold text-sky-200">{program.enrollmentPolicy.mode === 'rolling_membership' ? `${program.enrollmentPolicy.membershipDurationMonths || 12} mo rolling` : program.enrollmentPolicy.mode === 'modular' ? `By ${program.enrollmentPolicy.moduleLabel || 'module'}` : 'Fixed dates'}</span>}
+                          {program.enrollmentPolicy && program.deliveryModel !== 'on_demand' && <span className="rounded-md border border-sky-300/15 bg-sky-300/[0.06] px-1.5 py-0.5 text-[10px] font-bold text-sky-200">{program.enrollmentPolicy.mode === 'rolling_membership' ? `${program.enrollmentPolicy.membershipDurationMonths || 12} mo rolling` : program.enrollmentPolicy.mode === 'modular' ? `By ${program.enrollmentPolicy.moduleLabel || 'module'}` : 'Fixed dates'}</span>}
+                          {program.deliveryModel === 'on_demand' && <span className="rounded-md border border-teal-300/20 bg-teal-300/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-200">Entreprise · Sur demande</span>}
                           {program.status === 'draft' && <span className="rounded-md border border-sky-300/20 bg-sky-300/10 px-1.5 py-0.5 text-[10px] font-bold text-sky-200">Draft</span>}
+                          {program.status === 'paused' && <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-200">Paused</span>}
                           {program.status === 'archived' && <span className="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-bold text-slate-500">Archived</span>}
                           {operationalState === 'finished' && <span className="rounded-md border border-amber-300/20 bg-amber-300/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-200">Finished</span>}
                           {operationalState === 'evergreen' && program.enrollmentPolicy?.mode === 'rolling_membership' && <span className="rounded-md border border-teal-300/20 bg-teal-300/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-200">Always open</span>}
@@ -783,13 +847,13 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                       </span>
                     </button>
 
-                    <div className="grid grid-cols-3 gap-3 border-y border-white/10 py-3 lg:w-[310px] lg:border-x lg:border-y-0 lg:px-5 lg:py-0">
+                    <div className="edu-programs-v1__program-stats grid grid-cols-3 gap-3 border-y border-white/10 py-3">
                       <span><span className="block text-sm font-black text-white">{activeEnrollments.length}</span><span className="text-[10px] font-bold uppercase text-slate-600">Learners</span></span>
                       <span><span className="block text-sm font-black text-white">{groups.length}</span><span className="text-[10px] font-bold uppercase text-slate-600">Groups</span></span>
                       <span><span className="block text-sm font-black text-white">{program.packs?.length || 0}</span><span className="text-[10px] font-bold uppercase text-slate-600">Plans</span></span>
                     </div>
 
-                    <div className="flex min-w-0 items-center gap-3 lg:w-[280px]">
+                    <div className="edu-programs-v1__program-attention flex min-w-0 items-center gap-3">
                       <span className={`h-2 w-2 shrink-0 rounded-full ${needsSetup ? 'bg-amber-300' : openLeads.length > 0 ? 'bg-sky-300' : 'bg-emerald-300'}`} />
                       <span className="min-w-0 flex-1">
                         <span className={`block text-xs font-bold ${needsSetup ? 'text-amber-100' : 'text-slate-300'}`}>{attentionText}</span>
@@ -799,11 +863,12 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                       </span>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1.5">
+                    <div className="edu-programs-v1__program-actions flex shrink-0 items-center gap-1.5">
                       <button type="button" onClick={action} className={`flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60 ${needsSetup && canEditPrograms ? 'bg-amber-300 text-slate-950 hover:bg-amber-200' : 'border border-white/10 bg-white/[0.04] text-slate-200 hover:border-teal-300/30 hover:bg-teal-300/10 hover:text-teal-100'}`}>
                         {actionLabel} <ChevronRight size={15} className="transition-transform group-hover:translate-x-0.5" />
                       </button>
                       {canCreatePrograms && <button type="button" onClick={() => openDuplicateProgram(program)} title="Duplicate setup" aria-label={`Duplicate ${program.name}`} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:border-sky-300/30 hover:bg-sky-300/10 hover:text-sky-200"><Copy size={15} /></button>}
+                      {canEditPrograms && ['active', 'paused'].includes(program.status) && <button type="button" onClick={() => handleToggleProgramPause(program)} title={program.status === 'paused' ? 'Resume program' : 'Pause program'} aria-label={`${program.status === 'paused' ? 'Resume' : 'Pause'} ${program.name}`} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:border-amber-300/30 hover:bg-amber-300/10 hover:text-amber-200">{program.status === 'paused' ? <PlayCircle size={15} /> : <PauseCircle size={15} />}</button>}
                       {((enrollmentHistoryCount > 0 && canEditPrograms) || (enrollmentHistoryCount === 0 && canDeletePrograms)) && <button type="button" onClick={() => handleDeleteProgram(program)} title={enrollmentHistoryCount ? 'Archive program' : 'Delete program'} aria-label={`${enrollmentHistoryCount ? 'Archive' : 'Delete'} ${program.name}`} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-500 transition-colors hover:border-red-300/25 hover:bg-red-300/10 hover:text-red-300"><Trash2 size={15} /></button>}
                     </div>
                   </div>
@@ -869,6 +934,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                   <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wide">Catalog status</label>
                   <select className="w-full min-h-10 p-3 bg-slate-950 border border-slate-800 rounded-lg text-white outline-none focus:border-teal-400" value={programForm.status || 'active'} onChange={e => setProgramForm({ ...programForm, status: e.target.value as Program['status'] })}>
                     <option value="active">Active and public</option>
+                    <option value="paused">Paused</option>
                     <option value="archived">Archived</option>
                   </select>
                 </div>
