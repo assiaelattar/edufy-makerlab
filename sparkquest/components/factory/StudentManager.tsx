@@ -252,7 +252,8 @@ export const StudentManager: React.FC<StudentManagerProps> = ({ onReviewProject 
         // Also add students who have NO projects yet if they exist in valid students list
         // This ensures the portfolio view shows all registered students even if inactive
         students.forEach(s => {
-            if (s.role === 'student' && !map.has(s.id)) {
+            const isLearnerRecord = s._source === 'student_profile' || s.role === 'student';
+            if (isLearnerRecord && !map.has(s.id)) {
                 const enrollment = enrollments.find(e => e.studentId === s.id && e.status === 'active');
                 map.set(s.id, {
                     id: s.id,

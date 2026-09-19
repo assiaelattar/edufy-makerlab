@@ -841,6 +841,7 @@ export const StudentDetailsView = ({
                             studentPayments={studentPayments}
                             studentEnrollments={studentEnrollments}
                             student={student}
+                            programs={programs}
                             onRecordPayment={onRecordPayment}
                             navigateTo={navigateTo as any}
                             setEditPayment={setEditPayment}

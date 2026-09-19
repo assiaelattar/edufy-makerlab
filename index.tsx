@@ -1,8 +1,13 @@
 
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isPublicEnrollmentRequest } from './utils/publicEnrollment';
+
+const App = lazy(() => import('./App'));
+const PublicEnrollmentView = lazy(() => import('./views/PublicEnrollmentView').then(module => ({
+  default: module.PublicEnrollmentView
+})));
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -10,10 +15,16 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+const entryView = isPublicEnrollmentRequest()
+  ? <PublicEnrollmentView />
+  : <App />;
+
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <App />
+      <Suspense fallback={null}>
+        {entryView}
+      </Suspense>
     </ErrorBoundary>
   </React.StrictMode>
 );

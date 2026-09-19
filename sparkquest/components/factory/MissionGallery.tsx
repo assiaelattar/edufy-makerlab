@@ -59,6 +59,7 @@ export const MissionGallery: React.FC<MissionGalleryProps> = ({ onSelectTemplate
 
     // Add any legacy/other strings found in templates that weren't IDs but aren't in the station list (e.g. "General")
     usedStationNames.forEach(name => {
+        if (typeof name !== 'string') return;
         if (!stationFilterLabels.includes(name)) stationFilterLabels.push(name);
     });
 

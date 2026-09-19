@@ -72,7 +72,7 @@ service cloud.firestore {
     }
 
     function canReadTenantDoc() {
-      return resourceHasOrg() && isSameOrg(resource.data.organizationId);
+      return isElevatedUser() && resourceHasOrg() && isSameOrg(resource.data.organizationId);
     }
 
     function canCreateTenantDoc() {
@@ -89,6 +89,248 @@ service cloud.firestore {
 
     function canDeleteTenantDoc() {
       return isElevatedUser() && canReadTenantDoc();
+    }
+
+    function isAdmissionsOperator() {
+      return hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
+        currentRole() in ['super_admin', 'owner', 'admin', 'admission_officer'];
+    }
+
+    function canReadAdmissionDoc() {
+      return isAdmissionsOperator() && resourceHasOrg() && admissionSameOrg(resource.data.organizationId);
+    }
+
+    function admissionSameOrg(orgId) {
+      return orgId == currentOrgId() || currentRole() == 'super_admin';
+    }
+
+    function admissionLeadMatchesOrg(leadId, orgId) {
+      return exists(/databases/$(database)/documents/leads/$(leadId)) &&
+        get(/databases/$(database)/documents/leads/$(leadId)).data.organizationId == orgId;
+    }
+
+    function validAdmissionNoteActivityCreate(activityId) {
+      return isAdmissionsOperator() &&
+        requestHasOrg() &&
+        admissionSameOrg(request.resource.data.organizationId) &&
+        request.resource.data.keys().hasOnly([
+          'organizationId',
+          'admissionCaseId',
+          'legacyLeadId',
+          'kind',
+          'channel',
+          'body',
+          'outcome',
+          'occurredAt',
+          'actorId',
+          'caseVersion',
+          'commandFingerprint',
+          'createdAt'
+        ]) &&
+        request.resource.data.admissionCaseId is string &&
+        request.resource.data.legacyLeadId is string &&
+        request.resource.data.kind == 'note' &&
+        request.resource.data.channel == 'internal' &&
+        request.resource.data.body is string &&
+        request.resource.data.body.size() > 0 &&
+        request.resource.data.body.size() <= 2000 &&
+        request.resource.data.outcome == null &&
+        request.resource.data.occurredAt is timestamp &&
+        request.resource.data.occurredAt <= request.time + duration.value(5, 'm') &&
+        request.resource.data.actorId == request.auth.uid &&
+        request.resource.data.caseVersion is int &&
+        request.resource.data.caseVersion > 0 &&
+        request.resource.data.commandFingerprint is string &&
+        request.resource.data.commandFingerprint.size() == 16 &&
+        request.resource.data.createdAt == request.time &&
+        admissionLeadMatchesOrg(request.resource.data.legacyLeadId, request.resource.data.organizationId) &&
+        existsAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)) &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.organizationId == request.resource.data.organizationId &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.legacyLeadId == request.resource.data.legacyLeadId &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.version == request.resource.data.caseVersion &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.lastCommandId == activityId;
+    }
+
+    function admissionStoredWhatsAppConsent(caseId) {
+      return exists(/databases/$(database)/documents/admission_case_states/$(caseId))
+        ? get(/databases/$(database)/documents/admission_case_states/$(caseId)).data.get('whatsappConsentState', 'unknown')
+        : 'unknown';
+    }
+
+    function validAdmissionConsentSnapshot(caseId) {
+      let activity = getAfter(/databases/$(database)/documents/admission_activities/$(request.resource.data.lastCommandId)).data;
+      return request.resource.data.get('whatsappConsentState', 'unknown') == (
+        activity.get('communicationState', '') == 'consent_updated'
+          ? activity.consentState
+          : admissionStoredWhatsAppConsent(caseId)
+      );
+    }
+
+    function validAdmissionWhatsAppActivityCreate(activityId) {
+      return isAdmissionsOperator() &&
+        requestHasOrg() &&
+        admissionSameOrg(request.resource.data.organizationId) &&
+        request.resource.data.keys().hasOnly([
+          'organizationId',
+          'admissionCaseId',
+          'legacyLeadId',
+          'kind',
+          'channel',
+          'body',
+          'outcome',
+          'communicationState',
+          'consentState',
+          'templateId',
+          'occurredAt',
+          'actorId',
+          'caseVersion',
+          'commandFingerprint',
+          'createdAt'
+        ]) &&
+        request.resource.data.keys().hasAll([
+          'organizationId',
+          'admissionCaseId',
+          'legacyLeadId',
+          'kind',
+          'channel',
+          'body',
+          'outcome',
+          'communicationState',
+          'consentState',
+          'templateId',
+          'occurredAt',
+          'actorId',
+          'caseVersion',
+          'commandFingerprint',
+          'createdAt'
+        ]) &&
+        request.resource.data.admissionCaseId is string &&
+        request.resource.data.legacyLeadId is string &&
+        request.resource.data.kind == 'follow_up' &&
+        request.resource.data.channel == 'whatsapp' &&
+        request.resource.data.body is string &&
+        request.resource.data.body.size() > 0 &&
+        request.resource.data.body.size() <= 2000 &&
+        request.resource.data.communicationState in [
+          'consent_updated',
+          'prepared',
+          'launched',
+          'operator_confirmed_sent',
+          'operator_confirmed_not_sent',
+          'parent_response_recorded'
+        ] &&
+        request.resource.data.consentState in ['unknown', 'granted', 'opted_out'] &&
+        (request.resource.data.communicationState == 'consent_updated' ||
+          request.resource.data.consentState == admissionStoredWhatsAppConsent(request.resource.data.admissionCaseId)) &&
+        request.resource.data.templateId is string &&
+        request.resource.data.templateId.size() > 0 &&
+        request.resource.data.templateId.size() <= 128 &&
+        (
+          (request.resource.data.communicationState == 'parent_response_recorded' &&
+            request.resource.data.outcome in [
+              'connected',
+              'no_answer',
+              'asked_to_follow_up',
+              'interested',
+              'not_interested',
+              'wrong_contact'
+            ]) ||
+          (request.resource.data.communicationState != 'parent_response_recorded' && request.resource.data.outcome == null)
+        ) &&
+        !(request.resource.data.communicationState == 'prepared' && request.resource.data.consentState == 'opted_out') &&
+        !(
+          request.resource.data.communicationState in ['launched', 'operator_confirmed_sent'] &&
+          request.resource.data.consentState != 'granted'
+        ) &&
+        request.resource.data.occurredAt is timestamp &&
+        request.resource.data.occurredAt <= request.time + duration.value(5, 'm') &&
+        request.resource.data.actorId == request.auth.uid &&
+        request.resource.data.caseVersion is int &&
+        request.resource.data.caseVersion > 0 &&
+        request.resource.data.commandFingerprint is string &&
+        request.resource.data.commandFingerprint.size() == 16 &&
+        request.resource.data.createdAt == request.time &&
+        admissionLeadMatchesOrg(request.resource.data.legacyLeadId, request.resource.data.organizationId) &&
+        existsAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)) &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.organizationId == request.resource.data.organizationId &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.legacyLeadId == request.resource.data.legacyLeadId &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.version == request.resource.data.caseVersion &&
+        getAfter(/databases/$(database)/documents/admission_case_states/$(request.resource.data.admissionCaseId)).data.lastCommandId == activityId;
+    }
+
+    function validAdmissionCaseStateCreate(caseId) {
+      let activity = getAfter(/databases/$(database)/documents/admission_activities/$(request.resource.data.lastCommandId)).data;
+      return isAdmissionsOperator() &&
+        requestHasOrg() &&
+        admissionSameOrg(request.resource.data.organizationId) &&
+        request.resource.data.keys().hasOnly([
+          'whatsappConsentState',
+          'organizationId',
+          'admissionCaseId',
+          'legacyLeadId',
+          'version',
+          'openNextActionId',
+          'lastActivityAt',
+          'lastActivityKind',
+          'lastCommandId',
+          'createdAt',
+          'createdBy',
+          'updatedAt',
+          'updatedBy'
+        ]) &&
+        request.resource.data.admissionCaseId == caseId &&
+        validAdmissionConsentSnapshot(caseId) &&
+        request.resource.data.legacyLeadId is string &&
+        request.resource.data.version == 1 &&
+        request.resource.data.openNextActionId == null &&
+        request.resource.data.lastActivityAt is timestamp &&
+        request.resource.data.lastActivityKind in ['note', 'follow_up'] &&
+        request.resource.data.lastCommandId is string &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.createdBy == request.auth.uid &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        admissionLeadMatchesOrg(request.resource.data.legacyLeadId, request.resource.data.organizationId) &&
+        activity.organizationId == request.resource.data.organizationId &&
+        activity.admissionCaseId == caseId &&
+        activity.legacyLeadId == request.resource.data.legacyLeadId &&
+        activity.kind == request.resource.data.lastActivityKind &&
+        activity.caseVersion == 1;
+    }
+
+    function validAdmissionCaseStateUpdate(caseId) {
+      let activity = getAfter(/databases/$(database)/documents/admission_activities/$(request.resource.data.lastCommandId)).data;
+      return isAdmissionsOperator() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        admissionSameOrg(resource.data.organizationId) &&
+        request.resource.data.admissionCaseId == caseId &&
+        validAdmissionConsentSnapshot(caseId) &&
+        request.resource.data.admissionCaseId == resource.data.admissionCaseId &&
+        request.resource.data.legacyLeadId == resource.data.legacyLeadId &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.createdBy == resource.data.createdBy &&
+        request.resource.data.openNextActionId == resource.data.openNextActionId &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'whatsappConsentState',
+          'version',
+          'lastActivityAt',
+          'lastActivityKind',
+          'lastCommandId',
+          'updatedAt',
+          'updatedBy'
+        ]) &&
+        request.resource.data.version == resource.data.version + 1 &&
+        request.resource.data.lastActivityKind in ['note', 'follow_up'] &&
+        request.resource.data.lastCommandId is string &&
+        request.resource.data.updatedAt == request.time &&
+        request.resource.data.updatedBy == request.auth.uid &&
+        admissionLeadMatchesOrg(resource.data.legacyLeadId, resource.data.organizationId) &&
+        activity.organizationId == resource.data.organizationId &&
+        activity.admissionCaseId == caseId &&
+        activity.legacyLeadId == resource.data.legacyLeadId &&
+        activity.kind == request.resource.data.lastActivityKind &&
+        activity.caseVersion == request.resource.data.version &&
+        activity.occurredAt == request.resource.data.lastActivityAt;
     }
 
     function canManageTenantOrg(orgId) {
@@ -168,7 +410,67 @@ service cloud.firestore {
           (
             get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['parentLoginInfo']) &&
             get(/databases/$(database)/documents/students/$(studentId)).data.parentLoginInfo.uid == request.auth.uid
+          ) ||
+          (
+            get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['parentUids']) &&
+            get(/databases/$(database)/documents/students/$(studentId)).data.parentUids.hasAny([request.auth.uid])
           )
+        ) || guardianSubjectLinkedToRequester(studentId, orgId);
+    }
+
+    function guardianSubjectLinkedToRequester(subjectId, orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)) &&
+        get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.parentUid == request.auth.uid &&
+        get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.organizationId == orgId &&
+        get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.status == 'active';
+    }
+
+    function enrollmentLinkedToRequester(enrollmentId, orgId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/enrollments/$(enrollmentId)) &&
+        get(/databases/$(database)/documents/enrollments/$(enrollmentId)).data.organizationId == orgId &&
+        studentLinkedToRequester(
+          get(/databases/$(database)/documents/enrollments/$(enrollmentId)).data.studentId,
+          orgId
+        );
+    }
+
+    function canCreateOwnStudentProject() {
+      return hasUserProfile() && currentRole() == 'student' && requestHasOrg() &&
+        request.resource.data.organizationId == currentOrgId() &&
+        (
+          request.resource.data.studentId == request.auth.uid ||
+          studentLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId)
+        );
+    }
+
+    function canUpdateOwnStudentProject() {
+      return hasUserProfile() && currentRole() == 'student' && resourceHasOrg() && requestHasOrg() &&
+        request.resource.data.organizationId == resource.data.organizationId &&
+        request.resource.data.studentId == resource.data.studentId &&
+        (
+          resource.data.studentId == request.auth.uid ||
+          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId)
+        );
+    }
+
+    function canReadLegacyStudentProject() {
+      return hasUserProfile() && !resourceHasOrg() && resource.data.studentId is string &&
+        (
+          resource.data.studentId == request.auth.uid ||
+          studentLinkedToRequester(resource.data.studentId, currentOrgId()) ||
+          guardianSubjectLinkedToRequester(resource.data.studentId, currentOrgId())
+        );
+    }
+
+    function canMigrateOwnLegacyStudentProject() {
+      return hasUserProfile() && currentRole() == 'student' && !resourceHasOrg() && requestHasOrg() &&
+        request.resource.data.organizationId == currentOrgId() &&
+        request.resource.data.studentId == resource.data.studentId &&
+        (
+          resource.data.studentId == request.auth.uid ||
+          studentLinkedToRequester(resource.data.studentId, currentOrgId())
         );
     }
 
@@ -324,11 +626,18 @@ service cloud.firestore {
       allow read: if isOwner(userId) ||
         isPlatformAdmin() ||
         (isSignedIn() && resource.data.email == request.auth.token.email) ||
-        (resourceHasOrg() && isSameOrg(resource.data.organizationId));
+        (isElevatedUser() && resourceHasOrg() && isSameOrg(resource.data.organizationId));
 
       allow create: if validOwnUserCreate(userId) || canCreateTenantUser();
       allow update: if validOwnUserUpdate(userId) || canUpdateTenantUser();
       allow delete: if canDeleteTenantUser(userId);
+    }
+
+    match /guardian_links/{linkId} {
+      allow read: if (isSignedIn() && resource.data.parentUid == request.auth.uid) || canReadTenantDoc();
+      allow create: if canCreateTenantDoc();
+      allow update: if canUpdateTenantDoc();
+      allow delete: if canDeleteTenantDoc();
     }
 
     match /organizations/{orgId} {
@@ -400,7 +709,7 @@ service cloud.firestore {
 
     // --- Core Edufy tenant data ---
     match /students/{studentId} {
-      allow read: if canReadTenantDoc();
+      allow read: if canReadTenantDoc() || studentLinkedToRequester(studentId, resource.data.organizationId);
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -414,14 +723,16 @@ service cloud.firestore {
     }
 
     match /enrollments/{enrollmentId} {
-      allow read: if canReadTenantDoc();
+      allow read: if canReadTenantDoc() ||
+        (resourceHasOrg() && studentLinkedToRequester(resource.data.studentId, resource.data.organizationId));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
     }
 
     match /payments/{paymentId} {
-      allow read: if canReadTenantDoc();
+      allow read: if canReadTenantDoc() ||
+        (resourceHasOrg() && enrollmentLinkedToRequester(resource.data.enrollmentId, resource.data.organizationId));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -464,9 +775,15 @@ service cloud.firestore {
     }
 
     match /student_projects/{projectId} {
-      allow read: if canReadTenantDoc();
-      allow create: if canCreateTenantDoc();
-      allow update: if canUpdateTenantDoc();
+      allow read: if canReadTenantDoc() ||
+        canReadLegacyStudentProject() ||
+        (resourceHasOrg() && (
+          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianSubjectLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          (hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid && resource.data.organizationId == currentOrgId())
+        ));
+      allow create: if canCreateTenantDoc() || canCreateOwnStudentProject();
+      allow update: if canUpdateTenantDoc() || canUpdateOwnStudentProject() || canMigrateOwnLegacyStudentProject();
       allow delete: if canDeleteTenantDoc();
     }
 
@@ -528,6 +845,27 @@ service cloud.firestore {
       allow delete: if canDeleteTenantDoc();
     }
 
+    match /admission_case_states/{caseId} {
+      allow get: if isAdmissionsOperator() && (resource == null || canReadAdmissionDoc());
+      allow list: if canReadAdmissionDoc();
+      allow create: if validAdmissionCaseStateCreate(caseId);
+      allow update: if validAdmissionCaseStateUpdate(caseId);
+      allow delete: if false;
+    }
+
+    match /admission_activities/{activityId} {
+      allow get: if isAdmissionsOperator() && (resource == null || canReadAdmissionDoc());
+      allow list: if canReadAdmissionDoc();
+      allow create: if (request.resource.data.kind == 'note' && validAdmissionNoteActivityCreate(activityId)) ||
+        (request.resource.data.kind == 'follow_up' && validAdmissionWhatsAppActivityCreate(activityId));
+      allow update, delete: if false;
+    }
+
+    match /admission_tasks/{taskId} {
+      allow read: if canReadAdmissionDoc();
+      allow write: if false;
+    }
+
     match /marketing_posts/{postId} {
       allow read: if true;
       allow create: if canCreateTenantDoc();
@@ -571,7 +909,7 @@ service cloud.firestore {
     }
 
     match /tool_links/{linkId} {
-      allow read: if canReadTenantDoc();
+      allow read: if canReadTenantDoc() || (hasUserProfile() && currentRole() == 'student' && resourceHasOrg() && isSameOrg(resource.data.organizationId));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -585,7 +923,11 @@ service cloud.firestore {
     }
 
     match /gallery_items/{itemId} {
-      allow read: if canReadTenantDoc();
+      allow read: if canReadTenantDoc() ||
+        (resourceHasOrg() && resource.data.studentId is string && (
+          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianSubjectLinkedToRequester(resource.data.studentId, resource.data.organizationId)
+        ));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -599,17 +941,32 @@ service cloud.firestore {
     }
 
     match /pickup_queue/{entryId} {
-      allow read: if canReadTenantDoc();
+      allow read: if canReadTenantDoc() ||
+        (resourceHasOrg() && studentLinkedToRequester(resource.data.studentId, resource.data.organizationId));
       allow create: if canCreateTenantDoc() || validLinkedPickupCreate();
       allow update: if canUpdateTenantDoc() || validLinkedPickupUpdate();
       allow delete: if canDeleteTenantDoc();
     }
 
     match /notifications/{notifId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == 'all' || isElevatedUser());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isElevatedUser());
       allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isElevatedUser());
       allow delete: if isElevatedUser();
+    }
+
+    match /focus_sessions/{sessionId} {
+      allow read: if canReadTenantDoc() ||
+        (resourceHasOrg() && isSameOrg(resource.data.organizationId) &&
+          hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid);
+      allow create: if requestHasOrg() && isSameOrg(request.resource.data.organizationId) &&
+        hasUserProfile() && currentRole() == 'student' && request.resource.data.studentId == request.auth.uid;
+      allow update: if resourceHasOrg() && requestHasOrg() &&
+        resource.data.organizationId == request.resource.data.organizationId &&
+        isSameOrg(resource.data.organizationId) &&
+        hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid &&
+        request.resource.data.studentId == resource.data.studentId;
+      allow delete: if canDeleteTenantDoc();
     }
 
     // --- Legacy and support collections ---

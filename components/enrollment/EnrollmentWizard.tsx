@@ -37,7 +37,7 @@ export interface EnrollmentProgramDraft {
   packName: string;
   gradeId: string;
   groupId: string;
-  paymentPlan: string;
+  paymentPlan: Enrollment['paymentPlan'];
   secondGroupId: string;
   campSessionId: string;
   campShiftId: string;

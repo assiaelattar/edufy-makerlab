@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Image as ImageIcon, Filter, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 interface Photo {
     id: string;
     url: string;
     caption?: string;
     uploadedAt: any;
+    createdAt?: any;
     studentId?: string;
     type?: string;
 }
@@ -19,7 +20,7 @@ interface StudentGalleryProps {
 }
 
 export const StudentGallery: React.FC<StudentGalleryProps> = ({ isOpen, onClose }) => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const [photos, setPhotos] = useState<Photo[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -27,30 +28,34 @@ export const StudentGallery: React.FC<StudentGalleryProps> = ({ isOpen, onClose 
         if (isOpen && user) {
             loadPhotos();
         }
-    }, [isOpen, user]);
+    }, [isOpen, user, userProfile?.studentId]);
 
     const loadPhotos = async () => {
         if (!db || !user) return;
         setLoading(true);
         try {
-            // Load from gallery_items collection (ERP data)
-            // Simplified query: Sort only (avoids Composite Index requirement)
-            const photosQuery = query(
+            const ownerIds = Array.from(new Set([user.uid, userProfile?.studentId].filter(Boolean))) as string[];
+            const results = await Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
                 collection(db, 'gallery_items'),
-                orderBy('createdAt', 'desc'),
-                limit(50)
-            );
-            const photosSnap = await getDocs(photosQuery);
+                where('studentId', '==', ownerId),
+                where('organizationId', '==', userProfile?.organizationId || 'makerlab-academy')
+            ))));
+            if (results.length > 0 && results.every(result => result.status === 'rejected')) {
+                throw results[0].reason;
+            }
 
-            // Client-side filtering
-            const photosData = photosSnap.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as Photo))
-                .filter(p => p.type === 'image'); // Filter by type manually
-
-            // Filter to show only this student's photos OR public photos (null/empty studentId)
-            const studentPhotos = photosData.filter(p =>
-                !p.studentId || p.studentId === user.uid || p.studentId === 'all'
-            );
+            const photoMap = new Map<string, Photo>();
+            results.forEach(result => {
+                if (result.status !== 'fulfilled') return;
+                result.value.docs.forEach(photoDoc => {
+                    const photo = { id: photoDoc.id, ...photoDoc.data() } as Photo;
+                    if (!photo.type || photo.type === 'image') photoMap.set(photo.id, photo);
+                });
+            });
+            const toMillis = (value: any) => value?.toMillis?.() || new Date(value || 0).getTime() || 0;
+            const studentPhotos = Array.from(photoMap.values())
+                .sort((a, b) => toMillis(b.createdAt || b.uploadedAt) - toMillis(a.createdAt || a.uploadedAt))
+                .slice(0, 50);
 
             setPhotos(studentPhotos);
         } catch (err) {

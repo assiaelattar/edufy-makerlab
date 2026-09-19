@@ -153,7 +153,7 @@ export const api = {
       // FALLBACK: Base64 Upload (More robust for some network/CORS issues)
       try {
         console.log("⚠️ [SparkQuest] Attempting Base64 Fallback...");
-        const { uploadString, getDownloadURL } = await import('firebase/storage');
+        const { ref, uploadString, getDownloadURL } = await import('firebase/storage');
 
         // Convert File to Base64
         const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {

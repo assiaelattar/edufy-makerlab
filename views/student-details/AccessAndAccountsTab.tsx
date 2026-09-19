@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle, Eye, EyeOff } from 'lucide-react';
 import { Student } from '../../types';
 import { useAuth } from '../../context/AuthContext';
-import { useAppContext } from '../../context/AppContext';
 import { Modal } from '../../components/Modal';
 import { useConfirm } from '../../context/ConfirmContext';
 interface AccessAndAccountsTabProps {
@@ -31,11 +30,9 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   settings,
   isAdult = false,
 }) => {
-  const { impersonateUser, currentOrganization } = useAuth();
-  const { navigateTo } = useAppContext();
+  const { currentOrganization } = useAuth();
   const { confirm, alert: showAlert } = useConfirm();
   const [showPassword, setShowPassword] = useState(false);
-  const [showParentPassword, setShowParentPassword] = useState(false);
 
   // New PIN State
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
@@ -47,7 +44,6 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   useEffect(() => {
     setParentEmailInput(student.parentLoginInfo?.email || '');
     setShowPassword(false);
-    setShowParentPassword(false);
     setShowPin(false);
   }, [student.id, student.parentLoginInfo?.email]);
 
@@ -156,35 +152,6 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           </div>
         )}
 
-        {/* MASQUERADE BUTTON - ADMIN ONLY */}
-        {student.loginInfo?.uid && (
-          <div className="mt-4 border-t border-white/10 pt-4">
-            <button
-              onClick={async () => {
-                if (!student.loginInfo?.uid) return;
-
-                const isConfirmed = await confirm({
-                  title: 'Open student portal',
-                  message: `You will enter the portal as ${student.name}. Sign out to return to the admin workspace.`,
-                  variant: 'warning',
-                  confirmText: 'Open portal'
-                });
-                if (isConfirmed) {
-                  try {
-                    await impersonateUser(student.loginInfo.uid, student.loginInfo.email, 'student');
-                    navigateTo('dashboard', {});
-                  } catch (error) {
-                    console.error('Could not open student portal:', error);
-                    await showAlert('Student portal did not open', 'The account session could not be started. Refresh and try again.', 'danger');
-                  }
-                }
-              }}
-              className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-xs font-bold text-slate-400 transition-colors hover:border-teal-400/30 hover:text-teal-300"
-            >
-              <UserPlus size={14} /> Open student portal
-            </button>
-          </div>
-        )}
       </div>
 
       {/* NEW: CLASSROOM PIN (KIOSK MODE) */}
@@ -244,37 +211,8 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Parent Login Email</div>
                 <div className="break-all font-mono text-sm text-white select-all">{student.parentLoginInfo.email}</div>
               </div>
-              <div className="bg-slate-950/50 p-3 rounded border border-slate-800/50">
-                <div className="flex justify-between items-center mb-1">
-                  <div className="text-[10px] text-slate-500 uppercase font-bold">Password</div>
-                  <button
-                    onClick={() => setShowParentPassword(!showParentPassword)}
-                    className="text-[10px] font-bold text-teal-300 hover:text-white"
-                  >
-                    {showParentPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <div className="text-white font-mono text-sm select-all">
-                  {showParentPassword ? student.parentLoginInfo.initialPassword || '********' : '••••••••'}
-                </div>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <button
-                  onClick={() =>
-                    setCredentialsModal({
-                      isOpen: true,
-                      data: {
-                        name: student.parentName || 'Parent',
-                        email: student.parentLoginInfo!.email,
-                        pass: student.parentLoginInfo!.initialPassword || '',
-                        role: 'Parent',
-                      },
-                    })
-                  }
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded flex items-center justify-center gap-1 transition-colors border border-slate-700"
-                >
-                  <Printer size={12} /> Print / Share
-                </button>
+              <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
+                Passwords are never displayed or stored here. Edufy sends a private setup link to the parent email.
               </div>
               <button
                 onClick={() => setIsParentEmailModalOpen(true)}
@@ -286,7 +224,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 ) : (
                   <RefreshCw size={12} />
                 )}{' '}
-                Change linked email
+                Send setup link or change email
               </button>
             </div>
           ) : (
@@ -303,49 +241,6 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             </div>
           )}
 
-          {/* MASQUERADE BUTTON - ADMIN ONLY */}
-          {student.parentLoginInfo && (
-            <div className="mt-4 border-t border-white/10 pt-4">
-              {!student.parentLoginInfo.uid ? (
-                <div className="text-center">
-                  <p className="text-xs text-amber-500 font-bold mb-1">Feature Unavailable</p>
-                  <p className="text-[10px] text-slate-500">
-                    This legacy account is missing a user ID. Use "Change linked email" above to repair the portal link.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <button
-                    onClick={async () => {
-                      if (!student.parentLoginInfo?.uid) return;
-
-                      const isConfirmed = await confirm({
-                        title: 'Open parent portal',
-                        message: `You will enter the portal as ${student.parentName || 'this parent'}. Sign out to return to the admin workspace.`,
-                        variant: 'warning',
-                        confirmText: 'Open portal'
-                      });
-                      if (isConfirmed) {
-                        try {
-                          await impersonateUser(student.parentLoginInfo.uid, student.parentLoginInfo.email, 'parent');
-                          navigateTo('dashboard', {});
-                        } catch (error) {
-                          console.error('Could not open parent portal:', error);
-                          await showAlert('Parent portal did not open', 'The account session could not be started. Refresh and try again.', 'danger');
-                        }
-                      }
-                    }}
-                    className="w-full py-2 bg-slate-900 hover:bg-emerald-900/50 text-slate-400 hover:text-emerald-400 text-xs font-bold rounded border border-slate-800 hover:border-emerald-500/30 flex items-center justify-center gap-2 transition-all"
-                  >
-                    <UserPlus size={14} /> Open parent portal
-                  </button>
-                  <p className="text-[10px] text-slate-500 text-center mt-2">
-                    View the portal as this parent. Use "Sign Out" to return.
-                  </p>
-                </>
-              )}
-            </div>
-          )}
         </div>
       )}
       {/* PARENT EMAIL MODAL */}

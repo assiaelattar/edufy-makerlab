@@ -1,5 +1,6 @@
 
 import { Timestamp } from 'firebase/firestore';
+import type { TenantBrandDna } from './creativeStudio';
 import type { ProgramFormatPreset, RegistrationMode } from './programOperations';
 import type { BillingAudience, FinanceBillingProfile } from './finance';
 
@@ -57,6 +58,7 @@ export interface ProgramPack {
   priceTrimester?: number;
   price?: number;
   promoPrice?: number; // Per-pack Discount Price
+  billingProfile?: FinanceBillingProfile;
 }
 
 export interface ProgramCampWeek {
@@ -330,6 +332,9 @@ export interface ProgramDashboardConfig {
 export interface Student {
   id: string;
   organizationId: string; // SaaS Tenant ID
+  /** Stable Admissions origin, written only when the originating enrollment succeeds. */
+  admissionCaseId?: string;
+  sourceLeadId?: string;
   name: string;
   email?: string;
   parentPhone: string;
@@ -349,9 +354,12 @@ export interface Student {
   };
   parentLoginInfo?: {
     email: string;
-    initialPassword?: string; // Stored only for initial distribution
+    /** @deprecated Legacy records only. New invitations never persist a password. */
+    initialPassword?: string;
     uid: string;
   };
+  /** Auth UIDs that are explicitly allowed to act as guardians for this learner. */
+  parentUids?: string[];
   badges?: string[]; // Array of Badge IDs
   avatarUrl?: string; // Creative Avatar URL
   lastScheduleSharedAt?: Timestamp; // Track when schedule was shared
@@ -364,9 +372,37 @@ export interface PaymentPromise {
   amount: number;
 }
 
+export interface AdmissionOfferSnapshot {
+  version: 1;
+  organizationId: string;
+  admissionCaseId: string;
+  sourceLeadId: string;
+  programId: string;
+  programName: string;
+  packName: string;
+  paymentPlan: 'annual' | 'semestre' | 'trimester' | 'monthly' | 'full';
+  pricingSource: 'program_pack';
+  standardPriceField: 'priceAnnual' | 'priceTrimester' | 'price' | 'promoPrice';
+  priceCatalog: {
+    priceAnnual: number | null;
+    priceTrimester: number | null;
+    price: number | null;
+    promoPrice: number | null;
+  };
+  standardAmount: number;
+  agreedAmount: number;
+  discountAmount: number;
+  currency: 'MAD';
+  quotedAt: string;
+}
+
 export interface Enrollment {
   id: string;
   organizationId: string;
+  /** Stable Admissions origin; never inferred from a phone number. */
+  admissionCaseId?: string;
+  sourceLeadId?: string;
+  offerSnapshot?: AdmissionOfferSnapshot;
   studentId: string;
   studentName: string;
   programId: string;
@@ -425,6 +461,9 @@ export interface Announcement {
 export interface Payment {
   id: string;
   organizationId: string;
+  /** Traceability only. Finance status remains the payment source of truth. */
+  admissionCaseId?: string;
+  sourceLeadId?: string;
   enrollmentId: string;
   studentName: string;
   amount: number;
@@ -559,6 +598,14 @@ export interface Booking {
   notes?: string;
   feedbackNotes?: string;
   programInterest?: string;
+  followUpStatus?: 'feedback_received' | 'not_interested' | 'converted';
+  reminderPreparedAt?: Timestamp;
+  reminderSentAt?: Timestamp;
+  feedbackPreparedAt?: Timestamp;
+  feedbackRequestedAt?: Timestamp;
+  followUpCompletedAt?: Timestamp;
+  convertedAt?: Timestamp;
+  statusUpdatedAt?: Timestamp;
 }
 
 export interface WorkshopEvaluation {
@@ -699,7 +746,10 @@ export interface Lead {
   interests?: string[]; // Program Names or IDs
   notes?: string[];     // Legacy simple notes
   preferredPaymentTerm?: string; // NEW
-  paymentMethod?: 'cash' | 'check' | 'card'; // NEW
+  paymentMethod?: 'cash' | 'check' | 'virement'; // NEW
+  convertedStudentId?: string;
+  enrollmentId?: string;
+  convertedAt?: Timestamp;
   timeline?: {
     date: string;
     type: 'workshop' | 'call' | 'note' | 'status_change' | 'conversion';
@@ -774,12 +824,27 @@ export interface StudentProject {
   externalLink?: string; // Scratch, Tinkercad link
   embedUrl?: string; // NEW: For iframes (Scratch, YouTube, Tinkercad)
   mediaUrls?: string[]; // Screenshots
+  thumbnailUrl?: string;
   resources?: ProjectResource[]; // Copied from template
   skillsAcquired: string[];
   skills?: string[]; // Alias for compatibility
   steps: ProjectStep[]; // The engineering process steps
   status: 'planning' | 'building' | 'testing' | 'delivered' | 'submitted' | 'changes_requested' | 'published'; // Expanded workflow
   instructorFeedback?: string;
+  /** Canonical school year used by family portfolio filtering, for example 2025-2026. */
+  academicYearId?: string;
+  /** Legacy aliases accepted while older SparkQuest records are migrated. */
+  academicYear?: string;
+  schoolYear?: string;
+  session?: string;
+  identityLink?: {
+    legacyStudentId: string;
+    legacyStudentName: string;
+    linkedStudentId: string;
+    linkedBy: string;
+    linkedAt: Timestamp;
+  };
+  publishedAt?: Timestamp;
   dueDate?: Timestamp;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -1009,6 +1074,20 @@ export interface AppSettings {
     phone?: string;
   };
   apiConfig?: ApiConfig;
+  creativeStudio?: TenantBrandDna;
+}
+
+export interface GuardianLink {
+  id: string;
+  organizationId: string;
+  parentUid: string;
+  studentId: string;
+  /** ID accepted by legacy learning records (student document ID or student Auth UID). */
+  subjectId: string;
+  status: 'active' | 'revoked';
+  permissions: Array<'portfolio' | 'enrollments' | 'payments' | 'gallery' | 'pickup'>;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 export interface StaffAttendanceRecord {

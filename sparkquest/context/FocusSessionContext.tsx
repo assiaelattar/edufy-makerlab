@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from '../services/firebase';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, serverTimestamp, Timestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 
 interface FocusSession {
     id?: string;
@@ -40,7 +40,7 @@ export const useFocusSession = () => {
 };
 
 export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const [activeSession, setActiveSession] = useState<FocusSession | null>(null);
     const [sessionHistory, setSessionHistory] = useState<FocusSession[]>([]);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -52,7 +52,7 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
         if (user?.uid) {
             loadSessionHistory();
         }
-    }, [user?.uid]);
+    }, [user?.uid, userProfile?.organizationId]);
 
     // Timer for active session
     useEffect(() => {
@@ -83,8 +83,7 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
             const q = query(
                 collection(db, 'focus_sessions'),
                 where('studentId', '==', user.uid),
-                orderBy('startTime', 'desc'),
-                limit(100)
+                where('organizationId', '==', userProfile?.organizationId || 'makerlab-academy')
             );
 
             const snapshot = await getDocs(q);
@@ -96,7 +95,7 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
                     startTime: data.startTime?.toDate() || new Date(),
                     endTime: data.endTime?.toDate(),
                 } as FocusSession;
-            });
+            }).sort((a, b) => b.startTime.getTime() - a.startTime.getTime()).slice(0, 100);
 
             setSessionHistory(sessions);
 
@@ -152,6 +151,7 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
         try {
             // Save to Firestore
             await addDoc(collection(db, 'focus_sessions'), {
+                organizationId: userProfile?.organizationId || 'makerlab-academy',
                 studentId: user.uid,
                 startTime: activeSession.startTime,
                 endTime: endTime,

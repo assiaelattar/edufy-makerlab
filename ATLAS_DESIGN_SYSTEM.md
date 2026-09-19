@@ -1,10 +1,10 @@
 # Atlas UI System
 
-Atlas is the operational workspace inside Edufy. It serves education-center owners and staff who move quickly between students, classes, money, families, and team work. The interface should feel prepared, calm, and attentive: important work is already within reach, dense information remains readable, and every action gives clear feedback.
+Atlas is the operational foundation inside Edufy. School owners and staff should experience Edufy—not the underlying platform architecture—while moving between students, classes, money, families, and team work. The interface should feel bright, prepared, calm, and attentive: today's school activity is immediately understandable, important work is already within reach, and every action gives clear feedback.
 
 ## Design Thesis
 
-Atlas is a personal service desk, not a collection of dashboards. The shell keeps active work connected through persistent, reorderable workspace tabs. Each module follows the same operating rhythm:
+Edufy is a school-day workspace, not a collection of SaaS dashboards. The shell keeps active work connected through persistent, reorderable open pages. Customer-facing language uses school concepts such as Today, Students, Classes, Attendance, Payments, Families, and Staff; terms such as tenant, module, SaaS, and command remain internal. Each module follows the same operating rhythm:
 
 ```text
 +-----------------------------------------------------------+
@@ -32,14 +32,20 @@ Atlas is a personal service desk, not a collection of dashboards. The shell keep
 - Care Amber `#F2C766`: attention, pending work, human follow-up.
 - Atlas Paper `#F7F1E4`: marketing and high-contrast light surfaces.
 - Signal Rose `#FB7185`: destructive actions and urgent risk only.
+- Edufy Volt `#C8FF00`: the product's signature action capsule, selected workspace state, and small readiness signal. It is deliberately rare and always paired with ink text.
+- Electric Blue `#8DB5FF`: expressive school-category surfaces and supporting information, never the default action color.
 
 Module colors identify data categories; they do not replace Service Teal as the interaction color.
 
 ### Theme
 
 - Atlas supports `dark` and `light` themes through `data-atlas-theme` on the document root and application shell.
-- A user's explicit choice is stored per tenant at `atlas:theme:<tenant-id>`. The operating-system preference is consulted only when that key does not exist.
-- Dark remains the deep operational workspace. Light uses warm-neutral canvas `#F3F1EB`, white work surfaces, graphite text, and restrained slate borders.
+- A user's explicit choice is stored per tenant at `atlas:theme:<tenant-id>`. Light is used only when that key does not yet exist.
+- Light is the default for a new school workspace and uses a cool paper canvas `#F2F4F7`, white work surfaces, graphite text, and restrained slate borders. A stored explicit preference is always preserved.
+- Dark is a fully designed alternative using deep navy canvas and surfaces. It follows the same hierarchy and semantic components; it is not an inversion filter or a separate layout.
+- Soft mint, sky, peach, lilac, and sun tones identify school-day categories in both themes. Dark mode uses controlled translucent equivalents rather than bright pastel fills.
+- On owner overview screens, color should occupy the card surface rather than appear only as a small icon accent. Use an approximate 65/25/10 balance: calm paper and neutral space, category pastels, then a small amount of high-contrast ink or saturated action color.
+- The strongest spectrum treatment is reserved for one priority card per view, such as verified payments. Supporting cards use one pastel family each so the page remains warm without becoming noisy.
 - Service Teal and Care Amber keep the same meaning in both themes. Their light-theme text variants must be dark enough for readable contrast.
 - Shared components consume semantic `--atlas-*` surface, border, and text tokens. New module work must not add theme-specific branching in React.
 - The scoped light compatibility rules in `index.css` are a migration bridge for existing dark Tailwind utilities, not the preferred pattern for new surfaces.
@@ -55,6 +61,8 @@ Module colors identify data categories; they do not replace Service Teal as the 
 
 - Command surfaces: 12px radius.
 - Cards, fields, tabs, buttons: 8px radius.
+- School-day overview and bento cards are the expressive exception: use 23-30px asymmetric corner geometry, a fine highlight edge, and a soft two-layer shadow. Nested controls remain compact so the surface still feels operational.
+- Shared module headers and primary panels use 28px sculpted corners. List rows and option cards use 18-20px corners; primary and secondary actions may use capsule geometry. Do not turn large content cards into pills.
 - Pills are reserved for status, presence, and compact counts.
 - Default control height: 40px. Dense table controls may use 34-36px.
 - Avoid cards nested inside cards. Use dividers and full-width bands for hierarchy.
@@ -64,6 +72,8 @@ Module colors identify data categories; they do not replace Service Teal as the 
 - Control feedback: 140-180ms.
 - Panels and navigation: 200-240ms.
 - Animate opacity and transforms only; avoid layout-shifting entrance effects.
+- Owner overview entrances may stagger by 45-70ms, with a total reveal under 500ms. Hover lift stays below 6px and 1.02 scale.
+- Data bars may grow from their baseline and the current schedule marker may pulse gently. Ambient hero shapes can drift slowly, but must remain clipped inside the hero and never compete with actions.
 - Dragging raises the active tab and reduces surrounding emphasis.
 - Respect `prefers-reduced-motion` everywhere.
 
@@ -87,6 +97,9 @@ Every logged-in module should use these shared pieces where applicable:
 4. `AtlasSectionHeader` for unframed content sections.
 5. `AtlasEmptyState` with a clear next action.
 6. Shared confirmation and alert modals instead of browser dialogs.
+7. Shared module surfaces inherit the Edufy component language: white or navy appliance panels, category-tinted signal cards, soft capsule toolbars, rounded fields, separated table rows, and theme-aware dialogs.
+
+Legacy authenticated modules may temporarily inherit these rules through the scoped `.atlas-module-content` compatibility layer. New work should use the semantic Atlas primitives directly rather than adding more hard-coded slate surfaces.
 
 ## Interaction Rules
 

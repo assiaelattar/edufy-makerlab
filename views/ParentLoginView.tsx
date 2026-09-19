@@ -1,22 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { browserLocalPersistence, browserSessionPersistence, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
+import { browserLocalPersistence, browserSessionPersistence, sendPasswordResetEmail, setPersistence, signInWithEmailAndPassword } from 'firebase/auth';
 import { AlertCircle, ArrowRight, BookOpenCheck, Fingerprint, Loader2, Lock, Mail, Rocket, ShieldCheck, Users } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { Logo } from '../components/Logo';
 import { useAppContext } from '../context/AppContext';
-import { useAuth } from '../maker-pro/src/context/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { auth } from '../services/firebase';
 import { authenticateBiometric, isBiometricEnabled } from '../utils/biometrics';
+import { config } from '../utils/config';
 
 export const ParentLoginView = () => {
     const { settings } = useAppContext();
-    const navigate = useNavigate();
-    const { user, userRole, loading: authLoading } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [resetSent, setResetSent] = useState(false);
     const [biometricAvailable, setBiometricAvailable] = useState(false);
 
     useEffect(() => {
@@ -25,15 +25,33 @@ export const ParentLoginView = () => {
 
     useEffect(() => {
         if (!authLoading && user) {
-            if (userRole === 'parent') {
-                navigate('/parent-dashboard');
-            } else if (userRole === 'instructor') {
-                navigate('/instructor-dashboard');
-            } else {
-                navigate('/');
-            }
+            window.history.replaceState({}, '', '/');
+            window.dispatchEvent(new PopStateEvent('popstate'));
         }
-    }, [user, userRole, authLoading, navigate]);
+    }, [user, authLoading]);
+
+    const handlePasswordReset = async () => {
+        const normalizedEmail = email.trim().toLowerCase();
+        if (!auth || !normalizedEmail) {
+            setError('Enter your parent email address first.');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        setResetSent(false);
+        try {
+            await sendPasswordResetEmail(auth, normalizedEmail);
+            setResetSent(true);
+        } catch (resetError: any) {
+            console.error(resetError);
+            setError(resetError.code === 'auth/invalid-email'
+                ? 'Enter a valid email address.'
+                : 'The reset email could not be sent. Contact the academy if the problem continues.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleBiometricLogin = async () => {
         setLoading(true);
@@ -80,9 +98,9 @@ export const ParentLoginView = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F7F1E4] p-4 font-sans text-slate-950 sm:p-6 lg:p-10">
+        <div className={`min-h-screen bg-[#F7F1E4] p-4 font-sans text-slate-950 sm:p-6 lg:p-10 ${import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'edu-parent-login-v1' : ''}`} data-testid={import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'education-parent-login-v1' : undefined}>
             <div className="mx-auto grid min-h-[calc(100vh-2rem)] w-full max-w-6xl overflow-hidden rounded-lg border border-slate-950/10 bg-white shadow-[0_24px_80px_rgba(8,17,31,0.14)] md:min-h-[680px] lg:grid-cols-[1.05fr_0.95fr]">
-                <section className="flex flex-col justify-between bg-[#08111F] p-7 text-white sm:p-10 lg:p-12">
+                <section className="order-last flex flex-col justify-between bg-[#08111F] p-7 text-white sm:p-10 lg:order-first lg:p-12">
                     <div>
                         <div className="flex items-center gap-3">
                             <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]">
@@ -115,11 +133,11 @@ export const ParentLoginView = () => {
 
                     <div className="mt-10 flex flex-wrap items-center gap-4 text-xs font-medium text-slate-400">
                         <span className="flex items-center gap-1.5"><ShieldCheck size={15} className="text-teal-300" /> Secure family access</span>
-                        <a href="https://sparkquest-makerlab.vercel.app" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-amber-200 transition-colors hover:text-amber-100"><Rocket size={15} /> Open student portal</a>
+                        <a href={config.sparkQuestUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-amber-200 transition-colors hover:text-amber-100"><Rocket size={15} /> Open student portal</a>
                     </div>
                 </section>
 
-                <section className="flex items-center p-7 sm:p-10 lg:p-14">
+                <section className="order-first flex items-center p-7 sm:p-10 lg:order-last lg:p-14">
                     <div className="mx-auto w-full max-w-sm">
                         <div className="mb-8">
                             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-teal-700">Welcome back</p>
@@ -139,6 +157,12 @@ export const ParentLoginView = () => {
                                 <div role="alert" className={`flex items-start gap-3 rounded-lg border p-3 text-xs ${error.startsWith('Biometric verified') ? 'border-teal-200 bg-teal-50 text-teal-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
                                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                                     <span className="leading-5">{error}</span>
+                                </div>
+                            )}
+                            {resetSent && (
+                                <div role="status" className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-800">
+                                    <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span className="leading-5">Password setup link sent. Check your inbox and spam folder.</span>
                                 </div>
                             )}
 
@@ -162,6 +186,10 @@ export const ParentLoginView = () => {
                                 <input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
                                 Keep me signed in on this device
                             </label>
+
+                            <button type="button" onClick={handlePasswordReset} disabled={loading} className="text-xs font-bold text-teal-700 hover:text-teal-600 disabled:opacity-60">
+                                First connection or forgotten password?
+                            </button>
 
                             <button type="submit" disabled={loading} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-teal-700/20 bg-teal-500 px-4 py-2.5 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-60">
                                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Open family workspace <ArrowRight className="h-4 w-4" /></>}

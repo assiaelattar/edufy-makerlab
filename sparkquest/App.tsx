@@ -281,7 +281,7 @@ const SparkQuestApp: React.FC = () => {
   if (view === 'HOME' && !project) {
     return (
       <ProjectSelector
-        studentId={user.uid}
+        studentId={userProfile?.studentId || user.uid}
         onSelectProject={(projectId) => {
           // DIRECT LAUNCH to Wizard (as requested by user)
           console.log("Launching Mission Direct:", projectId);

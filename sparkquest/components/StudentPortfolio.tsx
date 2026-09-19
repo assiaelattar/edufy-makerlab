@@ -31,15 +31,28 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
         if (!db || !user || !userProfile) return;
         setLoading(true);
         try {
-            // Load completed projects
-            const projectsQuery = query(
+            const ownerIds = Array.from(new Set([user.uid, userProfile.studentId].filter(Boolean))) as string[];
+            const results = await Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
                 collection(db, 'student_projects'),
-                where('studentId', '==', user.uid),
-                where('organizationId', '==', userProfile.organizationId || 'makerlab-academy'), // Ensure Org Scoping
-                where('status', 'in', ['submitted', 'published', 'PENDING_REVIEW', 'APPROVED', 'DONE', 'COMPLETED'])
-            );
-            const projectsSnap = await getDocs(projectsQuery);
-            const projectsData = projectsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StudentProject));
+                where('studentId', '==', ownerId),
+                where('organizationId', '==', userProfile.organizationId || 'makerlab-academy')
+            ))));
+            if (results.length > 0 && results.every(result => result.status === 'rejected')) {
+                throw results[0].reason;
+            }
+
+            const visibleStatuses = new Set(['submitted', 'published', 'delivered', 'completed', 'PENDING_REVIEW', 'APPROVED', 'DONE', 'COMPLETED']);
+            const projectMap = new Map<string, StudentProject>();
+            results.forEach(result => {
+                if (result.status !== 'fulfilled') return;
+                result.value.docs.forEach(projectDoc => {
+                    const project = { id: projectDoc.id, ...projectDoc.data() } as StudentProject;
+                    const sameOrganization = !project.organizationId
+                        || project.organizationId === (userProfile.organizationId || 'makerlab-academy');
+                    if (sameOrganization && visibleStatuses.has(project.status)) projectMap.set(project.id, project);
+                });
+            });
+            const projectsData = Array.from(projectMap.values());
             setProjects(projectsData);
 
             // Calculate XP and Level (mock calculation)

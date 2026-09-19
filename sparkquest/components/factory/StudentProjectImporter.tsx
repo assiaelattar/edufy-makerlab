@@ -6,6 +6,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { StudentProject } from '../../types';
 
 import { useAuth } from '../../context/AuthContext';
+import { normalizeAcademicYear, previousAcademicYear } from '../../utils/academicYear';
 
 interface StudentProjectImporterProps {
     onClose: () => void;
@@ -16,11 +17,13 @@ interface StudentProjectImporterProps {
 }
 
 export const StudentProjectImporter: React.FC<StudentProjectImporterProps> = ({ onClose, onSuccess, studentId, studentName, organizationId }) => {
+    const { userProfile } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [file, setFile] = useState<File | null>(null);
     const [previewData, setPreviewData] = useState<any[]>([]);
     const [errors, setErrors] = useState<string[]>([]);
     const [isImporting, setIsImporting] = useState(false);
+    const [academicYearId, setAcademicYearId] = useState(previousAcademicYear());
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
@@ -69,10 +72,21 @@ export const StudentProjectImporter: React.FC<StudentProjectImporterProps> = ({ 
         // Try to find image field (case-insensitiveish)
         const coverImage = row['CoverImage'] || row['ThumbnailUrl'] || row['Image'] || 'https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=800&q=80'; // Fallback image
 
+        const rowAcademicYear = normalizeAcademicYear(
+            row['AcademicYear'] || row['AcademicYearId'] || row['SchoolYear'] || row['Session'] || academicYearId
+        ) || academicYearId;
+        const assignmentScope = {
+            ...(row['ProgramId'] ? { programId: String(row['ProgramId']).trim() } : {}),
+            ...(row['GradeId'] ? { gradeId: String(row['GradeId']).trim() } : {}),
+            ...(row['GroupId'] ? { groupId: String(row['GroupId']).trim() } : {})
+        };
+
         return {
             studentId,
             studentName,
-            organizationId: organizationId || 'makerlab-academy',
+            organizationId: organizationId || userProfile?.organizationId || 'makerlab-academy',
+            academicYearId: rowAcademicYear,
+            ...assignmentScope,
             title: row['Title'] || 'Untitled Project',
             thumbnailUrl: coverImage,
             coverImage: coverImage, // Ensure this is set for Admin/Parent views
@@ -129,6 +143,18 @@ export const StudentProjectImporter: React.FC<StudentProjectImporterProps> = ({ 
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1">
+                    <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50 p-4">
+                        <label className="block text-xs font-black uppercase tracking-wider text-indigo-700" htmlFor="project-import-year">Portfolio year</label>
+                        <input
+                            id="project-import-year"
+                            value={academicYearId}
+                            onChange={(event) => setAcademicYearId(normalizeAcademicYear(event.target.value) || event.target.value)}
+                            placeholder="2025-2026"
+                            className="mt-2 min-h-11 w-full rounded-lg border border-indigo-200 bg-white px-3 text-sm font-bold text-slate-900 outline-none focus:border-indigo-500"
+                        />
+                        <p className="mt-2 text-xs leading-5 text-indigo-700/80">Every imported project is linked to this school year. A row can override it with an AcademicYear column.</p>
+                    </div>
+
                     {/* Input Method Switcher */}
                     <div className="flex gap-4 mb-6 border-b border-slate-100">
                         <button

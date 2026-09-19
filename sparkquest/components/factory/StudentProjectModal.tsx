@@ -47,7 +47,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [station, setStation] = useState<StationType>('Robotics');
-    const [status, setStatus] = useState<'planning' | 'building' | 'submitted' | 'published'>('planning');
+    const [status, setStatus] = useState<StudentProject['status']>('planning');
     const [thumbnailUrl, setThumbnailUrl] = useState('');
     const [presentationUrl, setPresentationUrl] = useState('');
 

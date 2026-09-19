@@ -227,6 +227,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const firestore = db;
     // END SAAS LOGIC
 
+    // Parent accounts use the dedicated family data loader. Never hydrate the
+    // organization-wide operational context in a parent browser session.
+    if (userProfile?.role === 'parent') {
+      setStudents([]);
+      setEnrollments([]);
+      setPayments([]);
+      setExpenses([]);
+      setTeamMembers([]);
+      setTasks([]);
+      setProjects([]);
+      setChatMessages([]);
+      setMarketingPosts([]);
+      setCampaigns([]);
+      setLeads([]);
+      setStudentProjects([]);
+      setProjectTemplates([]);
+      setGalleryItems([]);
+      setAssets([]);
+      setPickupQueue([]);
+      setLoading(true);
+
+      return onSnapshot(doc(firestore, 'organizations', orgId, 'settings', 'global'), snapshot => {
+        const savedData = snapshot.exists() ? snapshot.data() as AppSettings : DEFAULT_SETTINGS;
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...savedData,
+          studentFormConfig: { ...DEFAULT_SETTINGS.studentFormConfig, ...savedData.studentFormConfig }
+        });
+        setLoading(false);
+      }, error => {
+        console.error('Unable to load family workspace settings:', error);
+        setSettings(DEFAULT_SETTINGS);
+        setLoading(false);
+      });
+    }
+
     // We wait for the SETTINGS to load specifically before unblocking the UI to ensure branding is correct.
     let isSettingsLoaded = false;
     let pendingCores = 5; // students, programs, enrollments, payments, expenses
@@ -345,7 +381,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
 
     return () => unsubs.forEach(u => u());
-  }, [currentOrganization]);
+  }, [currentOrganization, userProfile?.role]);
 
   // Separate effect for Notifications based on userProfile
   useEffect(() => {
@@ -354,10 +390,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const q = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
-    // In a real app, we would filter by userId: where('userId', '==', userProfile.uid)
-    // But for this demo/MVP where auth might be simulated or loose, we'll fetch all and filter in memory or just show all for now if no ID match.
-    // Let's try to be specific if we have a UID.
+    if (!userProfile.uid) {
+      setNotifications([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'notifications'),
+      where('userId', 'in', [userProfile.uid, 'all']),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
 
     const unsubscribe = onSnapshot(q, (snap) => {
       const allNotes = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification));

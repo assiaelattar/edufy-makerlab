@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, Clock, MessageCircle, MessageSquare, UserCheck } from 'lucide-react';
-import { arrayUnion, collection, doc, getDocs, query, runTransaction, serverTimestamp, where, writeBatch } from 'firebase/firestore';
+import { arrayUnion, collection, doc, runTransaction, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useConfirm } from '../../context/ConfirmContext';
@@ -8,31 +8,23 @@ import { db } from '../../services/firebase';
 import { Booking } from '../../types';
 import { Modal } from '../../components/Modal';
 import { AtlasActionButton, AtlasSectionHeader } from '../../components/atlas/AtlasSurface';
-
-type OperationalBooking = Booking & {
-    reminderSentAt?: unknown;
-    feedbackRequestedAt?: unknown;
-    followUpCompletedAt?: unknown;
-    convertedAt?: unknown;
-    crmLeadId?: string;
-    followUpStatus?: 'feedback_received' | 'not_interested' | 'converted';
-};
+import { findBookingPhoneCandidateLeadIds, resolveBookingAdmissionLead } from '../../modules/admissions/domain';
 
 const toLocalDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
 const completedFollowUps = new Set(['feedback_received', 'not_interested', 'converted']);
 
 export const WorkshopActionCenter = () => {
-    const { bookings, workshopSlots, workshopTemplates, programs } = useAppContext();
+    const { bookings, workshopSlots, workshopTemplates, programs, leads } = useAppContext();
     const { currentOrganization, can } = useAuth();
     const { alert, confirm } = useConfirm();
-    const [selectedBooking, setSelectedBooking] = useState<OperationalBooking | null>(null);
+    const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
     const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
     const [feedbackNotes, setFeedbackNotes] = useState('');
     const [selectedProgramInterest, setSelectedProgramInterest] = useState('');
     const [busyBookingIds, setBusyBookingIds] = useState<string[]>([]);
 
-    const operationalBookings = bookings as OperationalBooking[];
+    const operationalBookings = bookings;
     const getTemplate = (slotId: string) => {
         const slot = workshopSlots.find(item => item.id === slotId);
         return slot ? workshopTemplates.find(item => item.id === slot.workshopTemplateId) : null;
@@ -44,7 +36,7 @@ export const WorkshopActionCenter = () => {
     const isOwnedBooking = (booking: Booking) => Boolean(currentOrganization?.id && booking.organizationId === currentOrganization.id);
     const setBookingBusy = (bookingId: string, busy: boolean) => setBusyBookingIds(ids => busy ? [...new Set([...ids, bookingId])] : ids.filter(id => id !== bookingId));
 
-    const handleUpdateStatus = async (booking: OperationalBooking, status: Booking['status']) => {
+    const handleUpdateStatus = async (booking: Booking, status: Booking['status']) => {
         if (!db || !currentOrganization || !can('workshops.manage') || busyBookingIds.includes(booking.id)) return false;
         if (!isOwnedBooking(booking)) {
             await alert('Booking unavailable', 'This booking is not available in the active organization.', 'warning');
@@ -108,7 +100,7 @@ export const WorkshopActionCenter = () => {
         }
     };
 
-    const handleOpenWhatsApp = async (booking: OperationalBooking, type: 'reminder' | 'feedback') => {
+    const handleOpenWhatsApp = async (booking: Booking, type: 'reminder' | 'feedback') => {
         if (!db || !currentOrganization || !isOwnedBooking(booking) || busyBookingIds.includes(booking.id)) return;
         const phone = normalizePhone(booking.phoneNumber);
         if (phone.length < 8) {
@@ -136,12 +128,12 @@ export const WorkshopActionCenter = () => {
                 const snapshot = await transaction.get(bookingRef);
                 if (!snapshot.exists() || snapshot.data().organizationId !== currentOrganization.id) throw new Error('Booking is no longer available.');
                 transaction.update(bookingRef, type === 'reminder'
-                    ? { status: 'reminder_sent', reminderSentAt: serverTimestamp() }
-                    : { status: 'feedback_requested', feedbackRequestedAt: serverTimestamp() });
+                    ? { reminderPreparedAt: serverTimestamp() }
+                    : { feedbackPreparedAt: serverTimestamp() });
             });
         } catch (error) {
             console.error('Workshop follow-up state update failed', error);
-            await alert('Follow-up was not recorded', 'WhatsApp opened, but Edufy could not save the follow-up state. Try again from the booking record.', 'danger');
+            await alert('Preparation was not recorded', 'WhatsApp opened, but Edufy could not save that the message was prepared. Delivery was not inferred.', 'danger');
         } finally {
             setBookingBusy(booking.id, false);
         }
@@ -155,7 +147,7 @@ export const WorkshopActionCenter = () => {
 
     const upcomingReminders = useMemo(() => operationalBookings.filter(booking => {
         const slot = workshopSlots.find(item => item.id === booking.workshopSlotId);
-        return Boolean(slot && booking.status === 'confirmed' && !booking.reminderSentAt && (slot.date === today || slot.date === tomorrow));
+        return Boolean(slot && booking.status === 'confirmed' && !booking.reminderPreparedAt && !booking.reminderSentAt && (slot.date === today || slot.date === tomorrow));
     }).sort((a, b) => `${getSlotDate(a.workshopSlotId).date}T${getSlotDate(a.workshopSlotId).time}`.localeCompare(`${getSlotDate(b.workshopSlotId).date}T${getSlotDate(b.workshopSlotId).time}`)), [operationalBookings, workshopSlots, today, tomorrow]);
 
     const pendingFeedback = useMemo(
@@ -163,7 +155,7 @@ export const WorkshopActionCenter = () => {
         [operationalBookings]
     );
     const pendingConfirmation = useMemo(
-        () => operationalBookings.filter(booking => booking.status === 'reminder_sent'),
+        () => operationalBookings.filter(booking => booking.status === 'reminder_sent' || (booking.status === 'confirmed' && Boolean(booking.reminderPreparedAt))),
         [operationalBookings]
     );
 
@@ -173,7 +165,7 @@ export const WorkshopActionCenter = () => {
         setSelectedProgramInterest('');
         setFeedbackNotes('');
     };
-    const openFeedbackModal = (booking: OperationalBooking) => {
+    const openFeedbackModal = (booking: Booking) => {
         setSelectedBooking(booking);
         setSelectedProgramInterest(booking.programInterest || '');
         setFeedbackNotes(booking.feedbackNotes || '');
@@ -202,9 +194,20 @@ export const WorkshopActionCenter = () => {
         const booking = selectedBooking;
         setBookingBusy(booking.id, true);
         try {
-            const leadSnapshot = await getDocs(query(collection(db, 'leads'), where('organizationId', '==', currentOrganization.id)));
-            const phone = normalizePhone(booking.phoneNumber);
-            const existingLead = leadSnapshot.docs.find(item => normalizePhone(String(item.data().phone || '')) === phone);
+            const resolution = resolveBookingAdmissionLead(booking, leads, currentOrganization.id);
+            if (resolution.status === 'conflict') {
+                throw new Error('This booking contains conflicting admission links. Repair the booking before converting it.');
+            }
+            if (resolution.status === 'missing') {
+                throw new Error('This booking points to a missing admission case. Repair the link before converting it.');
+            }
+            const phoneCandidates = resolution.status === 'unlinked'
+                ? findBookingPhoneCandidateLeadIds(booking, leads, currentOrganization.id)
+                : [];
+            if (phoneCandidates.length > 0) {
+                throw new Error('A possible existing family shares this phone number. Edufy will not link it automatically; review the admission case first.');
+            }
+            const existingLead = resolution.status === 'linked' ? resolution.lead : null;
             const batch = writeBatch(db);
             const leadRef = existingLead ? doc(db, 'leads', existingLead.id) : doc(collection(db, 'leads'));
             const timelineEntry = {
@@ -240,6 +243,7 @@ export const WorkshopActionCenter = () => {
                 followUpStatus: 'converted',
                 feedbackNotes: feedbackNotes.trim(),
                 programInterest: selectedProgramInterest,
+                admissionCaseId: leadRef.id,
                 crmLeadId: leadRef.id,
                 convertedAt: serverTimestamp()
             });
@@ -248,7 +252,7 @@ export const WorkshopActionCenter = () => {
             await alert(existingLead ? 'Lead updated' : 'Lead created', `${booking.kidName} is now connected to the admissions pipeline.`, 'success');
         } catch (error) {
             console.error('Workshop conversion failed', error);
-            await alert('Conversion failed', 'No conversion was saved. Check your connection and try again.', 'danger');
+            await alert('Conversion failed', error instanceof Error ? error.message : 'No conversion was saved. Check your connection and try again.', 'danger');
         } finally {
             setBookingBusy(booking.id, false);
         }
@@ -308,19 +312,19 @@ export const WorkshopActionCenter = () => {
                     {upcomingReminders.length === 0 ? <CompactEmpty label="No reminders due" /> : upcomingReminders.map(booking => {
                         const slot = getSlotDate(booking.workshopSlotId);
                         const template = getTemplate(booking.workshopSlotId);
-                        return <QueueItem key={booking.id} title={booking.kidName} detail={`${booking.parentName} | ${slot.date === today ? 'Today' : 'Tomorrow'} at ${slot.time}`} meta={template?.title} action={<AtlasActionButton className="w-full" icon={MessageCircle} disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleOpenWhatsApp(booking, 'reminder')}>Send reminder</AtlasActionButton>} />;
+                        return <QueueItem key={booking.id} title={booking.kidName} detail={`${booking.parentName} | ${slot.date === today ? 'Today' : 'Tomorrow'} at ${slot.time}`} meta={template?.title} action={<AtlasActionButton className="w-full" icon={MessageCircle} disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleOpenWhatsApp(booking, 'reminder')}>Prepare reminder</AtlasActionButton>} />;
                     })}
                 </QueueColumn>
 
                 <QueueColumn title="Confirmations" count={pendingConfirmation.length} icon={CheckCircle2} tone="teal">
                     {pendingConfirmation.length === 0 ? <CompactEmpty label="No confirmations waiting" /> : pendingConfirmation.map(booking => (
-                        <QueueItem key={booking.id} title={booking.kidName} detail={booking.parentName} meta="Reminder sent" action={<div className="grid grid-cols-2 gap-2"><AtlasActionButton variant="primary" disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'confirmed')}>Confirm</AtlasActionButton><AtlasActionButton disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'cancelled')}>Cancel</AtlasActionButton></div>} />
+                        <QueueItem key={booking.id} title={booking.kidName} detail={booking.parentName} meta={booking.status === 'reminder_sent' ? 'Legacy reminder state' : 'WhatsApp prepared'} action={<div className="grid grid-cols-2 gap-2"><AtlasActionButton variant="primary" disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'confirmed')}>Confirm</AtlasActionButton><AtlasActionButton disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'cancelled')}>Cancel</AtlasActionButton></div>} />
                     ))}
                 </QueueColumn>
 
                 <QueueColumn title="Feedback & admission" count={pendingFeedback.length} icon={UserCheck} tone="teal">
                     {pendingFeedback.length === 0 ? <CompactEmpty label="No feedback pending" /> : pendingFeedback.map(booking => (
-                        <QueueItem key={booking.id} title={booking.kidName} detail={booking.parentName} meta={booking.status === 'feedback_requested' ? 'Feedback requested' : 'Workshop attended'} action={<div className="grid grid-cols-2 gap-2"><AtlasActionButton icon={MessageSquare} disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleOpenWhatsApp(booking, 'feedback')}>Ask</AtlasActionButton><AtlasActionButton variant="primary" icon={ArrowRight} disabled={busyBookingIds.includes(booking.id)} onClick={() => openFeedbackModal(booking)}>Review</AtlasActionButton></div>} />
+                        <QueueItem key={booking.id} title={booking.kidName} detail={booking.parentName} meta={booking.feedbackPreparedAt ? 'WhatsApp prepared' : booking.status === 'feedback_requested' ? 'Legacy feedback state' : 'Workshop attended'} action={<div className="grid grid-cols-2 gap-2"><AtlasActionButton icon={MessageSquare} disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleOpenWhatsApp(booking, 'feedback')}>Prepare</AtlasActionButton><AtlasActionButton variant="primary" icon={ArrowRight} disabled={busyBookingIds.includes(booking.id)} onClick={() => openFeedbackModal(booking)}>Review</AtlasActionButton></div>} />
                     ))}
                 </QueueColumn>
             </div>

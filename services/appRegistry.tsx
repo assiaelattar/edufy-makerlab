@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Share2, FileText, Bot, Megaphone, PenTool, Scan, ScanFace, BookOpen } from 'lucide-react';
-import { SocialPosterView } from '../views/apps/SocialPosterView';
+import { Sparkles, FileText, Bot, Megaphone, PenTool, Scan, ScanFace, BookOpen } from 'lucide-react';
+import { CreativeStudioView } from '../views/apps/CreativeStudioView';
 import { DocDesignerView } from '../views/apps/DocDesignerView';
 import { PaperScannerView } from '../views/apps/PaperScannerView';
 import { FaceAttendanceView } from '../views/apps/FaceAttendanceView';
@@ -39,23 +39,23 @@ export interface AppManifest extends Omit<AtlasMarketplaceApp, 'id' | 'name' | '
 export const AVAILABLE_APPS: AppManifest[] = [
     {
         id: 'social-poster-ai',
-        name: 'Social Poster AI',
-        description: 'Generate engagement-ready social media posts, captions, and visuals using AI.',
-        fullDescription: 'Stop struggling with social media content. Social Poster AI analyzes your inputs and generates professional, engagement-ready posts for Instagram, LinkedIn, and Facebook in seconds. Includes image generation and hashtag suggestions.',
-        features: ['Multi-platform support (IG, FB, LinkedIn)', 'AI Image Generation', 'Hashtag Optimization', 'Schedule Assistance'],
+        name: 'Atlas Creative Studio',
+        description: 'Produce tenant-branded photography and campaign assets for social, web, ads, and local discovery.',
+        fullDescription: 'Create with the active organization Brand DNA, approved Gallery photography, or a newly generated realistic scene. Every production keeps tenant identity, exclusions, and safety rules attached to the brief.',
+        features: ['Tenant Brand DNA', 'Gallery and AI production routes', 'Social, website, ad, and Google formats', 'Clean and branded exports'],
         pricing: { price: 99, currency: 'MAD', interval: 'monthly' },
         productArea: 'marketplace',
         audience: ['admin', 'staff'],
         requiredPermissions: ['marketing.view', 'marketing.create'],
         requiredPlan: 'growth',
         dependencies: ['marketing'],
-        agentTools: ['marketplace.apps.install', 'edufy.crm.createLead'],
-        icon: Share2,
+        agentTools: ['marketplace.apps.install', 'atlas.creative.generate'],
+        icon: Sparkles,
         category: 'marketing',
         isPremium: true,
-        component: SocialPosterView,
-        version: '1.0.0',
-        developer: 'MakerLab AI',
+        component: CreativeStudioView,
+        version: '2.0.0',
+        developer: 'Atlas by Edufy',
         screenshots: ['https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=800&q=80', 'https://images.unsplash.com/photo-1611162616475-46b635cb6868?w=800&q=80']
     },
     {

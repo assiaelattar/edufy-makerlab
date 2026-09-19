@@ -7,7 +7,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Expose to all IPs (0.0.0.0) to fix localhost/IPv6 issues
-    port: 5173
+    port: 5173,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: false
+      }
+    }
   },
   build: {
     outDir: 'dist',
@@ -26,7 +32,8 @@ export default defineConfig({
         },
         manualChunks: {
           // Simplify chunking: Group React and Utils, let Firebase float or bundle naturally
-          vendor: ['react', 'react-dom', 'lucide-react', 'xlsx'],
+          vendor: ['react', 'react-dom', 'lucide-react'],
+          spreadsheet: ['xlsx'],
         }
       }
     }

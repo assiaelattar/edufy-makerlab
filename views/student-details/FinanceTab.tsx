@@ -15,7 +15,7 @@ import {
   Trash2,
   Wallet
 } from 'lucide-react';
-import { Enrollment, Payment, Student } from '../../types';
+import { Enrollment, Payment, Student, Program } from '../../types';
 import { formatCurrency, formatDate, generateReceipt, normalizePhone } from '../../utils/helpers';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useAuth } from '../../context/AuthContext';
@@ -27,6 +27,7 @@ interface FinanceTabProps {
   studentPayments: Payment[];
   studentEnrollments: Enrollment[];
   student: Student;
+  programs?: Program[];
   onRecordPayment: (id: string, enrollmentId?: string) => void;
   navigateTo: (view: string, params: any) => void;
   setEditPayment: (payment: Payment) => void;
@@ -52,6 +53,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
   studentPayments,
   studentEnrollments,
   student,
+  programs = [],
   onRecordPayment,
   navigateTo,
   setEditPayment,
@@ -146,7 +148,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
       return;
     }
     const enrollment = tenantEnrollments.find(item => item.id === payment.enrollmentId);
-    generateReceipt(payment, enrollment, student, settings);
+    generateReceipt(payment, enrollment, student, settings, programs);
   };
 
   const renderPaymentActions = (payment: Payment, stopPropagation = false) => {

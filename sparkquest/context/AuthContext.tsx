@@ -62,22 +62,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         data.organizationId = 'makerlab-academy';
                     }
 
-                    // 🔄 SELF-HEALING: If studentId is missing (Legacy Users), try to find it via students collection
-                    if (!data.studentId && data.role === 'student') {
+                    // Resolve the student record from the authenticated UID every
+                    // time. A stale studentId must never open another learner's data.
+                    if (data.role === 'student') {
                         try {
                             const { collection, query, where, getDocs, updateDoc } = await import('firebase/firestore');
-                            const q = query(collection(db, 'students'), where('loginInfo.uid', '==', uid));
+                            const q = query(
+                                collection(db, 'students'),
+                                where('loginInfo.uid', '==', uid),
+                                where('organizationId', '==', data.organizationId)
+                            );
                             const snap = await getDocs(q);
                             if (!snap.empty) {
                                 const foundId = snap.docs[0].id;
-                                console.log("✨ [AuthContext] Recovered missing Student ID:", foundId);
+                                console.log("✨ [AuthContext] Verified Student ID:", foundId);
                                 data.studentId = foundId;
 
-                                // Persist the fix
-                                await updateDoc(doc(db, 'users', uid), { studentId: foundId });
+                                if (userDoc.data().studentId !== foundId) {
+                                    await updateDoc(doc(db, 'users', uid), { studentId: foundId });
+                                }
                             }
                         } catch (recoveryErr) {
-                            console.warn("Failed to recover student ID", recoveryErr);
+                            console.warn("Failed to verify student ID", recoveryErr);
                         }
                     }
 

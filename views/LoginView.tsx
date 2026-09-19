@@ -3,13 +3,16 @@ import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
 import { auth } from '../services/firebase';
 import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, ArrowRight, Loader2, AlertCircle, CheckSquare, Square, ShieldCheck, UserPlus, Fingerprint, Users, Rocket, ChevronLeft, Baby } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { authenticateBiometric, isBiometricEnabled } from '../utils/biometrics';
 import { motion, AnimatePresence } from 'framer-motion';
+import { config } from '../utils/config';
 
 export const LoginView = () => {
     const { settings } = useAppContext();
+    const { loginAsDemo } = useAuth();
     const [viewMode, setViewMode] = useState<'selection' | 'parent' | 'admin'>(
         window.location.hash.includes('#admin') ? 'admin' : 'selection'
     );
@@ -53,7 +56,7 @@ export const LoginView = () => {
 
                 {/* Student Card */}
                 <div
-                    onClick={() => window.location.href = 'https://sparkquest-makerlab.vercel.app'}
+                    onClick={() => window.location.href = config.sparkQuestUrl}
                     className="cursor-pointer group relative bg-slate-900/70 backdrop-blur-sm border border-slate-800 hover:border-amber-300/50 p-10 rounded-xl shadow-xl hover:shadow-amber-950/20 transition-all duration-300 overflow-hidden"
                 >
                     <div className="w-16 h-16 bg-amber-300/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-105 transition-transform duration-300 border border-amber-300/20 backdrop-blur-sm relative z-10">
@@ -238,12 +241,8 @@ export const LoginView = () => {
             try {
                 const email = await authenticateBiometric();
                 if (email) {
-                    if (email === 'admin@edufy.com') {
-                        await signInWithEmailAndPassword(auth!, 'admin@edufy.com', 'admin123@');
-                    } else {
-                        setEmail(email);
-                        setError("Biometric verified! Please enter password.");
-                    }
+                    setEmail(email);
+                    setError("Passkey verified. Enter your password to finish signing in.");
                 }
             } catch (e) {
                 console.error(e);
@@ -385,6 +384,11 @@ export const LoginView = () => {
                                 {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <>{isLogin ? 'Sign In' : 'Create Account'} <ArrowRight className="w-4 h-4" /></>}
                             </button>
                         </form>
+                        {import.meta.env.DEV && isLogin && (
+                            <button type="button" onClick={() => void loginAsDemo()} className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] text-sm font-bold text-slate-300 transition-colors hover:border-teal-300/30 hover:bg-teal-400/[0.07] hover:text-teal-100">
+                                <Users size={16} /> Open local demo workspace
+                            </button>
+                        )}
                         <div className="mt-8 text-center">
                             <p className="text-slate-500 text-xs">
                                 {isLogin ? "Don't have an account?" : "Already have an account?"}
@@ -398,7 +402,7 @@ export const LoginView = () => {
     };
 
     return (
-        <div className="atlas-app-shell min-h-screen flex items-center justify-center overflow-hidden font-sans text-slate-200 relative">
+        <div className={`atlas-app-shell min-h-screen flex items-center justify-center overflow-hidden font-sans text-slate-200 relative ${import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'edu-login-v1' : ''}`} data-testid={import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'education-login-v1' : undefined}>
             <div className="atlas-grid-field absolute inset-0 z-0 opacity-30 pointer-events-none" />
 
             <div className="w-full z-10 px-4">

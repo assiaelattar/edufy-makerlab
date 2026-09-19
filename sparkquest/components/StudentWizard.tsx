@@ -90,7 +90,7 @@ const playSound = (type: 'hover' | 'click' | 'success' | 'open') => {
 interface StepContentProps {
   project: StudentProject;
   assignment: Assignment;
-  updateProject: (updates: Partial<StudentProject>) => Promise<void> | void;
+  updateProject: (updates: Partial<StudentProject>) => Promise<{ success: boolean; error?: string }>;
   closeModal: () => void;
   onShowResources?: () => void;
 }
@@ -1301,6 +1301,7 @@ const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject
 );
 
 const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
+  const { userProfile } = useAuth();
   const [link, setLink] = useState(project.presentationUrl || '');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1329,23 +1330,17 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
       let finalUrl = preview; // Default to existing preview if no new file
 
       if (file) {
-        // Convert to Base64 (Bypassing Storage Permission Issues)
-        const toBase64 = (file: File): Promise<string> => {
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = error => reject(error);
-          });
-        };
-
-        finalUrl = await toBase64(file);
-        console.log("✅ [Showcase] Converted to Base64");
+        const organizationId = userProfile?.organizationId;
+        if (!organizationId || !project.studentId) throw new Error('Your student account is not fully linked.');
+        finalUrl = await api.uploadFile(
+          file,
+          `student-projects/${organizationId}/${project.studentId}/${project.id}/showcase-${Date.now()}-${file.name}`
+        );
       }
 
       // update project status and media/link
       const result = await updateProject({
-        status: 'PENDING_REVIEW', // Changed from 'submitted' to indicate approval needed
+        status: 'submitted',
         presentationUrl: link,
         thumbnailUrl: finalUrl || project.thumbnailUrl,
         coverImage: finalUrl || project.coverImage,

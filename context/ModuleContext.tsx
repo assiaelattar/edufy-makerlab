@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { addDoc, arrayRemove, arrayUnion, collection, doc, getDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { db } from '../services/firebase';
 import { MODULES, type ModuleConfig } from '../services/moduleRegistry';
@@ -18,6 +18,7 @@ interface ModuleContextType {
     entitlements: AtlasEntitlement[];
     availableModules: ModuleConfig[];
     installedApps: string[];
+    requestedAddOnIds: string[];
     isModuleEnabled: (moduleKey: string) => boolean;
     getEntitlement: (itemId: string) => AtlasEntitlement | undefined;
     activateItem: (itemId: string) => Promise<boolean>;
@@ -35,6 +36,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [catalogPolicies, setCatalogPolicies] = useState<AtlasCatalogPolicy[]>([]);
     const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
     const [installedApps, setInstalledApps] = useState<string[]>([]);
+    const [requestedAddOnIds, setRequestedAddOnIds] = useState<string[]>([]);
 
     const loadAccess = useCallback(async () => {
         setModuleFlags(currentOrganization?.modules || {});
@@ -43,22 +45,25 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!db || !currentOrganization) {
             setCurrentPlan(null);
             setCatalogPolicies([]);
+            setRequestedAddOnIds([]);
             return;
         }
 
         setLoading(true);
         try {
-            const [planResult, catalogResult, organizationResult] = await Promise.allSettled([
+            const [planResult, catalogResult, organizationResult, requestResult] = await Promise.allSettled([
                 currentOrganization.subscription?.planId
                     ? getDoc(doc(db, 'subscriptionPlans', currentOrganization.subscription.planId))
                     : Promise.resolve(null),
                 getDocs(collection(db, 'moduleCatalog')),
-                getDoc(doc(db, 'organizations', currentOrganization.id))
+                getDoc(doc(db, 'organizations', currentOrganization.id)),
+                getDocs(collection(db, 'organizations', currentOrganization.id, 'addonRequests'))
             ]);
 
             const planSnapshot = planResult.status === 'fulfilled' ? planResult.value : null;
             const catalogSnapshot = catalogResult.status === 'fulfilled' ? catalogResult.value : null;
             const organizationSnapshot = organizationResult.status === 'fulfilled' ? organizationResult.value : null;
+            const requestSnapshot = requestResult.status === 'fulfilled' ? requestResult.value : null;
 
             setCurrentPlan(planSnapshot?.exists()
                 ? ({ id: planSnapshot.id, ...planSnapshot.data() } as SubscriptionPlan)
@@ -73,7 +78,14 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setInstalledApps(organizationData.installedApps || []);
             }
 
-            if (planResult.status === 'rejected' || catalogResult.status === 'rejected' || organizationResult.status === 'rejected') {
+            setRequestedAddOnIds(requestSnapshot
+                ? Array.from(new Set(requestSnapshot.docs
+                    .map(requestDoc => requestDoc.data())
+                    .filter(request => request.status === 'requested' && typeof request.itemId === 'string')
+                    .map(request => request.itemId as string)))
+                : []);
+
+            if (planResult.status === 'rejected' || catalogResult.status === 'rejected' || organizationResult.status === 'rejected' || requestResult.status === 'rejected') {
                 console.warn('Some Atlas entitlement sources were unavailable; available access data was preserved.');
             }
         } catch (error) {
@@ -157,13 +169,16 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         if (!db || !currentOrganization || !userProfile) return;
         const item = catalogItems.find(entry => entry.id === itemId);
         if (!item) return;
-        await addDoc(collection(db, 'organizations', currentOrganization.id, 'addonRequests'), {
+        await setDoc(doc(db, 'organizations', currentOrganization.id, 'addonRequests', itemId), {
+            organizationId: currentOrganization.id,
+            organizationName: currentOrganization.name,
             itemId,
             itemName: item.name,
             status: 'requested',
             requestedBy: userProfile.uid || userProfile.email,
             requestedAt: serverTimestamp()
         });
+        setRequestedAddOnIds(previous => previous.includes(itemId) ? previous : [...previous, itemId]);
     }, [catalogItems, currentOrganization, userProfile]);
 
     return (
@@ -174,6 +189,7 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             entitlements,
             availableModules: availableModules.length ? availableModules : MODULES.filter(module => ['dashboard', 'settings'].includes(module.id)),
             installedApps,
+            requestedAddOnIds,
             isModuleEnabled,
             getEntitlement,
             activateItem,

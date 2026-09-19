@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
@@ -22,6 +22,7 @@ import { ModernAlert } from './ModernAlert';
 import { SidebarItem } from './SidebarItem';
 import { Sidebar } from './Sidebar';
 import { MobileNavigation } from './MobileNavigation';
+import { currentAcademicYear, matchesAcademicYear, previousAcademicYear, projectAcademicYear } from '../utils/academicYear';
 
 interface ProjectSelectorProps {
     studentId: string;
@@ -43,10 +44,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Auth context might be missing if imported in main app
     let authProfile = null;
     let userProfile = null;
+    let authUser = null;
     try {
         const auth = useAuth();
         authProfile = auth?.userProfile;
         userProfile = auth?.userProfile;
+        authUser = auth?.user;
     } catch (e) { console.log('Auth context missing'); }
 
     const [projects, setProjects] = useState<StudentProject[]>([]);
@@ -55,12 +58,22 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
     // Resolved ID state
     const [effectiveStudentId, setEffectiveStudentId] = useState<string | null>(null);
+    const [verifiedStudentOwnerIds, setVerifiedStudentOwnerIds] = useState<string[]>([]);
 
     // State for available templates
     const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
 
     // Student Profile Data (for Group/Grade visibility fallback)
     const [studentProfileData, setStudentProfileData] = useState<any>(null);
+    const [assignmentContext, setAssignmentContext] = useState<{
+        programId?: string;
+        gradeId?: string;
+        gradeName?: string;
+        groupId?: string;
+        groupName?: string;
+    }>({});
+    const [enrollmentHistory, setEnrollmentHistory] = useState<any[]>([]);
+    const [selectedArchiveYear, setSelectedArchiveYear] = useState(previousAcademicYear());
 
     // Avatar State
     const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -116,37 +129,78 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         const fetchStudentData = async () => {
             if (!db || !studentId) return;
             try {
-                // Try key lookup
-                let studentRef = doc(db, 'students', studentId);
-                let studentSnap = await getDoc(studentRef);
-
-                // If not found by key, query by loginInfo.uid
-                if (!studentSnap.exists()) {
-                    const q = query(collection(db, 'students'), where('loginInfo.uid', '==', studentId));
-                    const qSnap = await getDocs(q);
-                    if (!qSnap.empty) {
-                        studentSnap = qSnap.docs[0];
-                    } else {
-                        // Try parent login info
-                        const qParent = query(collection(db, 'students'), where('parentLoginInfo.uid', '==', studentId));
-                        const qParentSnap = await getDocs(qParent);
-                        if (!qParentSnap.empty) studentSnap = qParentSnap.docs[0];
-                    }
+                // The authenticated UID is authoritative. Never trust a stale
+                // studentId pointer before verifying that relationship.
+                let studentSnap = null as any;
+                if (authUser?.uid) {
+                    const verifiedQuery = query(
+                        collection(db, 'students'),
+                        where('loginInfo.uid', '==', authUser.uid),
+                        where('organizationId', '==', authProfile?.organizationId || 'makerlab-academy')
+                    );
+                    const verifiedSnapshot = await getDocs(verifiedQuery);
+                    if (!verifiedSnapshot.empty) studentSnap = verifiedSnapshot.docs[0];
                 }
 
-                if (studentSnap.exists()) {
+                if (!studentSnap) {
+                    const directSnapshot = await getDoc(doc(db, 'students', studentId));
+                    const directData = directSnapshot.exists() ? directSnapshot.data() : null;
+                    const directBelongsToUser = isAdminOrInstructor || !authUser?.uid || directData?.loginInfo?.uid === authUser.uid;
+                    if (directSnapshot.exists() && directBelongsToUser) studentSnap = directSnapshot;
+                }
+
+                if (studentSnap?.exists()) {
                     const data = studentSnap.data();
                     setEffectiveStudentId(studentSnap.id); // ✅ RESOLVED ID
                     setAvatarUrl(data.avatarUrl || '');
                     setStudentName(data.name || data.firstName || 'Maker');
                     setStudentProfileData(data); // Store full profile for visibility checks
+
+                    const normalizeText = (value: unknown) => String(value || '').trim().toLowerCase();
+                    const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '');
+                    const primaryEmails = [data.email, data.loginInfo?.email].map(normalizeText).filter(Boolean);
+                    const primaryPhone = normalizePhone(data.parentPhone);
+                    const primaryBirthDate = normalizeText(data.birthDate);
+                    const linkedOwnerIds = new Set<string>([studentSnap.id]);
+                    if (data.loginInfo?.uid) linkedOwnerIds.add(data.loginInfo.uid);
+
+                    // Legacy imports sometimes created a second learner document.
+                    // Merge read aliases only when the duplicate shares a strong
+                    // identity field; an identical name alone is never sufficient.
+                    if (data.name) {
+                        const sameNameSnapshot = await getDocs(query(
+                            collection(db, 'students'),
+                            where('name', '==', data.name),
+                            where('organizationId', '==', authProfile?.organizationId || 'makerlab-academy')
+                        ));
+                        sameNameSnapshot.docs.forEach(candidateDoc => {
+                            if (candidateDoc.id === studentSnap.id) return;
+                            const candidate = candidateDoc.data();
+                            const candidateEmails = [candidate.email, candidate.loginInfo?.email].map(normalizeText).filter(Boolean);
+                            const emailMatches = primaryEmails.length > 0 && candidateEmails.some(email => primaryEmails.includes(email));
+                            const phoneMatches = primaryPhone.length >= 8 && primaryPhone === normalizePhone(candidate.parentPhone);
+                            const birthDateMatches = Boolean(primaryBirthDate) && primaryBirthDate === normalizeText(candidate.birthDate);
+                            if (!emailMatches && !phoneMatches && !birthDateMatches) return;
+                            linkedOwnerIds.add(candidateDoc.id);
+                            if (candidate.loginInfo?.uid) linkedOwnerIds.add(candidate.loginInfo.uid);
+                        });
+                    }
+                    setVerifiedStudentOwnerIds(Array.from(linkedOwnerIds));
+                } else {
+                    // A project can legitimately be keyed directly by Auth UID
+                    // even when the richer student document is still missing.
+                    setEffectiveStudentId(authUser?.uid || studentId);
+                    setStudentName(authProfile?.name || authUser?.displayName || 'Maker');
+                    setVerifiedStudentOwnerIds([authUser?.uid || studentId].filter(Boolean) as string[]);
                 }
             } catch (e) {
                 console.error("Error fetching student profile:", e);
+                setEffectiveStudentId(authUser?.uid || studentId);
+                setVerifiedStudentOwnerIds([authUser?.uid || studentId].filter(Boolean) as string[]);
             }
         };
         fetchStudentData();
-    }, [studentId]);
+    }, [studentId, authUser?.uid, authProfile?.organizationId, isAdminOrInstructor]);
 
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
@@ -176,8 +230,23 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         }
     };
 
-    // Filter Logic
-    const filteredProjects = projects.filter(project => {
+    const activeAcademicYear = currentAcademicYear();
+    const availableArchiveYears = useMemo(() => Array.from(new Set([
+        previousAcademicYear(),
+        ...projects
+            .map(projectAcademicYear)
+            .filter(year => year !== 'Unknown year' && year !== activeAcademicYear)
+    ])).sort().reverse(), [projects, activeAcademicYear]);
+
+    useEffect(() => {
+        if (availableArchiveYears.length && !availableArchiveYears.includes(selectedArchiveYear)) {
+            setSelectedArchiveYear(availableArchiveYears.includes(previousAcademicYear())
+                ? previousAcademicYear()
+                : availableArchiveYears[0]);
+        }
+    }, [availableArchiveYears, selectedArchiveYear]);
+
+    const matchesProjectFilters = (project: StudentProject) => {
         // 1. Search Filter
         const matchesSearch = project.title.toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -188,7 +257,18 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         if (filterType === 'custom') matchesType = isCustom;
 
         return matchesSearch && matchesType;
-    });
+    };
+
+    // Current-year work is actionable. Older work is a read-only learning archive.
+    const filteredProjects = projects.filter(project =>
+        projectAcademicYear(project) === activeAcademicYear && matchesProjectFilters(project)
+    );
+    const archivedProjects = projects.filter(project =>
+        projectAcademicYear(project) === selectedArchiveYear && matchesProjectFilters(project)
+    );
+    const selectedArchiveEnrollments = enrollmentHistory.filter(enrollment =>
+        matchesAcademicYear(enrollment.session, selectedArchiveYear)
+    );
 
     const handleSaveAvatar = async (url: string) => {
         if (!db || !studentId) return;
@@ -237,106 +317,85 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 const myProjects: StudentProject[] = [];
 
                 if (targetId) {
-                    // SIMPLIFIED: Only query by studentId (rules are permissive now)
-                    const qProjects = query(
+                    const organizationId = authProfile?.organizationId || 'makerlab-academy';
+                    // Student sessions may only use the verified learner document and
+                    // its linked Auth UID. A stale users/{uid}.studentId pointer must
+                    // never pull another learner's projects into this dashboard.
+                    const ownerIds = verifiedStudentOwnerIds.length
+                        ? verifiedStudentOwnerIds
+                        : Array.from(new Set([
+                            targetId,
+                            studentProfileData?.loginInfo?.uid,
+                            role === 'student' ? authUser?.uid : undefined
+                        ].filter(Boolean))) as string[];
+                    const projectResults = await Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
                         collection(db, 'student_projects'),
-                        where('studentId', '==', targetId)
-                    );
-                    const projectSnap = await getDocs(qProjects);
+                        where('studentId', '==', ownerId),
+                        where('organizationId', '==', organizationId)
+                    ))));
 
-                    projectSnap.docs.forEach(doc => {
-                        const data = { id: doc.id, ...doc.data() } as StudentProject;
-                        if (data.studentId === targetId) myProjects.push(data);
+                    projectResults.forEach(result => {
+                        if (result.status !== 'fulfilled') return;
+                        result.value.docs.forEach(projectDoc => {
+                            const data = { id: projectDoc.id, ...projectDoc.data() } as StudentProject;
+                            if (!myProjects.some(project => project.id === data.id)) myProjects.push(data);
+                        });
                     });
-                }
 
-                // --- DEDUPLICATION LOGIC (Existing) ---
-                // 🧹 AUTO-HEALING: Detect and cleanup duplicates by TITLE
-                const groupedByTitle = new Map<string, StudentProject[]>();
-                myProjects.forEach(p => {
-                    const title = (p.title || 'Untitled').trim();
-                    if (!groupedByTitle.has(title)) {
-                        groupedByTitle.set(title, []);
-                    }
-                    groupedByTitle.get(title)?.push(p);
-                });
-
-                const finalProjects: StudentProject[] = [];
-
-                for (const [title, group] of groupedByTitle.entries()) {
-                    if (group.length > 1) {
-                        // Sort by "value" (steps completed, commits, then creation date)
-                        // The "best" project comes first
-                        group.sort((a, b) => {
-                            const scoreA = (a.steps?.filter(s => s.status === 'done').length || 0) * 10
-                                + (a.commits?.length || 0) * 5;
-                            const scoreB = (b.steps?.filter(s => s.status === 'done').length || 0) * 10
-                                + (b.commits?.length || 0) * 5;
-                            if (scoreB !== scoreA) return scoreB - scoreA;
-                            const getTime = (d: any) => {
-                                if (!d) return 0;
-                                if (d.seconds) return d.seconds * 1000;
-                                if (d.toDate) return d.toDate().getTime();
-                                if (d instanceof Date) return d.getTime();
-                                return new Date(d).getTime();
-                            };
-                            return getTime(a.createdAt) - getTime(b.createdAt);
-                        });
-                        const winner = group[0];
-                        finalProjects.push(winner);
-                        // Cleanup losers
-                        group.slice(1).forEach(async (loser) => {
-                            try { if (db) await deleteDoc(doc(db, 'student_projects', loser.id)); } catch (e) { console.error(e); }
-                        });
-                    } else {
-                        finalProjects.push(group[0]);
+                    if (projectResults.length > 0 && projectResults.every(result => result.status === 'rejected')) {
+                        throw projectResults[0].reason;
                     }
                 }
-                setProjects(finalProjects);
 
+                // Never delete learner history during a read. Duplicate-looking
+                // records require an explicit, audited admin merge workflow.
                 // 2. Fetch Stations & Determine Future/Active
                 if (!db) return;
 
                 let gradeIds: string[] = [];
                 let groupIds: string[] = [];
                 let enrollments: any[] = [];
+                let allEnrollmentRecords: any[] = [];
 
                 if (targetId) {
                     console.log(`🔍 [Enrollment] Fetching enrollments for Resolved ID: "${targetId}"`);
-                    const qEnrollment = query(collection(db, 'enrollments'), where('studentId', '==', targetId), where('status', '==', 'active'));
-                    const enrollmentSnap = await getDocs(qEnrollment);
-                    console.log(`📚 [Enrollment] Found ${enrollmentSnap.docs.length} enrollments`);
-
-                    enrollments = enrollmentSnap.docs.map(d => d.data());
-                    gradeIds = enrollments.map(e => e.gradeId).filter(Boolean);
-                    groupIds = enrollments.map(e => e.groupId).filter(Boolean);
-
-                    // MERGE WITH PROFILE DATA (Fix for visibility)
-                    if (studentProfileData) {
-                        console.log("👤 [ProjectSelector] Merging Profile Data for Visibility:", {
-                            grade: studentProfileData.gradeId,
-                            group: studentProfileData.groupId
-                        });
-
-                        if (studentProfileData.gradeId) gradeIds.push(studentProfileData.gradeId);
-                        if (studentProfileData.grade) gradeIds.push(studentProfileData.grade); // Legacy
-
-                        if (studentProfileData.groupId) groupIds.push(studentProfileData.groupId);
-                        // Handle "group" object legacy
-                        if (typeof studentProfileData.group === 'object') {
-                            if (studentProfileData.group?.id) groupIds.push(studentProfileData.group.id);
-                            if (studentProfileData.group?.name) groupIds.push(studentProfileData.group.name); // 🔥 Catch Names
-                        } else if (studentProfileData.group && typeof studentProfileData.group === 'string') {
-                            groupIds.push(studentProfileData.group);
-                        }
-
-                        // Also check for "groupName" legacy field
-                        if (studentProfileData.groupName) groupIds.push(studentProfileData.groupName);
-                    }
+                    const enrollmentOwnerIds = verifiedStudentOwnerIds.length
+                        ? verifiedStudentOwnerIds
+                        : Array.from(new Set([
+                            targetId,
+                            studentProfileData?.loginInfo?.uid,
+                            role === 'student' ? authUser?.uid : undefined
+                        ].filter(Boolean))) as string[];
+                    const enrollmentResults = await Promise.allSettled(enrollmentOwnerIds.map(ownerId => getDocs(query(
+                        collection(db, 'enrollments'),
+                        where('studentId', '==', ownerId),
+                        where('organizationId', '==', authProfile?.organizationId || 'makerlab-academy')
+                    ))));
+                    const enrollmentMap = new Map<string, any>();
+                    enrollmentResults.forEach(result => {
+                        if (result.status !== 'fulfilled') return;
+                        result.value.docs.forEach(enrollmentDoc => enrollmentMap.set(enrollmentDoc.id, enrollmentDoc.data()));
+                    });
+                    allEnrollmentRecords = Array.from(enrollmentMap.values());
+                    setEnrollmentHistory(allEnrollmentRecords);
+                    enrollments = allEnrollmentRecords.filter(enrollment =>
+                        String(enrollment.status || '').toLowerCase() === 'active' && matchesAcademicYear(enrollment.session, activeAcademicYear)
+                    );
+                    console.log(`📚 [Enrollment] Found ${enrollments.length} enrollments across linked IDs`);
+                    gradeIds = enrollments.flatMap(e => [e.gradeId, e.gradeName]).filter(Boolean);
+                    groupIds = enrollments.flatMap(e => [e.groupId, e.groupName]).filter(Boolean);
 
                     // Deduplicate
                     gradeIds = [...new Set(gradeIds)];
                     groupIds = [...new Set(groupIds)];
+                    const primaryEnrollment = enrollments[0];
+                    setAssignmentContext(primaryEnrollment ? {
+                        programId: primaryEnrollment.programId,
+                        gradeId: primaryEnrollment.gradeId,
+                        gradeName: primaryEnrollment.gradeName,
+                        groupId: primaryEnrollment.groupId,
+                        groupName: primaryEnrollment.groupName
+                    } : {});
                 }
 
                 console.log(`✅ [Enrollment] Extracted gradeIds:`, gradeIds);
@@ -389,28 +448,32 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 // 3. Fetch Available Templates
                 const templatesSnap = await getDocs(collection(db, 'project_templates'));
+                const allTemplates = templatesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
-                // Allow explicit enrollments to bypass filters
-                const enrolledMissionIds = new Set(enrollments.map(e => e.programId));
-                console.log("📌 [ProjectSelector] Enrolled Mission IDs:", Array.from(enrolledMissionIds));
+                const targetStudentIds = (verifiedStudentOwnerIds.length
+                    ? verifiedStudentOwnerIds
+                    : Array.from(new Set([
+                        targetId,
+                        studentProfileData?.loginInfo?.uid,
+                        role === 'student' ? authUser?.uid : undefined
+                    ].filter(Boolean))))
+                    .map(String);
 
-                const templates = templatesSnap.docs
-                    .map(d => ({ id: d.id, ...d.data() } as any))
+                const templates = allTemplates
                     .filter(t => {
                         console.log(`🔍 [Filter Debug] Checking template: "${t.title}" (ID: ${t.id})`);
-
-                        // 0. 🔥 ENROLLMENT OVERRIDE: If explictly enrolled, always show (unless draft?)
-                        if (enrolledMissionIds.has(t.id)) {
-                            // Optional: Still check status? For now, trust the enrollment.
-                            // But maybe filter out 'archived' or 'deleted' if that concept exists.
-                            if (t.status === 'archived') return false;
-                            console.log(`✅ [Filter Debug] Accepted "${t.title}": Explicit Enrollment Found`);
-                            return true;
-                        }
 
                         // Basic status check
                         if (t.status === 'draft') {
                             console.log(`❌ [Filter Debug] Rejected "${t.title}": Status is draft`);
+                            return false;
+                        }
+
+                        const hasGradeTargets = Array.isArray(t.targetAudience?.grades) && t.targetAudience.grades.length > 0;
+                        const hasGroupTargets = Array.isArray(t.targetAudience?.groups) && t.targetAudience.groups.length > 0;
+                        const hasStudentTargets = Array.isArray(t.targetAudience?.students) && t.targetAudience.students.length > 0;
+                        if (!hasGradeTargets && !hasGroupTargets && !hasStudentTargets) {
+                            console.log(`❌ [Filter Debug] Rejected "${t.title}": No explicit grade, group, or student assignment.`);
                             return false;
                         }
                         if (t.status !== 'assigned' && t.status !== 'featured') {
@@ -452,7 +515,9 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         // 🎯 STUDENT SPECIFIC TARGETING (Highest Priority)
                         if (t.targetAudience?.students && t.targetAudience.students.length > 0) {
                             // If explicit students are listed, ONLY they can see it
-                            const istargeted = t.targetAudience.students.includes(studentId);
+                            const istargeted = t.targetAudience.students.some((candidateId: any) =>
+                                targetStudentIds.includes(String(candidateId))
+                            );
                             if (!istargeted) {
                                 console.log(`❌ [Filter Debug] Rejected "${t.title}": Explicitly targeted to other students.`);
                                 return false;
@@ -480,8 +545,8 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             );
 
                             if (!matchingStation) {
-                                console.log(`⚠️ [Filter Debug] Station "${t.station}" not active/visible, but ALLOWING mission per hotfix.`);
-                                // return false; // <--- DISABLED STRICT CHECK
+                                console.log(`❌ [Filter Debug] Rejected "${t.title}": Station "${t.station}" is not active for this grade.`);
+                                return false;
                             }
 
                             // Attach lock info to template if future
@@ -499,68 +564,56 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         return true;
                     });
 
-                // Filter out templates that I have already started
-                const startedTemplateIds = new Set(finalProjects.map(p => p.templateId).filter(Boolean));
-                const newMissions = templates.filter(t => !startedTemplateIds.has(t.id));
+                const equals = (left: unknown, right: unknown) => String(left || '').toLowerCase().trim() === String(right || '').toLowerCase().trim();
+                const includesValue = (values: unknown[] | undefined, candidates: unknown[]) =>
+                    Boolean(values?.some(value => candidates.some(candidate => equals(value, candidate))));
+                const shareableLegacyStatuses = new Set(['published', 'delivered', 'submitted', 'completed', 'approved', 'done']);
 
-                setAvailableTemplates(newMissions);
+                const verifiedProjects = myProjects.filter(projectItem => {
+                    const projectYear = projectAcademicYear(projectItem);
+                    const yearEnrollments = allEnrollmentRecords.filter(enrollment => matchesAcademicYear(enrollment.session, projectYear));
+                    if (!yearEnrollments.length) return false;
 
-                // --- INJECT STATIC TEMPLATES (Free Build & Showcase) ---
-                // We inject these AFTER filtering started IDs so they are always available (or available if not currently active?)
-                // Actually, "Free Build" should always be available for multiple projects.
+                    const normalizedStatus = String(projectItem.status || '').toLowerCase();
+                    const hasEvidence = Boolean(projectItem.thumbnailUrl || projectItem.coverImage || projectItem.presentationUrl || projectItem.mediaUrls?.length);
+                    const wasExplicitlyLinkedByAdmin = Boolean(
+                        projectItem.identityLink?.linkedStudentId &&
+                        targetStudentIds.includes(String(projectItem.identityLink.linkedStudentId))
+                    );
+                    if (wasExplicitlyLinkedByAdmin) {
+                        return shareableLegacyStatuses.has(normalizedStatus) && hasEvidence;
+                    }
 
-                // 4. 🔥 CRITICAL FIX: Fetch Program-Based Missions (from Enrollments)
-                // Many students are assigned via "Program" (e.g. StemQuest) not specific "Templates"
-                const activeProgramIds = enrollments.map(e => e.programId).filter(Boolean);
-                const programMissions: any[] = [];
+                    const hasProjectScope = Boolean(projectItem.programId || projectItem.gradeId || projectItem.groupId);
+                    if (hasProjectScope) {
+                        return yearEnrollments.some(enrollment =>
+                            (!projectItem.programId || equals(projectItem.programId, enrollment.programId)) &&
+                            (!projectItem.gradeId || includesValue([projectItem.gradeId], [enrollment.gradeId, enrollment.gradeName])) &&
+                            (!projectItem.groupId || includesValue([projectItem.groupId], [enrollment.groupId, enrollment.groupName]))
+                        );
+                    }
 
-                if (activeProgramIds.length > 0) {
-                    console.log(`🔍 [ProjectSelector] Fetching ${activeProgramIds.length} enrolled programs...`);
-                    // Fetch programs in parallel
-                    await Promise.all(activeProgramIds.map(async (pid) => {
-                        try {
-                            const progSnap = await getDoc(doc(db, 'programs', pid));
-                            if (progSnap.exists()) {
-                                const prog = progSnap.data();
+                    const template = allTemplates.find(candidate => candidate.id === projectItem.templateId);
+                    if (template) {
+                        const targetAudience = template.targetAudience || {};
+                        if (includesValue(targetAudience.students, targetStudentIds)) return true;
+                        return yearEnrollments.some(enrollment => {
+                            const gradeMatches = includesValue(targetAudience.grades, [enrollment.gradeId, enrollment.gradeName]);
+                            const groupRequired = Array.isArray(targetAudience.groups) && targetAudience.groups.length > 0;
+                            const groupMatches = !groupRequired || includesValue(targetAudience.groups, [enrollment.groupId, enrollment.groupName]);
+                            return gradeMatches && groupMatches;
+                        });
+                    }
 
-                                // Check if we already have a project for this program (Dedupe)
-                                const alreadyStarted = finalProjects.some(p => p.templateId === pid);
-                                if (alreadyStarted) {
-                                    console.log(`ℹ️ [ProjectSelector] Program "${prog.name}" already started. Skipping card.`);
-                                    return;
-                                }
+                    return shareableLegacyStatuses.has(normalizedStatus) && hasEvidence;
+                });
 
-                                const normalizeStation = (s: string) => {
-                                    const text = (s || '').toLowerCase();
-                                    if (text.includes('robot')) return 'Robotics';
-                                    if (text.includes('code') || text.includes('soft')) return 'Coding';
-                                    if (text.includes('game')) return 'Game Design';
-                                    return 'General';
-                                };
-
-                                console.log(`✅ [ProjectSelector] Added Program Mission: ${prog.name}`);
-                                programMissions.push({
-                                    id: progSnap.id, // Use Program ID as Template ID
-                                    title: prog.name,
-                                    description: prog.description || 'Training Mission',
-                                    station: normalizeStation(prog.type),
-                                    status: 'assigned',
-                                    thumbnailUrl: prog.image,
-                                    difficulty: 'beginner',
-                                    isProgram: true, // Marker
-                                    // Make sure it passes filters by defaulting to "targeted"
-                                    targetAudience: { students: [studentId] }
-                                });
-                            }
-                        } catch (e) {
-                            console.error(`Error fetching program ${pid}`, e);
-                        }
-                    }));
-                }
-
-                // MERGE: Templates + Program Missions
-                const combinedTemplates = [...newMissions, ...programMissions];
-                setAvailableTemplates(combinedTemplates);
+                setProjects(verifiedProjects);
+                const startedTemplateIds = new Set(verifiedProjects
+                    .filter(projectItem => projectAcademicYear(projectItem) === activeAcademicYear)
+                    .map(projectItem => projectItem.templateId)
+                    .filter(Boolean));
+                setAvailableTemplates(templates.filter(template => !startedTemplateIds.has(template.id)));
 
             } catch (error) {
                 console.error('❌ [ProjectSelector] Error fetching projects:', error);
@@ -570,7 +623,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         };
 
         fetchData();
-    }, [studentId, effectiveStudentId, previewGradeId, studentProfileData]); // Refetch when ID resolves or preview changes
+    }, [studentId, effectiveStudentId, verifiedStudentOwnerIds, previewGradeId, studentProfileData, authUser?.uid, authProfile?.organizationId, role, activeAcademicYear]); // Refetch when ID resolves or preview changes
 
     // Start Mission Alert State
     const [startMissionAlert, setStartMissionAlert] = useState<{
@@ -593,6 +646,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
         // Force Naming for Free Build & Showcase
         if (template.id === 'free-build-template' || template.id === 'showcase-template') {
+            if (!assignmentContext.programId) {
+                alert(`No active enrollment exists for ${activeAcademicYear}. Ask the academy to assign the student's current program and grade first.`);
+                return;
+            }
             console.log("✏️ [ProjectSelector] Opening Naming Modal for custom project");
             setNamingModal({ isOpen: true, template, name: '' });
             return;
@@ -636,6 +693,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             const newProject = {
                 studentId: effectiveStudentId || studentId,
                 organizationId: authProfile?.organizationId || 'makerlab-academy',
+                academicYearId: activeAcademicYear,
+                ...(assignmentContext.programId ? { programId: assignmentContext.programId } : {}),
+                ...(assignmentContext.gradeId ? { gradeId: assignmentContext.gradeId } : {}),
+                ...(assignmentContext.groupId ? { groupId: assignmentContext.groupId } : {}),
                 templateId: template.id,
                 title: name.trim(),
                 description: template.description || '',
@@ -706,6 +767,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             const newProject = {
                 studentId: effectiveStudentId || studentId,
                 organizationId: authProfile?.organizationId || 'makerlab-academy', // CRITICAL: Restore orgId
+                academicYearId: activeAcademicYear,
+                ...(assignmentContext.programId ? { programId: assignmentContext.programId } : {}),
+                ...(assignmentContext.gradeId ? { gradeId: assignmentContext.gradeId } : {}),
+                ...(assignmentContext.groupId ? { groupId: assignmentContext.groupId } : {}),
                 templateId: template.id,
                 title: projectTitle,
                 description: template.description || '',
@@ -741,11 +806,11 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Students can access Arcade, Gallery, Portfolio, Pickup, Inventory even without missions
 
     return (
-        <div className={`flex h-screen w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
+        <div className={`sparkquest-dashboard flex h-screen w-full overflow-hidden relative selection:bg-cyan-400 selection:text-slate-950 transition-colors duration-700 ${activeThemeDef.font || ''}`}>
 
             {/* Background Effects */}
-            <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0a0a0a] to-black"></div>
-            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
+            <div className="sq-atmosphere absolute inset-0 z-0"></div>
+            <div className="sq-grid absolute inset-0 z-0 pointer-events-none">
                 <svg width="100%" height="100%">
                     <pattern id="selector-grid" width="60" height="60" patternUnits="userSpaceOnUse">
                         <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#60a5fa" strokeWidth="0.5" />
@@ -783,7 +848,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             />
 
             {/* MODALS */}
-            {console.log('🔍 [ProjectSelector] Rendering Portfolio Modal. onPreviewProject passed?', !!onPreviewProject)}
             <StudentPortfolio
                 isOpen={isPortfolioOpen}
                 onClose={() => setIsPortfolioOpen(false)}
@@ -795,13 +859,19 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
             {/* MAIN CONTENT AREA */}
             <div className="flex-1 overflow-y-auto relative z-10 scroll-smooth pb-32 md:pb-20">
-                <div className="container mx-auto px-8 py-10 max-w-[1800px]">
+                <div className="sq-content container mx-auto px-5 py-7 md:px-10 md:py-10 max-w-[1800px]">
 
                     {/* Header */}
-                    <div className="flex items-center justify-between mb-8">
-                        <div>
-                            <h2 className="text-3xl font-black text-white tracking-tight uppercase drop-shadow-lg">Mission Control</h2>
-                            <p className="text-slate-400 text-sm font-medium">Select your next objective to launch.</p>
+                    <header className="sq-hero">
+                        <div className="sq-hero__copy">
+                            <span className="sq-kicker">MakerLab field lab · {activeAcademicYear}</span>
+                            <h2>What will you<br /><em>build next?</em></h2>
+                            <p>Choose a mission, collect proof as you build, and keep every finished project in your field log.</p>
+                            <p className={`sq-enrollment ${assignmentContext.gradeId || assignmentContext.gradeName ? 'is-ready' : 'is-waiting'}`}>
+                                {assignmentContext.gradeId || assignmentContext.gradeName
+                                    ? `${activeAcademicYear} · ${assignmentContext.gradeName || assignmentContext.gradeId}${assignmentContext.groupName ? ` · ${assignmentContext.groupName}` : ''}`
+                                    : `No active enrollment found for ${activeAcademicYear}`}
+                            </p>
                         </div>
                         {/* Preview Mode Banner */}
                         {isAdminOrInstructor && availableGrades.length > 0 && (
@@ -815,10 +885,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         )}
 
                         {/* USER CONTROLS (Restored) */}
-                        <div className="flex items-center gap-4">
+                        <div className="sq-profile flex items-center gap-3">
                             <button
                                 onClick={() => setIsProfileOpen(true)}
-                                className="flex items-center gap-3 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-full transition-all border border-white/5 group"
+                                className="flex items-center gap-3 px-4 py-2 transition-all group"
                             >
                                 <div className="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white/20 overflow-hidden relative">
                                     {avatarUrl ? (
@@ -835,18 +905,18 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             </button>
                             <button
                                 onClick={() => setIsLogoutConfirmOpen(true)}
-                                className="p-2 bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-full transition-colors"
+                                className="sq-logout p-2 text-slate-400 hover:text-red-300 rounded-full transition-colors"
                                 title="Logout"
                             >
                                 <LogOut size={20} />
                             </button>
                         </div>
-                    </div>
+                    </header>
 
 
 
                     {/* CONTROL BAR: Search & Filter & START BUTTON */}
-                    <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-8 sticky top-0 z-40 py-4 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 -mx-8 px-8">
+                    <div className="sq-control-deck flex flex-col md:flex-row gap-4 justify-between items-center mb-10 sticky top-3 z-40 p-3 md:p-4">
                         {/* Search */}
                         <div className="relative w-full md:w-80 group">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-400 transition-colors">
@@ -857,13 +927,15 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Find a mission..."
-                                className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-white placeholder-slate-500 transition-all font-medium"
+                                className="sq-search w-full pl-12 pr-4 py-3 text-white placeholder-slate-500 transition-all font-medium"
                             />
                         </div>
 
                         <div className="flex items-center gap-4">
                             {/* START PROJECT BUTTON (Moved Here) */}
                             <button
+                                disabled={!assignmentContext.programId}
+                                title={!assignmentContext.programId ? `No active enrollment for ${activeAcademicYear}` : 'Start a personal project'}
                                 onClick={() => handleStartMissionClick(availableTemplates.find(t => t.id === 'free-build-template') || {
                                     id: 'free-build-template',
                                     title: 'Free Build',
@@ -873,7 +945,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                     isLocked: false,
                                     defaultWorkflowId: 'custom-workflow'
                                 })}
-                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-amber-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-amber-500/20 transition-all active:scale-95"
+                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-amber-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-amber-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-amber-500"
                             >
                                 <Zap size={18} fill="currentColor" />
                                 <span>New Project</span>
@@ -881,6 +953,8 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                             {/* Showcase Project Button */}
                             <button
+                                disabled={!assignmentContext.programId}
+                                title={!assignmentContext.programId ? `No active enrollment for ${activeAcademicYear}` : 'Create a showcase project'}
                                 onClick={() => handleStartMissionClick({
                                     id: 'showcase-template',
                                     title: 'Showcase Project',
@@ -890,14 +964,14 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                     isLocked: false,
                                     defaultWorkflowId: 'showcase-workflow'
                                 })}
-                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-400 text-purple-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-purple-500/20 transition-all active:scale-95"
+                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-400 text-purple-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-purple-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-purple-500"
                             >
                                 <Award size={18} fill="currentColor" />
                                 <span>Showcase Project</span>
                             </button>
 
                             {/* Filter Tabs */}
-                            <div className="flex p-1 bg-slate-900 rounded-xl border border-slate-800">
+                            <div className="sq-filter flex p-1">
                                 <button
                                     onClick={() => setFilterType('all')}
                                     className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filterType === 'all' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
@@ -921,9 +995,19 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     </div>
 
                     {/* NEW ADVENTURES - Moved to Top */}
-                    <div className="mb-8">
-                        <h3 className="text-xl font-black text-white mb-6 px-2">New Adventures</h3>
+                    <section className="sq-missions mb-10">
+                        <div className="sq-section-heading">
+                            <span>Current route</span>
+                            <h3>New adventures</h3>
+                            <p>{activeAcademicYear} missions assigned to your class.</p>
+                        </div>
                         <div className="flex overflow-x-auto pb-12 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
+                            {availableTemplates.length === 0 && (
+                                <div className="w-full rounded-2xl border border-dashed border-cyan-400/30 bg-cyan-400/5 p-8 text-center">
+                                    <h4 className="text-lg font-black text-white">No mission assigned to this grade yet</h4>
+                                    <p className="mt-2 text-sm text-slate-400">Only projects explicitly assigned to the active grade, group, or student appear here.</p>
+                                </div>
+                            )}
                             {availableTemplates.map((template, idx) => {
                                 const isLocked = template.isLocked;
                                 return (
@@ -1003,7 +1087,75 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                 );
                             })}
                         </div>
-                    </div>
+                    </section>
+
+                    {/* LEARNING ARCHIVE: previous academic years stay visible but read-only */}
+                    <section className="sq-archive mb-12 p-6 md:p-9">
+                        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                            <div>
+                                <p className="sq-archive__kicker">Field log · learning archive</p>
+                                <h3 className="mt-2 text-3xl font-black">What you built in {selectedArchiveYear}</h3>
+                                <p className="mt-2 max-w-2xl text-sm">Your previous missions stay here, even when a new adventure begins.</p>
+                                {selectedArchiveEnrollments.length > 0 && (
+                                    <p className="mt-3 text-xs font-bold text-amber-100/80">
+                                        {Array.from(new Set(selectedArchiveEnrollments.map(enrollment => [
+                                            enrollment.programName,
+                                            enrollment.gradeName || enrollment.gradeId,
+                                            enrollment.groupName || enrollment.groupId
+                                        ].filter(Boolean).join(' · ')))).filter(Boolean).join('  |  ')}
+                                    </p>
+                                )}
+                            </div>
+                            <label className="flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-slate-400">
+                                School year
+                                <select
+                                    value={selectedArchiveYear}
+                                    onChange={(event) => setSelectedArchiveYear(event.target.value)}
+                                    className="sq-year-select min-h-11 rounded-xl px-4 text-sm font-bold outline-none"
+                                >
+                                    {availableArchiveYears.map(year => (
+                                        <option key={year} value={year}>{year}{year === previousAcademicYear() ? ' · Last year' : ''}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+
+                        {archivedProjects.length ? (
+                            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                {archivedProjects.map(project => {
+                                    const badge = getStatusBadge(project.status, project.templateId);
+                                    return (
+                                        <button
+                                            key={project.id}
+                                            type="button"
+                                            onClick={() => onPreviewProject ? onPreviewProject(project.id) : onSelectProject(project.id)}
+                                            className="group overflow-hidden rounded-2xl border border-white/10 bg-slate-900/80 text-left transition hover:-translate-y-1 hover:border-amber-300/40 hover:shadow-2xl"
+                                        >
+                                            <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
+                                                {project.thumbnailUrl || project.coverImage ? (
+                                                    <img src={project.thumbnailUrl || project.coverImage} alt="" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                                                ) : (
+                                                    <div className="flex h-full items-center justify-center text-6xl opacity-40">{getProjectIcon(project.title)}</div>
+                                                )}
+                                                <span className={`absolute left-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${badge.color} ${badge.border}`}>{badge.label}</span>
+                                            </div>
+                                            <div className="p-5">
+                                                <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">{selectedArchiveYear} · {project.station || 'General'}</p>
+                                                <h4 className="mt-2 line-clamp-2 text-lg font-black text-white group-hover:text-amber-100">{project.title}</h4>
+                                                <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{project.description || 'Open this project to revisit the work and evidence.'}</p>
+                                                <span className="mt-4 inline-flex text-xs font-black text-white">View project →</span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 p-8 text-center">
+                                <h4 className="text-lg font-black">Your field log is waiting to be connected</h4>
+                                <p className="mt-2 text-sm">The academy can safely link your {selectedArchiveYear} projects to this verified account. No other learner’s work will appear here.</p>
+                            </div>
+                        )}
+                    </section>
 
                     {/* HERO SECTION: Last Opened Mission (or First if none opened yet) */}
                     {filteredProjects.length > 0 && (() => {

@@ -1,6 +1,6 @@
 # Atlas Build Context
 
-Last updated: 2026-09-05
+Last updated: 2026-09-19
 
 This is the living build context for Atlas, the SaaS evolution of Edufy MakerLab. Before each work loop, read this file first. After each work loop, update it with what changed, what was tested, what remains risky, and the next best module.
 
@@ -452,10 +452,18 @@ Left:
 
 ## Verification Log
 
+- 2026-09-09: Promoted the authenticated Education UI from development preview to the production default, retaining `?ui=atlas-legacy` as a non-persistent rollback. Diagnosed the live old/blank UI as the legacy cache-first `stemflow-erp-v2` service worker serving stale HTML that referenced a deleted asset; the current worker clears old caches, takes control immediately, and the registration bypasses HTTP cache. Added direct history editing for active invoices with preserved numbering, revision conflict protection, same-year dates, credited-document locks, edit preview, and desktop/mobile QA. Focused TypeScript, service smoke, real Auth/Firestore emulator, browser workflow and production build pass.
+
 - 2026-09-05: Rebranded the compact public workshop booking flow around MakerLab Academy rather than the Edufy application shell. The supplied red-and-black MakerLab wordmark is used directly, while the page now follows the public website's cool-mist, paper, deep-navy, and orange action system plus its `Design · Code · Build` signature. Production build and read-only browser QA passed at 390px and 1440px; the date chooser and form still fit within 390x844 with zero horizontal overflow and no booking submission.
 - 2026-09-05: Simplified the public workshop booking journey into a single-viewport mobile flow: six compact weekday/date tickets with progressive disclosure, a concise selected-session summary, paired child/age inputs, and collapsed optional notes. Production build and read-only browser QA passed at 390px and 1440px with zero horizontal overflow; both the date chooser and details form fit within the 390x844 viewport, and no booking was submitted.
 - 2026-09-05: Follow-up Open Graph verification found that an existing workshop used a Google Drive sharing-page URL, which social crawlers received as HTML instead of an image. Workshop image URLs now normalize supported Drive links to direct image responses, and copied/WhatsApp links include a content-derived preview version so stale pre-deployment cards are not reused. The production build passed; crawler and live deployment checks remain part of the release gate.
 - 2026-09-05: `npm.cmd run build` passed after the workshop recurrence, parent booking, WhatsApp sharing, and Open Graph rollout. A live read-only Monday/Thursday template rendered 17 upcoming sessions using only those weekdays at desktop and 390px mobile, with zero mobile horizontal overflow. The Vercel Open Graph handler returned the live title, image, Monday/Thursday schedule, canonical `/w/` URL, and booking redirect; the Hostinger PHP route was added but could not be syntax-checked locally because PHP is not installed.
+- 2026-09-03: `npm.cmd run build` passed after separating reusable on-demand company programs from dated runs and separating the billed company from an optional beneficiary company on finance documents. Local demo QA confirmed that selecting Company defaults to On demand, reduces the wizard from six to four steps, and removes Dates and Groups; no program or invoice was saved.
+- 2026-09-03: `npm.cmd run build` passed after extending company-aware finance with configurable billing units (hour, workshop, half-day, day, package, participant, group), duration/session metadata, planned/delivered/manual calculation modes, and invoice line snapshots. The full TypeScript workspace still reports the pre-existing maker-pro and SparkQuest diagnostics; no diagnostics matched the new finance or program billing files.
+- 2026-09-03: `npm.cmd run build` passed after adding company-aware invoicing, annual transaction-safe sequences, linked credit notes, durable invoice history, and configurable accounting exports. A focused invoice-plus-credit test generated six balanced journal entries; desktop and 390px mobile UI review passed without writing finance data.
+- 2026-09-01: `npm.cmd run build` passed after converting the public enrollment page into a four-step mobile-first flow, restoring the MakerLab public logo fallback, replacing card with bank transfer, adding copyable CIH RIB details, and adding a printable pending pre-enrollment receipt. Browser QA passed at 375px portrait, 812px landscape, and 1440px desktop with no horizontal overflow; the copy action returned the exact 24-digit RIB. Final submission was not triggered during QA to avoid creating a production lead.
+- 2026-09-01: `npm.cmd run build` passed after aligning public enrollment lead fields with Firestore rules, adding accurate offline/permission error messages, removing stale app-shell caching, forcing dark mode before first paint, replacing the legacy MakerLab PWA identity with Atlas, and splitting the public form from the full admin bundle. The public route rendered against the live StemQuest program in production-preview mode. Firebase rules deployment and Hostinger release remain pending.
+- 2026-09-01: `npm.cmd run build` passed after replacing Hostinger-incompatible `/enroll` kiosk links with root query URLs and retaining legacy route compatibility. Live HTTP checks confirmed the old deep link returns 404 while the root query URL returns the Atlas app shell.
 - 2026-07-20: `npm.cmd run build` passed after adding the reusable MakerLab Summer Camp template, session/week/shift/age-band enrollment routing, public QR registration choices, and year-safe duplication. The MakerLab 2026 draft was seeded idempotently without enrollments.
 - 2026-07-18: `npm.cmd run build` passed after landing/login visual coherence pass and Finance command header work. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
 - 2026-07-18: `npm.cmd run build` passed after extracting Atlas surface primitives and wiring Finance/Students headers to them. Existing warnings remain: large chunks and Firebase dynamic/static import mix.
@@ -471,6 +479,35 @@ Left:
 - 2026-07-17: `npm.cmd run build` passed after Programs and Enrollment Forms improvements. Targeted scan found no dynamic Tailwind or browser alert issues in `ProgramsView`, `ProgramDetailsView`, `PublicEnrollmentView`, or `EnrollmentFormsView`.
 
 ## Latest Completed Work
+
+### 2026-09-01 - Parent Pre-Enrollment And Transfer Flow
+
+- Replaced the long public enrollment form with a calm four-step learner, program, payment, and review sequence with explicit progress, Back navigation, focused step headings, mobile-sized inputs, and accurate inline recovery.
+- Restored the MakerLab Academy logo as the public enrollment fallback without changing the authenticated Atlas product identity.
+- Replaced the obsolete card preference with cash, check, and bank transfer choices.
+- Added copyable CIH Bank transfer details for MakerLab Academy and verified that Copy RIB returns `230780282542321100290015` without spaces.
+- Added a bilingual pending pre-enrollment receipt available after a successful request through the browser's print/save-as-PDF flow. The receipt includes the request reference, learner, program, pack, schedule, payment preference, estimated fee, transfer details when relevant, and a clear statement that it is not proof of payment or confirmed enrollment.
+- Kept payment confirmation honest: cash and check require on-site receipt/validation, while bank transfers require academy verification. The public form still creates a lead only and does not record a payment.
+- `npm.cmd run build` passes. Mobile portrait, mobile landscape, and desktop browser QA report no horizontal overflow. No production lead was created during QA.
+
+### 2026-09-01 - Public Enrollment Reliability And Dark-First Startup
+
+- Fixed the public enrollment contract mismatch that caused Firebase to reject structured grade, group, camp session, shift, and module selections while the UI incorrectly reported a connection problem.
+- Added field-aware Firestore validation while keeping older public lead payloads compatible.
+- Added accurate submission recovery messages for real offline, interrupted, permission, and invalid-data failures; inputs are trimmed before write.
+- Removed the service worker's cache-first app-shell strategy, cleared legacy caches on activation, and forced worker update checks so normal refreshes receive the current build.
+- Split public enrollment from the full authenticated application entry, reducing the public form's initial compressed JavaScript from roughly 960 KB to roughly 290 KB.
+- Forced the authenticated workspace to dark mode before React paints and removed the unfinished theme toggle.
+- Replaced the legacy MakerLab installed-app manifest and M icon with Atlas identity, and shortened the boot-screen exit delay.
+- `npm.cmd run build` passes. Production-preview QA loaded the live StemQuest form with the dark root theme and without runtime form errors. Firebase rules deployment and Hostinger release remain pending.
+
+### 2026-09-01 - Hostinger-Safe Public Enrollment Links
+
+- Centralized public enrollment link generation around `/?mode=enroll&program=...`, which loads reliably through Hostinger's static root route.
+- Updated Programs, Program Details, Enrollment Forms, copied links, kiosk actions, and QR codes to use the shared URL builder.
+- Added query-mode routing while preserving `/enroll` compatibility for environments that already provide SPA rewrites.
+- Confirmed the reported production deep link returns HTTP 404 and the replacement root query URL returns HTTP 200.
+- `npm.cmd run build` passes. Existing Firebase dynamic/static import and large bundle warnings remain.
 
 ### 2026-07-20 - Structured Summer Camp Template
 
@@ -754,31 +791,206 @@ Left:
 - Verified both 30-row Make & Go exports and both waiting-list confirmation paths without changing production records.
 - `npm.cmd run build` passes. The existing large App bundle warning remains.
 
+### 2026-08-03 - Atlas Creative Studio Foundation
+
+- Replaced the MakerLab-specific Social Poster entry with Atlas Creative Studio while preserving the installed-app ID for tenant compatibility.
+- Added one shared creative engine with versioned Brand DNA stored per organization; MakerLab receives a realistic academy starter while other tenants begin from a neutral draft.
+- Added identity, industry, voice, palette, visual direction, environments, people policy, signature details, exclusions, safety rules, and approved terminology to the tenant profile.
+- Built a four-step production route for destination, message, visual source, and review across social posts, stories, website imagery, Google Business, and paid ads.
+- Added an approved Gallery-photo path, a clean image download, and a browser-rendered branded layout export without requiring AI generation.
+- Added module-scoped Sign in with ChatGPT for new-image generation. Connecting is separate from Edufy login and never starts a generation by itself.
+- Added a secured creative endpoint that verifies Firebase identity, active organization membership, role permission, installed-app entitlement, and an approved server-loaded Brand DNA before reading ChatGPT credentials.
+- Kept Firebase and ChatGPT credentials on separate request boundaries; no access token is logged or persisted by Atlas.
+- Added a development-only demo workspace entry for local UI QA without changing production login behavior or promoting the demo user to platform super admin.
+- Verified the complete guided route at desktop and 390px mobile widths, including message input stability, zero document overflow, Gallery empty state, Brand DNA approval guard, and ChatGPT connection fallback.
+- Production build and diff checks pass. No image generation was executed and no OpenAI usage was consumed during QA.
+
+### 2026-08-03 - Marketplace Add-On Approval Loop
+
+- Made tenant add-on requests durable across refreshes and account switching instead of keeping the Requested state only in browser memory.
+- Added organization identity to new request records while retaining compatibility with older request documents through their Firestore parent path.
+- Added a dedicated Requests inbox to the Super Admin control plane with a prominent pending count, request context, approval, rejection, and recent decisions.
+- Connected approval to the tenant subscription add-on grant so the capability becomes available in the tenant Marketplace immediately.
+- Kept workspace activation as a separate tenant choice: after approval, an authorized tenant administrator or Super Admin can use Add to place the app in navigation.
+- Connected direct grants from Tenant access management to matching pending requests so the founder cannot grant access while leaving a stale request behind.
+- Production build, focused TypeScript checks, and diff checks pass. The live MakerLab request was not mutated during QA.
+
+### 2026-08-18 - Edufy School-Day Visual Foundation
+
+- Repositioned the customer-facing admin experience from a technical Atlas/SaaS command surface to a calm Edufy school-day workspace while preserving Atlas as the internal platform foundation.
+- Made light the default for school workspaces without a saved preference and preserved every tenant-scoped explicit light or dark choice.
+- Added shared semantic light/dark tokens for paper, navy, rows, borders, shadows, and mint, sky, peach, lilac, and sun school-category tones.
+- Rebuilt the owner shell language around Today, School, Learning, Office, Team, Settings, More tools, open pages, and school workspace concepts.
+- Reworked owner navigation, tenant identity, search, profile, top bar, workspace tabs, compact rail, mobile drawer, and theme controls against the same semantic theme system.
+- Rebuilt the owner home around a greeting, academic-session selector, primary school actions, active students, attendance, payments, follow-ups, a real school-day timeline, decision queue, finance activity, student-record health, family interest, birthdays, and existing workshop follow-up.
+- Preserved navigation and actions for payment, enrollment, attendance, finance, communications, tasks, marketing, student profiles, and workshops; no data model, Firebase write, or permission behavior changed.
+- Verified authenticated MakerLab data at 1440px desktop and 390px mobile in both light and dark themes. Both document and module content reported zero horizontal overflow, the mobile theme control remained reachable, and theme persistence worked.
+- `npm.cmd run build` passes. Existing Firebase dynamic/static import and large bundle warnings remain.
+- Remaining migration: convert secondary module-local dark utilities and modal surfaces to semantic school-day primitives instead of relying on the scoped light-theme compatibility bridge.
+
+### 2026-08-18 - Edufy School-Day Visual Expression Pass
+
+- Increased the owner dashboard's visual warmth with full-surface mint, sky, peach, lilac, pink, and ink cards instead of relying on small colored accents.
+- Added an asymmetric bento rhythm: compact student and attendance cards, a wider high-contrast payments card, and a compact attention card with stronger visual priority.
+- Refined card geometry with 23-30px sculpted corners, fine highlight edges, soft layered shadows, clipped decorative rings, and richer light and dark ambient gradients.
+- Added scoped Framer Motion reveals, card lift, timeline movement, chart growth, current-class pulse, and slow hero ambience without adding or modifying dependencies.
+- Kept all motion transform/opacity-based and disabled it through `prefers-reduced-motion` and the React reduced-motion preference.
+- Verified authenticated MakerLab data at 1440px desktop and 390px mobile in light and dark themes. The narrow layout has zero document-level horizontal overflow; its internal 16px scroll-width delta is the intentionally reserved scrollbar gutter, with no protruding content elements.
+- `npm.cmd run build` passes. Existing Firebase dynamic/static import and large bundle warnings remain.
+
+### 2026-08-18 - App-Wide Modern Component System
+
+- Promoted the reference language from a dashboard treatment into the shared authenticated Edufy component system used across more than 40 module and detail surfaces.
+- Added Edufy Volt and Electric Blue tokens, 28px appliance-panel geometry, 18-20px list rows, layered card shadows, lime active navigation, lime action capsules, and calmer cool-mist canvases.
+- Rebuilt the shared command header, signal cards, icon wells, toolbars, actions, section treatment, and empty states so existing Students, Programs, Finance, Attendance, Workshops, Marketing, Communications, Team, Apps, and other modules inherit the system automatically.
+- Normalized legacy authenticated panels, slate alpha surfaces, fields, select controls, text areas, tables, list rows, and action cards through the scoped module compatibility layer, including previously unmapped translucent navy values.
+- Reworked the shared Modal, AlertModal, and SuccessModal surfaces for semantic light/dark colors, sculpted desktop geometry, modern close controls, blurred backdrops, and accessible focus behavior without changing their workflows.
+- Upgraded the custom Settings command bar, workspace summaries, and form controls so the settings surface belongs to the same component family.
+- Verified Dashboard, Students, Finance, Programs, the Program wizard, and Settings in authenticated local UI review. Light and dark mobile checks at 390px reported zero document overflow; desktop checks reported zero document and module overflow.
+- No application records were written during UI QA. The local browser still reports the existing Firestore snapshot-listener permission error; this styling pass did not change rules, queries, or data access.
+- `npm.cmd run build` passes. Existing Firebase dynamic/static import and large bundle warnings remain.
+
+### 2026-09-01 - Program Roster CSV And Excel Export
+
+- Added CSV and Excel download actions to the always-visible Program Details header and the Roster tab, with responsive controls that remain usable on mobile.
+- Exported the active academic-year roster in the same unplaced-first order shown in Edufy, including learner, parent contact, school, level, primary and additional groups and schedules, plan, start date, placement, and academic year.
+- Added UTF-8 BOM output for reliable French names in CSV, safe descriptive filenames, useful Excel column widths, and a filterable Roster worksheet.
+- Verified both downloads against the populated Make & Go program: CSV contained 30 roster rows plus its header, and Excel contained the same 30 rows across 16 columns with an autofilter.
+- `npm.cmd run build` passes. The existing large App bundle warning remains.
+
+### 2026-09-01 - Program Waiting-List Removal Controls
+
+- Added Remove and Delete actions to each family card in a program's Waiting tab, while retaining the existing Enroll now action.
+- Remove is the safe default: it closes the lead and preserves its CRM timeline; Delete permanently removes only the lead/waiting record.
+- Added current-tenant and role-permission guards, pending-state protection, clear confirmation copy, and success/error feedback for both actions.
+- Verified the controls on the populated Make & Go waiting list and confirmed both warning dialogs without mutating live records.
+- Confirmed the CSV roster and Excel roster actions are visible and enabled in the always-visible Program Details header while Program plan is still selected.
+- `npm.cmd run build` passes. The existing large App bundle warning remains.
+
+### 2026-09-03 - Company Invoicing And Accounting Export Foundation
+
+- Added a program-level billing audience so each new program explicitly targets either individual billing or company billing.
+- Added company billing snapshots with one invoice recipient and any number of named participants, keeping the participant identities available for future attestations and certificates.
+- Added an organization-scoped, append-only invoice register with transactional annual numbering such as `20260001`, idempotent payment-origin invoices, printable documents, and full linked credit notes instead of invoice deletion.
+- Reconnected the legacy payment invoice action to the durable register and annual sequence.
+- Added balanced accounting-entry generation and Excel/CSV export using the 18-column MakerLab reference layout, plus user-uploaded software templates with editable column mappings and account defaults.
+- Stored finance documents, corporate enrollments, counters, and custom accounting templates under the active organization. Firestore rules were intentionally not changed in this loop; production immutability and non-admin finance access still require an explicitly approved server/rules hardening pass.
+- `npm.cmd run build` passes. Focused accounting checks produced six balanced entries for an invoice and its credit note (`240 MAD` debit and credit totals). Desktop and 390px mobile UI review passed without creating finance records.
+
+### 2026-09-03 - Configurable Training Billing Units
+
+- Added reusable billing profiles to programs with hour, workshop, half-day, day, package, participant, and group units.
+- Added configurable hours per unit, sessions per unit, invoice label, and calculation source (planned, delivered, or manual), with a default definition of one day = two three-hour workshops.
+- Added invoice-level overrides so a company contract can charge one workshop, one day, half a day, several units, or a fixed package without changing the source program.
+- Stored unit label, hours, session count, and calculation mode in each invoice line and exposed those fields to accounting template mappings and printable documents.
+- Preserved legacy programs and payment-origin invoices through safe defaults when no billing profile exists.
+- `npm.cmd run build` passes. No finance records were written during this loop.
+
+### 2026-09-03 - On-Demand Company Programs And Beneficiaries
+
+- Added Scheduled, On demand, and Hybrid delivery models so a reusable company training program no longer requires client dates, groups, or a timetable at catalog creation.
+- Made Company default to On demand for new programs, reduced that wizard route from six steps to four, disabled public registration, removed generated groups, and kept dates and academic-period data out of the saved program.
+- Preserved the dated StemQuest workflow for scheduled programs and restored Dates and Groups when an operator explicitly selects Scheduled or Hybrid.
+- Separated the company invoiced by MakerLab from an optional company where the training was delivered. No reseller margin, downstream price, or downstream invoice is stored.
+- Added beneficiary identity to the durable invoice snapshot, corporate enrollment, printed invoice, register search, register row, accounting label, and custom accounting export mappings.
+- Updated program readiness so an active On-demand program with pricing is ready for client missions instead of being incorrectly flagged as missing a schedule.
+- `npm.cmd run build` passes. Local demo QA covered the Company → On demand wizard transition and finance invoice form without saving records.
+
+### 2026-09-06 - Education UI System Dashboard Preview
+
+- Added a namespaced Education UI component layer with semantic surfaces, actions, section headers, and accessible progress indicators.
+- Reworked the Admin Dashboard as a daily school command center: schedule and attendance first, actionable follow-ups second, then collections, operational readiness, family interest, birthdays, and the live workshop follow-up queue.
+- Preserved the dashboard's existing data derivations, academic-session selector, navigation callbacks, permissions, payment modal, student creation flow, and live Workshop Action Center.
+- Kept the migration reversible: the new dashboard is available only in development at `?ui=education-v1`; the legacy dashboard remains the default in development and production.
+- Scoped the new styles under `.edu-v1` so the module does not restyle shared legacy pages.
+- Verified authenticated desktop, 375px phone, and phone-landscape layouts with no document-level horizontal overflow. New dashboard controls meet the 44px minimum target, and the existing payment dialog opens and closes without writing a record.
+- `npm.cmd run build` passes. Focused TypeScript output contains no errors for the new dashboard, primitives, or bridge. The repository-wide TypeScript check still reports unrelated pre-existing errors.
+- Added `EDUCATION_UI_SYSTEM_MAP.md` to record the component vocabulary, module archetypes, safety boundary, and approval gate before the Students module begins.
+- Expanded the preview from a page-only treatment into a complete authenticated Education UI shell. The development-only route now replaces the former dark Atlas navigation with a campus spine, searchable contextual drawer, redesigned top bar and tabs, compact rail, workspace organizer, and five-item mobile navigation.
+- Preserved permission-filtered modules, tenant context, installed apps, favorites and hidden-module preferences, compact and density preferences, notifications, sign-out, workspace tab activation/closing/reordering, and all existing module routes.
+- Verified that navigation from Dashboard to Students retains the new shell, then returned to Dashboard without writing application data. Desktop expanded/compact, 375px phone, and 844px phone-landscape states have zero document-level horizontal overflow and no undersized interactive controls within the new shell.
+
+### 2026-09-07 - Full Education UI Application Preview
+
+- Extended the Education UI preview from the dashboard into the complete Edufy experience: shell, core school operations, learning, finance, family journey, team operations, resources, platform administration, installed apps, role-specific workspaces, login, booking, and enrollment surfaces.
+- Corrected the navigation architecture after review: removed the parallel black icon rail and retained one white responsive sidebar/drawer. The horizontal strip now represents closable, reorderable open-workspace tabs only, while the mobile layout uses the same drawer plus five frequent destinations in the bottom bar.
+- Reframed modules around operator expectations instead of applying a visual skin: school-day action flow for Classes and Attendance, learner-and-family exploration for Students, lifecycle and evidence for Learning, collection and reconciliation for Finance, acquisition-to-pickup continuity for the family journey, and task-focused administration for Settings, Marketplace, and SaaS controls.
+- Preserved existing data sources, permissions, routes, callbacks, filters, dialogs, exports, workspace preferences, installed-app entitlements, authentication, and public form behavior. No application records were written during visual QA.
+- Added shared Education primitives and narrowly scoped compatibility styles for remaining legacy utility classes. The preview is still available only in development with `?ui=education-v1`; the default development route and production application remain on the current approved interface.
+- Audited the major admin modules through the real navigation and confirmed their intended preview roots, page titles, and zero document-level horizontal overflow. Desktop, phone portrait, phone landscape, drawer, and mobile bottom-navigation states were reviewed, including Students, Learning, Finance, Programs, Workshops, Marketing, Communications, Pickup, Team, Staff Attendance, Gallery, Admin Tools, Settings, Marketplace, and an installed app.
+- Kept reduced-motion support and accessible progress/interaction semantics in the shared system. The preview intentionally follows the supplied light Education system; a separate dark-theme expression was not introduced.
+- `npm.cmd run build` passes. Existing Firebase dynamic/static import and large bundle warnings remain; the existing Firestore snapshot-listener permission message remains unrelated to this presentation-only preview.
+- Updated `EDUCATION_UI_SYSTEM_MAP.md` to record the single-navigation contract and complete module coverage. The next step is user review and targeted refinement, not another partial navigation or page-by-page skin pass.
+
+### 2026-09-07 - Students Operations Redesign v2
+
+- Replaced the preview's generic Students directory treatment with an action-first operations desk behind `?ui=education-v1`; the default interface remains unchanged.
+- Separated operational blockers from optional profile cleanup. Needs Action now counts contact, enrollment, class-placement, and duplicate-identity gaps, while Profile Details remains a dedicated smart roster view.
+- Added a persistent learner passport with next-best action, family contact, program/class, balance, record state, five-step readiness, and existing profile/edit/enroll/archive callbacks.
+- Reframed Families as a household workspace with sibling context, expected/paid/balance signals, family search, learner profile routes, and the existing statement flow.
+- Preserved search, Program/Audience/Level/Class day/Archived filters, filter badges and reset, directory issue filters, bulk selection, parent linking, permission checks, and all existing dialogs and mutations.
+- Added content-container breakpoints so the module responds to the usable area beside Edufy navigation, including readable horizontal smart views and stacked narrow layouts.
+- Authenticated local QA verified 11 operational blockers, 148 profile-detail records, advanced filter selection/reset, family search, and Students/Families switching without writing application data.
+- `npm.cmd run build` passes. Existing Firebase import and large bundle warnings remain unrelated to this redesign.
+
+### 2026-09-08 - Family Admissions Phase 0
+
+- Received approval to build the pre-enrollment family journey and to use the new Education UI system.
+- Audited every current lead producer and major consumer, legacy status/timeline behavior, workshop conversion, enrollment handoff, permissions, Firestore rules/indexes, and the development-only Education UI preview.
+- Confirmed that Admission Officers currently lack the Marketing permissions used by the CRM, while Firestore lead writes remain broadly available to elevated tenant roles.
+- Confirmed two critical linking gaps: workshop conversion still uses phone matching in multiple paths, and enrollment prefill does not retain the originating lead ID.
+- Defined a conservative, read-only legacy adapter as Phase 1, plus stable-link, feature-flag, migration, and regression boundaries.
+- Defined the Education UI direction as a follow-up desk with a Family Journey Passport, using existing tokens/primitives and locally scoped CSS rather than another design system.
+- Added `.agent/`, `modules/admissions/AGENT_CONTEXT.md`, and durable documentation under `docs/admissions/`.
+- No application behavior, data model, Firestore rule/index, route, dependency, or production data changed.
+- `npm.cmd run build` passes with the existing Firebase import and large-chunk warnings. The repository-wide TypeScript check still fails on pre-existing Maker Pro, SparkQuest, and older ERP diagnostics.
+
+### 2026-09-08 - Family Admissions Phase 1 Read Projection
+
+- Added a Firebase-independent Admissions domain with canonical read stages, evidence precedence, repair flags, compatibility next actions, and age/search/stage-count selectors.
+- Projected active enrollment above completed workshop, completed workshop above booked workshop, and stable evidence above conservative legacy status mapping.
+- Accepted explicit case/lead links and the existing deterministic `crm_<slot>_<lead>` booking ID. Phone matches remain visible candidates and never advance identity or lifecycle.
+- Added 19 executable adapter/selector smoke scenarios covering all seven legacy statuses, precedence, cross-tenant rejection, missing data, unknown status, phone-only candidates, deterministic booking identity, full projection, search, counts, and aging.
+- Added Admissions beside Students and Families only in the development Education UI preview, with a read-only compatibility queue and Family Journey Passport using locally scoped Education UI styles.
+- Added a full-screen mobile passport with a visible Back control after QA found that a stacked passport would otherwise sit below the complete lead list.
+- Authenticated QA projected all 51 tenant leads and made 46 repair cases visible. Desktop and narrow mobile had zero document overflow; search empty/restoration, mobile passport open/close, and minimum visible control checks passed.
+- Verified that the default development UI has no Admissions entry or preview surface. No CRM write, message, payment, enrollment, rule, index, schema, dependency, or production data change was made.
+- `npm.cmd run build` passes with 4,404 transformed modules and the existing Firebase import and large-chunk warnings. Focused Admissions TypeScript passes; repository-wide TypeScript remains blocked by pre-existing unrelated diagnostics.
+
 ## Immediate Next Loop
 
-Recommended next module: Adaptive Programs foundation, phase two.
+Current approval gate: Admissions Phase 3 only. Phase 2 completed on 2026-09-08.
 
 Why:
-- Enrollment now needs a stable destination model for dated runs, repeated camp weeks, custom shifts, and actual class occurrences.
-- The current nested grade/group/day/time structure cannot support MakerLab's real camp and bootcamp operations cleanly.
-- Registration pages, QR links, attendance, pricing, attestations, and certificates must share the same run and occurrence identities.
+- The compatibility projection is proven against fixtures and the current tenant data.
+- Operators now need complete Today, Pipeline, and All cases read workflows before any mutation contract is introduced.
+- Marketing CRM, Workshops, Finance, enrollment, and all Firestore writes remain protected.
 
 Target checklist:
 
-- [x] Add ProgramRun, ProgramGroup, ScheduleBlock, ClassOccurrence, PricingOffer, and EnrollmentAgreement contracts with tenant-scoped compatibility adapters.
-- [x] Convert existing MakerLab programs into a non-destructive compatibility preview.
-- [x] Build the first writable autopilot setup slice: format preset, run dates, groups, multi-block timetable, offer, registration, documents, and review.
-- [ ] Connect the guided enrollment route to Program Runs and capacity-aware groups while retaining legacy fallback.
-- [x] Generate occurrence previews without writing attendance records until the operator publishes the run.
-- [x] Define registration-page and document-template contracts before adding public writes.
-- [ ] Add automated Firestore rules and high-value workflow tests.
-- [ ] Add the missing Firestore composite indexes observed in authenticated QA.
-- [ ] Add audit metadata to sensitive finance, expense, settings, and account actions.
+- [ ] Add Today without claiming due/overdue truth where no structured task exists.
+- [ ] Add a complete non-drag Pipeline and All cases view over the proven projection.
+- [ ] Keep repair flags, age, stable evidence, and phone-only candidates inspectable.
+- [ ] Preserve the default interface and Marketing CRM; add no writes, messages, rules, or indexes.
+- [ ] Run focused checks and the production build.
+- [x] Complete desktop/mobile, keyboard, and mobile passport QA; update memory and stop for Phase 2 review.
 
-Next best loop:
+### 2026-09-08 - Family Admissions Phase 2 Read-Only Workspace
 
-- Adaptive Programs foundation and compatibility layer.
-- Program setup autopilot and run-specific registration pages.
-- Occurrence-based classes, attendance, and document eligibility.
-- Students and family record repair.
-- Finance phase two: invoices, refunds/credits, cash close, provider reconciliation, and immutable audit history.
+- Completed the development-only Admissions workspace with Today, Pipeline, and All cases on top of the Phase 1 tenant-safe projection.
+- Today exposes 50 active non-terminal family cases and explicitly says that no due/overdue claim is possible until structured tasks exist.
+- Pipeline presents all seven canonical stages in a wrapping grid with observed counts 40/2/8/0/0/0/1 and no horizontal drag.
+- All cases opens with all 51 projected tenant leads, supports full search plus stage/repair filters, and keeps ambiguous records visible by default.
+- Preserved the 58/42 desktop workbench, Family Journey Passport, full-screen narrow passport, repair flags, and stable-versus-phone-only evidence.
+- Added deterministic active-case triage selectors and expanded the executable domain harness from 19 to 22 scenarios.
+- Authenticated desktop and 778px narrow QA found zero document/workspace/pipeline/passport overflow, no visible Admissions control below 38px, successful search empty/reset, and successful Escape dismissal of the passport.
+- Default Students remained unchanged outside `?ui=education-v1`; Marketing CRM, Firebase rules/indexes, schemas, dependencies, and production data were untouched. No application record was written.
+- Focused Admissions TypeScript and `npm.cmd run build` pass with the existing Firebase import and large-chunk warnings. The existing Tailwind CDN and Firestore snapshot-listener console diagnostics remain unrelated.
+- Next safe loop: Phase 3 contracts and proof for structured activities and next actions. Do not expose a write UI before authorization, idempotency/version, and rules gates pass.
+
+
+## 2026-09-09 — urgent Finance service catalogue phase
+
+Added a tenant service catalogue using the eight Future Makers 2026 PDF services and a rapid multi-service invoice form on the existing Finance ledger. Editable invoice snapshots, annual numbering, credit notes and print/export are preserved. Source prices are unspecified, and no defaults are written on startup. Local schema/version/archive rules retain the existing organization-manager permission boundary.
+
+Domain, real emulator, isolated browser, focused TypeScript and production build pass. Global TypeScript errors outside the changed Finance files and existing build warnings remain. Next work requires a new explicit scope; staff permission alignment is documented, not silently broadened. No production mutation or release occurred. See `docs/finance/SERVICE_CATALOGUE_PHASE_1.md` and `.agent/LAST_HANDOFF.md`.

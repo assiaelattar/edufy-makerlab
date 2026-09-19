@@ -28,13 +28,28 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [students, setStudents] = useState<any[]>([]); // Added students state
     const [loading, setLoading] = useState(true);
 
-    const { userProfile } = useAuth();
+    const { user, userProfile, loading: authLoading } = useAuth();
     // Default to 'makerlab-academy' to handle legacy data or uninitialized profiles safely (though restrictive is better for SaaS)
     const organizationId = userProfile?.organizationId || 'makerlab-academy';
 
     useEffect(() => {
-        if (!db) return;
+        if (authLoading) return;
+        if (!db || !user || !userProfile) {
+            setProjectTemplates([]);
+            setProcessTemplates([]);
+            setStations([]);
+            setBadges([]);
+            setPrograms([]);
+            setStudentProjects([]);
+            setGadgets([]);
+            setContests([]);
+            setPurchaseRequests([]);
+            setStudents([]);
+            setLoading(false);
+            return;
+        }
         const firestore = db as Firestore;
+        const isElevated = userProfile.role === 'admin' || userProfile.role === 'instructor';
 
         // Content: Global or Shared? For now, fetch all templates. 
         // ideally, templates should also be org-scoped or 'public'
@@ -82,13 +97,14 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setPrograms(filteredPrograms);
         }, (error) => console.error("Programs Error:", error));
 
-        // Fetch all student projects for Dashboard/Review - SIMPLIFIED (no org filter)
-        // OPTIMIZATION: Only fetch all projects for Admins/Instructors to avoid listener conflicts
+        // Fetch tenant projects only. Firestore list rules cannot safely evaluate
+        // an unscoped cross-organization listener.
         let unsubStudentProjects = () => { };
 
         if (userProfile?.role === 'admin' || userProfile?.role === 'instructor') {
             const projectsQuery = query(
-                collection(firestore, 'student_projects')
+                collection(firestore, 'student_projects'),
+                where('organizationId', '==', organizationId)
             );
 
             unsubStudentProjects = onSnapshot(projectsQuery, (snapshot) => {
@@ -105,12 +121,15 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
 
         // Admin view of requests
-        const reqQuery = query(
-            collection(firestore, 'purchase_requests'),
-        );
-        const unsubRequests = onSnapshot(collection(firestore, 'purchase_requests'), (snap) => {
-            setPurchaseRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
+        let unsubRequests = () => { };
+        if (isElevated) {
+            const reqQuery = query(collection(firestore, 'purchase_requests'), where('organizationId', '==', organizationId));
+            unsubRequests = onSnapshot(reqQuery, (snap) => {
+                setPurchaseRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            }, (error) => console.error("Requests Error:", error));
+        } else {
+            setPurchaseRequests([]);
+        }
 
         // Fetch Users (Auth) AND Students (Legacy/Profile) - SCOPED TO ORG
         let usersCache: any[] = [];
@@ -129,9 +148,14 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const alreadyExists = Array.from(studentMap.values()).some((s: any) => {
                     const emailMatch = s.email && u.email && s.email.toLowerCase() === u.email.toLowerCase();
                     const nameMatch = s.name && u.name && s.name.toLowerCase() === u.name.toLowerCase();
+                    const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '');
+                    const studentPhone = normalizePhone(s.parentPhone);
+                    const userPhone = normalizePhone(u.parentPhone);
+                    const phoneMatch = studentPhone.length >= 8 && studentPhone === userPhone;
+                    const birthDateMatch = s.birthDate && u.birthDate && s.birthDate === u.birthDate;
                     const idMatch = s.id === u.id || s.loginInfo?.uid === u.id;
 
-                    return emailMatch || nameMatch || idMatch;
+                    return emailMatch || idMatch || (nameMatch && (phoneMatch || birthDateMatch));
                 });
 
                 if (!alreadyExists) {
@@ -142,17 +166,23 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setStudents(Array.from(studentMap.values()));
         };
 
-        const usersQuery = query(collection(firestore, 'users'), where('organizationId', '==', organizationId));
-        const unsubUsersList = onSnapshot(usersQuery, (snap) => {
-            usersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            updateCombinedStudents();
-        }, (error) => console.error("Users Error:", error));
+        let unsubUsersList = () => { };
+        let unsubStudentsList = () => { };
+        if (isElevated) {
+            const usersQuery = query(collection(firestore, 'users'), where('organizationId', '==', organizationId));
+            unsubUsersList = onSnapshot(usersQuery, (snap) => {
+                usersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                updateCombinedStudents();
+            }, (error) => console.error("Users Error:", error));
 
-        const studentsQuery = query(collection(firestore, 'students'), where('organizationId', '==', organizationId));
-        const unsubStudentsList = onSnapshot(studentsQuery, (snap) => {
-            studentsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            updateCombinedStudents();
-        }, (error) => console.error("Students Error:", error));
+            const studentsQuery = query(collection(firestore, 'students'), where('organizationId', '==', organizationId));
+            unsubStudentsList = onSnapshot(studentsQuery, (snap) => {
+                studentsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                updateCombinedStudents();
+            }, (error) => console.error("Students Error:", error));
+        } else {
+            setStudents([]);
+        }
 
         setLoading(false);
 
@@ -169,7 +199,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             unsubContests();
             unsubRequests();
         };
-    }, [organizationId, userProfile]);
+    }, [authLoading, organizationId, user?.uid, userProfile]);
 
     // Helper to get available grades from programs
     const availableGrades = programs.reduce((acc: any[], prog) => {
@@ -288,20 +318,24 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Enrollments
     const [enrollments, setEnrollments] = useState<any[]>([]);
     useEffect(() => {
-        if (!db) return;
+        if (!db || !user || !userProfile || (userProfile.role !== 'admin' && userProfile.role !== 'instructor')) {
+            setEnrollments([]);
+            return;
+        }
         const firestore = db as Firestore;
-        const unsubEnrollments = onSnapshot(collection(firestore, 'enrollments'), (snapshot) => {
+        const enrollmentQuery = query(collection(firestore, 'enrollments'), where('organizationId', '==', organizationId));
+        const unsubEnrollments = onSnapshot(enrollmentQuery, (snapshot) => {
             setEnrollments(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
+        }, (error) => console.error("Enrollments Error:", error));
         return () => unsubEnrollments();
-    }, []);
+    }, [organizationId, user?.uid, userProfile]);
 
     const buyGadget = async (userId: string, userName: string, gadget: any) => {
         if (!db) return;
         const firestore = db as Firestore;
         const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
         await addDoc(collection(firestore, 'purchase_requests'), {
-            userId, userName, gadgetId: gadget.id, gadgetName: gadget.name, cost: gadget.cost, status: 'pending', createdAt: serverTimestamp()
+            organizationId, userId, userName, gadgetId: gadget.id, gadgetName: gadget.name, cost: gadget.cost, status: 'pending', createdAt: serverTimestamp()
         });
     };
 

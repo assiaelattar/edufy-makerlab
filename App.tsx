@@ -9,6 +9,8 @@ import { NotificationProvider, useNotifications } from './context/NotificationCo
 import { getModuleById } from './services/moduleRegistry';
 import { ModuleProvider, useModuleContext } from './context/ModuleContext';
 import { Lead, type Enrollment } from './types'; // Import Lead type
+import { buildAdmissionOfferSnapshot, normalizeAdmissionPaymentPlan, type AdmissionOriginLink } from './modules/admissions/domain';
+import { resolveProgramPackStandardPrice } from './utils/programPackPricing';
 import { DashboardView } from './views/DashboardView';
 import { StudentsView } from './views/StudentsView';
 import { ClassesView } from './views/ClassesView';
@@ -37,7 +39,6 @@ import { TestWizardView } from './views/TestWizardView';
 import { ArcadeManagerView } from './views/learning/ArcadeManagerView';
 import { CommunicationsView } from './views/CommunicationsView';
 import { EnrollmentFormsView } from './views/EnrollmentFormsView';
-import { PublicEnrollmentView } from './views/PublicEnrollmentView';
 import { CalendarView } from './views/CalendarView'; // NEW
 import { LoginView } from './views/LoginView';
 import { StaffAbsenceView } from './views/StaffAbsenceView';
@@ -54,13 +55,15 @@ import { NotificationDropdown } from './components/NotificationDropdown';
 import { EnrollmentWizard, type EnrollmentLearnerMode } from './components/enrollment/EnrollmentWizard';
 import { AtlasBootScreen } from './components/AtlasBootScreen';
 
-import { addDoc, collection, serverTimestamp, updateDoc, doc, setDoc } from 'firebase/firestore';
-import { db } from './services/firebase';
+import { addDoc, arrayUnion, collection, getDocs, query, serverTimestamp, updateDoc, doc, setDoc, where, writeBatch } from 'firebase/firestore';
+import { sendPasswordResetEmail } from 'firebase/auth';
+import { auth, db } from './services/firebase';
 import { formatCurrency, compressImage, normalizePhone } from './utils/helpers';
 import { resolveEnrollmentServicePeriod } from './utils/programLifecycle';
 import { getProgramReadiness } from './utils/program-readiness';
 import { getEnrollmentCoverageState } from './utils/membershipLifecycle';
 import { isPublicEnrollmentRequest } from './utils/publicEnrollment';
+import { getEnrollmentFinancialSummary } from './utils/enrollmentFinancials';
 import { ViewState } from './types';
 import { AdminLayout } from './components/layouts/AdminLayout';
 import { InstructorLayout } from './components/layouts/InstructorLayout';
@@ -107,13 +110,13 @@ const StudentNavigation = ({ currentView, navigateTo }: { currentView: string, n
 }
 
 const AppContent = () => {
-    const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, payments, t } = useAppContext();
+    const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, payments, leads, t } = useAppContext();
     const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser, currentOrganization, isSuperAdmin } = useAuth();
     const { isModuleEnabled, getEntitlement } = useModuleContext();
     const { requestPermission } = useNotifications();
     const { alert: showAlert, confirm } = useConfirm();
-    // Apply the approved Education UI to authenticated workspaces only. Public
-    // pages keep their own styling, and atlas-legacy remains an emergency URL.
+    // Education UI is the authenticated production default. Keep a query-only
+    // rollback route so operators can recover without changing persisted data.
     const showEducationUiV1 = Boolean(user)
         && new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
@@ -277,8 +280,9 @@ const AppContent = () => {
 
     // --- ENROLLMENT FORM DATA ---
     const [enrollStudentForm, setEnrollStudentForm] = useState({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
-    const [enrollProgramForm, setEnrollProgramForm] = useState({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '', campSessionId: '', campShiftId: '', moduleIds: [] as string[] });
+    const [enrollProgramForm, setEnrollProgramForm] = useState({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full' as Enrollment['paymentPlan'], secondGroupId: '', campSessionId: '', campShiftId: '', moduleIds: [] as string[] });
     const [negotiatedPrice, setNegotiatedPrice] = useState<number>(0);
+    const [enrollmentAdmissionOrigin, setEnrollmentAdmissionOrigin] = useState<AdmissionOriginLink | null>(null);
 
     // Multi-Payment State for Enrollment
     const [enrollPayments, setEnrollPayments] = useState<any[]>([]);
@@ -302,12 +306,7 @@ const AppContent = () => {
 
     const standardTuition = useMemo(() => {
         if (!selectedProgram || !selectedPack) return 0;
-        return Math.max(
-            selectedPack.priceAnnual || 0,
-            selectedPack.priceTrimester || 0,
-            selectedPack.price || 0,
-            selectedPack.promoPrice || 0
-        );
+        return resolveProgramPackStandardPrice(selectedPack)?.amount || 0;
     }, [selectedProgram, selectedPack]);
 
     // Sync negotiated price with standard price when pack changes
@@ -327,6 +326,7 @@ const AppContent = () => {
             if (!preserveEnrollmentFormRef.current) {
                 setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
                 setEnrollProgramForm({ programId: '', packName: '', gradeId: '', groupId: '', paymentPlan: 'full', secondGroupId: '', campSessionId: '', campShiftId: '', moduleIds: [] });
+                setEnrollmentAdmissionOrigin(null);
             }
 
             // Always reset payments on new session
@@ -408,6 +408,14 @@ const AppContent = () => {
         const logoHtml = settings?.logoUrl
             ? `<div class="logo-container"><img src="${settings.logoUrl}" alt="Logo" /></div>`
             : `<div class="logo-placeholder">${settings?.academyName?.charAt(0) || 'M'}</div>`;
+        const receiptRows = appliedPayments.map((payment: any) => {
+            const child = account.children.find((item: any) => item.enrollment.id === payment.enrollmentId);
+            const financials = child ? getEnrollmentFinancialSummary(child.enrollment, programs) : { listAmount: 0, discountAmount: 0, agreedAmount: 0 };
+            return { payment, child, financials };
+        });
+        const receiptListAmount = receiptRows.reduce((sum, row) => sum + row.financials.listAmount, 0);
+        const receiptDiscountAmount = receiptRows.reduce((sum, row) => sum + row.financials.discountAmount, 0);
+        const receiptAgreedAmount = receiptRows.reduce((sum, row) => sum + row.financials.agreedAmount, 0);
 
         const htmlContent = `
             <!DOCTYPE html>
@@ -486,17 +494,18 @@ const AppContent = () => {
                             <tr>
                                 <th>Child</th>
                                 <th>Program</th>
+                                <th class="text-right">Discount / Remise</th>
                                 <th class="text-right">Amount Applied</th>
                                 <th class="text-right">Remaining Balance</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${appliedPayments.map((p: any) => {
-                                const child = account.children.find((c: any) => c.enrollment.id === p.enrollmentId);
+                            ${receiptRows.map(({ payment: p, child, financials }) => {
                                 return `
                                     <tr>
                                         <td style="font-weight:600;">${child?.student.name || p.studentName}</td>
                                         <td>${child?.enrollment.programName || 'Program'}</td>
+                                        <td class="text-right font-mono" style="color:#d97706; font-weight:600;">${financials.discountAmount > 0 ? formatCurrency(financials.discountAmount) : '-'}</td>
                                         <td class="text-right font-mono" style="color:#10b981; font-weight:600;">${formatCurrency(p.amount)}</td>
                                         <td class="text-right font-mono">${formatCurrency(child ? Math.max(0, (child.enrollment.balance || 0) - p.amount) : 0)}</td>
                                     </tr>
@@ -506,6 +515,18 @@ const AppContent = () => {
                     </table>
 
                     <div class="totals-section">
+                        <div class="totals-row">
+                            <span class="totals-label">Listed fees:</span>
+                            <span class="totals-val">${formatCurrency(receiptListAmount)}</span>
+                        </div>
+                        <div class="totals-row">
+                            <span class="totals-label">Discount granted / Remise:</span>
+                            <span class="totals-val" style="color:#d97706;">-${formatCurrency(receiptDiscountAmount)}</span>
+                        </div>
+                        <div class="totals-row">
+                            <span class="totals-label">Agreed fees:</span>
+                            <span class="totals-val">${formatCurrency(receiptAgreedAmount)}</span>
+                        </div>
                         <div class="totals-row grand-total">
                             <span class="totals-label">Total Amount Paid:</span>
                             <span class="totals-val">${formatCurrency(totalAmount)}</span>
@@ -741,6 +762,7 @@ const AppContent = () => {
 
         // Reset student form for fresh entry
         setEnrollStudentForm({ name: '', parentPhone: '', parentName: '', birthDate: '', email: '', school: '' });
+        setEnrollmentAdmissionOrigin(null);
         setQuickEnrollStudentId(null);
         setEnrollmentLearnerMode('new');
         preserveEnrollmentFormRef.current = true; // Preserve the program form we just set
@@ -752,6 +774,7 @@ const AppContent = () => {
             await showAlert('Organization required', 'Select an organization before creating an enrollment.', 'warning');
             return;
         }
+        const firestore = db;
 
         const enrollmentGroup = selectedGrade?.groups.find(group => group.id === enrollProgramForm.groupId);
         if (!selectedProgram || !selectedPack || !selectedGrade || !enrollmentGroup) {
@@ -761,6 +784,10 @@ const AppContent = () => {
 
         if (selectedProgram.status !== 'active') {
             await showAlert('Program unavailable', `This program is ${selectedProgram.status} and cannot accept a new enrollment.`, 'warning');
+            return;
+        }
+        if (!getProgramReadiness(selectedProgram).isAcceptingEnrollments) {
+            await showAlert('Program finished', 'This fixed program has reached its end date. Its history is preserved, but new enrollments are closed.', 'warning');
             return;
         }
 
@@ -805,6 +832,19 @@ const AppContent = () => {
             : undefined;
         if (quickEnrollStudentId && (!selectedStudentRecord || selectedStudentRecord.organizationId !== currentOrganization.id)) {
             await showAlert('Learner unavailable', 'The selected learner does not belong to the active organization. Choose the learner again.', 'danger');
+            return;
+        }
+
+        const originatingLead = enrollmentAdmissionOrigin
+            ? leads.find(lead => lead.id === enrollmentAdmissionOrigin.sourceLeadId)
+            : undefined;
+        if (enrollmentAdmissionOrigin && (
+            enrollmentAdmissionOrigin.organizationId !== currentOrganization.id
+            || enrollmentAdmissionOrigin.admissionCaseId !== enrollmentAdmissionOrigin.sourceLeadId
+            || !originatingLead
+            || originatingLead.organizationId !== currentOrganization.id
+        )) {
+            await showAlert('Admissions link needs review', 'The originating case is missing or belongs to another organization. Reopen enrollment from the correct Admissions case.', 'danger');
             return;
         }
 
@@ -859,6 +899,8 @@ const AppContent = () => {
             let studentAccessCreated = Boolean(existingStudentRecord?.loginInfo?.uid);
             let parentAccessCreated = Boolean(existingStudentRecord?.parentLoginInfo?.uid);
             let parentAccessFailed = false;
+            let studentAuthUid = existingStudentRecord?.loginInfo?.uid;
+            let createdStudentForEnrollment = false;
 
             // 1. Create Student if New
             if (!finalStudentId) {
@@ -895,6 +937,7 @@ const AppContent = () => {
                     createdAt: serverTimestamp()
                 });
                 finalStudentId = sRef.id;
+                createdStudentForEnrollment = true;
             } else {
                 // If quick enrolling existing student, fetch name
                 const existingStudent = students.find(s => s.id === finalStudentId);
@@ -912,6 +955,7 @@ const AppContent = () => {
                     const email = `${username}@${domain}`;
                     const password = Math.random().toString(36).slice(-6);
                     const uid = await createSecondaryUser(email, password);
+                    studentAuthUid = uid;
 
                     await setDoc(doc(db, 'users', uid), {
                         uid,
@@ -935,23 +979,48 @@ const AppContent = () => {
             // 1.6 Generate Parent Account independently so an existing student login cannot block it.
             if (enrollStudentForm.email && !parentAccessCreated) {
                 try {
-                    const parentEmail = enrollStudentForm.email;
-                    const parentPassword = Math.random().toString(36).slice(-8);
-                    const parentUid = await createSecondaryUser(parentEmail, parentPassword);
+                    const parentEmail = enrollStudentForm.email.trim().toLowerCase();
+                    const existingParentSnapshot = await getDocs(query(
+                        collection(db, 'users'),
+                        where('email', '==', parentEmail),
+                        where('organizationId', '==', currentOrganization.id)
+                    ));
+                    const existingParent = existingParentSnapshot.docs.find(profile => profile.data().role === 'parent');
+                    let parentUid = existingParent?.id;
 
-                    await setDoc(doc(db, 'users', parentUid), {
-                        uid: parentUid,
-                        email: parentEmail,
-                        name: enrollStudentForm.parentName || 'Parent',
-                        role: 'parent',
-                        status: 'active',
-                        organizationId: currentOrganization.id,
-                        createdAt: serverTimestamp()
-                    });
+                    if (!parentUid) {
+                        const passwordBytes = crypto.getRandomValues(new Uint8Array(18));
+                        const parentPassword = Array.from(passwordBytes, value => value.toString(36)).join('').slice(0, 20);
+                        parentUid = await createSecondaryUser(parentEmail, parentPassword);
+                        await setDoc(doc(db, 'users', parentUid), {
+                            uid: parentUid,
+                            email: parentEmail,
+                            name: enrollStudentForm.parentName || 'Parent',
+                            role: 'parent',
+                            status: 'active',
+                            organizationId: currentOrganization.id,
+                            createdAt: serverTimestamp()
+                        });
+                    }
 
                     await updateDoc(doc(db, 'students', finalStudentId), {
-                        parentLoginInfo: { email: parentEmail, initialPassword: parentPassword, uid: parentUid }
+                        parentLoginInfo: { email: parentEmail, uid: parentUid },
+                        parentUids: arrayUnion(parentUid)
                     });
+
+                    const guardianSubjects = Array.from(new Set([finalStudentId, studentAuthUid].filter(Boolean) as string[]));
+                    await Promise.all(guardianSubjects.map(subjectId => setDoc(doc(firestore, 'guardian_links', `${parentUid}_${subjectId}`), {
+                        organizationId: currentOrganization.id,
+                        parentUid,
+                        studentId: finalStudentId,
+                        subjectId,
+                        status: 'active',
+                        permissions: ['portfolio', 'enrollments', 'payments', 'gallery', 'pickup'],
+                        updatedAt: serverTimestamp(),
+                        ...(!existingParent ? { createdAt: serverTimestamp() } : {})
+                    }, { merge: true })));
+
+                    if (auth) await sendPasswordResetEmail(auth, parentEmail);
                     parentAccessCreated = true;
                 } catch (error) {
                     console.error('Failed to generate parent account:', error);
@@ -983,7 +1052,19 @@ const AppContent = () => {
 
             const joinedAt = new Date().toISOString();
             const servicePeriod = resolveEnrollmentServicePeriod(selectedProgram, joinedAt);
-            const enrollmentRef = await addDoc(collection(db, 'enrollments'), {
+            const offerSnapshot = enrollmentAdmissionOrigin
+                ? buildAdmissionOfferSnapshot({
+                    origin: enrollmentAdmissionOrigin,
+                    program: selectedProgram,
+                    packName: selectedPack.name,
+                    paymentPlan: enrollProgramForm.paymentPlan,
+                    agreedAmount: negotiatedPrice,
+                    quotedAt: joinedAt
+                })
+                : null;
+            const enrollmentRef = doc(collection(db, 'enrollments'));
+            const enrollmentBatch = writeBatch(db);
+            enrollmentBatch.set(enrollmentRef, {
                 studentId: finalStudentId,
                 studentName: studentName,
                 programId: selectedProgram?.id,
@@ -1016,12 +1097,18 @@ const AppContent = () => {
                 // Keep the academic session aligned with the shared run start.
                 session: computeAcademicYear(new Date(servicePeriod.startDate)),
                 organizationId: currentOrganization.id,
+                ...(enrollmentAdmissionOrigin ? {
+                    admissionCaseId: enrollmentAdmissionOrigin.admissionCaseId,
+                    sourceLeadId: enrollmentAdmissionOrigin.sourceLeadId,
+                    offerSnapshot
+                } : {}),
                 createdAt: serverTimestamp()
             });
 
             // 3. Record All Payments
             for (const p of enrollPayments) {
-                await addDoc(collection(db, 'payments'), {
+                const paymentRef = doc(collection(db, 'payments'));
+                enrollmentBatch.set(paymentRef, {
                     enrollmentId: enrollmentRef.id,
                     studentName: studentName,
                     amount: Number(p.amount),
@@ -1034,14 +1121,43 @@ const AppContent = () => {
                     // Use payment date to determine session, not the admin's current setting
                     session: computeAcademicYear(new Date(p.date || new Date().toISOString())),
                     organizationId: currentOrganization.id,
+                    ...(enrollmentAdmissionOrigin ? {
+                        admissionCaseId: enrollmentAdmissionOrigin.admissionCaseId,
+                        sourceLeadId: enrollmentAdmissionOrigin.sourceLeadId
+                    } : {}),
                     createdAt: serverTimestamp()
                 });
             }
 
+            // Preserve the stable Admissions relationship only in the successful enrollment batch.
+            if (enrollmentAdmissionOrigin && originatingLead) {
+                if (createdStudentForEnrollment) {
+                    enrollmentBatch.update(doc(db, 'students', finalStudentId), {
+                        admissionCaseId: enrollmentAdmissionOrigin.admissionCaseId,
+                        sourceLeadId: enrollmentAdmissionOrigin.sourceLeadId
+                    });
+                }
+                enrollmentBatch.update(doc(db, 'leads', originatingLead.id), {
+                    status: 'converted',
+                    convertedStudentId: finalStudentId,
+                    enrollmentId: enrollmentRef.id,
+                    convertedAt: serverTimestamp(),
+                    timeline: arrayUnion({
+                        date: joinedAt,
+                        type: 'conversion',
+                        details: `Enrollment created for ${selectedProgram.name} · ${selectedPack.name}`,
+                        author: 'Enrollment Wizard'
+                    })
+                });
+            }
+
+            await enrollmentBatch.commit();
+
             setIsEnrollmentModalOpen(false);
+            setEnrollmentAdmissionOrigin(null);
             const accessSummary = studentAccessCreated
                 ? parentAccessCreated
-                    ? 'Student and parent access were created.'
+                    ? 'Student access was created and a secure parent setup email was sent.'
                     : parentAccessFailed
                         ? 'Student access was created. Parent access still needs attention in the student record.'
                         : 'Student access was created.'
@@ -1057,6 +1173,15 @@ const AppContent = () => {
 
     // --- SMART ENROLLMENT FROM LEAD ---
     const handleEnrollLead = (lead: Lead) => {
+        if (!currentOrganization?.id || lead.organizationId !== currentOrganization.id) {
+            void showAlert('Admissions case unavailable', 'Open the case from the active organization before starting enrollment.', 'danger');
+            return;
+        }
+        setEnrollmentAdmissionOrigin({
+            organizationId: currentOrganization.id,
+            admissionCaseId: lead.id,
+            sourceLeadId: lead.id
+        });
         // 1. Pre-fill Student Details
         setEnrollStudentForm({
             name: lead.name,
@@ -1112,7 +1237,7 @@ const AppContent = () => {
             packName,
             gradeId: leadGrade?.id || gradeId,
             groupId: leadPrimaryGroup?.id || groupId,
-            paymentPlan: 'full', // Default, or infer if lead has it
+            paymentPlan: normalizeAdmissionPaymentPlan(lead.paymentPlan || lead.preferredPaymentTerm),
             secondGroupId: lead.secondGroupId || '',
             campSessionId: lead.campSessionId || '',
             campShiftId: lead.campShiftId || '',
@@ -1131,7 +1256,8 @@ const AppContent = () => {
     // Routing
     if (/^\/w\/[^/]+\/?$/.test(locationPath) || window.location.search.includes('mode=booking')) return <PublicBookingView />;
     if (isPublicEnrollmentRequest({ pathname: locationPath, search: window.location.search })) return <PublicEnrollmentView />;
-    if (locationPath === '/parent-portal' || locationHash === '#parent') return <ParentLoginView />;
+    const isParentPortalRoute = locationPath === '/parent-portal' || locationHash === '#parent';
+    if (isParentPortalRoute && (!user || (userProfile && userProfile.role !== 'parent'))) return <ParentLoginView />;
 
     if (authLoading || appLoading || (user && !userProfile)) {
         const loadingMessage = authLoading
@@ -1157,16 +1283,16 @@ const AppContent = () => {
 
         switch (currentView) {
             case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
-            case 'students': return <StudentsView onAddStudent={() => { setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setQuickEnrollStudentId(id || null); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
+            case 'students': return <StudentsView onAddStudent={() => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(id || null); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
             case 'classes': return <ClassesView onEnroll={handleEnrollFromGroup} />;
             case 'programs': return <ProgramsView onEnrollLead={handleEnrollLead} />;
             case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;
             case 'expenses': return <ExpensesView />;
             case 'tools': return <ToolsView />;
             case 'settings': return <SettingsView />;
-            case 'student-details': return <StudentDetailsView onEditStudent={() => { }} onQuickEnroll={(id) => { setQuickEnrollStudentId(id); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onRecordPayment={(id) => handleOpenPaymentModal(id)} />;
+            case 'student-details': return <StudentDetailsView onEditStudent={() => { }} onQuickEnroll={(id) => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(id); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onRecordPayment={(id) => handleOpenPaymentModal(id)} />;
             case 'activity-details': return <ActivityDetailsView />;
-            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); preserveEnrollmentFormRef.current = true; setIsEnrollmentModalOpen(true); }} />;
+            case 'workshops': return <WorkshopsView onConvertProspect={(p) => { setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setEnrollmentAdmissionOrigin(p.admissionCaseId && p.sourceLeadId && p.organizationId ? { organizationId: p.organizationId, admissionCaseId: p.admissionCaseId, sourceLeadId: p.sourceLeadId } : null); setEnrollStudentForm({ name: p.childName, parentName: p.parentName, parentPhone: p.parentPhone, email: '', birthDate: '', school: '' }); preserveEnrollmentFormRef.current = true; setIsEnrollmentModalOpen(true); }} />;
             case 'attendance': return <AbsenceView />;
             case 'team': return <TeamView />;
             case 'staff-attendance': return <StaffAbsenceView />;
@@ -1695,6 +1821,7 @@ const AppContent = () => {
                 onClose={() => {
                     setIsEnrollmentModalOpen(false);
                     setQuickEnrollStudentId(null);
+                    setEnrollmentAdmissionOrigin(null);
                 }}
                 step={enrollmentStep}
                 setStep={setEnrollmentStep}

@@ -9,7 +9,10 @@ import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
 import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
 import StudentDirectoryHealth, { type StudentDirectoryFilter } from '../components/students/StudentDirectoryHealth';
+import EducationStudentsOperationsV1 from './students/EducationStudentsOperationsV1';
+import { projectAdmissionCases } from '../modules/admissions/domain';
 import { normalizePhone, generateParentStatementPrint, formatCurrency } from '../utils/helpers';
+import { getEnrollmentFinancialSummary } from '../utils/enrollmentFinancials';
 import { buildStudentDirectoryHealth, STUDENT_DIRECTORY_ISSUE_LABELS } from '../utils/studentIdentity';
 import './students/education-students-v1.css';
 
@@ -24,7 +27,7 @@ export const StudentsView = ({
     onQuickEnroll: (id?: string) => void,
     onViewProfile: (id: string) => void
 }) => {
-    const { students, enrollments, programs, navigateTo, settings } = useAppContext();
+    const { students, enrollments, programs, bookings, leads, navigateTo, settings } = useAppContext();
     const { can, currentOrganization } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const [searchQuery, setSearchQuery] = useState('');
@@ -48,6 +51,12 @@ export const StudentsView = ({
     // Parent View Mode state
     const [viewMode, setViewMode] = useState<'students' | 'parents'>('students');
     const [selectedParentStatement, setSelectedParentStatement] = useState<any>(null);
+    const [selectedParentProgramIds, setSelectedParentProgramIds] = useState<string[]>([]);
+
+    const openParentStatement = (parent: any) => {
+        setSelectedParentProgramIds([]);
+        setSelectedParentStatement(parent);
+    };
 
     // Autofill suggestions
     const autofillSuggestions = useMemo(() => {
@@ -176,7 +185,9 @@ export const StudentsView = ({
     );
 
     const directorySummary = useMemo(() => {
-        const activeRecords = students.filter(student => student.status === 'active');
+        // Legacy records without an explicit status are already treated as active by
+        // the directory filter. Keep the operating summary on that same definition.
+        const activeRecords = students.filter(student => student.status !== 'inactive');
         const countIssue = (issue: keyof typeof STUDENT_DIRECTORY_ISSUE_LABELS) => activeRecords.filter(student =>
             directoryHealth.records.get(student.id)?.issues.includes(issue)
         ).length;
@@ -199,7 +210,7 @@ export const StudentsView = ({
     // Stats calculation
     const stats = useMemo(() => {
         const total = students.length;
-        const active = students.filter(s => s.status === 'active').length;
+        const active = students.filter(s => s.status !== 'inactive').length;
         const inactive = students.filter(s => s.status === 'inactive').length;
         const newThisMonth = students.filter(s => {
             if (!s.createdAt) return false;
@@ -209,7 +220,7 @@ export const StudentsView = ({
             const now = new Date();
             return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         }).length;
-        const enrolled = students.filter(s => s.status === 'active' && enrollments.some(e => e.studentId === s.id && e.status === 'active')).length;
+        const enrolled = students.filter(s => s.status !== 'inactive' && enrollments.some(e => e.studentId === s.id && e.status === 'active')).length;
         const dataHealth = active === 0 ? 100 : Math.round((directorySummary.healthyRecords / active) * 100);
         return { total, active, inactive, newThisMonth, enrolled, dataHealth };
     }, [students, enrollments, directorySummary.healthyRecords]);
@@ -269,6 +280,47 @@ export const StudentsView = ({
         const familiesWithBalance = parentAccounts.filter(parent => parent.totalBalance > 0).length;
         return { totalBalance, familiesWithBalance };
     }, [parentAccounts]);
+
+    const parentStatementProgramOptions = useMemo(() => {
+        if (!selectedParentStatement) return [] as Array<{ id: string; name: string }>;
+        const options = new Map<string, string>();
+        selectedParentStatement.children.forEach((child: any) => {
+            (child.enrollments || []).forEach((enrollment: any) => {
+                const id = enrollment.programId || `name:${enrollment.programName || 'program'}`;
+                const name = enrollment.programName || programs.find(program => program.id === enrollment.programId)?.name || 'Program';
+                options.set(id, name);
+            });
+        });
+        return Array.from(options, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+    }, [selectedParentStatement, programs]);
+
+    const parentStatementView = useMemo(() => {
+        if (!selectedParentStatement) return null;
+        const children = selectedParentProgramIds.length === 0
+            ? selectedParentStatement.children
+            : selectedParentStatement.children
+                .map((child: any) => ({
+                    ...child,
+                    enrollments: (child.enrollments || []).filter((enrollment: any) => {
+                        const id = enrollment.programId || `name:${enrollment.programName || 'program'}`;
+                        return selectedParentProgramIds.includes(id);
+                    })
+                }))
+                .filter((child: any) => child.enrollments.length > 0);
+        const totals = children.reduce((summary: { totalBalance: number; totalPaid: number; totalExpected: number; totalList: number; totalDiscount: number }, child: any) => {
+            child.enrollments.forEach((enrollment: any) => {
+                const balance = Math.max(0, Number(enrollment.totalAmount || 0) - Number(enrollment.paidAmount || 0));
+                const financialSummary = getEnrollmentFinancialSummary(enrollment, programs);
+                summary.totalBalance += balance;
+                summary.totalPaid += Number(enrollment.paidAmount || 0);
+                summary.totalExpected += financialSummary.agreedAmount;
+                summary.totalList += financialSummary.listAmount;
+                summary.totalDiscount += financialSummary.discountAmount;
+            });
+            return summary;
+        }, { totalBalance: 0, totalPaid: 0, totalExpected: 0, totalList: 0, totalDiscount: 0 });
+        return { ...selectedParentStatement, children, ...totals };
+    }, [selectedParentStatement, selectedParentProgramIds, programs]);
 
     const filteredStudents = useMemo(() => {
         let result = students.filter(student => {
@@ -367,35 +419,64 @@ export const StudentsView = ({
     };
 
     const showEducationStudentsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const attentionCount = Math.max(0, directorySummary.totalRecords - directorySummary.healthyRecords);
+    const admissionProjection = useMemo(() => projectAdmissionCases({
+        tenantId: currentOrganization?.id || '',
+        leads,
+        bookings,
+        students,
+        enrollments
+    }), [currentOrganization?.id, leads, bookings, students, enrollments]);
 
     return (
         <div className={`atlas-module atlas-students-module flex flex-col space-y-6 pb-24 md:pb-8 ${showEducationStudentsV1 ? 'edu-v1 edu-students-v1' : ''}`} data-testid={showEducationStudentsV1 ? 'education-students-v1' : undefined}>
             {/* Header with Actions */}
             {showEducationStudentsV1 ? (
-                <section className="edu-students-v1__hero" aria-labelledby="education-students-title">
-                    <div className="edu-students-v1__hero-copy">
-                        <span className="edu-students-v1__eyebrow"><Users size={15} />Students & families</span>
-                        <h2 id="education-students-title">One directory for every learner journey.</h2>
-                        <p>Find a learner, understand their family context, and move incomplete records toward enrollment readiness.</p>
-                        <div className="edu-students-v1__pulse">
-                            <span><strong>{stats.dataHealth}%</strong> directory ready</span>
-                            <i aria-hidden="true"><u style={{ width: `${stats.dataHealth}%` }} /></i>
-                            <span><strong>{attentionCount}</strong> need attention</span>
-                        </div>
-                    </div>
-                    <div className="edu-students-v1__hero-actions">
-                        <div className="edu-students-v1__view-switch" role="group" aria-label="Directory view">
-                            <button type="button" data-active={viewMode === 'students'} onClick={() => setViewMode('students')}>Students</button>
-                            <button type="button" data-active={viewMode === 'parents'} onClick={() => setViewMode('parents')}>Families</button>
-                        </div>
-                        <div className="edu-students-v1__primary-actions">
-                            {can('students.enroll') && <button type="button" onClick={() => onQuickEnroll()}><Zap size={17} />Quick enroll</button>}
-                            {can('students.edit') && <button type="button" onClick={onAddStudent}><Plus size={18} />Add student</button>}
-                        </div>
-                    </div>
-                </section>
-            ) : <AtlasCommandHeader
+                <EducationStudentsOperationsV1
+                    students={students}
+                    enrollments={enrollments}
+                    programs={programs}
+                    admissionProjection={admissionProjection}
+                    filteredStudents={filteredStudents}
+                    parentAccounts={parentAccounts}
+                    parentLedger={parentLedger}
+                    directoryHealth={directoryHealth}
+                    directorySummary={directorySummary}
+                    stats={stats}
+                    viewMode={viewMode}
+                    setViewMode={setViewMode}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    filterProgramId={filterProgramId}
+                    setFilterProgramId={setFilterProgramId}
+                    filterGradeName={filterGradeName}
+                    setFilterGradeName={setFilterGradeName}
+                    filterDay={filterDay}
+                    setFilterDay={setFilterDay}
+                    filterAudience={filterAudience}
+                    setFilterAudience={setFilterAudience}
+                    showArchived={showArchived}
+                    setShowArchived={setShowArchived}
+                    directoryFilter={directoryFilter}
+                    setDirectoryFilter={setDirectoryFilter}
+                    selectedProgram={selectedProgram}
+                    availableDays={availableDays}
+                    hasActiveFilters={hasActiveFilters}
+                    clearFilters={clearFilters}
+                    selectedIds={selectedIds}
+                    setSelectedIds={setSelectedIds}
+                    allFilteredSelected={allFilteredSelected}
+                    toggleSelectAll={toggleSelectAll}
+                    can={can}
+                    onAddStudent={onAddStudent}
+                    onEditStudent={onEditStudent}
+                    onQuickEnroll={onQuickEnroll}
+                    onViewProfile={onViewProfile}
+                    onToggleStudentStatus={toggleStudentStatus}
+                    onLinkParent={() => setIsLinkModalOpen(true)}
+                    onOpenParentStatement={openParentStatement}
+                />
+            ) : <>
+            <AtlasCommandHeader
                 eyebrow="Core directory"
                 title="Students and parent accounts"
                 description="Manage learner profiles, household balances, enrollment readiness, and contact quality from one tenant-scoped command surface."
@@ -431,10 +512,10 @@ export const StudentsView = ({
                         )}
                     </div>
                 }
-            />}
+            />
 
             {/* Quick Stats Cards */}
-            <div className="edu-students-v1__stats grid grid-cols-2 gap-4 xl:grid-cols-5">
+            <div className={`edu-students-v1__stats grid grid-cols-2 gap-4 ${showEducationStudentsV1 ? 'xl:grid-cols-4' : 'xl:grid-cols-5'}`} aria-label="Directory snapshot">
                 <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                     <div className="text-[11px] font-black uppercase text-slate-500">Active students</div>
                     <div className="mt-2 text-3xl font-black text-white">{stats.active}</div>
@@ -450,11 +531,13 @@ export const StudentsView = ({
                     <div className="mt-2 text-3xl font-black text-sky-300">{stats.enrolled}</div>
                     <ShieldCheck className="absolute right-3 top-3 h-8 w-8 text-sky-300/18" />
                 </div>
-                <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <div className="text-[11px] font-black uppercase text-slate-500">Directory health</div>
-                    <div className={`mt-2 text-3xl font-black ${stats.dataHealth > 85 ? 'text-emerald-300' : stats.dataHealth > 65 ? 'text-amber-300' : 'text-red-300'}`}>{stats.dataHealth}%</div>
-                    <LinkIcon className="absolute right-3 top-3 h-8 w-8 text-amber-300/18" />
-                </div>
+                {!showEducationStudentsV1 && (
+                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                        <div className="text-[11px] font-black uppercase text-slate-500">Directory health</div>
+                        <div className={`mt-2 text-3xl font-black ${stats.dataHealth > 85 ? 'text-emerald-300' : stats.dataHealth > 65 ? 'text-amber-300' : 'text-red-300'}`}>{stats.dataHealth}%</div>
+                        <LinkIcon className="absolute right-3 top-3 h-8 w-8 text-amber-300/18" />
+                    </div>
+                )}
                 <button
                     type="button"
                     onClick={() => { setShowArchived(previous => !previous); setDirectoryFilter('all'); }}
@@ -538,6 +621,11 @@ export const StudentsView = ({
                             <div className="mt-0.5 text-sm font-black text-white">{parentLedger.familiesWithBalance}</div>
                         </div>
                     </div>
+                )}
+                {showEducationStudentsV1 && (
+                    <span className="edu-students-v1__result-count" aria-live="polite">
+                        {viewMode === 'students' ? `${filteredStudents.length} learners` : `${parentAccounts.length} families`}
+                    </span>
                 )}
             </div>
 
@@ -749,7 +837,7 @@ export const StudentsView = ({
                                 ) : parentAccounts.map((parent, idx) => {
                                     const initials = (parent.parentName || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
                                     return (
-                                        <tr key={parent.phone} onClick={() => setSelectedParentStatement(parent)} className="group hover:bg-slate-800/40 transition-colors cursor-pointer">
+                                        <tr key={parent.phone} onClick={() => openParentStatement(parent)} className="group hover:bg-slate-800/40 transition-colors cursor-pointer">
                                             <td className="p-4 text-center">
                                                 <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-500 transition-colors">
                                                     {initials}
@@ -775,7 +863,7 @@ export const StudentsView = ({
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => { e.stopPropagation(); setSelectedParentStatement(parent); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors" title="View Statement"><Eye size={16} /></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); openParentStatement(parent); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors" title="View Statement"><Eye size={16} /></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -793,7 +881,7 @@ export const StudentsView = ({
                                 <button
                                     key={parent.phone}
                                     type="button"
-                                    onClick={() => setSelectedParentStatement(parent)}
+                                    onClick={() => openParentStatement(parent)}
                                     className="w-full rounded-2xl border border-slate-800 bg-slate-950 p-4 text-left transition active:scale-[0.98]"
                                 >
                                     <div className="flex items-start gap-3">
@@ -820,6 +908,7 @@ export const StudentsView = ({
                     </div>
                 </div>
             )}
+            </>}
             {/* Bulk Actions Bar */}
             {selectedIds.length > 0 && (
                 <div className="edu-students-v1__bulk-bar fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 shadow-2xl shadow-black/80">
@@ -940,25 +1029,56 @@ export const StudentsView = ({
 
             {/* Parent Statement Modal */}
             <Modal isOpen={!!selectedParentStatement} onClose={() => setSelectedParentStatement(null)} title="Parent Financial Statement" size="lg">
-                {selectedParentStatement && (
+                {parentStatementView && (
                     <div className="space-y-6">
+                        {parentStatementProgramOptions.length > 1 && (
+                            <section className="rounded-xl border border-blue-300/20 bg-blue-300/[0.05] p-4">
+                                <div className="mb-3 flex items-center justify-between gap-3">
+                                    <div>
+                                        <h4 className="text-xs font-black uppercase tracking-wider text-blue-100">Programs included in this statement</h4>
+                                        <p className="mt-1 text-xs text-slate-400">Select the programs to show in the parent payment statement.</p>
+                                    </div>
+                                    <button type="button" onClick={() => setSelectedParentProgramIds([])} className="text-xs font-bold text-blue-200 hover:text-white">All programs</button>
+                                </div>
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                    {parentStatementProgramOptions.map(program => {
+                                        const checked = selectedParentProgramIds.length === 0 || selectedParentProgramIds.includes(program.id);
+                                        return (
+                                            <label key={program.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${checked ? 'border-blue-300/40 bg-blue-300/10 text-white' : 'border-white/10 bg-slate-950/30 text-slate-300 hover:border-white/20'}`}>
+                                                <input type="checkbox" checked={checked} onChange={() => setSelectedParentProgramIds(previous => {
+                                                    if (previous.length === 0) return parentStatementProgramOptions.map(item => item.id).filter(id => id !== program.id);
+                                                    if (checked && previous.length === 1) return previous;
+                                                    const next = checked ? previous.filter(id => id !== program.id) : [...previous, program.id];
+                                                    return next.length === parentStatementProgramOptions.length ? [] : next;
+                                                })} />
+                                                <span className="truncate">{program.name}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
                         {/* Summary Header */}
                         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex justify-between items-center">
                             <div>
-                                <h3 className="text-xl font-bold text-white mb-1">{selectedParentStatement.parentName}</h3>
-                                <p className="text-sm font-mono text-slate-400">{selectedParentStatement.phone}</p>
+                                <h3 className="text-xl font-bold text-white mb-1">{parentStatementView.parentName}</h3>
+                                <p className="text-sm font-mono text-slate-400">{parentStatementView.phone}</p>
                             </div>
                             <div className="text-right">
                                 <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Balance Due</p>
-                                <p className={`text-3xl font-bold font-mono ${selectedParentStatement.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    {formatCurrency(selectedParentStatement.totalBalance)}
+                                <p className={`text-3xl font-bold font-mono ${parentStatementView.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    {formatCurrency(parentStatementView.totalBalance)}
                                 </p>
+                                <p className="mt-1 text-[10px] text-slate-500">Prix catalogue: {formatCurrency(parentStatementView.totalList)} · Remise: {formatCurrency(parentStatementView.totalDiscount)}</p>
+                                <p className="text-[10px] text-slate-500">Prix négocié: {formatCurrency(parentStatementView.totalExpected)} · Payé: {formatCurrency(parentStatementView.totalPaid)}</p>
                             </div>
                         </div>
 
                         {/* Breakdown */}
                         <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
-                            {selectedParentStatement.children.map((c: any) => (
+                            {parentStatementView.children.length === 0 ? (
+                                <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">Select at least one program to display in this statement.</div>
+                            ) : parentStatementView.children.map((c: any) => (
                                 <div key={c.student.id} className="bg-slate-950 border border-slate-800 rounded-xl p-4">
                                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
                                         <h4 className="font-bold text-white">{c.student.name}</h4>
@@ -978,11 +1098,14 @@ export const StudentsView = ({
                                         <div className="space-y-2">
                                             {c.enrollments.map((e: any) => {
                                                 const bal = (e.totalAmount || 0) - (e.paidAmount || 0);
+                                                const financialSummary = getEnrollmentFinancialSummary(e, programs);
                                                 return (
                                                     <div key={e.id} className="flex justify-between items-center text-sm">
                                                         <span className="text-slate-300">{e.programName}</span>
                                                         <div className="flex gap-4 font-mono text-xs">
-                                                            <span className="text-slate-500">Exp: {formatCurrency(e.totalAmount || 0)}</span>
+                                                            <span className="text-slate-500">Cat: {formatCurrency(financialSummary.listAmount)}</span>
+                                                            <span className="text-amber-500">Rem: {formatCurrency(financialSummary.discountAmount)}</span>
+                                                            <span className="text-slate-500">Net: {formatCurrency(financialSummary.agreedAmount)}</span>
                                                             <span className="text-emerald-500">Paid: {formatCurrency(e.paidAmount || 0)}</span>
                                                             <span className={`font-bold min-w-24 text-right ${bal > 0 ? 'text-red-400' : 'text-slate-300'}`}>Bal: {formatCurrency(bal)}</span>
                                                         </div>
@@ -1005,7 +1128,7 @@ export const StudentsView = ({
                             </button>
                             <button 
                                 onClick={() => {
-                                    generateParentStatementPrint(selectedParentStatement, settings);
+                                    generateParentStatementPrint(parentStatementView, settings, programs);
                                 }}
                                 className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
                             >

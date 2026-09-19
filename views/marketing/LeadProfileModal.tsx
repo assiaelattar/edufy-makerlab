@@ -19,14 +19,9 @@ import { db } from '../../services/firebase';
 import { Lead } from '../../types';
 import { formatDate } from '../../utils/helpers';
 import { ChatImporterModal } from './ChatImporterModal';
+import { isBookingStableLinkedToLead } from '../../modules/admissions/domain';
 import { getGeneratedSlots, type VirtualSlot } from '../../utils/helpers';
 import { toLocalDateKey } from '../../utils/workshops';
-
-const isBookingLinkedToLead = (booking: { admissionCaseId?: string; crmLeadId?: string; leadId?: string; phoneNumber?: string }, lead: Lead) => {
-    if ([booking.admissionCaseId, booking.crmLeadId, booking.leadId].includes(lead.id)) return true;
-    const cleanPhone = (value = '') => value.replace(/[^0-9]/g, '');
-    return Boolean(cleanPhone(lead.phone)) && cleanPhone(booking.phoneNumber) === cleanPhone(lead.phone);
-};
 
 interface LeadProfileModalProps {
     isOpen: boolean;
@@ -80,7 +75,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
 
     const leadBookings = useMemo(() => {
         return bookings
-            .filter(booking => booking.organizationId === lead.organizationId && isBookingLinkedToLead(booking, lead))
+            .filter(booking => booking.organizationId === lead.organizationId && isBookingStableLinkedToLead(booking, lead.id))
             .sort((a, b) => (b.bookedAt?.toMillis?.() || 0) - (a.bookedAt?.toMillis?.() || 0));
     }, [bookings, lead.id, lead.organizationId]);
 
@@ -119,7 +114,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
         const duplicateBooking = bookings.some(booking =>
             booking.organizationId === orgId &&
             booking.workshopSlotId === slot.slotId &&
-            isBookingLinkedToLead(booking, lead) &&
+            isBookingStableLinkedToLead(booking, lead.id) &&
             booking.status !== 'cancelled'
         );
         if (duplicateBooking) {

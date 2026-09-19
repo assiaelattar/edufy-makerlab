@@ -94,6 +94,13 @@ async function resolveHandler(pathname, query) {
     };
   }
 
+  if (pathname === "/api/creative/generate") {
+    return {
+      mod: await import("../api/creative/generate.js"),
+      query,
+    };
+  }
+
   const accountMatch = pathname.match(/^\/api\/agent\/students\/([^/]+)\/account$/);
   if (accountMatch) {
     return {

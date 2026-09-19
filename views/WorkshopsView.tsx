@@ -11,10 +11,20 @@ import { WorkshopTemplate, Booking } from '../types';
 import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { WorkshopReportModal } from '../components/WorkshopReportModal';
 import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, getWorkshopShareVersion, normalizeWorkshopDays, normalizeWorkshopImageUrl, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
+import { findBookingPhoneCandidateLeadIds, resolveBookingAdmissionLead } from '../modules/admissions/domain';
 import './programs/education-programs-v1.css';
 
-export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: any) => void }) => {
-    const { workshopTemplates, workshopSlots, bookings } = useAppContext();
+interface WorkshopEnrollmentPrefill {
+    childName: string;
+    parentName: string;
+    parentPhone: string;
+    organizationId?: string;
+    admissionCaseId?: string;
+    sourceLeadId?: string;
+}
+
+export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: WorkshopEnrollmentPrefill) => void }) => {
+    const { workshopTemplates, workshopSlots, bookings, leads } = useAppContext();
     const { currentOrganization, can } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const [activeTab, setActiveTab] = useState<'calendar' | 'templates'>('calendar');
@@ -354,7 +364,25 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             variant: 'info'
         });
         if (!approved) return;
-        onConvertProspect({ childName: booking.kidName, parentName: booking.parentName, parentPhone: booking.phoneNumber });
+        const resolution = resolveBookingAdmissionLead(booking, leads, currentOrganization.id);
+        if (resolution.status === 'conflict') {
+            await showAlert('Admissions link needs review', 'This booking contains conflicting case links. Repair the link before starting enrollment.', 'danger');
+            return;
+        }
+        if (resolution.status === 'missing') {
+            await showAlert('Admissions case missing', 'This booking points to a case that is not available in the active organization.', 'danger');
+            return;
+        }
+        onConvertProspect({
+            childName: booking.kidName,
+            parentName: booking.parentName,
+            parentPhone: booking.phoneNumber,
+            ...(resolution.status === 'linked' ? {
+                organizationId: currentOrganization.id,
+                admissionCaseId: resolution.lead.id,
+                sourceLeadId: resolution.lead.id
+            } : {})
+        });
     };
 
     const handlePushToCRM = async (booking: Booking, templateTitle: string) => {
@@ -378,10 +406,20 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         if (!approved) return;
 
         try {
-            const q = query(collection(db, 'leads'), where('organizationId', '==', orgId));
-            const querySnapshot = await getDocs(q);
-            const normalizedPhone = booking.phoneNumber.replace(/\D/g, '');
-            const existingLead = querySnapshot.docs.find(item => String(item.data().phone || '').replace(/\D/g, '') === normalizedPhone);
+            const resolution = resolveBookingAdmissionLead(booking, leads, orgId);
+            if (resolution.status === 'conflict') {
+                throw new Error('This booking contains conflicting admission links. Repair the booking before converting it.');
+            }
+            if (resolution.status === 'missing') {
+                throw new Error('This booking points to a missing admission case. Repair the link before converting it.');
+            }
+            const phoneCandidates = resolution.status === 'unlinked'
+                ? findBookingPhoneCandidateLeadIds(booking, leads, orgId)
+                : [];
+            if (phoneCandidates.length > 0) {
+                throw new Error('A possible CRM match shares this phone number. Review and link the correct family instead of merging automatically.');
+            }
+            const existingLead = resolution.status === 'linked' ? resolution.lead : null;
             const batch = writeBatch(db);
             const bookingRef = doc(db, 'bookings', booking.id);
             const timelineEntry = {
@@ -397,7 +435,12 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                     interests: arrayUnion(templateTitle),
                     timeline: arrayUnion(timelineEntry)
                 });
-                batch.update(bookingRef, { status: 'converted', convertedAt: serverTimestamp() });
+                batch.update(bookingRef, {
+                    status: 'converted',
+                    admissionCaseId: existingLead.id,
+                    crmLeadId: existingLead.id,
+                    convertedAt: serverTimestamp()
+                });
                 await batch.commit();
                 await showAlert('Lead updated', 'The existing CRM profile now includes this workshop and the booking is marked converted.', 'success');
             } else {
@@ -415,13 +458,18 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                     notes: [booking.notes || 'No initial notes'],
                     timeline: [timelineEntry]
                 });
-                batch.update(bookingRef, { status: 'converted', convertedAt: serverTimestamp() });
+                batch.update(bookingRef, {
+                    status: 'converted',
+                    admissionCaseId: leadRef.id,
+                    crmLeadId: leadRef.id,
+                    convertedAt: serverTimestamp()
+                });
                 await batch.commit();
                 await showAlert('Lead created', 'The booking is now available in Marketing Hub.', 'success');
             }
         } catch (error) {
             console.error("Error pushing to CRM:", error);
-            await showAlert('CRM push failed', 'No conversion was saved. Check your connection and try again.', 'danger');
+            await showAlert('CRM push failed', error instanceof Error ? error.message : 'No conversion was saved. Check your connection and try again.', 'danger');
         }
     };
 

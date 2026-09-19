@@ -19,7 +19,7 @@ import './finance/education-finance-v1.css';
 
 export const ActivityDetailsView = () => {
     const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { viewParams, navigateTo, enrollments, payments, students, settings, bookings, workshopTemplates, workshopSlots } = useAppContext();
+    const { viewParams, navigateTo, enrollments, payments, students, programs, settings, bookings, workshopTemplates, workshopSlots } = useAppContext();
     const { confirm, alert: showAlert } = useConfirm();
     const { activityId } = viewParams;
     
@@ -313,7 +313,7 @@ export const ActivityDetailsView = () => {
                    description={`Recorded for ${payment.studentName} on ${formatDate(payment.date)}.`}
                    icon={Receipt}
                    badges={<span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${['paid','verified'].includes(payment.status) ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 bg-red-400/10 text-red-300' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>{payment.status.replace('_', ' ')}</span>}
-                   actions={<><AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton><AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings)}>Print receipt</AtlasActionButton></>}
+                   actions={<><AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton><AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}>Print receipt</AtlasActionButton></>}
                />
                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                    <AtlasSignalCard label="Amount" value={formatCurrency(payment.amount)} detail="Recorded payment" icon={WalletCards} tone="teal" />
@@ -409,7 +409,7 @@ export const ActivityDetailsView = () => {
                             <AtlasActionButton icon={Pencil} onClick={() => { setEditForm(payment); setIsEditModalOpen(true); }}>Edit payment</AtlasActionButton>
                             <AtlasActionButton aria-label="Delete payment" title="Delete payment" icon={Trash2} variant="danger" onClick={() => openDeleteConfirmation(payment)} />
                         </div>
-                        <AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings)}>Print receipt</AtlasActionButton>
+                        <AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}>Print receipt</AtlasActionButton>
                     </div>
                </section>
 

@@ -98,7 +98,31 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                      <AtlasEmptyState title="Build this roster" description="Add the first learner to connect attendance, family contact, and class records." icon={Users} action={can('students.enroll') ? <AtlasActionButton icon={Plus} variant="primary" onClick={handleEnroll}>Add student</AtlasActionButton> : undefined} />
                   </div>
                ) : (
-                  <div className="mt-4 overflow-x-auto custom-scrollbar">
+                  <>
+                  {showEducationSchoolDayV1 && (
+                     <div className="edu-classes-v1__mobile-roster mt-4 md:hidden" aria-label="Class roster cards">
+                        {enrolledStudents.map(student => (
+                           <article key={student.id}>
+                              <div className="edu-classes-v1__mobile-roster-head">
+                                 <div className="edu-classes-v1__mobile-avatar">{student.name.charAt(0)}</div>
+                                 <div>
+                                    <strong>{student.name}</strong>
+                                    <span>{student.school || 'School not listed'} · {calculateAge(student.birthDate)} yrs</span>
+                                 </div>
+                                 {student.enrollment.balance > 0 ? <b data-status="due">Due {formatCurrency(student.enrollment.balance)}</b> : <b data-status="paid">Paid</b>}
+                              </div>
+                              <div className="edu-classes-v1__mobile-contact">
+                                 <span>{student.parentName || 'Parent not listed'}</span>
+                                 <span><Phone size={13} />{student.parentPhone || 'No phone'}</span>
+                              </div>
+                              <button type="button" onClick={() => navigateTo('student-details', { studentId: student.id })}>
+                                 Open student profile <ChevronRight size={16} />
+                              </button>
+                           </article>
+                        ))}
+                     </div>
+                  )}
+                  <div className={`mt-4 overflow-x-auto custom-scrollbar ${showEducationSchoolDayV1 ? 'hidden md:block' : ''}`}>
                      <table className="w-full min-w-[760px] text-left text-sm">
                         <thead className="sticky top-0 z-10 bg-slate-950/95 text-[11px] font-bold uppercase text-slate-500">
                            <tr><th className="p-3">Student</th><th className="p-3">Age</th><th className="p-3">Family contact</th><th className="p-3 text-right">Account</th><th className="w-20 p-3 text-center">Open</th></tr>
@@ -121,6 +145,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                         </tbody>
                      </table>
                   </div>
+                  </>
                )}
             </section>
          </div>

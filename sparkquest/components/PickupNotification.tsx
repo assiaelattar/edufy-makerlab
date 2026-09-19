@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Truck, CheckCircle2, Clock } from 'lucide-react';
@@ -12,7 +12,7 @@ interface PickupEntry {
 }
 
 export const PickupNotification: React.FC = () => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const [activePickup, setActivePickup] = useState<PickupEntry | null>(null);
 
     useEffect(() => {
@@ -21,23 +21,27 @@ export const PickupNotification: React.FC = () => {
         // Listen for ANY pickup request for this student that is NOT completed
         const q = query(
             collection(db, 'pickup_queue'),
-            where('studentId', '==', user.uid),
-            where('status', 'in', ['on_the_way', 'arrived', 'released']),
-            orderBy('createdAt', 'desc'),
-            limit(1)
+            where('studentId', '==', userProfile?.studentId || user.uid),
+            where('organizationId', '==', userProfile?.organizationId || 'makerlab-academy')
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            if (!snapshot.empty) {
-                const doc = snapshot.docs[0];
-                setActivePickup({ id: doc.id, ...doc.data() } as PickupEntry);
+            const activeEntries = snapshot.docs
+                .map(entryDoc => ({ id: entryDoc.id, ...entryDoc.data() } as PickupEntry & { createdAt?: any }))
+                .filter(entry => ['on_the_way', 'arrived', 'released'].includes(entry.status))
+                .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+            if (activeEntries.length > 0) {
+                setActivePickup(activeEntries[0]);
             } else {
                 setActivePickup(null);
             }
+        }, (error) => {
+            console.warn('Pickup notifications are unavailable:', error.code || error.message);
+            setActivePickup(null);
         });
 
         return () => unsubscribe();
-    }, [user]);
+    }, [user, userProfile?.organizationId, userProfile?.studentId]);
 
     if (!activePickup) return null;
 

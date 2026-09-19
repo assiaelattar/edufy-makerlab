@@ -1,7 +1,7 @@
 
 import { Timestamp } from 'firebase/firestore';
 
-export type ProjectStatus = 'planning' | 'building' | 'submitted' | 'published';
+export type ProjectStatus = 'planning' | 'building' | 'testing' | 'delivered' | 'submitted' | 'changes_requested' | 'published';
 export type TaskStatus = 'todo' | 'doing' | 'done' | 'PENDING_REVIEW' | 'REJECTED';
 
 export interface Workflow {
@@ -128,6 +128,21 @@ export interface StudentProject {
   dueDate?: Date;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  academicYearId?: string;
+  academicYear?: string;
+  schoolYear?: string;
+  identityLink?: {
+    legacyStudentId: string;
+    legacyStudentName: string;
+    linkedStudentId: string;
+    linkedBy: string;
+    linkedAt: any;
+  };
+  session?: string;
+  programId?: string;
+  gradeId?: string;
+  groupId?: string;
+  publishedAt?: Timestamp;
 }
 
 // Data coming from the Instructor/LMS for a specific assignment

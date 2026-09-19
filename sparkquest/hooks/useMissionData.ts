@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../services/firebase';
-import { doc, getDoc, collection, query, where, getDocs, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, onSnapshot, setDoc, Timestamp } from 'firebase/firestore';
 import { User, Assignment, StudentProject, RoadmapStep, StepStatus } from '../types';
 
 // Helper to normalize station names to match ERP's expected keys
@@ -13,6 +13,12 @@ const normalizeStation = (stationText: string): string => {
     if (text.includes('design') || text.includes('brand')) return 'branding';
     if (text.includes('engineer') || text.includes('diy') || text.includes('prototype')) return 'engineering';
     return 'general'; // Fallback for unrecognized stations
+};
+
+const currentAcademicYear = () => {
+    const now = new Date();
+    const startYear = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${startYear}-${startYear + 1}`;
 };
 
 import { useAuth } from '../context/AuthContext';
@@ -83,10 +89,16 @@ export const useMissionData = () => {
                     console.log(`[useMissionData] Project found!`, snap.data());
                     // 🔥 CRITICAL FIX: Add document ID to data (Firestore doesn't include it automatically)
                     const pData = { id: snap.id, ...snap.data() } as StudentProject;
+                    if (pData.studentId && pData.studentId !== studentId && pData.studentId !== user?.uid) {
+                        throw new Error('This project does not belong to the signed-in student.');
+                    }
                     console.log('✅ [useMissionData] Project with ID:', pData.id);
                     // Ensure studentId is set (for older projects that might not have it)
                     if (!pData.studentId) {
                         pData.studentId = studentId;
+                    }
+                    if (!pData.organizationId && userProfile?.organizationId) {
+                        pData.organizationId = userProfile.organizationId;
                     }
                     // 🔥 CRITICAL FIX: Fetch Template Resources
                     let stepResources = pData.stepResources || {};
@@ -191,6 +203,9 @@ export const useMissionData = () => {
                     if (!pData.studentId) {
                         pData.studentId = studentId;
                     }
+                    if (!pData.organizationId && userProfile?.organizationId) {
+                        pData.organizationId = userProfile.organizationId;
+                    }
                     // 🔥 CRITICAL FIX: Fetch Template Resources
                     let stepResources = pData.stepResources || {};
                     let globalResources: any[] = pData.resources || [];
@@ -249,7 +264,7 @@ export const useMissionData = () => {
             const progData = progDoc.data();
 
             const mappedAssignment: Assignment = {
-                id: progData.id,
+                id: progDoc.id,
                 title: progData.name,
                 description: progData.description || "Complete your training mission.",
                 station: normalizeStation(progData.type || "Station 1"),
@@ -309,6 +324,7 @@ export const useMissionData = () => {
                         id: `proj_${studentId}_${Date.now()}`,
                         studentId: studentId, // CRITICAL: Add studentId for queries to work
                         studentName: user?.displayName || 'Student', // ✅ CRITICAL FIX: Add studentName for Manager View
+                        organizationId: userProfile?.organizationId,
                         templateId: programId,
                         title: mappedAssignment.title,
                         description: mappedAssignment.description,
@@ -318,8 +334,12 @@ export const useMissionData = () => {
                         steps: initialSteps,
                         commits: [],
                         skills: [],
-                        resources: []
+                        resources: [],
+                        academicYearId: currentAcademicYear(),
+                        createdAt: Timestamp.now(),
+                        updatedAt: Timestamp.now()
                     };
+                    if (!newProject.organizationId) throw new Error('Your organization could not be resolved. Sign in again.');
                     console.log('[useMissionData] Creating new project:', newProject.id);
 
                     // ✅ CRITICAL FIX: Save to Firestore IMMEDIATELY to ensure persistence

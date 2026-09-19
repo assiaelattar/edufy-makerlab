@@ -1,10 +1,9 @@
-export const config = {
-    // Logic: If on localhost, point to localhost. Else point to production.
-    sparkQuestUrl: window.location.hostname === 'localhost'
-        ? 'http://localhost:3000'
-        : 'https://sparkquest-makerlab.vercel.app',
+const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 
-    erpUrl: window.location.hostname === 'localhost'
-        ? 'http://localhost:5173'
-        : 'https://edufy-makerlab.vercel.app'
+export const config = {
+    sparkQuestUrl: import.meta.env.VITE_SPARKQUEST_URL
+        || (isLocalHost ? 'http://127.0.0.1:5174' : 'https://sparkquest-makerlab.vercel.app'),
+
+    erpUrl: import.meta.env.VITE_ERP_URL
+        || (isLocalHost ? 'http://127.0.0.1:5173' : 'https://edufy-makerlab.vercel.app')
 };

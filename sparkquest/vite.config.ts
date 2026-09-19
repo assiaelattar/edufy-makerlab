@@ -12,7 +12,8 @@ export default defineConfig(({ mode }) => {
   return {
     base: isVercel ? '/' : './',
     server: {
-      port: 3000,
+      port: 5174,
+      strictPort: true,
       host: '0.0.0.0',
     },
     plugins: [react()],

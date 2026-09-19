@@ -24,7 +24,7 @@ export type AtlasEntitlement = {
     entitled: boolean;
     active: boolean;
     locked: boolean;
-    source: 'platform' | 'plan' | 'add_on' | 'free' | 'none';
+    source: 'platform' | 'plan' | 'add_on' | 'free' | 'legacy' | 'none';
 };
 
 const essentialModuleIds = new Set(['dashboard', 'settings']);
@@ -93,6 +93,13 @@ const legacyModuleActive = (organization: Organization | null, item: AtlasCatalo
     if (essentialModuleIds.has(item.id)) return true;
     const explicit = organization.modules?.[item.id];
     if (typeof explicit === 'boolean') return explicit;
+    if (item.id === 'learning') {
+        return Boolean(
+            organization.modules?.makerPro ||
+            organization.modules?.sparkQuest ||
+            organization.modules?.sparkquest
+        );
+    }
     return Boolean(organization.modules?.erp && item.module?.appId === 'edufy-core' && item.module.enabledByDefault);
 };
 
@@ -107,7 +114,8 @@ export const resolveCatalogEntitlement = (
     const includedByPlatform = item.billing === 'included';
     const grantedAsAddOn = Boolean(organization?.subscription?.addOns?.includes(item.id));
     const free = item.billing === 'free';
-    const entitled = item.isPublished && (includedByPlatform || includedByPlan || grantedAsAddOn || free);
+    const grantedByLegacyWorkspace = legacyModuleActive(organization, item);
+    const entitled = item.isPublished && (includedByPlatform || includedByPlan || grantedAsAddOn || free || grantedByLegacyWorkspace);
     const source: AtlasEntitlement['source'] = includedByPlatform
         ? 'platform'
         : includedByPlan
@@ -116,7 +124,9 @@ export const resolveCatalogEntitlement = (
                 ? 'add_on'
                 : free
                     ? 'free'
-                    : 'none';
+                    : grantedByLegacyWorkspace
+                        ? 'legacy'
+                        : 'none';
 
     const active = item.kind === 'module'
         ? (essentialModuleIds.has(item.id) || (activeModuleOverrides[item.id] ?? legacyModuleActive(organization, item)))

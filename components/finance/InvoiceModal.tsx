@@ -6,7 +6,9 @@ import { generateFinanceDocument } from '../../utils/financeDocumentGenerator';
 import { issueFinanceInvoice } from '../../services/financeDocuments';
 import { db } from '../../services/firebase';
 import { useAuth } from '../../context/AuthContext';
+import { useAppContext } from '../../context/AppContext';
 import { useConfirm } from '../../context/ConfirmContext';
+import { getEnrollmentFinancialSummary } from '../../utils/enrollmentFinancials';
 import { Building, User, MapPin, Hash, FileText } from 'lucide-react';
 
 interface InvoiceModalProps {
@@ -27,6 +29,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     settings
 }) => {
     const { currentOrganization } = useAuth();
+    const { programs } = useAppContext();
     const { alert: showAlert } = useConfirm();
     const [clientType, setClientType] = useState<'individual' | 'company'>('individual');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -72,6 +75,12 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
         }
         try {
             setIsGenerating(true);
+            const financialSummary = getEnrollmentFinancialSummary(enrollment, programs);
+            const pricingDetails = [
+                `Prix catalogue : ${financialSummary.listAmount.toLocaleString('fr-MA')} MAD`,
+                `Remise accordée : ${financialSummary.discountAmount.toLocaleString('fr-MA')} MAD`,
+                `Prix négocié : ${financialSummary.agreedAmount.toLocaleString('fr-MA')} MAD`,
+            ].join(' · ');
             const invoice = await issueFinanceInvoice(db, {
                 organizationId: currentOrganization.id,
                 sequenceType: 'formation',
@@ -93,6 +102,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
                 idempotencyKey: `payment-${payment.id}`,
                 lines: [{
                     description: `Formation — ${enrollment.programName}`,
+                    details: pricingDetails,
                     quantity: 1,
                     unitPrice: payment.amount,
                     taxRate: 20,

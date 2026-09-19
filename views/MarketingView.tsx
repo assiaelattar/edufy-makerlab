@@ -86,27 +86,6 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     const [actionFeedback, setActionFeedback] = useState<{ kind: 'success' | 'error' | 'info'; message: string } | null>(null);
     const canCreateMarketing = can('marketing.create');
 
-    // Auto-Status Listener (Sync bookings to lead status)
-    React.useEffect(() => {
-        if (!db || !orgId || !canCreateMarketing || !leads.length || !bookings.length) return;
-
-        leads.forEach(lead => {
-            if (['new', 'contacted', 'interested'].includes(lead.status)) {
-                if (lead.organizationId !== orgId) return;
-                const leadPhone = cleanPhone(lead.phone);
-                if (!leadPhone) return;
-
-                const hasBooking = bookings.some(b => b.organizationId === orgId && cleanPhone(b.phoneNumber) === leadPhone && b.status !== 'cancelled');
-                if (hasBooking) {
-                    void updateDoc(doc(db, 'leads', lead.id), { status: 'workshop_booked', timeline: arrayUnion({ date: new Date().toISOString(), type: 'status_change', details: 'Workshop booking detected; pipeline moved to workshop booked.', author: 'Edufy automation' }) }).catch(error => {
-                        console.error('Lead booking sync failed', error);
-                        setActionFeedback({ kind: 'error', message: `Could not sync ${lead.name}'s booking status. Refresh and try again.` });
-                    });
-                }
-            }
-        });
-    }, [bookings, canCreateMarketing, leads, orgId]);
-
     // --- INVITE STATE ---
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
     const [selectedLeadForInvite, setSelectedLeadForInvite] = useState<Lead | null>(null);

@@ -1,68 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Atlas by Edufy</title>
+  <desc id="description">A dark Atlas operations grid with a teal and amber center signal.</desc>
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f172a"/>
-      <stop offset="100%" style="stop-color:#1e1b4b"/>
+    <linearGradient id="atlas-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08111f"/>
+      <stop offset="1" stop-color="#13243a"/>
     </linearGradient>
-    <linearGradient id="red" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ff3a5c"/>
-      <stop offset="100%" style="stop-color:#ea223f"/>
+    <linearGradient id="atlas-core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#14b8a6"/>
     </linearGradient>
-    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#60a5fa"/>
-      <stop offset="100%" style="stop-color:#3b82f6"/>
-    </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="atlas-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="14"/>
     </filter>
   </defs>
 
-  <!-- Background with rounded corners -->
-  <rect width="512" height="512" rx="114" ry="114" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="116" fill="url(#atlas-bg)"/>
+  <path d="M72 176h368M72 256h368M72 336h368M176 72v368M256 72v368M336 72v368" fill="none" stroke="#8db5ff" stroke-opacity=".13" stroke-width="3"/>
 
-  <!-- Subtle grid dots -->
-  <g opacity="0.07" fill="#60a5fa">
-    <circle cx="80" cy="80" r="3"/><circle cx="160" cy="80" r="3"/><circle cx="240" cy="80" r="3"/>
-    <circle cx="320" cy="80" r="3"/><circle cx="400" cy="80" r="3"/><circle cx="432" cy="80" r="3"/>
-    <circle cx="80" cy="160" r="3"/><circle cx="432" cy="160" r="3"/>
-    <circle cx="80" cy="352" r="3"/><circle cx="432" cy="352" r="3"/>
-    <circle cx="80" cy="432" r="3"/><circle cx="160" cy="432" r="3"/><circle cx="240" cy="432" r="3"/>
-    <circle cx="320" cy="432" r="3"/><circle cx="400" cy="432" r="3"/><circle cx="432" cy="432" r="3"/>
+  <circle cx="256" cy="256" r="82" fill="#14b8a6" opacity=".18" filter="url(#atlas-glow)"/>
+  <rect x="188" y="188" width="136" height="136" rx="32" fill="url(#atlas-core)"/>
+  <rect x="218" y="218" width="76" height="76" rx="20" fill="#08111f"/>
+  <path d="M236 271l20-39 20 39h-12l-8-16-8 16z" fill="#f2c766"/>
+
+  <g fill="#8db5ff">
+    <circle cx="176" cy="176" r="8"/><circle cx="336" cy="176" r="8"/>
+    <circle cx="176" cy="336" r="8"/><circle cx="336" cy="336" r="8"/>
   </g>
-
-  <!-- Orbit ring -->
-  <ellipse cx="256" cy="256" rx="200" ry="200" fill="none" stroke="#334155" stroke-width="1" opacity="0.4"/>
-  <ellipse cx="256" cy="256" rx="140" ry="140" fill="none" stroke="#334155" stroke-width="1" opacity="0.3"/>
-
-  <!-- Small accent dots on orbit -->
-  <circle cx="256" cy="56" r="5" fill="url(#accent)" opacity="0.7" filter="url(#glow)"/>
-  <circle cx="456" cy="256" r="5" fill="url(#accent)" opacity="0.7" filter="url(#glow)"/>
-  <circle cx="256" cy="456" r="5" fill="#ea223f" opacity="0.7" filter="url(#glow)"/>
-  <circle cx="56" cy="256" r="5" fill="url(#accent)" opacity="0.7" filter="url(#glow)"/>
-
-  <!-- M letterform — two triangular peaks + base bar -->
-  <!-- Left leg -->
-  <polygon points="96,370 96,165 164,280 256,152 348,280 416,165 416,370" fill="none" stroke="url(#red)" stroke-width="0" opacity="0"/>
-
-  <!-- Main M shape using paths -->
-  <!-- Left vertical bar -->
-  <rect x="96" y="152" width="52" height="210" rx="8" fill="url(#red)" filter="url(#glow)"/>
-  <!-- Right vertical bar -->
-  <rect x="364" y="152" width="52" height="210" rx="8" fill="url(#red)" filter="url(#glow)"/>
-  <!-- Left diagonal strut (top-left to center bottom) -->
-  <polygon points="96,152 148,152 256,290 256,360 208,360" fill="url(#red)" filter="url(#glow)"/>
-  <!-- Right diagonal strut (top-right to center bottom) -->
-  <polygon points="364,152 416,152 304,360 256,360 256,290" fill="url(#red)" filter="url(#glow)"/>
-
-  <!-- Center bottom point accent glow -->
-  <circle cx="256" cy="330" r="18" fill="#ff3a5c" opacity="0.35" filter="url(#glow)"/>
-
-  <!-- Top bar connecting peaks -->
-  <rect x="96" y="152" width="320" height="0" rx="4" fill="url(#red)"/>
-
-  <!-- Accent blue dash — bottom left corner decoration -->
-  <rect x="96" y="390" width="80" height="6" rx="3" fill="url(#accent)" opacity="0.6"/>
-  <!-- Accent blue dash — bottom right -->
-  <rect x="336" y="390" width="80" height="6" rx="3" fill="url(#accent)" opacity="0.6"/>
+  <g fill="#5eead4">
+    <circle cx="96" cy="256" r="7"/><circle cx="416" cy="256" r="7"/>
+  </g>
+  <g fill="#f2c766">
+    <circle cx="256" cy="96" r="7"/><circle cx="256" cy="416" r="7"/>
+  </g>
 </svg>

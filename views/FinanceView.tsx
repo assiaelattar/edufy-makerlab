@@ -20,6 +20,7 @@ import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
 import './finance/education-finance-v1.css';
 import { FinanceDocumentsPanel } from '../components/finance/FinanceDocumentsPanel';
 import { getProgramOperationalState } from '../utils/programLifecycle';
+import { getEnrollmentFinancialSummary } from '../utils/enrollmentFinancials';
 
 // --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
@@ -119,6 +120,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     const [isSubmittingParentPayment, setIsSubmittingParentPayment] = useState(false);
     const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
     const [statementAccount, setStatementAccount] = useState<any>(null);
+    const [statementProgramIds, setStatementProgramIds] = useState<string[]>([]);
 
     // --- Transaction Edit Modal State ---
     const [editingTransaction, setEditingTransaction] = useState<Payment | null>(null);
@@ -401,6 +403,36 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
         return Array.from(map.values()).sort((a, b) => b.totalBalance - a.totalBalance);
     }, [filteredEnrollments, students]);
+
+    const statementProgramOptions = useMemo(() => {
+        if (!statementAccount) return [] as Array<{ id: string; name: string }>;
+        const seen = new Set<string>();
+        return statementAccount.children
+            .map((child: any) => ({
+                id: child.enrollment.programId,
+                name: child.enrollment.programName || programs.find(program => program.id === child.enrollment.programId)?.name || 'Program'
+            }))
+            .filter((program: { id: string; name: string }) => {
+                if (!program.id || seen.has(program.id)) return false;
+                seen.add(program.id);
+                return true;
+            })
+            .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
+    }, [statementAccount, programs]);
+
+    const statementViewAccount = useMemo(() => {
+        if (!statementAccount) return null;
+        const children = statementProgramIds.length === 0
+            ? statementAccount.children
+            : statementAccount.children.filter((child: any) => statementProgramIds.includes(child.enrollment.programId));
+        return {
+            ...statementAccount,
+            children,
+            totalBalance: children.reduce((sum: number, child: any) => sum + Number(child.enrollment.balance || 0), 0),
+            totalPaid: children.reduce((sum: number, child: any) => sum + Number(child.enrollment.paidAmount || 0), 0),
+            totalExpected: children.reduce((sum: number, child: any) => sum + Number(child.enrollment.totalAmount || 0), 0),
+        };
+    }, [statementAccount, statementProgramIds]);
 
     const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -992,6 +1024,8 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     };
 
     const handlePrintParentStatement = (account: any, parentPayments: Payment[]) => {
+        const statementListAmount = account.children.reduce((sum: number, child: any) => sum + getEnrollmentFinancialSummary(child.enrollment, programs).listAmount, 0);
+        const statementDiscountAmount = account.children.reduce((sum: number, child: any) => sum + getEnrollmentFinancialSummary(child.enrollment, programs).discountAmount, 0);
         const printWindow = window.open('', '_blank');
         if (!printWindow) {
             showAlert("Warning", "Please allow popups to print statements", "warning");
@@ -1073,6 +1107,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 <th>Child</th>
                                 <th>Program</th>
                                 <th class="text-right">Total Fee</th>
+                                <th class="text-right">Discount / Remise</th>
                                 <th class="text-right">Paid</th>
                                 <th class="text-right">Balance</th>
                             </tr>
@@ -1086,6 +1121,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                         <div style="font-size:10px; color:#64748b;">${c.enrollment.paymentPlan} &middot; ${c.enrollment.packName}</div>
                                     </td>
                                     <td class="text-right font-mono">${formatCurrency(c.enrollment.totalAmount || 0)}</td>
+                                    <td class="text-right font-mono" style="color:#d97706;">${getEnrollmentFinancialSummary(c.enrollment, programs).discountAmount > 0 ? formatCurrency(getEnrollmentFinancialSummary(c.enrollment, programs).discountAmount) : '-'}</td>
                                     <td class="text-right font-mono" style="color:#10b981;">${formatCurrency(c.enrollment.paidAmount || 0)}</td>
                                     <td class="text-right font-mono" style="font-weight:600;">${formatCurrency(c.enrollment.balance || 0)}</td>
                                 </tr>
@@ -1131,7 +1167,15 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
                     <div class="totals-section">
                         <div class="totals-row">
-                            <span class="totals-label">Total Expected Fee:</span>
+                            <span class="totals-label">Listed fees:</span>
+                            <span class="totals-val">${formatCurrency(statementListAmount)}</span>
+                        </div>
+                        <div class="totals-row">
+                            <span class="totals-label">Discount granted / Remise:</span>
+                            <span class="totals-val" style="color:#d97706;">-${formatCurrency(statementDiscountAmount)}</span>
+                        </div>
+                        <div class="totals-row">
+                            <span class="totals-label">Agreed fees:</span>
                             <span class="totals-val">${formatCurrency(account.totalExpected)}</span>
                         </div>
                         <div class="totals-row">
@@ -2012,7 +2056,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     </div>
                                     <dl><div><dt>Children</dt><dd>{account.children.length}</dd></div><div><dt>Received</dt><dd>{formatCurrency(account.totalPaid)}</dd></div></dl>
                                     <div className="edu-finance-v1__mobile-actions">
-                                        <button type="button" onClick={() => { setStatementAccount(account); setIsStatementModalOpen(true); }}><FileText size={15} />Statement</button>
+                                        <button type="button" onClick={() => { setStatementAccount(account); setStatementProgramIds([]); setIsStatementModalOpen(true); }}><FileText size={15} />Statement</button>
                                         {account.totalBalance > 0 && can('finance.record_payment') && <button type="button" className="is-primary" onClick={() => {
                                             if (account.children.length > 1) {
                                                 setParentPaymentAccount(account);
@@ -2117,6 +2161,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                     <button 
                                                         onClick={() => {
                                                             setStatementAccount(account);
+                                                            setStatementProgramIds([]);
                                                             setIsStatementModalOpen(true);
                                                         }}
                                                         className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors"
@@ -2177,7 +2222,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                         {lifecycleAction && can('finance.record_payment') && <button type="button" className="is-primary" onClick={() => openTransactionEditor(payment, lifecycleAction.status)}>{lifecycleAction.label}</button>}
                                         <button type="button" onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })}><Eye size={15} />Details</button>
                                         {can('finance.record_payment') && <button type="button" onClick={() => openTransactionEditor(payment)}><Wrench size={15} />Edit</button>}
-                                        <button type="button" disabled={!['paid', 'verified'].includes(payment.status)} onClick={() => generateReceipt(payment, enrollment, student, settings)}><Printer size={15} />Receipt</button>
+                                        <button type="button" disabled={!['paid', 'verified'].includes(payment.status)} onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}><Printer size={15} />Receipt</button>
                                     </div>
                                 </article>
                             );
@@ -2260,7 +2305,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                             <Wrench size={16} />
                                                         </button>
                                                     )}
-                                                    <button disabled={!['paid', 'verified'].includes(payment.status)} onClick={() => generateReceipt(payment, enrollment, student, settings)} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400 transition-colors disabled:cursor-not-allowed disabled:opacity-30" title={['paid', 'verified'].includes(payment.status) ? 'Print cleared payment receipt' : 'Receipt available when payment clears'}>
+                                                    <button disabled={!['paid', 'verified'].includes(payment.status)} onClick={() => generateReceipt(payment, enrollment, student, settings, programs)} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400 transition-colors disabled:cursor-not-allowed disabled:opacity-30" title={['paid', 'verified'].includes(payment.status) ? 'Print cleared payment receipt' : 'Receipt available when payment clears'}>
                                                         <Printer size={16} />
                                                     </button>
                                                 </div>
@@ -2468,27 +2513,61 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
             {/* --- PARENT STATEMENT MODAL --- */}
             <Modal isOpen={isStatementModalOpen} onClose={() => setIsStatementModalOpen(false)} title="Parent Statement of Account" size="lg">
-                {statementAccount && (() => {
-                    const childEnrollmentIds = statementAccount.children.map((c: any) => c.enrollment.id);
+                {statementViewAccount && (() => {
+                    const childEnrollmentIds = statementViewAccount.children.map((c: any) => c.enrollment.id);
                     const parentPayments = payments.filter(p => childEnrollmentIds.includes(p.enrollmentId))
                         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    const statementDiscount = statementViewAccount.children.reduce((sum: number, child: any) => sum + getEnrollmentFinancialSummary(child.enrollment, programs).discountAmount, 0);
+                    const statementListAmount = statementViewAccount.children.reduce((sum: number, child: any) => sum + getEnrollmentFinancialSummary(child.enrollment, programs).listAmount, 0);
 
                     return (
                         <div className="space-y-6">
+                            {statementProgramOptions.length > 1 && (
+                                <section className="rounded-xl border border-teal-300/20 bg-teal-300/[0.05] p-4">
+                                    <div className="mb-3 flex items-center justify-between gap-3">
+                                        <div>
+                                            <h4 className="text-xs font-black uppercase tracking-wider text-teal-100">Programs included in this statement</h4>
+                                            <p className="mt-1 text-xs text-slate-400">Choose one or more programs, or keep all programs selected.</p>
+                                        </div>
+                                        <button type="button" onClick={() => setStatementProgramIds([])} className="text-xs font-bold text-teal-200 hover:text-white">All programs</button>
+                                    </div>
+                                    <div className="grid gap-2 sm:grid-cols-2">
+                                        {statementProgramOptions.map(program => {
+                                            const checked = statementProgramIds.length === 0 || statementProgramIds.includes(program.id);
+                                            return (
+                                                <label key={program.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${checked ? 'border-teal-300/40 bg-teal-300/10 text-white' : 'border-white/10 bg-slate-950/30 text-slate-300 hover:border-white/20'}`}>
+                                                    <input type="checkbox" checked={checked} onChange={() => setStatementProgramIds(previous => {
+                                                        if (previous.length === 0) return statementProgramOptions.map(item => item.id).filter(id => id !== program.id);
+                                                        if (checked && previous.length === 1) return previous;
+                                                        const next = checked ? previous.filter(id => id !== program.id) : [...previous, program.id];
+                                                        return next.length === statementProgramOptions.length ? [] : next;
+                                                    })} />
+                                                    <span className="truncate">{program.name}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            )}
                             {/* Family Summary Header */}
                             <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 flex justify-between items-start">
                                 <div>
-                                    <h3 className="text-lg font-bold text-white mb-1">{statementAccount.parentName || 'Parent Account'}</h3>
-                                    <div className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12} /> {statementAccount.phone || 'No phone'}</div>
-                                    <div className="text-xs text-slate-500 mt-2">{statementAccount.children.length} Child(ren) Enrolled</div>
+                                    <h3 className="text-lg font-bold text-white mb-1">{statementViewAccount.parentName || 'Parent Account'}</h3>
+                                    <div className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12} /> {statementViewAccount.phone || 'No phone'}</div>
+                                    <div className="text-xs text-slate-500 mt-2">{statementViewAccount.children.length} Child(ren) Enrolled</div>
                                 </div>
                                 <div className="text-right">
                                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Family Balance</div>
-                                    <div className={`text-2xl font-mono font-bold ${statementAccount.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                        {formatCurrency(statementAccount.totalBalance)}
+                                    <div className={`text-2xl font-mono font-bold ${statementViewAccount.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                        {formatCurrency(statementViewAccount.totalBalance)}
                                     </div>
-                                    <div className="text-[10px] text-slate-500 mt-1">Expected: {formatCurrency(statementAccount.totalExpected)} &middot; Paid: {formatCurrency(statementAccount.totalPaid)}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">Expected: {formatCurrency(statementViewAccount.totalExpected)} &middot; Paid: {formatCurrency(statementViewAccount.totalPaid)}</div>
                                 </div>
+                            </div>
+                            <div className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900/50 p-4 sm:grid-cols-3">
+                                <div><p className="text-[10px] font-bold uppercase text-slate-500">Listed fees</p><p className="mt-1 font-mono text-sm text-slate-200">{formatCurrency(statementListAmount)}</p></div>
+                                <div><p className="text-[10px] font-bold uppercase text-slate-500">Discount / Remise</p><p className="mt-1 font-mono text-sm text-amber-300">-{formatCurrency(statementDiscount)}</p></div>
+                                <div><p className="text-[10px] font-bold uppercase text-slate-500">Agreed fees</p><p className="mt-1 font-mono text-sm text-slate-200">{formatCurrency(statementViewAccount.totalExpected)}</p></div>
                             </div>
 
                             {/* Children & Enrollments Section */}
@@ -2501,12 +2580,13 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                 <th className="p-3">Child</th>
                                                 <th className="p-3">Program</th>
                                                 <th className="p-3 text-right">Total Fee</th>
+                                                <th className="p-3 text-right">Discount / Remise</th>
                                                 <th className="p-3 text-right">Paid</th>
                                                 <th className="p-3 text-right">Balance</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800 text-slate-300">
-                                            {statementAccount.children.map((c: any, i: number) => (
+                                            {statementViewAccount.children.map((c: any, i: number) => (
                                                 <tr key={i} className="hover:bg-slate-850/50 transition-colors">
                                                     <td className="p-3 font-medium text-white">{c.student.name}</td>
                                                     <td className="p-3">
@@ -2514,6 +2594,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                         <div className="text-[10px] text-slate-500">{c.enrollment.paymentPlan} &middot; {c.enrollment.packName}</div>
                                                     </td>
                                                     <td className="p-3 text-right font-mono">{formatCurrency(c.enrollment.totalAmount || 0)}</td>
+                                                    <td className="p-3 text-right font-mono text-amber-300">{getEnrollmentFinancialSummary(c.enrollment, programs).discountAmount > 0 ? formatCurrency(getEnrollmentFinancialSummary(c.enrollment, programs).discountAmount) : '-'}</td>
                                                     <td className="p-3 text-right font-mono text-emerald-400">{formatCurrency(c.enrollment.paidAmount || 0)}</td>
                                                     <td className="p-3 text-right font-mono font-bold text-slate-200">
                                                         <span className={c.enrollment.balance > 0 ? 'text-red-400' : 'text-slate-500'}>
@@ -2548,7 +2629,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                     <td colSpan={6} className="p-6 text-center text-slate-500 italic">No payments recorded yet.</td>
                                                 </tr>
                                             ) : parentPayments.map((p: Payment, i: number) => {
-                                                const child = statementAccount.children.find((c: any) => c.enrollment.id === p.enrollmentId);
+                                                const child = statementViewAccount.children.find((c: any) => c.enrollment.id === p.enrollmentId);
                                                 return (
                                                     <tr key={i} className="hover:bg-slate-850/50 transition-colors">
                                                         <td className="p-3 text-slate-400">{formatDate(p.date)}</td>
@@ -2580,7 +2661,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
                                 <button 
                                     type="button"
-                                    onClick={() => handlePrintParentStatement(statementAccount, parentPayments)}
+                                    onClick={() => handlePrintParentStatement(statementViewAccount, parentPayments)}
                                     className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-lg shadow-blue-900/20"
                                 >
                                     <Printer size={14} /> Print Statement

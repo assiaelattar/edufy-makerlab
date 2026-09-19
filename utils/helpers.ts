@@ -1,8 +1,9 @@
 
-import { Enrollment, Payment, Student, AppSettings, WorkshopTemplate, WorkshopSlot, StudentProject } from '../types';
+import { Enrollment, Payment, Student, AppSettings, WorkshopTemplate, WorkshopSlot, StudentProject, Program } from '../types';
 import { translations } from './translations';
 import { STATION_THEMES } from './theme';
 import { normalizeWorkshopDays, parseLocalDateKey, toLocalDateKey } from './workshops';
+import { getEnrollmentFinancialSummary } from './enrollmentFinancials';
 
 export const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-MA', { style: 'currency', currency: 'MAD' }).format(amount);
@@ -479,7 +480,13 @@ export const getGeneratedSlots = (
   });
 };
 
-export const generateReceipt = (payment: Payment, enrollment: Enrollment | undefined, student: Student | undefined, settings: AppSettings) => {
+export const generateReceipt = (
+  payment: Payment,
+  enrollment: Enrollment | undefined,
+  student: Student | undefined,
+  settings: AppSettings,
+  programs: Program[] = []
+) => {
   const receiptWindow = window.open('', '_blank');
   if (!receiptWindow) {
     alert('Please allow popups to generate receipts');
@@ -491,6 +498,9 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
   const t = (key: string) => (translations[lang] as any)[key] || key;
 
   const isRejected = payment.status === 'check_bounced';
+  const financialSummary = enrollment
+    ? getEnrollmentFinancialSummary(enrollment, programs)
+    : { listAmount: 0, discountAmount: 0, agreedAmount: 0, discountPercent: 0 };
   const defaultLogo = `${window.location.origin}/images/logo.png`;
   const logoHtml = `<div class="logo-container"><img src="${settings.logoUrl || defaultLogo}" alt="Logo" /></div>`;
 
@@ -537,6 +547,13 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
         .payment-table td { padding: 16px; border-bottom: 1px solid #e2e8f0; font-size: 14px; color: #334155; }
         .payment-table tr:last-child td { border-bottom: none; }
         .payment-table td:last-child { text-align: right; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+        .pricing-summary { display: grid; grid-template-columns: 1fr auto; gap: 0 24px; margin: -12px 0 28px; padding: 14px 18px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; position: relative; z-index: 1; }
+        .pricing-summary .pricing-row { display: contents; }
+        .pricing-summary .pricing-label, .pricing-summary .pricing-value { padding: 5px 0; font-size: 13px; }
+        .pricing-summary .pricing-label { color: #92400e; }
+        .pricing-summary .pricing-value { text-align: right; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #78350f; }
+        .pricing-summary .discount-label, .pricing-summary .discount-value { color: #b45309; }
+        .pricing-summary .agreed-label, .pricing-summary .agreed-value { border-top: 1px dashed #f59e0b; margin-top: 5px; padding-top: 10px; color: #0f172a; font-weight: 800; }
         .total-section { display: flex; flex-direction: column; align-items: flex-end; margin-top: 20px; padding-top: 20px; border-top: 2px solid #f1f5f9; position: relative; z-index: 1; }
         .total-row { display: flex; justify-content: space-between; width: 250px; margin-bottom: 10px; }
         .total-label { font-size: 14px; color: #64748b; }
@@ -582,6 +599,12 @@ export const generateReceipt = (payment: Payment, enrollment: Enrollment | undef
             ${enrollment?.secondGroupName ? `<div class="sub-value" style="margin-top:2px; font-size:11px; color:#2563eb;">+ ${enrollment.secondGroupName} (DIY)</div>` : ''}
           </div>
         </div>
+        ${enrollment ? `
+        <div class="pricing-summary" aria-label="${t('receipt.pricing_details')}">
+          <div class="pricing-row"><span class="pricing-label">${t('receipt.list_price')}</span><span class="pricing-value">${formatCurrency(financialSummary.listAmount)}</span></div>
+          <div class="pricing-row"><span class="pricing-label discount-label">${t('receipt.discount')}</span><span class="pricing-value discount-value">-${formatCurrency(financialSummary.discountAmount)}</span></div>
+          <div class="pricing-row"><span class="pricing-label agreed-label">${t('receipt.negotiated_price')}</span><span class="pricing-value agreed-value">${formatCurrency(financialSummary.agreedAmount)}</span></div>
+        </div>` : ''}
         <table class="payment-table">
           <thead><tr><th>${t('receipt.description')}</th><th>${t('receipt.method')}</th><th>${t('receipt.reference')}</th><th>${t('receipt.amount')}</th></tr></thead>
           <tbody>
@@ -1031,7 +1054,9 @@ export const normalizePhone = (phone: string | undefined | null): string => {
   return digits;
 };
 
-export const generateParentStatementPrint = (parentData: any, settings: AppSettings) => {
+export { normalizePhoneForWhatsApp } from './whatsappPhone';
+
+export const generateParentStatementPrint = (parentData: any, settings: AppSettings, programs: Program[] = []) => {
   const win = window.open('', '_blank');
   if (!win) {
     alert("Please allow popups to print.");
@@ -1041,6 +1066,25 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
   const defaultLogo = `${window.location.origin}/images/logo.png`;
   const logoHtml = `<img src="${settings.logoUrl || defaultLogo}" alt="Logo" class="logo" />`;
 
+  const statementTotals = (parentData.children || []).reduce((totals: {
+    listAmount: number;
+    discountAmount: number;
+    agreedAmount: number;
+    paidAmount: number;
+    balanceAmount: number;
+  }, childInfo: any) => {
+    (childInfo.enrollments || []).forEach((enrollment: Enrollment) => {
+      const financialSummary = getEnrollmentFinancialSummary(enrollment, programs);
+      const paidAmount = Math.max(0, Number(enrollment.paidAmount || 0));
+      totals.listAmount += financialSummary.listAmount;
+      totals.discountAmount += financialSummary.discountAmount;
+      totals.agreedAmount += financialSummary.agreedAmount;
+      totals.paidAmount += paidAmount;
+      totals.balanceAmount += Math.max(0, financialSummary.agreedAmount - paidAmount);
+    });
+    return totals;
+  }, { listAmount: 0, discountAmount: 0, agreedAmount: 0, paidAmount: 0, balanceAmount: 0 });
+
   let childrenHtml = '';
   parentData.children.forEach((childInfo: any) => {
     const student = childInfo.student;
@@ -1049,18 +1093,21 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
     let enrollmentsHtml = '';
     enrollments.forEach((e: any) => {
       const balance = (e.totalAmount || 0) - (e.paidAmount || 0);
+      const financialSummary = getEnrollmentFinancialSummary(e as Enrollment, programs);
       enrollmentsHtml += `
         <tr>
           <td class="col-prog">${e.programName}</td>
-          <td class="col-num">${e.totalAmount || 0}</td>
-          <td class="col-num">${e.paidAmount || 0}</td>
-          <td class="col-num font-bold ${balance > 0 ? 'text-red' : 'text-green'}">${balance}</td>
+          <td class="col-num">${formatCurrency(financialSummary.listAmount)}</td>
+          <td class="col-num text-amber">${financialSummary.discountAmount > 0 ? `-${formatCurrency(financialSummary.discountAmount)}` : '-'}</td>
+          <td class="col-num">${formatCurrency(financialSummary.agreedAmount)}</td>
+          <td class="col-num">${formatCurrency(e.paidAmount || 0)}</td>
+          <td class="col-num font-bold ${balance > 0 ? 'text-red' : 'text-green'}">${formatCurrency(balance)}</td>
         </tr>
       `;
     });
 
     if (enrollments.length === 0) {
-      enrollmentsHtml = `<tr><td colspan="4" class="text-center text-gray">No active enrollments</td></tr>`;
+      enrollmentsHtml = `<tr><td colspan="6" class="text-center text-gray">No active enrollments</td></tr>`;
     }
 
     childrenHtml += `
@@ -1069,10 +1116,12 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
         <table class="data-table">
           <thead>
             <tr>
-              <th class="col-prog">Program</th>
-              <th class="col-num">Expected</th>
-              <th class="col-num">Paid</th>
-              <th class="col-num">Balance</th>
+              <th class="col-prog">Programme</th>
+              <th class="col-num">Prix catalogue</th>
+              <th class="col-num">Remise</th>
+              <th class="col-num">Prix négocié</th>
+              <th class="col-num">Payé</th>
+              <th class="col-num">Solde</th>
             </tr>
           </thead>
           <tbody>
@@ -1083,7 +1132,7 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
     `;
   });
 
-  const now = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const now = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 
   const html = `
     <!DOCTYPE html>
@@ -1109,9 +1158,13 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
         .info-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
         .info-value { font-size: 16px; font-weight: 600; color: #0f172a; margin-top: 4px; }
         
-        .summary-box { text-align: right; border-left: 2px solid #e2e8f0; padding-left: 20px; }
+        .summary-box { min-width: 260px; text-align: right; border-left: 2px solid #e2e8f0; padding-left: 20px; }
         .solde-label { font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; }
-        .solde-value { font-size: 32px; font-weight: 800; color: ${parentData.totalBalance > 0 ? '#dc2626' : '#16a34a'}; margin-top: 5px; }
+        .solde-value { font-size: 32px; font-weight: 800; color: ${statementTotals.balanceAmount > 0 ? '#dc2626' : '#16a34a'}; margin-top: 5px; }
+        .pricing-summary { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; display: grid; gap: 5px; }
+        .pricing-line { display: flex; justify-content: space-between; gap: 18px; font-size: 11px; color: #64748b; }
+        .pricing-line strong { color: #0f172a; white-space: nowrap; }
+        .pricing-line.discount, .pricing-line.discount strong { color: #b45309; }
         
         .student-section { margin-bottom: 30px; }
         .student-name { font-size: 16px; font-weight: 700; color: #1e293b; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 12px; }
@@ -1119,12 +1172,13 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
         .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .data-table th { text-align: left; padding: 10px; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 11px; text-transform: uppercase; }
         .data-table td { padding: 12px 10px; border-bottom: 1px solid #e2e8f0; }
-        .col-prog { width: 50%; }
-        .col-num { width: 16.6%; text-align: right; }
+        .col-prog { width: 29%; }
+        .col-num { width: 14.2%; text-align: right; white-space: nowrap; }
         
         .font-bold { font-weight: 700; }
         .text-red { color: #dc2626; }
         .text-green { color: #16a34a; }
+        .text-amber { color: #b45309; }
         .text-gray { color: #94a3b8; }
         .text-center { text-align: center; }
         
@@ -1145,32 +1199,36 @@ export const generateParentStatementPrint = (parentData: any, settings: AppSetti
           </div>
         </div>
         
-        <h2 class="statement-title">Financial Statement</h2>
+        <h2 class="statement-title">Bilan financier famille</h2>
         
         <div class="parent-info-card">
           <div>
             <div class="info-group">
-              <div class="info-label">Parent / Guardian</div>
+              <div class="info-label">Parent / Tuteur</div>
               <div class="info-value">${parentData.parentName}</div>
             </div>
             <div class="info-group">
-              <div class="info-label">Contact Phone</div>
+              <div class="info-label">Téléphone</div>
               <div class="info-value">${parentData.phone || 'N/A'}</div>
             </div>
           </div>
           <div class="summary-box">
-            <div class="solde-label">Total Balance Due</div>
-            <div class="solde-value">${parentData.totalBalance}</div>
-            <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Total Expected: ${parentData.totalExpected}</div>
-            <div style="font-size: 11px; color: #64748b;">Total Paid: ${parentData.totalPaid}</div>
+            <div class="solde-label">Solde total à payer</div>
+            <div class="solde-value">${formatCurrency(statementTotals.balanceAmount)}</div>
+            <div class="pricing-summary">
+              <div class="pricing-line"><span>Prix catalogue total</span><strong>${formatCurrency(statementTotals.listAmount)}</strong></div>
+              <div class="pricing-line discount"><span>Remise totale</span><strong>${statementTotals.discountAmount > 0 ? `-${formatCurrency(statementTotals.discountAmount)}` : formatCurrency(0)}</strong></div>
+              <div class="pricing-line"><span>Prix négocié total</span><strong>${formatCurrency(statementTotals.agreedAmount)}</strong></div>
+              <div class="pricing-line"><span>Total payé</span><strong>${formatCurrency(statementTotals.paidAmount)}</strong></div>
+            </div>
           </div>
         </div>
         
         ${childrenHtml}
         
         <div class="footer">
-          Thank you for being part of ${settings.academyName || 'our community'}.<br/>
-          If you have any questions regarding this statement, please contact us.
+          Merci de faire partie de ${settings.academyName || 'notre communauté'}.<br/>
+          Pour toute question concernant ce bilan, veuillez nous contacter.
         </div>
       </div>
       <script>

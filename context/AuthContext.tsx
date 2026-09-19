@@ -61,6 +61,7 @@ const DEFAULT_ROLES: RoleDefinition[] = [
     description: 'Can manage students, enrollments, attendance and record payments.',
     permissions: [
       'dashboard.view',
+      'admissions.view', 'admissions.note', 'admissions.whatsapp',
       'students.view', 'students.edit', 'students.enroll',
       'classes.view',
       'attendance.manage',
@@ -426,7 +427,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         slug: 'makerlab-demo',
         ownerUid: demoUser.uid,
         status: 'active',
+        installedApps: ['social-poster-ai'],
         modules: { erp: true, makerPro: true, sparkQuest: true },
+        subscription: {
+          planId: 'demo',
+          status: 'active',
+          startDate: Timestamp.now(),
+          nextBillingDate: Timestamp.now(),
+          interval: 'month',
+          addOns: ['social-poster-ai']
+        },
         createdAt: Timestamp.now() as any
     });
 
@@ -607,6 +617,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authError = !userProfile ? 'Profile not found' : userProfile.status !== 'active' ? 'Account inactive' : !roleDefinition ? 'Role not defined' : null;
 
   const isPlatformBootstrapAdmin = !platformBootstrapComplete
+    && userProfile?.uid !== 'demo-admin-id'
     && userProfile?.organizationId === 'makerlab-academy'
     && userProfile?.role === 'admin';
   const isSuperAdmin = userProfile?.role === 'super_admin' || isPlatformBootstrapAdmin;

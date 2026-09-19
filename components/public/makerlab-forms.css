@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@500;600;700&display=swap');
+
+.makerlab-public { color-scheme: light; font-family: Manrope, sans-serif; background: #f6f7f9; color: #172033; min-height: 100dvh; }
+.makerlab-public h1, .makerlab-public h2, .makerlab-public h3 { font-family: Outfit, Manrope, sans-serif; letter-spacing: -.025em; }
+.ml-form-header { background: white; border-bottom: 1px solid #e5e8ee; }
+.ml-form-header > div { max-width: 780px; margin: auto; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ml-form-logo { display: block; width: 146px; flex-shrink: 0; border-radius: 8px; }
+.ml-form-logo svg { display: block; width: 100%; height: 50px; }
+.ml-form-header span { font-size: 11px; font-weight: 800; text-align: right; }
+.ml-form-header small { display: block; color: #64748b; font-size: 10px; font-weight: 500; margin-top: 3px; }
+.ml-enroll-intro { max-width: 740px; margin: 22px auto 18px; padding: 0 20px; }
+.ml-enroll-intro p { color: #b94c16; font-size: 10px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+.ml-enroll-intro h1 { font-size: clamp(25px, 4vw, 34px); font-weight: 700; margin-top: 5px; line-height: 1.15; }
+.ml-enroll-intro small { display: block; margin-top: 7px; color: #64748b; font-size: 12px; }
+.ml-enrollment-main { max-width: 740px; margin: 0 auto; padding: 0 16px 32px; }
+.ml-pack-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.ml-pack-option { cursor: pointer; position: relative; display: flex; flex-direction: column; padding: 16px 12px; border: 1px solid #dbe1ea; border-radius: 14px; background: #fff; }
+.ml-pack-option:has(:checked) { border: 2px solid #c64f12; padding: 15px 11px; background: #fff6ef; }
+.ml-pack-option input { position: absolute; right: 12px; top: 15px; accent-color: #c64f12; }
+.ml-pack-option strong { font-family: Outfit, sans-serif; padding-right: 18px; font-size: 17px; }
+.ml-pack-option span { font-size: 11px; color: #526174; margin-top: 6px; }
+.ml-session-choices { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.ml-session-choice { display: flex; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid #dbe1ea; border-radius: 12px; min-height: 68px; cursor: pointer; }
+.ml-session-choice input { margin-top: 3px; accent-color: #c64f12; }
+.ml-session-choice strong { display: block; font-size: 12px; }
+.ml-session-choice small { display: block; margin-top: 4px; font-size: 10px; color: #64748b; }
+.ml-session-choice .ml-session-time { font-size: 12px; font-weight: 600; color: #334155; white-space: nowrap; }
+.ml-session-section { border: 1px solid #dbe1ea; border-radius: 12px; padding: 12px; }
+.ml-session-section > summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; list-style: none; min-height: 44px; }
+.ml-session-section > summary::-webkit-details-marker { display: none; }
+.ml-session-section > summary strong { display: block; font-size: 13px; }
+.ml-session-section > summary small { display: block; font-size: 12px; color: #526174; margin-top: 4px; }
+.ml-session-edit { font-size: 11px; color: #b94c16; font-weight: 700; }
+.ml-session-section .ml-session-choice { padding: 8px; gap: 6px; }
+.ml-session-choice:has(:checked) { border-color: #c64f12; background: #fff3e9; }
+.ml-session-choice:has(:disabled) { opacity: .45; cursor: not-allowed; }
+.makerlab-public :focus-visible { outline: 2px solid #c64f12; outline-offset: 3px; }
+.makerlab-public input, .makerlab-public select, .makerlab-public textarea { font-size: 16px; }
+.ml-trial-intro { display: grid; grid-template-columns: minmax(0,1fr) 100px; align-items: center; gap: 14px; padding: 18px; background: #fff; border: 1px solid #e5e8ee; border-radius: 18px; margin-top: 16px; }
+.ml-trial-intro h1 { font-size: 24px; line-height: 1.12; font-weight: 700; }
+.ml-trial-intro img { width: 100px; height: 110px; object-fit: cover; border-radius: 12px; }
+.ml-trial-intro p { color: #b94c16; text-transform: uppercase; letter-spacing: .1em; font-size: 9px; font-weight: 800; margin-bottom: 7px; }
+.ml-trial-intro .ml-trial-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; color: #64748b; margin: 12px 0 0; font-size: 11px; text-transform: none; letter-spacing: 0; }
+@media(min-width:640px) { .ml-trial-intro { grid-template-columns: minmax(0,1fr) 160px; padding: 24px; } .ml-trial-intro img { width:160px; height:150px; } .ml-trial-intro h1 { font-size:32px; } }
+@media(prefers-reduced-motion:reduce) { .makerlab-public *, .makerlab-public *::before, .makerlab-public *::after { animation: none !important; transition:none !important; scroll-behavior:auto !important; } }

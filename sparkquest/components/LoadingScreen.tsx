@@ -70,7 +70,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({ mode = 'standard',
                     initial={{ y: 200, opacity: 0 }}
                     animate={{ y: [200, -20, 0], opacity: 1 }}
                     exit={{ y: -1000, transition: { duration: 0.8, ease: "easeIn" } }}
-                    transition={{ duration: 1.2, type: "spring" }}
+                    transition={{ duration: 1.2, type: "tween", ease: "easeOut" }}
                     className="relative z-10 mb-8"
                 >
                     {/* Rocket Body */}
