@@ -1,16 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FactoryProvider } from './context/FactoryContext';
 import { useMissionData } from './hooks/useMissionData';
 import { useFactoryData } from './hooks/useFactoryData';
-import { StudentWizard } from './components/StudentWizard';
-import { InstructorFactory } from './components/InstructorFactory';
-import { RoadmapStep, StepStatus, Peer, User, Assignment, StudentProject } from './types';
-import { Roadmap } from './components/Roadmap';
-import { SubmissionModal } from './components/SubmissionModal';
-import { StyleGuide } from './components/StyleGuide';
-import { api } from './services/api';
-import { LoginPage } from './components/LoginPage';
 import { LoginView } from './components/LoginView';
 import { ProjectSelector } from './components/ProjectSelector';
 import { SessionProvider } from './context/SessionContext';
@@ -21,57 +13,60 @@ import { InactivityMonitor } from './components/InactivityMonitor';
 import { PickupNotification } from './components/PickupNotification';
 import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
-import { ProjectDetailsEnhanced } from './components/ProjectDetailsEnhanced';
-import ParentShowcase from './components/ParentShowcase';
 import { ToastProvider } from './context/ToastContext';
+import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
+import { isLocalHostname } from '../utils/appUrls';
+import { exchangeSparkQuestLaunch } from './services/appBridge';
 
 
-// Mock Data for Old Roadmap (Legacy View)
-const INITIAL_STEPS: RoadmapStep[] = [
-  { id: 1, title: 'Concept', description: 'Draw your robot car idea on paper. What features does it have?', status: StepStatus.ACTIVE, proofType: 'image', xpReward: 50 },
-  { id: 2, title: 'Design', description: 'Use Tinkercad to create a 3D model of your chassis.', status: StepStatus.LOCKED, proofType: 'link', xpReward: 100 },
-  { id: 3, title: 'Build', description: '3D Print or Laser Cut your parts. Show us the physical parts!', status: StepStatus.LOCKED, proofType: 'image', xpReward: 150 },
-  { id: 4, title: 'Wiring', description: 'Wire up the motors and battery pack. Careful with polarity!', status: StepStatus.LOCKED, proofType: 'image', xpReward: 150 },
-  { id: 5, title: 'Code', description: 'Write the code to make it move. Upload a screenshot of your code.', status: StepStatus.LOCKED, proofType: 'image', xpReward: 200 },
-  { id: 6, title: 'Launch', description: 'Record a video or photo of your robot driving!', status: StepStatus.LOCKED, proofType: 'image', xpReward: 500 },
-];
-
-const MOCK_PEERS: Peer[] = [
-  { id: 'p1', name: 'Alex', avatarColor: 'bg-red-500', currentStepId: 2 },
-  { id: 'p2', name: 'Sarah', avatarColor: 'bg-yellow-500', currentStepId: 2 },
-  { id: 'p3', name: 'Jordan', avatarColor: 'bg-purple-500', currentStepId: 4 },
-  { id: 'p4', name: 'Mike', avatarColor: 'bg-green-500', currentStepId: 1 },
-];
-
-const INITIAL_USER: User = {
-  name: 'Explorer',
-  level: 1,
-  xp: 0,
-  currentStepId: 1
-};
-
-
-import { KioskLoginView } from './components/KioskLoginView';
 import { LoadingScreen } from './components/LoadingScreen';
+
+const StudentWizard = lazy(() => import('./components/StudentWizard').then(module => ({ default: module.StudentWizard })));
+const InstructorFactory = lazy(() => import('./components/InstructorFactory').then(module => ({ default: module.InstructorFactory })));
+const ProjectDetailsEnhanced = lazy(() => import('./components/ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
+const ParentShowcase = lazy(() => import('./components/ParentShowcase'));
+
+const LazyView: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <Suspense fallback={<LoadingScreen mode="standard" message="Opening your workshop..." />}>
+    {children}
+  </Suspense>
+);
+
+const AccountIssue: React.FC<{ message: string; onSignOut: () => Promise<void> }> = ({ message, onSignOut }) => (
+  <main className="sq-entry-shell">
+    <section className="sq-entry-card sq-entry-card--issue" aria-labelledby="account-issue-title">
+      <div className="sq-entry-mark" aria-hidden="true"><Wrench /></div>
+      <p className="sq-entry-eyebrow">Account connection</p>
+      <h1 id="account-issue-title">Your workshop pass needs a quick repair.</h1>
+      <p className="sq-entry-copy">{message}</p>
+      <div className="sq-entry-actions">
+        <a className="sq-entry-primary" href={config.erpUrl}><ArrowLeft size={18} /> Return to Edufy</a>
+        <button className="sq-entry-secondary" type="button" onClick={() => window.location.reload()}><RefreshCw size={18} /> Try again</button>
+      </div>
+      <button className="sq-entry-text-action" type="button" onClick={() => void onSignOut()}>Use a different account</button>
+    </section>
+  </main>
+);
 
 // Wrapper component to use Auth Context
 const SparkQuestApp: React.FC = () => {
   // 1. ALL HOOKS
-  const { user, userProfile, signInWithToken, signOut, loading: authLoading, isKioskMode } = useAuth();
-  const { fetchMission, clearMission, assignment, project, loading: missionLoading, error, isConnected } = useMissionData();
+  const { user, userProfile, signInWithToken, signOut, loading: authLoading, authIssue } = useAuth();
+  const { fetchMission, clearMission, assignment, project, error, isConnected } = useMissionData();
   const { projectTemplates, studentProjects } = useFactoryData();
 
   const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY' | 'SHOWCASE'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
 
-  const [bootComplete, setBootComplete] = useState(false);
-
   // URL State Hooks (Moved Up)
-  const [initialProjectId] = useState(() => {
+  const [initialProjectId, setInitialProjectId] = useState<string | null>(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('projectId');
   });
+  const launchExchangeStarted = useRef(false);
+  const [launchPending, setLaunchPending] = useState(() => new URLSearchParams(window.location.search).has('launch'));
+  const [launchIssue, setLaunchIssue] = useState<string | null>(null);
 
   const [initialRole] = useState<'student' | 'instructor' | 'parent'>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -84,36 +79,42 @@ const SparkQuestApp: React.FC = () => {
     return params.get('view');
   });
 
-  const [erpUrl, setErpUrl] = useState(() => localStorage.getItem('erp_url') || import.meta.env.VITE_ERP_URL || 'http://localhost:5173');
-  const [showConfig, setShowConfig] = useState(false);
-
   // Effects
   useEffect(() => { console.log("App Version: Fixed hooks v2"); }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    if (token) {
-      console.log("Token detected, attempting sign in...");
-      signInWithToken(token).then(() => {
-        console.log("Sign in promise resolved.");
-      }).catch(err => console.error("Auth Token Error", err));
-    }
+    const currentUrl = new URL(window.location.href);
+    if (!currentUrl.searchParams.has('token')) return;
+    currentUrl.searchParams.delete('token');
+    window.history.replaceState({}, document.title, currentUrl.toString());
+    setLaunchIssue('This legacy SparkQuest sign-in link is no longer supported. Return to Edufy and open SparkQuest again.');
   }, []);
 
   useEffect(() => {
-    if (user) {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('token')) {
-        const timer = setTimeout(() => {
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.delete('token');
-          window.history.replaceState({}, document.title, newUrl.toString());
-        }, 2000);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [user]);
+    const launchCode = new URLSearchParams(window.location.search).get('launch');
+    if (!launchCode || launchExchangeStarted.current) return;
+    launchExchangeStarted.current = true;
+    setLaunchPending(true);
+
+    void exchangeSparkQuestLaunch(launchCode)
+      .then(async result => {
+        if (result.projectId) setInitialProjectId(result.projectId);
+        await signInWithToken(result.customToken);
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('launch');
+        cleanUrl.searchParams.delete('token');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+        setLaunchIssue(null);
+      })
+      .catch(error => {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('launch');
+        cleanUrl.searchParams.delete('token');
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+        setLaunchIssue(error instanceof Error ? error.message : 'The Edufy launch link is invalid or expired.');
+      })
+      .finally(() => setLaunchPending(false));
+  }, [signInWithToken]);
 
   // Routing Logic
   useEffect(() => {
@@ -164,48 +165,43 @@ const SparkQuestApp: React.FC = () => {
     window.location.reload();
   };
 
-  const handleLogin = () => {
-    const currentUrl = window.location.href;
-    window.location.href = `${erpUrl}?service=sparkquest&redirect=${encodeURIComponent(currentUrl)}`;
-  };
-
   // 2. EARLY RETURNS (Guard Clauses)
   // 2. EARLY RETURNS (Guard Clauses)
-
-  // Boot
-  if (!bootComplete) {
-    return <LoadingScreen mode="boot" onComplete={() => {
-      setBootComplete(true);
-    }} />;
-  }
 
   // Loading
   if (authLoading) {
     return <LoadingScreen mode="standard" message="Initializing System..." />;
   }
 
-  // KIOSK MODE GUARD
-  if (isKioskMode && !user) {
-    return <KioskLoginView />;
+  if (launchPending) {
+    return <LoadingScreen mode="standard" message="Opening your verified Edufy workshop..." />;
+  }
+
+  if (launchIssue) {
+    return <AccountIssue message={launchIssue} onSignOut={handleLogout} />;
   }
 
   // Auth Guard
   if (!user) {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('token')) {
-      return <LoadingScreen mode="standard" message="Verifying Identity..." />;
-    }
     return <LoginView />;
+  }
+
+  if (authIssue) {
+    return <AccountIssue message={authIssue} onSignOut={handleLogout} />;
+  }
+
+  if (!userProfile) {
+    return <LoadingScreen mode="standard" message="Connecting your Edufy profile..." />;
   }
 
   // 3. MAIN RENDER LOGIC
 
   if (view === 'FACTORY') {
-    return <InstructorFactory />;
+    return <LazyView><InstructorFactory /></LazyView>;
   }
 
   if (view === ('SHOWCASE' as any)) {
-    return <ParentShowcase
+    return <LazyView><ParentShowcase
       coverImage={project?.coverImage || project?.thumbnailUrl || undefined}
       onViewProject={() => {
         // If we have a project ID in URL, we could open details, but for now lets go to HOME
@@ -215,7 +211,7 @@ const SparkQuestApp: React.FC = () => {
         } else {
           setView('HOME');
         }
-      }} />;
+      }} /></LazyView>;
   }
 
   // PREVIEW / DETAILS INTERSTITIAL
@@ -243,7 +239,7 @@ const SparkQuestApp: React.FC = () => {
       skills: []
     } as any;
 
-    return (
+    return <LazyView>{(
       <ProjectDetailsEnhanced
         project={finalProject}
         role={initialRole}
@@ -258,7 +254,7 @@ const SparkQuestApp: React.FC = () => {
           if (initialViewMode === 'details') window.close();
         }}
       />
-    );
+    )}</LazyView>;
   }
 
   // Error State
@@ -300,7 +296,7 @@ const SparkQuestApp: React.FC = () => {
   // WIZARD View
   return (
     <div className="h-screen w-full flex flex-col bg-slate-900 overflow-hidden relative">
-      <StudentWizard
+      <LazyView><StudentWizard
         assignment={assignment!}
         initialProject={project!}
         isConnected={isConnected}
@@ -311,7 +307,7 @@ const SparkQuestApp: React.FC = () => {
           // Clear URL params if any
           window.history.pushState({}, '', window.location.pathname);
         }}
-      />
+      /></LazyView>
     </div>
   );
 };
@@ -333,28 +329,34 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   render() {
     if (this.state.hasError) {
       return (
-        <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-900 text-white p-8 text-center space-y-6">
-          <h1 className="text-4xl font-black text-red-500">System Failure</h1>
-          <p className="text-lg text-slate-300 max-w-2xl bg-slate-800 p-4 rounded-xl font-mono text-sm text-left overflow-auto max-h-64">
+        <main className="sq-entry-shell">
+          <section className="sq-entry-card sq-entry-card--issue" aria-labelledby="system-issue-title">
+          <div className="sq-entry-mark" aria-hidden="true"><Wrench /></div>
+          <p className="sq-entry-eyebrow">SparkQuest recovery</p>
+          <h1 id="system-issue-title">The studio could not open.</h1>
+          <p className="sq-entry-copy">Refresh the page first. If the problem continues, reset only SparkQuest’s local session and sign in again.</p>
+          <pre className="sq-entry-error-detail">
             {this.state.error?.toString()}
-          </p>
+          </pre>
+          <div className="sq-entry-actions">
           <button
             onClick={() => window.location.reload()}
-            className="px-8 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-colors"
+            className="sq-entry-primary"
           >
-            Reboot System
+            <RefreshCw size={18} /> Refresh
           </button>
           <button
             onClick={() => {
-              localStorage.clear();
-              sessionStorage.clear();
+              ['sparkquest_bridge_user', 'sparkquest_kiosk_mode', 'sparkquest_boot_complete'].forEach(key => localStorage.removeItem(key));
               window.location.reload();
             }}
-            className="px-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-bold transition-colors text-sm"
+            className="sq-entry-secondary"
           >
-            Emergency Reset (Logout)
+            Reset SparkQuest session
           </button>
-        </div>
+          </div>
+          </section>
+        </main>
       );
     }
 
@@ -363,6 +365,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 const App: React.FC = () => {
+  const localPreview = isLocalHostname(window.location.hostname)
+    && new URLSearchParams(window.location.search).get('preview') === 'login';
+
+  if (localPreview) return <LoginView />;
+
   return (
     <ErrorBoundary>
       <AuthProvider>

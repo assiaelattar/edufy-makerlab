@@ -96,6 +96,7 @@ interface StepContentProps {
 }
 
 const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, updateProject, closeModal, onShowResources }) => {
+  const { user, userProfile } = useAuth();
   const [stage, setStage] = useState<'BRIEFING' | 'CUSTOMIZE'>(project.title ? 'CUSTOMIZE' : 'BRIEFING');
 
   // Typewriter State
@@ -250,26 +251,18 @@ const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, 
                       }
 
                       try {
-                        // 1. Show optimistic preview (optional, or just wait)
-                        // For now, let's just upload. Consider adding a Loading UI if needed.
-                        const reader = new FileReader();
-                        reader.onload = (ev) => {
-                          // Optional: Show preview immediately while uploading?
-                          // Can't set project.coverImage to base64 or it defeats the purpose if save happens before upload finishes.
-                          // But we can trigger upload now.
-                        };
-                        // reader.readAsDataURL(file);
-
-                        // 2. Upload
-                        const path = `projects/${project.studentId || 'unknown'}/${Date.now()}_${file.name}`;
+                        const organizationId = userProfile?.organizationId;
+                        if (!organizationId || !user?.uid) throw new Error('Your student account is not fully linked.');
+                        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+                        const path = `student-projects/${organizationId}/${user.uid}/${project.id}/cover-${Date.now()}-${safeFileName}`;
                         const url = await api.uploadFile(file, path);
 
-                        // 3. Update Project
-                        updateProject({
+                        const result = await updateProject({
                           thumbnailUrl: url,
                           coverImage: url,
                           mediaUrls: [url]
                         });
+                        if (!result.success) throw new Error(result.error || 'Project image could not be saved.');
 
                       } catch (error) {
                         console.error("Upload failed", error);
@@ -408,10 +401,11 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
       if (targetId === 'custom-workflow') {
         console.log("✨ [StudentWizard] Initializing Free Build");
         if ((project.steps || []).length === 0) {
+          if (!userProfile?.organizationId) throw new Error('Your student account is not fully linked.');
           updateProject({
             workflowId: targetId,
             steps: [],
-            organizationId: userProfile?.organizationId || 'makerlab-academy'
+            organizationId: userProfile.organizationId
           });
         }
         closeModal();
@@ -420,10 +414,11 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 
       if (targetId === 'showcase') {
         console.log("🏆 [StudentWizard] Initializing Showcase");
+        if (!userProfile?.organizationId) throw new Error('Your student account is not fully linked.');
         updateProject({
           workflowId: targetId,
           steps: [],
-          organizationId: userProfile?.organizationId || 'makerlab-academy'
+          organizationId: userProfile.organizationId
         }); // No steps needed
         // Allow view to switch to ShowcaseUploadContent automatically on re-render
         return;
@@ -754,6 +749,7 @@ const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProje
 
 const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ project, updateProject, closeModal, taskId }) => {
   const { startSession } = useSession();
+  const { user, userProfile } = useAuth();
   const realId = taskId.replace('step-', '');
   const step = project.steps.find(s => s.id === realId);
 
@@ -816,7 +812,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const canGoNext = () => {
     switch (wizardStep) {
       case 1: return true; // Instructions - always can proceed
-      case 2: return !!(preview || link); // Evidence - must have file or link
+      case 2: return !!(file || preview || link); // Evidence - must have file or link
       case 3: return true; // Notes - optional, always can proceed
       default: return false;
     }
@@ -838,20 +834,32 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
     if (e.target.files?.[0]) {
       const selectedFile = e.target.files[0];
 
-      // Validation: Max 5MB
-      if (selectedFile.size > 5 * 1024 * 1024) {
-        alert("File too large. Maximum size is 5MB.");
+      // Storage rules accept project media up to 20 MB.
+      if (selectedFile.size > 20 * 1024 * 1024) {
+        showToast('File too large. Maximum size is 20 MB.', 'error');
         e.target.value = ''; // Reset input
+        return;
+      }
+
+      const allowed = /^(image|video|audio)\//.test(selectedFile.type) || ['application/pdf', 'text/plain'].includes(selectedFile.type);
+      if (!allowed) {
+        showToast('Upload an image, video, audio clip, PDF, or text file.', 'error');
+        e.target.value = '';
         return;
       }
 
       playSound('click');
       setFile(selectedFile);
 
-      // Show local preview immediately
-      const reader = new FileReader();
-      reader.onloadend = () => setPreview(reader.result as string);
-      reader.readAsDataURL(selectedFile);
+      // Only images need an in-memory visual preview. Large documents and
+      // media remain as File objects until the Storage upload begins.
+      if (selectedFile.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => setPreview(reader.result as string);
+        reader.readAsDataURL(selectedFile);
+      } else {
+        setPreview(null);
+      }
     }
   };
 
@@ -863,38 +871,31 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       // Prepare Evidence Data
       let evidenceUrl = link;
 
-      // Convert file to Base64 with progress (matching gallery/profile pattern)
+      // Store binary evidence in Firebase Storage. Keeping Base64 out of the
+      // Firestore project document prevents slow writes and the 1 MiB document
+      // ceiling from breaking a learner's submission.
       if (file) {
         try {
           setUploading(true);
           setUploadProgress(0);
-          console.log("🚀 [Evidence] Converting to Base64...");
+          console.log("🚀 [Evidence] Uploading file...");
           console.log("📄 [Evidence] File:", file.name, "Size:", file.size);
-
-          const toBase64 = (file: File): Promise<string> => {
-            return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.readAsDataURL(file);
-              reader.onprogress = (event) => {
-                if (event.lengthComputable) {
-                  setUploadProgress(Math.round((event.loaded / event.total) * 100));
-                }
-              };
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = error => reject(error);
-            });
-          };
-
-          evidenceUrl = await toBase64(file);
-          setUploadProgress(100);
-          console.log("✅ [Evidence] Base64 conversion complete!");
+          const organizationId = userProfile?.organizationId;
+          if (!organizationId || !user?.uid) throw new Error('Your student account is not fully linked.');
+          const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          evidenceUrl = await api.uploadFile(
+            file,
+            `student-projects/${organizationId}/${user.uid}/${project.id}/evidence-${realId}-${Date.now()}-${safeFileName}`,
+            setUploadProgress
+          );
+          console.log("✅ [Evidence] Upload complete!");
           setUploading(false);
 
         } catch (e) {
-          console.error("❌ [Evidence] Base64 conversion failed:", e);
+          console.error("❌ [Evidence] Upload failed:", e);
           setUploading(false);
           setUploadProgress(0);
-          showToast(`Failed to process image: ${(e as any).message || "Unknown error"}`, 'error');
+          showToast(`Upload failed: ${(e as any).message || "Unknown error"}`, 'error');
           setSubmitting(false);
           return;
         }
@@ -920,7 +921,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       // AUTO-PROMOTE EVIDENCE TO COVER IMAGE (Fix for Showcase/Teacher View)
       // If no cover exists (or it's a placeholder), use this evidence.
       let autoPromoteUpdates = {};
-      if (evidenceUrl && (!project.thumbnailUrl || project.thumbnailUrl.startsWith('data:image/svg') || project.workflowId === 'showcase')) {
+      if (evidenceUrl && (!file || file.type.startsWith('image/')) && (!project.thumbnailUrl || project.thumbnailUrl.startsWith('data:image/svg') || project.workflowId === 'showcase')) {
         console.log("📸 [StudentWizard] Auto-promoting evidence to Project Cover");
         autoPromoteUpdates = {
           thumbnailUrl: evidenceUrl, // Used for List View
@@ -981,13 +982,19 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
     alert('✅ Progress saved!');
   };
 
+  const evidenceLooksLikeImage = (url?: string) => Boolean(url && (
+    url.startsWith('data:image/') || /\.(png|jpe?g|gif|webp|avif)(?:\?|$)/i.test(url)
+  ));
+
   if (step.status === 'done') {
     return (
       <div className="text-center py-4 md:py-8">
         <div className="text-4xl md:text-6xl mb-2 md:mb-4 animate-bounce">🏆</div>
         <h3 className="text-xl md:text-2xl font-black text-slate-800">Step Completed!</h3>
         <p className="text-green-600 font-bold text-sm md:text-base">Commander Approved</p>
-        {step.evidence && <img src={step.evidence} className="mt-4 md:mt-6 rounded-2xl shadow-lg mx-auto max-h-40 md:max-h-60 border-4 border-white transform -rotate-1" alt="Evidence" />}
+        {step.evidence && (evidenceLooksLikeImage(step.evidence)
+          ? <img src={step.evidence} className="mt-4 md:mt-6 rounded-2xl shadow-lg mx-auto max-h-40 md:max-h-60 border-4 border-white transform -rotate-1" alt="Evidence" />
+          : <a href={step.evidence} target="_blank" rel="noreferrer" className="mx-auto mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700"><FileText size={18} /> Open submitted file</a>)}
       </div>
     );
   }
@@ -1044,11 +1051,11 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             <div className="w-full bg-white p-4 rounded-2xl border-2 border-amber-200 space-y-3">
               <p className="text-xs font-black uppercase text-amber-600 text-left">Your Submitted Evidence</p>
               <div className="relative">
-                <img
+                {evidenceLooksLikeImage(step.evidence) ? <img
                   src={step.evidence}
                   alt="Submitted Evidence"
                   className="w-full max-h-48 object-cover rounded-xl shadow-md"
-                />
+                /> : <a href={step.evidence} target="_blank" rel="noreferrer" className="flex min-h-24 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-black text-amber-800"><FileText size={20} /> Open submitted file</a>}
                 <button
                   onClick={() => {
                     setIsEditing(true);
@@ -1142,24 +1149,26 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
               onClick={() => fileInputRef.current?.click()}
               className="border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
             >
-              {preview ? (
+              {preview && (!file || file.type.startsWith('image/')) ? (
                 <div className="relative z-10">
                   <img src={preview} alt="Preview" className="h-32 md:h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform" />
                 </div>
+              ) : file ? (
+                <div className="relative z-10 rounded-2xl border border-blue-200 bg-white px-5 py-4 text-center shadow-sm"><FileText className="mx-auto text-blue-600" size={30} /><p className="mt-2 max-w-xs truncate text-sm font-black text-slate-800">{file.name}</p><p className="mt-1 text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(1)} MB</p></div>
               ) : (
                 <div className="relative z-10 flex flex-col items-center">
                   <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm text-2xl md:text-4xl">📷</div>
-                  <span className="text-base md:text-lg font-bold text-slate-400 text-center">Upload Photo / Screenshot</span>
+                  <span className="text-base md:text-lg font-bold text-slate-400 text-center">Upload photo, video, audio, PDF, or text</span>
                 </div>
               )}
-              <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
+              <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
             </div>
 
             {/* UPLOAD PROGRESS BAR */}
             {uploading && (
               <div className="mt-4 space-y-2 animate-in fade-in slide-in-from-bottom-2">
                 <div className="flex justify-between text-sm font-bold">
-                  <span className="text-blue-600">Processing image...</span>
+                  <span className="text-blue-600">Uploading evidence...</span>
                   <span className="text-blue-600">{uploadProgress}%</span>
                 </div>
                 <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
@@ -1301,7 +1310,7 @@ const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject
 );
 
 const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
-  const { userProfile } = useAuth();
+  const { user, userProfile } = useAuth();
   const [link, setLink] = useState(project.presentationUrl || '');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -1310,15 +1319,27 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
+      const selectedFile = e.target.files[0];
+      if (selectedFile.size > 20 * 1024 * 1024) {
+        alert('File too large. Maximum size is 20 MB.');
+        e.target.value = '';
+        return;
+      }
+      const allowed = /^(image|video|audio)\//.test(selectedFile.type) || ['application/pdf', 'text/plain'].includes(selectedFile.type);
+      if (!allowed) {
+        alert('Upload an image, video, audio clip, PDF, or text file.');
+        e.target.value = '';
+        return;
+      }
       playSound('click');
-      setFile(e.target.files[0]);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-        // Auto-save preview to project mediaUrls logic would go here or on submit
-        // For now, let's just update local state until they click submit
-      };
-      reader.readAsDataURL(e.target.files[0]);
+      setFile(selectedFile);
+      if (selectedFile.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => setPreview(reader.result as string);
+        reader.readAsDataURL(selectedFile);
+      } else {
+        setPreview(null);
+      }
     }
   };
 
@@ -1331,10 +1352,11 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
 
       if (file) {
         const organizationId = userProfile?.organizationId;
-        if (!organizationId || !project.studentId) throw new Error('Your student account is not fully linked.');
+        if (!organizationId || !user?.uid) throw new Error('Your student account is not fully linked.');
+        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         finalUrl = await api.uploadFile(
           file,
-          `student-projects/${organizationId}/${project.studentId}/${project.id}/showcase-${Date.now()}-${file.name}`
+          `student-projects/${organizationId}/${user.uid}/${project.id}/showcase-${Date.now()}-${safeFileName}`
         );
       }
 
@@ -1342,8 +1364,8 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
       const result = await updateProject({
         status: 'submitted',
         presentationUrl: link,
-        thumbnailUrl: finalUrl || project.thumbnailUrl,
-        coverImage: finalUrl || project.coverImage,
+        thumbnailUrl: file?.type.startsWith('image/') ? finalUrl || project.thumbnailUrl : project.thumbnailUrl,
+        coverImage: file?.type.startsWith('image/') ? finalUrl || project.coverImage : project.coverImage,
         mediaUrls: finalUrl ? [finalUrl] : project.mediaUrls
       });
 
@@ -1376,13 +1398,15 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
         >
           {preview ? (
             <img src={preview} alt="Preview" className="h-32 md:h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
+          ) : file ? (
+            <div className="relative z-10 rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-center shadow-sm"><FileText className="mx-auto text-indigo-600" size={30} /><p className="mt-2 max-w-xs truncate text-sm font-black text-slate-800">{file.name}</p><p className="mt-1 text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(1)} MB</p></div>
           ) : (
             <div className="relative z-10 flex flex-col items-center">
               <div className="w-12 h-12 md:w-16 md:h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform shadow-sm text-2xl md:text-3xl">📷</div>
-              <span className="text-base md:text-lg font-bold text-slate-400">Upload Photo</span>
+              <span className="text-base md:text-lg font-bold text-slate-400">Upload project media or file</span>
             </div>
           )}
-          <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*" />
+          <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
         </div>
 
         {/* Link Input */}
@@ -1398,7 +1422,7 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
 
         <button
           onClick={handleSubmit}
-          disabled={!preview && !link}
+          disabled={!file && !preview && !link}
           className="w-full py-4 md:py-5 rounded-3xl bg-indigo-600 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30"
         >
           {submitting ? 'Uploading...' : '🚀 Publish to Gallery'}

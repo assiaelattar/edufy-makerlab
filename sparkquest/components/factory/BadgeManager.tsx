@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { Badge } from '../../types';
 import { Plus, Trash2, Edit2, Check, X, Award, Zap, Star, Trophy, Target, Crown, Medal } from 'lucide-react';
+import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
 
 const ICONS = { Award, Zap, Star, Trophy, Target, Crown, Medal };
 
@@ -55,23 +56,18 @@ export const BadgeManager: React.FC = () => {
     };
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h3 className="text-2xl font-black text-slate-800">Badge Smithy</h3>
-                    <p className="text-slate-500 font-medium">Forge rewards for your students' achievements.</p>
-                </div>
-                <button
-                    onClick={handleCreate}
-                    className="flex items-center gap-2 px-5 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold shadow-lg shadow-amber-500/20 transition-all hover:-translate-y-1"
-                >
-                    <Plus size={20} /> New Badge
-                </button>
-            </div>
+        <div className="space-y-6">
+            <FactoryPageHeader
+                icon={Award}
+                eyebrow="Recognition"
+                title="Design achievement badges"
+                description="Create clear rewards tied to project completion or demonstrated skills."
+                actions={<button type="button" onClick={handleCreate} className={factoryButton.primary}><Plus size={18} /> New badge</button>}
+            />
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {badges.map(badge => (
-                    <div key={badge.id} className="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-xl transition-all hover:scale-105 flex flex-col items-center text-center">
+                    <div key={badge.id} className="group relative flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm transition hover:border-blue-300 hover:shadow-md">
                         <div className={`w-16 h-16 rounded-full bg-${badge.color}-50 text-${badge.color}-500 flex items-center justify-center mb-4 text-3xl shadow-sm border border-${badge.color}-100`}>
                             {/* Simple Icon Mapping */}
                             {React.createElement((ICONS as any)[badge.icon] || Award, { size: 32 })}
@@ -87,28 +83,29 @@ export const BadgeManager: React.FC = () => {
                             </span>
                         </div>
 
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEdit(badge)} className="p-1.5 text-slate-400 hover:text-indigo-600 bg-white shadow-sm rounded-lg hover:shadow-md transition-all">
+                        <div className="absolute right-2 top-2 flex gap-1">
+                            <button onClick={() => handleEdit(badge)} className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white text-slate-400 hover:bg-blue-50 hover:text-blue-700" aria-label={`Edit ${badge.name}`}>
                                 <Edit2 size={14} />
                             </button>
-                            <button onClick={() => handleDelete(badge.id)} className="p-1.5 text-slate-400 hover:text-red-600 bg-white shadow-sm rounded-lg hover:shadow-md transition-all">
+                            <button onClick={() => handleDelete(badge.id)} className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white text-slate-400 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${badge.name}`}>
                                 <Trash2 size={14} />
                             </button>
                         </div>
                     </div>
                 ))}
+                {badges.length === 0 && <FactoryEmptyState icon={Award} title="No badges yet" description="Create the first achievement badge and define exactly how learners earn it." action={<button type="button" onClick={handleCreate} className={factoryButton.primary}><Plus size={18} /> Create badge</button>} />}
             </div>
 
             {/* Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div role="dialog" aria-modal="true" aria-labelledby="badge-dialog-title" className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-amber-50/50">
-                            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                            <h3 id="badge-dialog-title" className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <Award className="text-amber-500" />
-                                {editingId ? 'Reforge Badge' : 'Forget New Badge'}
+                                {editingId ? 'Edit badge' : 'Forge new badge'}
                             </h3>
-                            <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                            <button onClick={() => setIsModalOpen(false)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close badge editor">
                                 <X size={24} />
                             </button>
                         </div>

@@ -1,5 +1,5 @@
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getFirestore, Firestore, collection, getDocs, query, where, updateDoc, doc, initializeFirestore, memoryLocalCache } from "firebase/firestore";
+import { getFirestore, Firestore, initializeFirestore, memoryLocalCache } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
 import { getStorage, FirebaseStorage } from "firebase/storage";
 
@@ -64,22 +64,6 @@ try {
 
     storage = getStorage(app);
     console.log('✅ Storage initialized:', storage ? 'Connected' : 'Failed');
-
-    // 🔥 DEBUG EXPOSURE
-    if (typeof window !== 'undefined') {
-        (window as any)._DEBUG_DB = db;
-        (window as any)._DEBUG_AUTH = auth;
-        // Expose functions needed for repair scripts
-        (window as any)._DEBUG_FIRESTORE = {
-            collection,
-            getDocs,
-            query,
-            where,
-            updateDoc,
-            doc
-        };
-        console.log('🔧 Debug: DB, Auth & Firestore functions exposed on window._DEBUG_*');
-    }
 
 } catch (error) {
     console.error("❌ Firebase initialization failed:", error);

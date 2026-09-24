@@ -1,493 +1,391 @@
-
-import React, { useState, useEffect } from 'react';
-import { X, Users, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+    ArrowLeft,
+    ArrowRight,
+    Check,
+    CheckCircle2,
+    GraduationCap,
+    Loader2,
+    Search,
+    Send,
+    UserRound,
+    UsersRound,
+    X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useFactoryData } from '../../hooks/useFactoryData';
-import { collection, query, where, getDocs, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../services/firebase';
+import type { MissionAudienceMode } from '../../domain/missionAssignment';
+import type { ProjectTemplate } from '../../types';
 
 interface AssignMissionModalProps {
-    mission: any; // ProjectTemplate
+    mission: ProjectTemplate;
     onClose: () => void;
 }
 
+const scopeOptions: Array<{
+    id: MissionAudienceMode;
+    title: string;
+    description: string;
+    icon: LucideIcon;
+}> = [
+    { id: 'grade', title: 'Whole grade', description: 'Every active learner in one grade.', icon: GraduationCap },
+    { id: 'groups', title: 'Selected groups', description: 'One or more groups inside a grade.', icon: UsersRound },
+    { id: 'students', title: 'Specific students', description: 'A precise learner list, independent of class changes.', icon: UserRound },
+];
+
+const normalize = (value: unknown) => String(value || '').trim().toLowerCase();
+
 export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission, onClose }) => {
-    const { availableGrades, students: allStudents, enrollments, programs } = useFactoryData();
-    const [selectedGradeId, setSelectedGradeId] = useState<string>('');
-    const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+    const { students, enrollments, programs, actions } = useFactoryData();
+    const existingAudience = mission.targetAudience || {};
+    const initialMode: MissionAudienceMode = existingAudience.students?.length
+        ? 'students'
+        : existingAudience.groups?.length
+            ? 'groups'
+            : 'grade';
+    const initialGradeId = existingAudience.grades?.[0] || '';
+    const initialProgram = programs.find((program: any) =>
+        program.grades?.some((grade: any) => String(grade.id) === String(initialGradeId))
+    );
 
-    // Derived state
-    const studentsInGrade = React.useMemo(() => {
-        if (!selectedGradeId) return [];
-        console.log("🔍 [AssignMission] Filtering for Grade:", selectedGradeId);
-        if (allStudents.length > 0) {
-            console.log("🔍 [AssignMission] SAMPLE STUDENT STRUCTURE:", JSON.stringify(allStudents[0], null, 2));
-        }
+    const [mode, setMode] = useState<MissionAudienceMode>(initialMode);
+    const [programId, setProgramId] = useState<string>(initialProgram?.id || '');
+    const [gradeId, setGradeId] = useState<string>(initialGradeId);
+    const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set(existingAudience.groups || []));
+    const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set(existingAudience.students || []));
+    const [search, setSearch] = useState('');
+    const [step, setStep] = useState<'audience' | 'review' | 'done'>('audience');
+    const [isSaving, setIsSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-        // 1. Find all relevant IDs (Grade ID + Child Group IDs)
-        const relevantIds = new Set<string>([selectedGradeId]);
+    const activePrograms = useMemo(() => programs.filter((program: any) =>
+        Array.isArray(program.grades) && program.grades.length > 0
+    ), [programs]);
+    const selectedProgram = activePrograms.find((program: any) => program.id === programId);
+    const availableGrades = selectedProgram?.grades || [];
+    const selectedGrade = availableGrades.find((grade: any) => String(grade.id) === String(gradeId));
+    const availableGroups = selectedGrade?.groups || [];
 
-        programs.forEach(p => {
-            p.grades?.forEach((g: any) => {
-                if (g.id === selectedGradeId) {
-                    // Found the grade, add its groups
-                    console.log("Found Grade in Program:", g.name, "Groups:", g.groups?.length);
-                    g.groups?.forEach((grp: any) => {
-                        if (grp.id) relevantIds.add(grp.id);
-                        if (grp.name) relevantIds.add(grp.name);
-                    });
-                }
+    const activeEnrollments = useMemo(() => enrollments.filter((enrollment: any) =>
+        normalize(enrollment.status) === 'active'
+    ), [enrollments]);
+
+    const learnerRows = useMemo(() => {
+        const rows = new Map<string, any>();
+        students.forEach((student: any) => {
+            if (student._source === 'user_auth' && student.role && student.role !== 'student') return;
+            rows.set(String(student.id), student);
+        });
+
+        activeEnrollments.forEach((enrollment: any) => {
+            const linkedStudent = students.find((student: any) =>
+                String(student.id) === String(enrollment.studentId) ||
+                String(student.loginInfo?.uid || '') === String(enrollment.studentId)
+            );
+            const canonicalId = String(linkedStudent?.id || enrollment.studentId || '');
+            if (!canonicalId) return;
+            rows.set(canonicalId, {
+                ...(rows.get(canonicalId) || {}),
+                ...(linkedStudent || {}),
+                id: canonicalId,
+                name: linkedStudent?.name || linkedStudent?.firstName || enrollment.studentName || 'Unnamed learner',
             });
         });
 
-        console.log("🔍 [AssignMission] Relevant Target IDs:", Array.from(relevantIds));
+        return Array.from(rows.values()).sort((left: any, right: any) =>
+            String(left.name || left.firstName || '').localeCompare(String(right.name || right.firstName || ''))
+        );
+    }, [students, activeEnrollments]);
 
-        // 2. Filter Students
-        const filtered = allStudents.filter(s => {
-            // A. Check direct properties (legacy/fallback)
-            const directLocationIds = [
-                s.gradeId,
-                s.grade,
-                s.classId,
-                s.sectionId,
-                s.groupId,
-                s.group,
-                typeof s.group === 'object' ? s.group?.id : undefined
-            ].filter(Boolean);
+    const enrollmentMatchesGrade = (enrollment: any) => !gradeId ||
+        [enrollment.gradeId, enrollment.gradeName].some(value => normalize(value) === normalize(gradeId) || normalize(value) === normalize(selectedGrade?.name));
 
-            // B. Check Enrollments (Source of Truth)
-            const studentEnrollments = enrollments.filter(e => e.studentId === s.id && e.status === 'active');
-            const enrollmentIds = studentEnrollments.map(e => e.gradeId).filter(Boolean);
+    const groupMatchesSelection = (enrollment: any) => {
+        if (selectedGroupIds.size === 0) return mode !== 'groups';
+        const values = [enrollment.groupId, enrollment.groupName].map(normalize);
+        return availableGroups.some((group: any) =>
+            (selectedGroupIds.has(String(group.id)) || selectedGroupIds.has(String(group.name))) &&
+            values.some(value => value === normalize(group.id) || value === normalize(group.name))
+        );
+    };
 
-            // Combine all possible IDs
-            const allLocationIds = [...directLocationIds, ...enrollmentIds];
-
-            // If ANY location ID matches one of our Relevant IDs
-            return allLocationIds.some(loc => relevantIds.has(String(loc)));
+    const visibleLearners = useMemo(() => {
+        const query = normalize(search);
+        return learnerRows.filter((student: any) => {
+            const memberships = activeEnrollments.filter((enrollment: any) =>
+                String(enrollment.studentId) === String(student.id) ||
+                String(enrollment.studentId) === String(student.loginInfo?.uid || '')
+            );
+            const classMatches = !gradeId || memberships.some(enrollmentMatchesGrade);
+            const groupMatches = mode !== 'groups' || memberships.some(enrollment =>
+                enrollmentMatchesGrade(enrollment) && groupMatchesSelection(enrollment)
+            );
+            const searchMatches = !query || [student.name, student.firstName, student.lastName]
+                .some(value => normalize(value).includes(query));
+            return classMatches && groupMatches && searchMatches;
         });
+    }, [learnerRows, activeEnrollments, gradeId, selectedGrade?.name, mode, selectedGroupIds, availableGroups, search]);
 
-        console.log("🔍 [AssignMission] Filtered Count:", filtered.length);
-        return filtered;
-    }, [allStudents, selectedGradeId, programs, enrollments]);
+    const affectedLearners = useMemo(() => {
+        if (mode === 'students') return learnerRows.filter((student: any) => selectedStudentIds.has(String(student.id)));
+        if (!gradeId) return [];
+        return learnerRows.filter((student: any) => {
+            const memberships = activeEnrollments.filter((enrollment: any) =>
+                String(enrollment.studentId) === String(student.id) ||
+                String(enrollment.studentId) === String(student.loginInfo?.uid || '')
+            );
+            return memberships.some((enrollment: any) =>
+                enrollmentMatchesGrade(enrollment) && (mode === 'grade' || groupMatchesSelection(enrollment))
+            );
+        });
+    }, [mode, gradeId, learnerRows, activeEnrollments, selectedStudentIds, selectedGroupIds, selectedGrade?.name, availableGroups]);
 
-    // Update selection when grade changes
-    useEffect(() => {
-        // Auto-select all students in grade by default
-        setSelectedStudentIds(new Set(studentsInGrade.map(s => s.id)));
-    }, [studentsInGrade]);
+    const groupNames = availableGroups
+        .filter((group: any) => selectedGroupIds.has(String(group.id)) || selectedGroupIds.has(String(group.name)))
+        .map((group: any) => String(group.name || ''));
 
-    const [isAssigning, setIsAssigning] = useState(false);
-    const [result, setResult] = useState<{ success: number; skipped: number; total: number } | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const canContinue = mode === 'students'
+        ? selectedStudentIds.size > 0
+        : Boolean(gradeId) && (mode !== 'groups' || selectedGroupIds.size > 0);
+
+    const chooseProgram = (nextProgramId: string) => {
+        setProgramId(nextProgramId);
+        setGradeId('');
+        setSelectedGroupIds(new Set());
+        setError(null);
+    };
+
+    const chooseGrade = (nextGradeId: string) => {
+        setGradeId(nextGradeId);
+        setSelectedGroupIds(new Set());
+        setError(null);
+    };
+
+    const toggleGroup = (groupId: string, groupName: string) => {
+        setSelectedGroupIds(current => {
+            const next = new Set(current);
+            if (next.has(groupId) || next.has(groupName)) {
+                next.delete(groupId);
+                next.delete(groupName);
+            } else {
+                next.add(groupId);
+            }
+            return next;
+        });
+    };
+
+    const toggleStudent = (studentId: string) => {
+        setSelectedStudentIds(current => {
+            const next = new Set(current);
+            next.has(studentId) ? next.delete(studentId) : next.add(studentId);
+            return next;
+        });
+    };
 
     const handleAssign = async () => {
-        if (selectedStudentIds.size === 0) return;
-
-        setIsAssigning(true);
+        setIsSaving(true);
         setError(null);
-        setResult(null);
-
         try {
-            const targets = studentsInGrade.filter(s => selectedStudentIds.has(s.id));
-
-            let successCount = 0;
-            let skippedCount = 0;
-
-            // 2. For each student, check/create enrollment
-            for (const student of targets) {
-                // Check existing enrollment in Cache FIRST to avoid reads, 
-                // but for safety we might also check the live DB or recent `enrollments` cache.
-                // Let's use the local `enrollments` cache for speed + DB check for robustness if needed.
-                // Actually, relying on `enrollments` from factory data is fastest.
-
-                const alreadyEnrolled = enrollments.some(e => e.studentId === student.id && e.programId === mission.id);
-
-                if (alreadyEnrolled) {
-                    skippedCount++;
-                } else {
-                    // Double check with query? No, let's trust cache + maybe a quick query if critical. 
-                    // To be safe and avoid duplicates if cache is stale:
-                    const qEnroll = query(
-                        collection(db, 'enrollments'),
-                        where('studentId', '==', student.id),
-                        where('programId', '==', mission.id)
-                    );
-                    const enrollSnap = await getDocs(qEnroll);
-
-                    if (!enrollSnap.empty) {
-                        skippedCount++;
-                    } else {
-                        // Create Enrollment
-                        // Resolve Name: Priority Use Name, then First Name, then 'Unknown'
-                        const nameToUse = student.name || student.firstName || student.displayName || 'Unknown Maker';
-
-                        await addDoc(collection(db, 'enrollments'), {
-                            studentId: student.id, // This is the ID from the student doc (could be Auth UID or Profile AutoID)
-                            studentEmail: student.loginInfo?.email || student.email || '',
-                            studentName: nameToUse,
-                            programId: mission.id,
-                            programTitle: mission.title,
-                            gradeId: selectedGradeId,
-                            groupId: student.groupId || (typeof student.group === 'object' ? student.group?.id : student.group) || null,
-                            status: 'active',
-                            assignedAt: Timestamp.now(),
-                            progress: 0
-                        });
-                        successCount++;
-                    }
-                }
-            }
-
-            setResult({ success: successCount, skipped: skippedCount, total: targets.length });
-
-        } catch (err: any) {
-            console.error("Assignment failed:", err);
-            setError(err.message || "Failed to assign mission.");
+            await actions.assignProjectTemplate(mission.id, {
+                mode,
+                gradeId: gradeId || undefined,
+                groupIds: Array.from(selectedGroupIds),
+                groupNames,
+                studentIds: Array.from(selectedStudentIds),
+            });
+            setStep('done');
+        } catch (assignError: any) {
+            setError(assignError?.message || 'The mission could not be assigned. Check the audience and try again.');
         } finally {
-            setIsAssigning(false);
+            setIsSaving(false);
         }
     };
 
-    const toggleStudent = (id: string) => {
-        const next = new Set(selectedStudentIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        setSelectedStudentIds(next);
-    };
-
-    const toggleAll = () => {
-        if (selectedStudentIds.size === studentsInGrade.length) {
-            setSelectedStudentIds(new Set());
-        } else {
-            setSelectedStudentIds(new Set(studentsInGrade.map(s => s.id)));
-        }
-    };
-
-    // State
-    const [searchTerm, setSearchTerm] = useState('');
-
-    // Filtered Options for Grid
-    const filteredPrograms = React.useMemo(() => {
-        if (!searchTerm) return programs;
-        const lower = searchTerm.toLowerCase();
-        return programs.map(p => ({
-            ...p,
-            grades: p.grades?.filter((g: any) => g.name.toLowerCase().includes(lower))
-        })).filter(p => p.name.toLowerCase().includes(lower) || (p.grades && p.grades.length > 0));
-    }, [programs, searchTerm]);
+    const audienceLabel = mode === 'students'
+        ? `${selectedStudentIds.size} selected student${selectedStudentIds.size === 1 ? '' : 's'}`
+        : mode === 'groups'
+            ? `${selectedGrade?.name || 'Grade'} · ${groupNames.join(', ')}`
+            : selectedGrade?.name || 'Grade not selected';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
-            <div className={`bg-white rounded-3xl shadow-2xl w-full ${!selectedGradeId ? 'max-w-4xl' : 'max-w-2xl'} overflow-hidden flex flex-col max-h-[90vh] ring-1 ring-slate-900/5 transition-all duration-500 ease-in-out`}>
-
-                {/* Header */}
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white/80 backdrop-blur-sm sticky top-0 z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                            <Users size={24} />
-                        </div>
-                        <div>
-                            <h3 className="text-2xl font-black text-slate-800 tracking-tight">Assign Mission</h3>
-                            <div className="flex items-center gap-2 text-sm text-slate-500 font-bold">
-                                <span>{mission.title}</span>
-                                {selectedGradeId && (
-                                    <>
-                                        <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                                        <span className="text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full text-xs uppercase tracking-wide">
-                                            {availableGrades.find(g => g.id === selectedGradeId)?.name}
-                                        </span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="assign-mission-title">
+            <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-[#f8fafc] shadow-2xl">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-7">
+                    <div className="min-w-0">
+                        <p className="mb-1 text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">Mission dispatch</p>
+                        <h2 id="assign-mission-title" className="truncate text-2xl font-black tracking-tight text-slate-950">Assign “{mission.title}”</h2>
+                        <p className="mt-1 text-sm text-slate-500">Choose exactly who receives this mission. Enrollments stay unchanged.</p>
                     </div>
-                    <div className="flex gap-2">
-                        {selectedGradeId && !result && (
-                            <button
-                                onClick={() => setSelectedGradeId('')}
-                                className="px-4 py-2 font-bold text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-colors text-sm"
-                            >
-                                Change Class
+                    <button onClick={onClose} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" aria-label="Close mission assignment">
+                        <X size={22} />
+                    </button>
+                </header>
+
+                {step !== 'done' && (
+                    <div className="grid grid-cols-2 border-b border-slate-200 bg-white px-5 sm:px-7">
+                        {[
+                            ['audience', '1', 'Choose audience'],
+                            ['review', '2', 'Review & assign'],
+                        ].map(([id, number, label]) => {
+                            const active = step === id;
+                            const completed = step === 'review' && id === 'audience';
+                            return (
+                                <div key={id} className={`flex items-center gap-3 border-b-2 py-4 ${active ? 'border-blue-600' : 'border-transparent'}`}>
+                                    <span className={`grid h-7 w-7 place-items-center rounded-full text-xs font-black ${active || completed ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                        {completed ? <Check size={15} /> : number}
+                                    </span>
+                                    <span className={`text-sm font-bold ${active ? 'text-slate-950' : 'text-slate-500'}`}>{label}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                <div className="flex-1 overflow-y-auto">
+                    {step === 'audience' && (
+                        <div className="space-y-7 p-5 sm:p-7">
+                            <section aria-labelledby="scope-heading">
+                                <div className="mb-3">
+                                    <h3 id="scope-heading" className="text-lg font-black text-slate-950">How should learners be selected?</h3>
+                                    <p className="text-sm text-slate-500">Direct student assignments remain valid if a learner changes group later.</p>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-3">
+                                    {scopeOptions.map(option => {
+                                        const Icon = option.icon;
+                                        const selected = mode === option.id;
+                                        return (
+                                            <button key={option.id} onClick={() => { setMode(option.id); setError(null); }} className={`min-h-[118px] rounded-2xl border-2 p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selected ? 'border-blue-600 bg-blue-50 shadow-sm' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                                                <Icon size={22} className={selected ? 'text-blue-700' : 'text-slate-400'} />
+                                                <strong className="mt-3 block text-base text-slate-950">{option.title}</strong>
+                                                <span className="mt-1 block text-sm leading-5 text-slate-500">{option.description}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </section>
+
+                            <section className="rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="class-filter-heading">
+                                <h3 id="class-filter-heading" className="text-base font-black text-slate-950">Class context</h3>
+                                <p className="mb-4 text-sm text-slate-500">{mode === 'students' ? 'Optional: filter the learner list by program and grade.' : 'Required: choose the program and grade that define this audience.'}</p>
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <label className="text-sm font-bold text-slate-700">
+                                        Program {mode !== 'students' && <span className="text-red-600">*</span>}
+                                        <select value={programId} onChange={event => chooseProgram(event.target.value)} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-semibold text-slate-900 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100">
+                                            <option value="">{mode === 'students' ? 'All programs' : 'Choose a program'}</option>
+                                            {activePrograms.map((program: any) => <option key={program.id} value={program.id}>{program.name || program.title}</option>)}
+                                        </select>
+                                    </label>
+                                    <label className="text-sm font-bold text-slate-700">
+                                        Grade {mode !== 'students' && <span className="text-red-600">*</span>}
+                                        <select value={gradeId} onChange={event => chooseGrade(event.target.value)} disabled={!programId} className="mt-2 min-h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-semibold text-slate-900 outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100">
+                                            <option value="">{mode === 'students' ? 'All grades' : 'Choose a grade'}</option>
+                                            {availableGrades.map((grade: any) => <option key={grade.id} value={grade.id}>{grade.name || grade.title}</option>)}
+                                        </select>
+                                    </label>
+                                </div>
+                            </section>
+
+                            {mode === 'groups' && gradeId && (
+                                <section className="rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="groups-heading">
+                                    <h3 id="groups-heading" className="text-base font-black text-slate-950">Groups <span className="text-red-600">*</span></h3>
+                                    <p className="mb-4 text-sm text-slate-500">Select one or more groups in {selectedGrade?.name}.</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {availableGroups.map((group: any) => {
+                                            const selected = selectedGroupIds.has(String(group.id)) || selectedGroupIds.has(String(group.name));
+                                            return (
+                                                <button key={group.id} onClick={() => toggleGroup(String(group.id), String(group.name))} className={`min-h-11 rounded-xl border px-4 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400'}`}>
+                                                    {selected && <Check size={15} className="mr-2 inline" />}{group.name}
+                                                </button>
+                                            );
+                                        })}
+                                        {availableGroups.length === 0 && <p className="text-sm font-medium text-amber-700">This grade has no configured groups. Use “Whole grade” or “Specific students”.</p>}
+                                    </div>
+                                </section>
+                            )}
+
+                            {mode === 'students' && (
+                                <section className="rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="students-heading">
+                                    <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                        <div>
+                                            <h3 id="students-heading" className="text-base font-black text-slate-950">Students <span className="text-red-600">*</span></h3>
+                                            <p className="text-sm text-slate-500">{selectedStudentIds.size} selected · {visibleLearners.length} shown</p>
+                                        </div>
+                                        <label className="relative block sm:w-80">
+                                            <span className="sr-only">Search students</span>
+                                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search students" className="min-h-11 w-full rounded-xl border border-slate-300 pl-10 pr-3 text-base outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100" />
+                                        </label>
+                                    </div>
+                                    <div className="grid max-h-72 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+                                        {visibleLearners.map((student: any) => {
+                                            const studentId = String(student.id);
+                                            const selected = selectedStudentIds.has(studentId);
+                                            const name = student.name || student.firstName || 'Unnamed learner';
+                                            return (
+                                                <button key={studentId} onClick={() => toggleStudent(studentId)} className={`flex min-h-14 items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selected ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-400'}`}>
+                                                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-black ${selected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{String(name).charAt(0).toUpperCase()}</span>
+                                                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">{name}</span>
+                                                    <span className={`grid h-6 w-6 place-items-center rounded-md border ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={14} />}</span>
+                                                </button>
+                                            );
+                                        })}
+                                        {visibleLearners.length === 0 && <p className="col-span-full py-8 text-center text-sm font-medium text-slate-500">No learners match these filters.</p>}
+                                    </div>
+                                </section>
+                            )}
+
+                            {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+                        </div>
+                    )}
+
+                    {step === 'review' && (
+                        <div className="mx-auto max-w-3xl space-y-6 p-5 sm:p-8">
+                            <div className="rounded-3xl border border-blue-200 bg-white p-6 shadow-sm">
+                                <div className="mb-5 flex items-start gap-4">
+                                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white"><Send size={22} /></div>
+                                    <div>
+                                        <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">Ready to assign</p>
+                                        <h3 className="mt-1 text-2xl font-black text-slate-950">{mission.title}</h3>
+                                    </div>
+                                </div>
+                                <dl className="grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2">
+                                    <div><dt className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Audience type</dt><dd className="mt-1 font-bold text-slate-900">{scopeOptions.find(option => option.id === mode)?.title}</dd></div>
+                                    <div><dt className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Audience</dt><dd className="mt-1 font-bold text-slate-900">{audienceLabel}</dd></div>
+                                    <div><dt className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Learners currently matched</dt><dd className="mt-1 text-3xl font-black text-blue-700">{affectedLearners.length}</dd></div>
+                                    <div><dt className="text-xs font-extrabold uppercase tracking-wider text-slate-400">What changes</dt><dd className="mt-1 font-bold text-slate-900">Mission becomes assigned. Enrollments are not modified.</dd></div>
+                                </dl>
+                            </div>
+                            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Learners see the mission after their next dashboard refresh. Specific-student assignments use canonical learner IDs and remain authoritative when class metadata changes.</p>
+                            {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+                        </div>
+                    )}
+
+                    {step === 'done' && (
+                        <div className="mx-auto flex max-w-xl flex-col items-center px-6 py-16 text-center">
+                            <div className="grid h-20 w-20 place-items-center rounded-3xl bg-emerald-100 text-emerald-700"><CheckCircle2 size={42} /></div>
+                            <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-950">Mission assigned</h3>
+                            <p className="mt-2 text-base leading-7 text-slate-600">“{mission.title}” is now available to {audienceLabel}. No enrollment records were created or changed.</p>
+                            <button onClick={onClose} className="mt-8 min-h-12 rounded-xl bg-slate-950 px-7 font-bold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">Back to missions</button>
+                        </div>
+                    )}
+                </div>
+
+                {step !== 'done' && (
+                    <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4 sm:px-7">
+                        <button onClick={step === 'review' ? () => setStep('audience') : onClose} className="flex min-h-11 items-center gap-2 rounded-xl px-4 font-bold text-slate-600 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                            {step === 'review' && <ArrowLeft size={18} />}{step === 'review' ? 'Edit audience' : 'Cancel'}
+                        </button>
+                        {step === 'audience' ? (
+                            <button onClick={() => setStep('review')} disabled={!canContinue} className="flex min-h-12 items-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/15 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+                                Review assignment <ArrowRight size={18} />
+                            </button>
+                        ) : (
+                            <button onClick={handleAssign} disabled={isSaving} className="flex min-h-12 items-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-lg shadow-blue-600/15 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2">
+                                {isSaving ? <Loader2 size={19} className="animate-spin" /> : <Send size={18} />}{isSaving ? 'Assigning mission…' : 'Assign mission'}
                             </button>
                         )}
-                        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-all hover:rotate-90 duration-300">
-                            <X size={24} />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Body */}
-                <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
-                    {!result ? (
-                        <>
-                            {/* STEP 1: CLASS SELECTION GRID */}
-                            {!selectedGradeId && (
-                                <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
-                                    {/* Search Bar */}
-                                    <div className="relative max-w-xl mx-auto group">
-                                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                            <Users size={20} className="text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                                        </div>
-                                        <input
-                                            autoFocus
-                                            type="text"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                            placeholder="Search for a class, program, or group..."
-                                            className="w-full pl-12 pr-4 py-4 bg-white border-2 border-slate-200 rounded-2xl text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all shadow-sm group-hover:shadow-md"
-                                        />
-                                    </div>
-
-                                    {/* Programs Grid */}
-                                    <div className="space-y-12">
-                                        {filteredPrograms.length === 0 ? (
-                                            <div className="text-center py-12 opacity-50">
-                                                <p className="font-bold text-slate-400">No classes found matching "{searchTerm}"</p>
-                                            </div>
-                                        ) : (
-                                            filteredPrograms.map((prog: any, index: number) => {
-                                                // Program Header Color (Keep random/preset for separation)
-                                                const PRESET_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#0ea5e9', '#8b5cf6'];
-                                                const progThemeColor = prog.themeColor || PRESET_COLORS[index % PRESET_COLORS.length];
-
-                                                return (
-                                                    <div key={prog.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                                        <div className="flex items-center gap-4 mb-6">
-                                                            <div className="h-8 w-1 rounded-full" style={{ backgroundColor: progThemeColor }} />
-                                                            <h4
-                                                                className="text-lg font-black uppercase tracking-tight"
-                                                                style={{ color: progThemeColor }}
-                                                            >
-                                                                {prog.name || prog.title || "Untitled Program"}
-                                                            </h4>
-                                                            <div className="h-px bg-slate-100 flex-1" />
-                                                        </div>
-
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                                            {prog.grades && prog.grades.length > 0 ? (
-                                                                prog.grades.map((g: any) => {
-                                                                    // Resolve Grade-Specific Theme Color
-                                                                    const name = (g.name || '').toLowerCase();
-                                                                    let gradeColor = progThemeColor; // Fallback to program color
-
-                                                                    if (name.includes('tiny') || name.includes('mini')) gradeColor = '#ec4899'; // Pink
-                                                                    else if (name.includes('junior') || name.includes('découverte')) gradeColor = '#f59e0b'; // Amber
-                                                                    else if (name.includes('explorer') || name.includes('explorateur')) gradeColor = '#10b981'; // Emerald
-                                                                    else if (name.includes('ranger') || name.includes('voyager')) gradeColor = '#0ea5e9'; // Sky
-                                                                    else if (name.includes('maker') || name.includes('champion')) gradeColor = '#8b5cf6'; // Violet
-                                                                    else if (name.includes('tech') || name.includes('code')) gradeColor = '#6366f1'; // Indigo
-
-                                                                    return (
-                                                                        <button
-                                                                            key={g.id}
-                                                                            onClick={() => setSelectedGradeId(g.id)}
-                                                                            className="group relative bg-white border rounded-2xl p-6 text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden"
-                                                                            style={{
-                                                                                borderColor: `${gradeColor}40`,
-                                                                                backgroundColor: '#ffffff'
-                                                                            }}
-                                                                        >
-                                                                            {/* Hover Fill Effect */}
-                                                                            <div
-                                                                                className="absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 pointer-events-none"
-                                                                                style={{ backgroundColor: gradeColor }}
-                                                                            />
-
-                                                                            <div className="flex justify-between items-start mb-4 relative z-10">
-                                                                                <div
-                                                                                    className="p-3 rounded-xl transition-all duration-300 group-hover:scale-110"
-                                                                                    style={{
-                                                                                        backgroundColor: `${gradeColor}15`,
-                                                                                        color: gradeColor
-                                                                                    }}
-                                                                                >
-                                                                                    <Users size={24} />
-                                                                                </div>
-                                                                            </div>
-                                                                            <h5
-                                                                                className="text-xl font-black mb-1 text-slate-800"
-                                                                            >
-                                                                                {g.name || g.title || g.id}
-                                                                            </h5>
-                                                                            <p
-                                                                                className="text-xs font-bold uppercase tracking-wider"
-                                                                                style={{ color: `${gradeColor}90` }}
-                                                                            >
-                                                                                {g.groups?.length || 0} Groups
-                                                                            </p>
-                                                                        </button>
-                                                                    );
-                                                                })
-                                                            ) : (
-                                                                <div className="col-span-full p-6 border-2 border-dashed border-slate-100 rounded-3xl text-center bg-slate-50/50">
-                                                                    <p className="text-slate-400 font-bold">No active classes in this program.</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* STEP 2: STUDENT SELECTION LIST */}
-                            {selectedGradeId && (
-                                <div className="p-8 space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
-                                    <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4 pb-4 border-b border-slate-200">
-                                        <div>
-                                            <h4 className="text-2xl font-black text-slate-800">Who is this for?</h4>
-                                            <p className="text-slate-500 font-medium">Select students to receive this mission.</p>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-sm font-bold text-slate-400">
-                                                {selectedStudentIds.size} / {studentsInGrade.length} Selected
-                                            </span>
-                                            <button
-                                                onClick={toggleAll}
-                                                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700 rounded-xl text-sm font-black transition-colors"
-                                            >
-                                                {selectedStudentIds.size === studentsInGrade.length ? 'Deselect All' : 'Select All'}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {studentsInGrade.length === 0 ? (
-                                            <div className="col-span-full py-12 flex flex-col items-center justify-center text-center opacity-50">
-                                                <Users size={48} className="text-slate-300 mb-4" />
-                                                <p className="text-lg font-bold text-slate-500">No students found.</p>
-                                                <p className="text-sm text-slate-400">Try selecting a different class.</p>
-                                            </div>
-                                        ) : (
-                                            studentsInGrade.map(s => {
-                                                const isEnrolled = enrollments.some(e => e.studentId === s.id && e.programId === mission.id);
-                                                const isSelected = selectedStudentIds.has(s.id);
-
-                                                return (
-                                                    <div key={s.id}
-                                                        onClick={() => !isEnrolled && toggleStudent(s.id)}
-                                                        className={`relative p-4 rounded-2xl border-2 transition-all duration-200 group cursor-pointer overflow-hidden ${isEnrolled
-                                                            ? 'bg-slate-50 border-slate-100 opacity-60 grayscale'
-                                                            : isSelected
-                                                                ? 'bg-indigo-50/50 border-indigo-600 shadow-lg shadow-indigo-500/10'
-                                                                : 'bg-white border-slate-100 hover:border-indigo-300 hover:shadow-md'
-                                                            }`}
-                                                    >
-                                                        {isSelected && !isEnrolled && (
-                                                            <div className="absolute top-0 right-0 p-1 bg-indigo-600 rounded-bl-xl text-white">
-                                                                <CheckCircle size={14} />
-                                                            </div>
-                                                        )}
-
-                                                        <div className="flex items-center gap-4">
-                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-black transition-colors ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600'}`}>
-                                                                {(s.name || s.firstName || '?').charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className={`font-bold truncate ${isSelected ? 'text-indigo-900' : 'text-slate-700'}`}>
-                                                                    {s.name || s.firstName || 'Unknown'}
-                                                                </p>
-                                                                <p className="text-xs text-slate-400 font-mono truncate opacity-80">
-                                                                    {s.email}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-
-                                                        {isEnrolled && (
-                                                            <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[1px]">
-                                                                <span className="bg-green-100 text-green-700 text-xs font-black px-3 py-1 rounded-full shadow-sm">
-                                                                    ASSIGNED
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-
-                                    {error && (
-                                        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-full shadow-xl font-bold text-sm flex items-center gap-2 animate-in slide-in-from-bottom-4 z-[60]">
-                                            <AlertCircle size={18} />
-                                            {error}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <div className="text-center py-12 flex flex-col items-center justify-center h-full animate-in zoom-in duration-500">
-                            <div className="relative mb-8">
-                                <div className="absolute inset-0 bg-green-400 rounded-full blur-2xl opacity-20 animate-pulse"></div>
-                                <div className="relative w-32 h-32 bg-gradient-to-tr from-green-400 to-emerald-600 text-white rounded-full flex items-center justify-center shadow-2xl shadow-green-500/30">
-                                    <CheckCircle size={64} />
-                                </div>
-                            </div>
-                            <h4 className="text-4xl font-black text-slate-800 mb-2">Details Sent! 🚀</h4>
-                            <p className="text-lg text-slate-500 font-medium max-w-sm">
-                                The mission <span className="text-slate-800 font-bold">"{mission.title}"</span> has been successfully assigned.
-                            </p>
-
-                            <div className="grid grid-cols-2 gap-6 w-full max-w-sm mt-12">
-                                <div className="bg-white p-6 rounded-3xl border-2 border-indigo-50 shadow-xl shadow-indigo-500/5">
-                                    <p className="text-5xl font-black text-indigo-600 mb-2">{result.success}</p>
-                                    <p className="text-xs font-black text-indigo-300 uppercase tracking-widest">Students Assigned</p>
-                                </div>
-                                <div className="bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
-                                    <p className="text-5xl font-black text-slate-400 mb-2">{result.skipped}</p>
-                                    <p className="text-xs font-black text-slate-300 uppercase tracking-widest">Already Has It</p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Footer Action Bar */}
-                <div className="p-6 border-t border-slate-100 bg-white/80 backdrop-blur-sm z-20">
-                    {!result ? (
-                        <div className="flex gap-4">
-                            {selectedGradeId ? (
-                                <>
-                                    <button
-                                        onClick={() => setSelectedGradeId('')}
-                                        className="px-6 py-4 font-bold text-slate-500 hover:bg-slate-100 rounded-2xl transition-colors"
-                                    >
-                                        Back
-                                    </button>
-                                    <button
-                                        onClick={handleAssign}
-                                        disabled={selectedStudentIds.size === 0 || isAssigning}
-                                        className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 text-white font-black rounded-2xl shadow-xl shadow-indigo-600/20 transition-all duration-200 flex items-center justify-center gap-3 text-lg"
-                                    >
-                                        {isAssigning ? (
-                                            <>
-                                                <Loader2 className="animate-spin" size={24} />
-                                                <span>Launching Mission...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Users size={24} />
-                                                <span>Assign to {selectedStudentIds.size} Students</span>
-                                            </>
-                                        )}
-                                    </button>
-                                </>
-                            ) : (
-                                <p className="w-full text-center text-sm font-bold text-slate-400 py-4">
-                                    Select a class above to continue
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <button
-                            onClick={onClose}
-                            className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white font-black rounded-2xl shadow-xl transition-all hover:scale-[1.01] active:scale-[0.99] text-lg"
-                        >
-                            Return to Dashboard
-                        </button>
-                    )}
-                </div>
+                    </footer>
+                )}
             </div>
         </div>
     );

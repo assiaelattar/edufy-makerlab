@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useFocusSession } from '../context/FocusSessionContext';
 import { X, Clock, TrendingUp, Gamepad2, Target, Award, Calendar } from 'lucide-react';
 
@@ -8,7 +8,11 @@ interface ProductivityDashboardProps {
 }
 
 export const ProductivityDashboard: React.FC<ProductivityDashboardProps> = ({ isOpen, onClose }) => {
-    const { sessionHistory, todayFocusMinutes, weekFocusMinutes, activeSession, elapsedSeconds } = useFocusSession();
+    const { sessionHistory, todayFocusMinutes, weekFocusMinutes, activeSession, elapsedSeconds, refreshHistory } = useFocusSession();
+
+    useEffect(() => {
+        if (isOpen) void refreshHistory();
+    }, [isOpen, refreshHistory]);
 
     if (!isOpen) return null;
 

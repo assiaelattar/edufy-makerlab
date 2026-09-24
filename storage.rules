@@ -1,0 +1,60 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUser() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function hasUserProfile() {
+      return isSignedIn() && currentUser().data.organizationId is string;
+    }
+
+    function isSameOrg(organizationId) {
+      return hasUserProfile() && currentUser().data.organizationId == organizationId;
+    }
+
+    function isElevated() {
+      return hasUserProfile() && currentUser().data.role in ['super_admin', 'owner', 'admin', 'instructor'];
+    }
+
+    function isValidProjectFile() {
+      return request.resource != null &&
+        request.resource.size < 20 * 1024 * 1024 &&
+        request.resource.contentType.matches('(image|video|audio)/.*|application/pdf|text/.*');
+    }
+
+    // Learner evidence is isolated by tenant, Auth UID, and project. The
+    // Firestore project may use a canonical students/{id}; the Storage owner
+    // segment deliberately stays the unambiguous Firebase Auth UID.
+    match /student-projects/{organizationId}/{ownerUid}/{projectId}/{fileName=**} {
+      allow read: if isSameOrg(organizationId) && (request.auth.uid == ownerUid || isElevated());
+      allow create, update: if isSameOrg(organizationId) &&
+        request.auth.uid == ownerUid &&
+        currentUser().data.role == 'student' &&
+        isValidProjectFile();
+      allow delete: if isSameOrg(organizationId) && (request.auth.uid == ownerUid || isElevated());
+    }
+
+    // Instructor-authored mission covers/resources and instructor-managed
+    // portfolio media. The actor UID in the path makes every write attributable
+    // while tenant members may read resources assigned inside their organization.
+    match /instructor-projects/{organizationId}/{actorUid}/{projectId}/{fileName=**} {
+      allow read: if isSameOrg(organizationId);
+      allow create, update: if isSameOrg(organizationId) &&
+        request.auth.uid == actorUid &&
+        isElevated() &&
+        isValidProjectFile();
+      allow delete: if isSameOrg(organizationId) &&
+        request.auth.uid == actorUid &&
+        isElevated();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimest
 import { db } from '../services/firebase';
 import { useAuth } from './AuthContext';
 import { ProjectTemplate, ProcessTemplate, Station, Badge, StudentProject } from '../types';
+import { buildMissionAssignmentPatch, MissionAudienceInput } from '../domain/missionAssignment';
 
 const FactoryContext = createContext<any>(null);
 
@@ -29,12 +30,11 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [loading, setLoading] = useState(true);
 
     const { user, userProfile, loading: authLoading } = useAuth();
-    // Default to 'makerlab-academy' to handle legacy data or uninitialized profiles safely (though restrictive is better for SaaS)
-    const organizationId = userProfile?.organizationId || 'makerlab-academy';
+    const organizationId = userProfile?.organizationId;
 
     useEffect(() => {
         if (authLoading) return;
-        if (!db || !user || !userProfile) {
+        if (!db || !user || !userProfile || !organizationId) {
             setProjectTemplates([]);
             setProcessTemplates([]);
             setStations([]);
@@ -51,28 +51,70 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const firestore = db as Firestore;
         const isElevated = userProfile.role === 'admin' || userProfile.role === 'instructor';
 
+        // Student startup stays deliberately small. The dashboard owns its
+        // enrollment/mission reads, while the wizard only needs these two
+        // catalogues. Admin-only live listeners were adding network work and
+        // permission noise to every learner login.
+        if (!isElevated) {
+            setStations([]);
+            setBadges([]);
+            setPrograms([]);
+            setStudentProjects([]);
+            setGadgets([]);
+            setContests([]);
+            setPurchaseRequests([]);
+            setStudents([]);
+
+            const unsubProjectTemplates = onSnapshot(
+                collection(firestore, 'project_templates'),
+                snapshot => setProjectTemplates(snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() } as ProjectTemplate))
+                    .filter(template => !template.organizationId || template.organizationId === organizationId)),
+                error => console.error('Template Error:', error)
+            );
+            const unsubProcessTemplates = onSnapshot(
+                collection(firestore, 'process_templates'),
+                snapshot => setProcessTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProcessTemplate))),
+                error => console.error('Workflow Error:', error)
+            );
+            setLoading(false);
+            return () => {
+                unsubProjectTemplates();
+                unsubProcessTemplates();
+            };
+        }
+
         // Content: Global or Shared? For now, fetch all templates. 
         // ideally, templates should also be org-scoped or 'public'
         const unsubProjectTemplates = onSnapshot(collection(firestore, 'project_templates'), (snapshot) => {
-            setProjectTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProjectTemplate)));
+            setProjectTemplates(snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as ProjectTemplate))
+                .filter(template => !template.organizationId || template.organizationId === organizationId));
         }, (error) => console.error("Template Error:", error));
 
         const unsubProcessTemplates = onSnapshot(collection(firestore, 'process_templates'), (snapshot) => {
-            setProcessTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ProcessTemplate)));
+            setProcessTemplates(snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as ProcessTemplate & { organizationId?: string }))
+                .filter(template => !template.organizationId || template.organizationId === organizationId));
         });
 
         const unsubStations = onSnapshot(
             query(collection(firestore, 'stations'), orderBy('order', 'asc')),
             (snapshot) => {
-                setStations(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Station)));
+                setStations(snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() } as Station & { organizationId?: string }))
+                    .filter(station => !station.organizationId || station.organizationId === organizationId));
             }, (error) => console.error("Station Error:", error)
         );
 
         const unsubBadges = onSnapshot(collection(firestore, 'badges'), (snapshot) => {
-            setBadges(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Badge)));
+            setBadges(snapshot.docs
+                .map(d => ({ id: d.id, ...d.data() } as Badge & { organizationId?: string }))
+                .filter(badge => !badge.organizationId || badge.organizationId === organizationId));
         });
 
-        const unsubPrograms = onSnapshot(collection(firestore, 'programs'), (snapshot) => {
+        const programsQuery = query(collection(firestore, 'programs'), where('organizationId', '==', organizationId));
+        const unsubPrograms = onSnapshot(programsQuery, (snapshot) => {
             const allPrograms = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
             // Filter out Adult/Maker-Pro Programs for SparkQuest
@@ -113,11 +155,15 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         const unsubGadgets = onSnapshot(collection(firestore, 'gadgets'), (snap) => {
-            setGadgets(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setGadgets(snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter((gadget: any) => !gadget.organizationId || gadget.organizationId === organizationId));
         });
 
         const unsubContests = onSnapshot(collection(firestore, 'contests'), (snap) => {
-            setContests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setContests(snap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                .filter((contest: any) => !contest.organizationId || contest.organizationId === organizationId));
         });
 
         // Admin view of requests
@@ -145,18 +191,11 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             // 2. Secondary Source: 'users' collection (Auth Profiles)
             usersCache.forEach(u => {
-                const alreadyExists = Array.from(studentMap.values()).some((s: any) => {
-                    const emailMatch = s.email && u.email && s.email.toLowerCase() === u.email.toLowerCase();
-                    const nameMatch = s.name && u.name && s.name.toLowerCase() === u.name.toLowerCase();
-                    const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '');
-                    const studentPhone = normalizePhone(s.parentPhone);
-                    const userPhone = normalizePhone(u.parentPhone);
-                    const phoneMatch = studentPhone.length >= 8 && studentPhone === userPhone;
-                    const birthDateMatch = s.birthDate && u.birthDate && s.birthDate === u.birthDate;
-                    const idMatch = s.id === u.id || s.loginInfo?.uid === u.id;
-
-                    return emailMatch || idMatch || (nameMatch && (phoneMatch || birthDateMatch));
-                });
+                // Identity links only. Names, email addresses, phone numbers and
+                // birth dates are display data and must never merge learner records.
+                const alreadyExists = Array.from(studentMap.values()).some((s: any) =>
+                    s.id === u.id || s.loginInfo?.uid === u.id
+                );
 
                 if (!alreadyExists) {
                     studentMap.set(u.id, { ...u, _source: 'user_auth' });
@@ -233,12 +272,12 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // --- ACTIONS ---
 
     const addBadge = async (badge: Omit<Badge, 'id'>) => {
-        if (!db) return;
-        await addDoc(collection(db as Firestore, 'badges'), { ...badge, createdAt: serverTimestamp() });
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await addDoc(collection(db as Firestore, 'badges'), { ...badge, organizationId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     };
     const updateBadge = async (id: string, data: Partial<Badge>) => {
-        if (!db) return;
-        await updateDoc(doc(db as Firestore, 'badges', id), data);
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await updateDoc(doc(db as Firestore, 'badges', id), { ...data, organizationId, updatedAt: serverTimestamp() });
     };
     const deleteBadge = async (id: string) => {
         if (!db) return;
@@ -246,12 +285,12 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const addWorkflow = async (workflow: Omit<ProcessTemplate, 'id'>) => {
-        if (!db) return;
-        await addDoc(collection(db as Firestore, 'process_templates'), { ...workflow, createdAt: serverTimestamp() });
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await addDoc(collection(db as Firestore, 'process_templates'), { ...workflow, organizationId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     };
     const updateWorkflow = async (id: string, data: Partial<ProcessTemplate>) => {
-        if (!db) return;
-        await updateDoc(doc(db as Firestore, 'process_templates', id), data);
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await updateDoc(doc(db as Firestore, 'process_templates', id), { ...data, organizationId, updatedAt: serverTimestamp() });
     };
     const deleteWorkflow = async (id: string) => {
         if (!db) return;
@@ -259,12 +298,12 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const addStation = async (station: Omit<Station, 'id'>) => {
-        if (!db) return;
-        await addDoc(collection(db as Firestore, 'stations'), { ...station, order: stations.length });
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await addDoc(collection(db as Firestore, 'stations'), { ...station, organizationId, order: stations.length, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     };
     const updateStation = async (id: string, data: Partial<Station>) => {
-        if (!db) return;
-        await updateDoc(doc(db as Firestore, 'stations', id), data);
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await updateDoc(doc(db as Firestore, 'stations', id), { ...data, organizationId, updatedAt: serverTimestamp() });
     };
     const deleteStation = async (id: string) => {
         if (!db) return;
@@ -272,12 +311,35 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const addProjectTemplate = async (template: Omit<ProjectTemplate, 'id'>) => {
-        if (!db) return;
-        await addDoc(collection(db as Firestore, 'project_templates'), { ...template, createdAt: serverTimestamp() });
+        if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
+        await addDoc(collection(db as Firestore, 'project_templates'), {
+            ...template,
+            organizationId,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
     };
     const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>) => {
-        if (!db) return;
-        await updateDoc(doc(db as Firestore, 'project_templates', id), { ...data, updatedAt: serverTimestamp() });
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        await updateDoc(doc(db as Firestore, 'project_templates', id), {
+            ...data,
+            organizationId,
+            updatedAt: serverTimestamp()
+        });
+    };
+    const assignProjectTemplate = async (
+        id: string,
+        audience: Omit<MissionAudienceInput, 'organizationId'>
+    ) => {
+        if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
+        const patch = buildMissionAssignmentPatch({ ...audience, organizationId });
+        await updateDoc(doc(db as Firestore, 'project_templates', id), {
+            ...patch,
+            assignedAt: serverTimestamp(),
+            assignedBy: user.uid,
+            updatedAt: serverTimestamp()
+        });
     };
     const deleteProjectTemplate = async (id: string) => {
         if (!db) return;
@@ -318,7 +380,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Enrollments
     const [enrollments, setEnrollments] = useState<any[]>([]);
     useEffect(() => {
-        if (!db || !user || !userProfile || (userProfile.role !== 'admin' && userProfile.role !== 'instructor')) {
+        if (!db || !user || !userProfile || !organizationId || (userProfile.role !== 'admin' && userProfile.role !== 'instructor')) {
             setEnrollments([]);
             return;
         }
@@ -331,7 +393,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, [organizationId, user?.uid, userProfile]);
 
     const buyGadget = async (userId: string, userName: string, gadget: any) => {
-        if (!db) return;
+        if (!db || !organizationId) return;
         const firestore = db as Firestore;
         const { addDoc, collection, serverTimestamp } = await import('firebase/firestore');
         await addDoc(collection(firestore, 'purchase_requests'), {
@@ -345,7 +407,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             addBadge, updateBadge, deleteBadge,
             addWorkflow, updateWorkflow, deleteWorkflow,
             addStation, updateStation, deleteStation, toggleStationActivation,
-            addProjectTemplate, updateProjectTemplate, deleteProjectTemplate,
+            addProjectTemplate, updateProjectTemplate, assignProjectTemplate, deleteProjectTemplate,
             buyGadget
         }
     };

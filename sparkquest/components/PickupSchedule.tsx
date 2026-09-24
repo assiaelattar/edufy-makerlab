@@ -10,7 +10,7 @@ interface PickupScheduleProps {
 }
 
 export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose }) => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const [pickupTime, setPickupTime] = useState('');
     const [pickupLocation, setPickupLocation] = useState('Main Entrance');
     const [loading, setLoading] = useState(true);
@@ -24,12 +24,15 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
 
     // Listen for Real-time Pickup Status
     useEffect(() => {
-        if (!user || !db) return;
+        // The closed modal must not create another Firestore listener during
+        // every student login. Subscribe only while pickup is actually open.
+        if (!isOpen || !user || !userProfile?.organizationId || !db) return;
 
         // Listen to pickup_queue for this student
         const q = query(
             collection(db, 'pickup_queue'),
-            where('studentId', '==', user.uid)
+            where('studentId', '==', userProfile.studentId || user.uid),
+            where('organizationId', '==', userProfile.organizationId)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -39,10 +42,13 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
             } else {
                 setRealtimeStatus(null);
             }
+        }, (error) => {
+            console.warn('Pickup status is unavailable:', error.code || error.message);
+            setRealtimeStatus(null);
         });
 
         return () => unsubscribe();
-    }, [user]);
+    }, [isOpen, user, userProfile?.organizationId, userProfile?.studentId]);
 
     const loadPickupInfo = async () => {
         if (!db || !user) return;

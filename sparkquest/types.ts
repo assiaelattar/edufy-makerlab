@@ -189,6 +189,7 @@ export interface User {
 
 export interface ProjectTemplate {
   id: string;
+  organizationId?: string;
   title: string;
   description: string;
   hook?: string; // New: Engagement hook
@@ -205,6 +206,8 @@ export interface ProjectTemplate {
     groups?: string[];
     students?: string[]; // Specific student UIDs
   };
+  assignedAt?: Timestamp;
+  assignedBy?: string;
   defaultWorkflowId?: string; // Legacy or specific workflow overide
   stepResources?: Record<string, Resource[]>; // Mission-specific resources for workflow steps
 
@@ -281,6 +284,7 @@ export interface UserProfile {
 
 export interface Gadget {
   id: string;
+  organizationId?: string;
   name: string;
   description: string;
   cost: number; // XP or Coins
@@ -303,6 +307,7 @@ export interface PurchaseRequest {
 
 export interface Contest {
   id: string;
+  organizationId?: string;
   title: string;
   description: string;
   image: string; // Banner

@@ -131,26 +131,30 @@ export const ProjectImporter: React.FC<ProjectImporterProps> = ({ onClose, onSuc
     };
 
     return (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6" role="dialog" aria-modal="true" aria-labelledby="mission-import-title">
+            <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900">Import Projects</h2>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Mission library</p>
+                        <h2 id="mission-import-title" className="mt-1 text-xl font-black text-slate-950">Import missions</h2>
                         <p className="text-sm text-slate-500">Upload CSV to bulk create missions</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600">
-                        <X size={24} />
+                    <button onClick={onClose} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Close mission import">
+                        <X size={21} />
                     </button>
                 </div>
 
                 <div className="p-6 overflow-y-auto flex-1">
                     {!file ? (
                         <div
-                            className="border-2 border-dashed border-slate-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-colors group"
+                            className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center transition-colors hover:border-blue-500 hover:bg-blue-50"
                             onClick={() => fileInputRef.current?.click()}
+                            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') fileInputRef.current?.click(); }}
+                            role="button"
+                            tabIndex={0}
                         >
                             <input ref={fileInputRef} type="file" className="hidden" accept=".csv" onChange={handleFileChange} />
-                            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 mb-4 transition-colors">
+                            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
                                 <Upload size={32} />
                             </div>
                             <h3 className="font-bold text-slate-700 text-lg mb-1">Click to upload CSV</h3>
@@ -221,7 +225,7 @@ export const ProjectImporter: React.FC<ProjectImporterProps> = ({ onClose, onSuc
                     <button
                         onClick={handleImport}
                         disabled={previewData.length === 0 || isImporting}
-                        className="px-5 py-2.5 rounded-xl font-bold bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 font-extrabold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {isImporting && <Loader2 size={18} className="animate-spin" />}
                         {isImporting ? 'Importing...' : 'Import Projects'}

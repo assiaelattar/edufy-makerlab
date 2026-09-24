@@ -1,7 +1,15 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import {
+    ArrowRight,
+    CheckCircle2,
+    CircleDot,
+    ClipboardCheck,
+    FilePenLine,
+    Rocket,
+    Send,
+    UsersRound,
+} from 'lucide-react';
 import { useFactoryData } from '../../hooks/useFactoryData';
-import { Activity, Clock, Award, Users, ArrowRight, Eye, Zap, MessageSquare, ExternalLink } from 'lucide-react';
 
 interface FactoryDashboardProps {
     onReviewProject: (projectId: string) => void;
@@ -10,301 +18,174 @@ interface FactoryDashboardProps {
     onClearFilter?: () => void;
 }
 
-export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({ onReviewProject, onNavigate, filterTemplateId, onClearFilter }) => {
-    const { studentProjects, students } = useFactoryData();
-    const [filter, setFilter] = React.useState<'overview' | 'active' | 'review' | 'published'>('overview');
+const toTime = (value: any) => {
+    if (!value) return 0;
+    if (value.seconds) return value.seconds * 1000;
+    if (value.toDate) return value.toDate().getTime();
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? 0 : parsed;
+};
 
-    // Calculate Stats
-    const stats = useMemo(() => {
-        // If filtering by template, restrict the pool
-        const pool = filterTemplateId ? studentProjects.filter(p => p.templateId === filterTemplateId) : studentProjects;
+export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
+    onReviewProject,
+    onNavigate,
+    filterTemplateId,
+    onClearFilter,
+}) => {
+    const { studentProjects, students, projectTemplates } = useFactoryData();
+    const [filter, setFilter] = useState<'active' | 'review' | 'published' | null>(null);
 
-        const active = pool.filter(p => ['planning', 'building', 'testing'].includes(p.status));
-        const review = pool.filter(p =>
-            p.status === 'submitted' ||
-            p.steps?.some(s => s.status === 'PENDING_REVIEW')
+    const data = useMemo(() => {
+        const pool = filterTemplateId
+            ? studentProjects.filter((project: any) => project.templateId === filterTemplateId)
+            : studentProjects;
+        const active = pool.filter((project: any) => ['planning', 'building', 'testing'].includes(project.status));
+        const review = pool.filter((project: any) =>
+            project.status === 'submitted' || project.steps?.some((step: any) => step.status === 'PENDING_REVIEW')
         );
-        const completed = pool.filter(p => p.status === 'published');
+        const published = pool.filter((project: any) => project.status === 'published');
+        const recent = [...pool].sort((left: any, right: any) => toTime(right.updatedAt) - toTime(left.updatedAt)).slice(0, 7);
+        const draftTemplates = projectTemplates.filter((template: any) => !template.status || template.status === 'draft');
+        const assignedTemplates = projectTemplates.filter((template: any) => template.status === 'assigned' || template.status === 'featured');
+        return { active, review, published, recent, draftTemplates, assignedTemplates };
+    }, [studentProjects, projectTemplates, filterTemplateId]);
 
-        const recent = pool
-            .sort((a, b) => {
-                const getDate = (d: any) => {
-                    if (!d) return 0;
-                    if (d.seconds) return d.seconds * 1000; // Timestamp
-                    if (d.toDate) return d.toDate().getTime(); // Firestore Timestamp method
-                    const date = new Date(d);
-                    return !isNaN(date.getTime()) ? date.getTime() : 0;
-                };
-                return getDate(b.updatedAt) - getDate(a.updatedAt);
-            })
-            .slice(0, 5);
+    const selectedProjects = filter === 'active'
+        ? data.active
+        : filter === 'review'
+            ? data.review
+            : filter === 'published'
+                ? data.published
+                : [];
 
-        return { active, review, completed, recent };
-    }, [studentProjects, filterTemplateId]);
+    const studentName = (project: any) => project.studentName ||
+        students.find((student: any) => student.id === project.studentId || student.loginInfo?.uid === project.studentId)?.name ||
+        'Learner';
 
-    // Force list view if filtered by template
-    React.useEffect(() => {
-        if (filterTemplateId) {
-            setFilter('active'); // Default to showing active projects in the list
-        }
-    }, [filterTemplateId]);
+    const pipeline = [
+        { label: 'Draft', value: data.draftTemplates.length, icon: FilePenLine, detail: 'Ready to finish' },
+        { label: 'Assigned', value: data.assignedTemplates.length, icon: Send, detail: 'Visible to learners' },
+        { label: 'In progress', value: data.active.length, icon: CircleDot, detail: 'Student work' },
+        { label: 'Review', value: data.review.length, icon: ClipboardCheck, detail: 'Needs instructor' },
+    ];
 
-    // Get Filtered List
-    const filteredList = useMemo(() => {
-        if (filter === 'active') return stats.active;
-        if (filter === 'review') return stats.review;
-        if (filter === 'published') return stats.completed;
-        return [];
-    }, [filter, stats]);
-
-    return (
-        <div className="p-4 sm:p-8 max-w-7xl mx-auto space-y-6 sm:space-y-10 animate-in fade-in duration-500 pb-24 md:pb-8">
-            {/* Header & Quick Actions */}
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                <div>
-                    {filterTemplateId ? (
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={onClearFilter}
-                                className="p-2 bg-slate-100 hover:bg-slate-200 rounded-full transition-colors"
-                            >
-                                <ArrowRight className="rotate-180 text-slate-500" size={20} />
-                            </button>
-                            <div>
-                                <h2 className="text-3xl font-black text-slate-800 tracking-tight">Mission Submissions</h2>
-                                <p className="text-slate-500 font-medium text-lg mt-1">
-                                    Showing submissions for this template.
-                                </p>
+    if (filter) {
+        return (
+            <div className="mx-auto max-w-[1320px] space-y-6 p-4 pb-24 sm:p-7 md:pb-8">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <button onClick={() => setFilter(null)} className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 font-bold text-slate-600 transition hover:bg-white hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                            <ArrowRight size={18} className="rotate-180" /> Back to dispatch
+                        </button>
+                        <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-blue-700">Student production</p>
+                        <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">{filter === 'review' ? 'Review queue' : filter === 'published' ? 'Published work' : 'Work in progress'}</h1>
+                    </div>
+                    <span className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600">{selectedProjects.length} projects</span>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {selectedProjects.map((project: any) => (
+                        <button key={project.id} onClick={() => onReviewProject(project.id)} className="group min-h-44 rounded-2xl border border-slate-200 bg-white p-5 text-left transition hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                            <div className="flex items-center justify-between gap-3">
+                                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide text-slate-600">{project.status}</span>
+                                <span className="truncate text-xs font-bold text-slate-500">{studentName(project)}</span>
                             </div>
-                        </div>
-                    ) : (
-                        <div>
-                            <button
-                                onClick={() => setFilter('overview')}
-                                className={`text-3xl font-black tracking-tight transition-colors ${filter === 'overview' ? 'text-slate-800' : 'text-slate-400 hover:text-indigo-600'}`}
-                            >
-                                Studio Command
-                            </button>
-                            <p className="text-slate-500 font-medium text-lg mt-1">
-                                {filter === 'overview' ? 'Live overview of student production.' : `Showing ${filter} missions.`}
-                            </p>
+                            <h2 className="mt-5 line-clamp-2 text-xl font-black text-slate-950 group-hover:text-blue-700">{project.title || 'Untitled mission'}</h2>
+                            <span className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 text-sm font-bold text-slate-500"><span>Open project</span><ArrowRight size={17} /></span>
+                        </button>
+                    ))}
+                    {selectedProjects.length === 0 && (
+                        <div className="col-span-full rounded-3xl border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center">
+                            <CheckCircle2 size={36} className="mx-auto text-emerald-600" />
+                            <h2 className="mt-4 text-xl font-black text-slate-900">Nothing waiting here</h2>
+                            <p className="mt-1 text-sm text-slate-500">This queue is clear.</p>
                         </div>
                     )}
                 </div>
-
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => onNavigate('projects')}
-                        className="px-5 py-3 bg-white border-2 border-indigo-100 hover:border-indigo-400 text-indigo-700 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm hover:shadow-indigo-100"
-                    >
-                        <Zap size={18} /> Quick Mission
-                    </button>
-                    <button
-                        onClick={() => onNavigate('badges')}
-                        className="px-5 py-3 bg-white border-2 border-amber-100 hover:border-amber-400 text-amber-700 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm hover:shadow-amber-100"
-                    >
-                        <Award size={18} /> New Batch
-                    </button>
-                    <button
-                        onClick={() => onNavigate('stations')}
-                        className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-1"
-                    >
-                        <Users size={18} /> Manage Stations
-                    </button>
-                </div>
             </div>
+        );
+    }
 
-            {/* Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div
-                    onClick={() => setFilter('active')}
-                    className={`p-6 rounded-2xl border-2 shadow-xl flex items-center justify-between group cursor-pointer transition-all hover:-translate-y-1 ${filter === 'active' ? 'bg-indigo-50 border-indigo-500 ring-4 ring-indigo-100' : 'bg-white border-slate-100 hover:border-indigo-100 shadow-indigo-100/50'
-                        }`}
-                >
+    return (
+        <div className="mx-auto max-w-[1320px] space-y-7 p-4 pb-24 sm:p-7 md:pb-8">
+            <section className="overflow-hidden rounded-[28px] bg-[#10233f] text-white shadow-xl shadow-slate-900/10">
+                <div className="grid gap-8 px-6 py-7 sm:px-8 lg:grid-cols-[1fr_auto] lg:items-end">
                     <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Active Missions</p>
-                        <h3 className="text-4xl font-black text-slate-800">{stats.active.length}</h3>
-                        <p className="text-xs font-bold text-indigo-500 mt-2 flex items-center gap-1">
-                            {filter === 'active' ? 'Viewing list' : 'View active'} <ArrowRight size={12} />
-                        </p>
+                        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-sky-300">SparkFactory · Mission operations</p>
+                        <h1 className="mt-3 max-w-3xl text-3xl font-black leading-tight tracking-tight sm:text-4xl">Create once. Assign clearly. Follow every learner.</h1>
+                        <p className="mt-3 max-w-2xl text-base leading-7 text-slate-300">The mission pipeline now uses Edufy class membership for targeting and canonical learner IDs for direct assignments.</p>
                     </div>
-                    <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center transform group-hover:scale-110 transition-transform">
-                        <Activity size={32} />
-                    </div>
+                    <button onClick={() => onNavigate('projects')} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffb000] px-6 font-black text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#10233f]">
+                        <Rocket size={19} /> Create or assign mission
+                    </button>
                 </div>
-
-                <div
-                    onClick={() => setFilter('review')}
-                    className={`p-6 rounded-2xl border-2 shadow-xl flex items-center justify-between group cursor-pointer transition-all hover:-translate-y-1 ${filter === 'review' ? 'bg-amber-50 border-amber-500 ring-4 ring-amber-100' : 'bg-white border-slate-100 hover:border-amber-100 shadow-amber-100/50'
-                        }`}
-                >
-                    <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Needs Review</p>
-                        <h3 className="text-4xl font-black text-slate-800">{stats.review.length}</h3>
-                        <p className="text-xs font-bold text-amber-500 mt-2 flex items-center gap-1">
-                            {filter === 'review' ? 'Viewing list' : 'View pending'} <ArrowRight size={12} />
-                        </p>
-                    </div>
-                    <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center transform group-hover:scale-110 transition-transform">
-                        <Eye size={32} />
-                    </div>
-                </div>
-
-                <div
-                    onClick={() => setFilter('published')}
-                    className={`p-6 rounded-2xl border-2 shadow-xl flex items-center justify-between group cursor-pointer transition-all hover:-translate-y-1 ${filter === 'published' ? 'bg-emerald-50 border-emerald-500 ring-4 ring-emerald-100' : 'bg-white border-slate-100 hover:border-emerald-100 shadow-emerald-100/50'
-                        }`}
-                >
-                    <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Published</p>
-                        <h3 className="text-4xl font-black text-slate-800">{stats.completed.length}</h3>
-                        <p className="text-xs font-bold text-emerald-500 mt-2 flex items-center gap-1">
-                            {filter === 'published' ? 'Viewing list' : 'View archive'} <ArrowRight size={12} />
-                        </p>
-                    </div>
-                    <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center transform group-hover:scale-110 transition-transform">
-                        <Award size={32} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Content Area - Switches between Overview and Lists */}
-            {filter === 'overview' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Review Queue */}
-                    <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm h-96 flex flex-col">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                                Review Queue
-                            </h3>
-                            <button onClick={() => setFilter('review')} className="text-xs font-bold text-slate-400 hover:text-indigo-600">View All</button>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                            {stats.review.length > 0 ? stats.review.slice(0, 10).map(p => {
-                                const studentName = p.studentName || students?.find(s => s.id === p.studentId)?.name || 'Unknown Student';
-                                return (
-                                    <div
-                                        key={p.id}
-                                        onClick={() => onReviewProject(p.id)}
-                                        className="p-4 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-between group hover:bg-amber-100 transition-colors cursor-pointer"
-                                    >
-                                        <div>
-                                            <h4 className="font-bold text-slate-800">{p.title || 'Untitled Mission'}</h4>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <span className="text-xs font-bold text-amber-700 bg-white px-2 py-0.5 rounded shadow-sm border border-amber-100">{studentName}</span>
-                                                <span className="text-xs text-amber-600 font-medium">Waiting for review</span>
-                                            </div>
-                                        </div>
-                                        <button className="p-2 bg-white rounded-lg text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110">
-                                            <ArrowRight size={16} />
-                                        </button>
-                                    </div>
-                                );
-                            }) : (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-300">
-                                    <CheckCircleIcon />
-                                    <p className="font-bold mt-4">All caught up!</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Live Feed */}
-                    <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm h-96 flex flex-col">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-bold text-slate-800">Live Feed</h3>
-                            <Clock size={16} className="text-slate-300" />
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto space-y-6 pr-2">
-                            {stats.recent.map((p, i) => {
-                                const studentName = p.studentName || students?.find(s => s.id === p.studentId)?.name || 'Unknown Student';
-                                return (
-                                    <div key={p.id} className="flex gap-4 group cursor-pointer hover:bg-slate-50 p-2 rounded-xl transition-colors" onClick={() => onReviewProject(p.id)}>
-                                        <div className="flex flex-col items-center">
-                                            <div className={`w-3 h-3 rounded-full ${i === 0 ? 'bg-indigo-500 ring-4 ring-indigo-50' : 'bg-slate-200'}`} />
-                                            {i !== stats.recent.length - 1 && <div className="w-0.5 h-full bg-slate-100 my-1" />}
-                                        </div>
-                                        <div className="pb-2 w-full">
-                                            <div className="flex justify-between items-start">
-                                                <p className="text-sm text-slate-600">
-                                                    <span className="font-bold text-slate-800">{studentName}</span> updated <span className="font-bold text-indigo-600">{p.title}</span>
-                                                </p>
-                                                <ExternalLink size={12} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                            <p className="text-xs text-slate-400 font-medium mt-1">
-                                                {(() => {
-                                                    if (!p.updatedAt) return 'Just now';
-                                                    // Handle Firestore Timestamp
-                                                    if ((p.updatedAt as any).seconds) return new Date((p.updatedAt as any).seconds * 1000).toLocaleTimeString();
-                                                    // Handle JS Date or String
-                                                    const d = new Date(p.updatedAt as any);
-                                                    return !isNaN(d.getTime()) ? d.toLocaleTimeString() : 'Just now';
-                                                })()}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-500">
-                    {filteredList.map(p => {
-                        const studentName = p.studentName || students?.find(s => s.id === p.studentId)?.name || 'Student';
+                <div className="grid border-t border-white/10 sm:grid-cols-2 lg:grid-cols-4">
+                    {pipeline.map((item, index) => {
+                        const Icon = item.icon;
                         return (
-                            <div
-                                key={p.id}
-                                onClick={() => onReviewProject(p.id)}
-                                className="bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-xl hover:border-indigo-400 transition-all cursor-pointer group flex flex-col"
-                            >
-                                <div className="flex justify-between items-start mb-4">
-                                    <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${p.status === 'published' ? 'bg-emerald-100 text-emerald-700' :
-                                        p.status === 'submitted' ? 'bg-amber-100 text-amber-700' :
-                                            'bg-indigo-100 text-indigo-700'
-                                        }`}>
-                                        {p.status}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-400">{studentName}</span>
-                                </div>
-
-                                <h4 className="text-xl font-bold text-slate-800 mb-2">{p.title || 'Untitled Mission'}</h4>
-                                <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{p.description || 'No description.'}</p>
-
-                                <div className="flex items-center justify-between text-xs font-bold text-slate-400 border-t border-slate-100 pt-4 mt-auto">
-                                    <span>Updated {(() => {
-                                        if (!p.updatedAt) return 'N/A';
-                                        if ((p.updatedAt as any).seconds) return new Date((p.updatedAt as any).seconds * 1000).toLocaleDateString();
-                                        const d = new Date(p.updatedAt as any);
-                                        return !isNaN(d.getTime()) ? d.toLocaleDateString() : 'N/A';
-                                    })()}</span>
-                                    <span className="group-hover:text-indigo-600 flex items-center gap-1 transition-colors">
-                                        Open <ArrowRight size={14} />
-                                    </span>
-                                </div>
+                            <div key={item.label} className={`flex items-center gap-4 px-6 py-5 ${index ? 'border-t border-white/10 sm:border-l sm:border-t-0' : ''} ${index === 2 ? 'lg:border-t-0' : ''}`}>
+                                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/10 text-sky-200"><Icon size={20} /></div>
+                                <div><p className="text-2xl font-black leading-none">{item.value}</p><p className="mt-1 text-sm font-bold text-white">{item.label}</p><p className="text-xs text-slate-400">{item.detail}</p></div>
                             </div>
                         );
                     })}
-                    {filteredList.length === 0 && (
-                        <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl">
-                            <p className="text-slate-400 font-bold text-lg">No {filter} missions found.</p>
-                            <button onClick={() => setFilter('overview')} className="mt-4 text-indigo-600 font-bold hover:underline">
-                                Back to Overview
-                            </button>
-                        </div>
-                    )}
+                </div>
+            </section>
+
+            {filterTemplateId && (
+                <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-900">
+                    <span>Showing submissions for one mission template.</span>
+                    <button onClick={onClearFilter} className="min-h-10 rounded-lg px-3 hover:bg-blue-100">Clear filter</button>
                 </div>
             )}
+
+            <section className="grid gap-4 md:grid-cols-3" aria-label="Student project queues">
+                {[
+                    { id: 'active' as const, label: 'Active student work', value: data.active.length, note: 'Planning, building or testing', tone: 'blue' },
+                    { id: 'review' as const, label: 'Needs review', value: data.review.length, note: 'Submitted or pending step', tone: 'amber' },
+                    { id: 'published' as const, label: 'Published', value: data.published.length, note: 'Completed learner outcomes', tone: 'emerald' },
+                ].map(card => (
+                    <button key={card.id} onClick={() => setFilter(card.id)} className="group min-h-36 rounded-2xl border border-slate-200 bg-white p-5 text-left transition hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                        <div className="flex items-start justify-between gap-4">
+                            <div><p className="text-sm font-extrabold text-slate-700">{card.label}</p><p className="mt-3 text-4xl font-black tracking-tight text-slate-950">{card.value}</p></div>
+                            <ArrowRight size={19} className="text-slate-300 transition group-hover:translate-x-1 group-hover:text-blue-600" />
+                        </div>
+                        <p className="mt-3 text-xs font-semibold text-slate-500">{card.note}</p>
+                    </button>
+                ))}
+            </section>
+
+            <section className="grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
+                <div className="rounded-2xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                        <div><h2 className="font-black text-slate-950">Review next</h2><p className="text-sm text-slate-500">Oldest waiting work should be handled first.</p></div>
+                        <button onClick={() => setFilter('review')} className="min-h-10 rounded-lg px-3 text-sm font-bold text-blue-700 hover:bg-blue-50">View all</button>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                        {data.review.slice(0, 5).map((project: any) => (
+                            <button key={project.id} onClick={() => onReviewProject(project.id)} className="flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600">
+                                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100 font-black text-amber-800">{studentName(project).charAt(0)}</span>
+                                <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-950">{project.title || 'Untitled mission'}</strong><span className="block truncate text-xs font-semibold text-slate-500">{studentName(project)}</span></span>
+                                <ArrowRight size={17} className="text-slate-300" />
+                            </button>
+                        ))}
+                        {data.review.length === 0 && <p className="px-5 py-12 text-center text-sm font-semibold text-slate-500">Review queue is clear.</p>}
+                    </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white">
+                    <div className="border-b border-slate-100 px-5 py-4"><h2 className="font-black text-slate-950">Recent learner activity</h2><p className="text-sm text-slate-500">Latest project updates across your organization.</p></div>
+                    <div className="divide-y divide-slate-100">
+                        {data.recent.slice(0, 5).map((project: any) => (
+                            <button key={project.id} onClick={() => onReviewProject(project.id)} className="flex min-h-16 w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600">
+                                <CircleDot size={18} className="shrink-0 text-blue-600" />
+                                <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-950">{studentName(project)}</strong><span className="block truncate text-xs text-slate-500">Updated {project.title || 'a project'}</span></span>
+                                <span className="text-xs font-semibold text-slate-400">{toTime(project.updatedAt) ? new Date(toTime(project.updatedAt)).toLocaleDateString() : 'Now'}</span>
+                            </button>
+                        ))}
+                        {data.recent.length === 0 && <p className="px-5 py-12 text-center text-sm font-semibold text-slate-500">No learner activity yet.</p>}
+                    </div>
+                </div>
+            </section>
         </div>
     );
 };
-
-// Helper Icon
-const CheckCircleIcon = () => (
-    <svg className="w-16 h-16 text-slate-100" fill="currentColor" viewBox="0 0 20 20">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-    </svg>
-);

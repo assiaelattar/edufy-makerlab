@@ -958,13 +958,22 @@ service cloud.firestore {
     match /focus_sessions/{sessionId} {
       allow read: if canReadTenantDoc() ||
         (resourceHasOrg() && isSameOrg(resource.data.organizationId) &&
-          hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid);
+          hasUserProfile() && currentRole() == 'student' && (
+            resource.data.studentId == request.auth.uid ||
+            studentLinkedToRequester(resource.data.studentId, resource.data.organizationId)
+          ));
       allow create: if requestHasOrg() && isSameOrg(request.resource.data.organizationId) &&
-        hasUserProfile() && currentRole() == 'student' && request.resource.data.studentId == request.auth.uid;
+        hasUserProfile() && currentRole() == 'student' && (
+          request.resource.data.studentId == request.auth.uid ||
+          studentLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId)
+        );
       allow update: if resourceHasOrg() && requestHasOrg() &&
         resource.data.organizationId == request.resource.data.organizationId &&
         isSameOrg(resource.data.organizationId) &&
-        hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid &&
+        hasUserProfile() && currentRole() == 'student' && (
+          resource.data.studentId == request.auth.uid ||
+          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId)
+        ) &&
         request.resource.data.studentId == resource.data.studentId;
       allow delete: if canDeleteTenantDoc();
     }

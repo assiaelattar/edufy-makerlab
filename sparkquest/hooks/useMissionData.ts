@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { db } from '../services/firebase';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, setDoc, Timestamp } from 'firebase/firestore';
 import { User, Assignment, StudentProject, RoadmapStep, StepStatus } from '../types';
+import { createVerifiedStudentIdentity, projectBelongsToStudent } from '../domain/studentIdentity';
 
 // Helper to normalize station names to match ERP's expected keys
 const normalizeStation = (stationText: string): string => {
@@ -79,6 +80,20 @@ export const useMissionData = () => {
                 return;
             }
 
+            if (!user || !userProfile?.organizationId) {
+                throw new Error('Your Edufy account is not connected to an organization.');
+            }
+
+            const identity = createVerifiedStudentIdentity({
+                authUid: user.uid,
+                organizationId: userProfile.organizationId,
+                student: studentId === user.uid ? undefined : {
+                    id: studentId,
+                    organizationId: userProfile.organizationId,
+                    loginInfo: { uid: user.uid },
+                },
+            });
+
             // 1. Specific Project Fetch (Deep Link)
             if (projectId) {
                 console.log(`[useMissionData] Attempting to fetch specific project: ${projectId}`);
@@ -89,17 +104,10 @@ export const useMissionData = () => {
                     console.log(`[useMissionData] Project found!`, snap.data());
                     // 🔥 CRITICAL FIX: Add document ID to data (Firestore doesn't include it automatically)
                     const pData = { id: snap.id, ...snap.data() } as StudentProject;
-                    if (pData.studentId && pData.studentId !== studentId && pData.studentId !== user?.uid) {
+                    if (!projectBelongsToStudent(pData, identity)) {
                         throw new Error('This project does not belong to the signed-in student.');
                     }
                     console.log('✅ [useMissionData] Project with ID:', pData.id);
-                    // Ensure studentId is set (for older projects that might not have it)
-                    if (!pData.studentId) {
-                        pData.studentId = studentId;
-                    }
-                    if (!pData.organizationId && userProfile?.organizationId) {
-                        pData.organizationId = userProfile.organizationId;
-                    }
                     // 🔥 CRITICAL FIX: Fetch Template Resources
                     let stepResources = pData.stepResources || {};
                     let globalResources: any[] = pData.resources || [];
@@ -154,40 +162,29 @@ export const useMissionData = () => {
                 }
             }
 
-            // 2. Find Active Enrollment/Project for Student (Default)
-            // QUERY: Get latest active enrollment by ID
-            let q = query(collection(db, 'enrollments'), where('studentId', '==', studentId), where('status', '==', 'active'));
-            let snap = await getDocs(q);
+            // 2. Find Active Enrollment/Project using only verified owner IDs.
+            const enrollmentSnapshots = await Promise.all(identity.ownerIds.map(ownerId => getDocs(query(
+                collection(db, 'enrollments'),
+                where('studentId', '==', ownerId),
+                where('organizationId', '==', identity.organizationId)
+            ))));
+            const activeEnrollments = enrollmentSnapshots
+                .flatMap(snapshot => snapshot.docs)
+                .filter(enrollmentDoc => String(enrollmentDoc.data().status || '').toLowerCase() === 'active');
 
-            // FALLBACK: Query by Email if ID yielded nothing (Handles recreated accounts)
-            if (snap.empty && user?.email) {
-                console.log(`[useMissionData] No enrollment found for ID ${studentId}. Trying email: ${user.email}`);
-                const qEmail = query(collection(db, 'enrollments'), where('studentEmail', '==', user.email), where('status', '==', 'active'));
-                snap = await getDocs(qEmail);
-            }
+            if (activeEnrollments.length === 0) {
+                const projectSnapshots = await Promise.all(identity.ownerIds.map(ownerId => getDocs(query(
+                    collection(db, 'student_projects'),
+                    where('studentId', '==', ownerId),
+                    where('organizationId', '==', identity.organizationId)
+                ))));
+                const activeProjects = projectSnapshots
+                    .flatMap(snapshot => snapshot.docs)
+                    .filter(projectDoc => ['planning', 'building', 'submitted', 'changes_requested', 'published'].includes(String(projectDoc.data().status)));
 
-            if (snap.empty) {
-                // Check for ANY active project (planning or building)
-                // Also check by Email fallback for projects if needed, though projects usually tied to ID.
-                let projQ = query(collection(db, 'student_projects'), where('studentId', '==', studentId), where('status', 'in', ['planning', 'building', 'submitted', 'changes_requested', 'published']));
-                let projSnap = await getDocs(projQ);
-
-                if (projSnap.empty && user?.email) {
-                    // Try finding orphaned projects by email (less likely but possible if manually created)
-                    // Note: student_projects usually don't have studentEmail indexed, but let's check if the schema supports it or if we can rely on ID.
-                    // Skipping email fallback for project-direct query for now to avoid index errors, assume enrollment is the key entry point.
-                }
-
-                if (!projSnap.empty) {
+                if (activeProjects.length > 0) {
                     // 🔥 CRITICAL FIX: Add document ID
-                    const pData = { id: projSnap.docs[0].id, ...projSnap.docs[0].data() } as StudentProject;
-                    // Ensure studentId is current
-                    if (pData.studentId !== studentId) {
-                        console.log(`[useMissionData] adopted project from old ID ${pData.studentId} to new ${studentId}`);
-                        pData.studentId = studentId;
-                        // Optional: trigger a backend update to migrate the ID? 
-                        // For now just use it.
-                    }
+                    const pData = { id: activeProjects[0].id, ...activeProjects[0].data() } as StudentProject;
 
                     // ... (rest of logic) ...
                     // Let's just return here to avoid touching the rest of the block in this replacement if possible, 
@@ -199,13 +196,6 @@ export const useMissionData = () => {
 
                     // 🔥 CRITICAL FIX: Add document ID
                     // (Repeating logic from original file for safety in replacement)
-                    // Ensure studentId
-                    if (!pData.studentId) {
-                        pData.studentId = studentId;
-                    }
-                    if (!pData.organizationId && userProfile?.organizationId) {
-                        pData.organizationId = userProfile.organizationId;
-                    }
                     // 🔥 CRITICAL FIX: Fetch Template Resources
                     let stepResources = pData.stepResources || {};
                     let globalResources: any[] = pData.resources || [];
@@ -254,7 +244,7 @@ export const useMissionData = () => {
                 throw new Error("No active enrollment or project found.");
             }
 
-            const enrollment = snap.docs[0].data();
+            const enrollment = activeEnrollments[0].data();
             const programId = enrollment.programId;
 
             // 3. Fetch Program/Mission Details
@@ -280,51 +270,30 @@ export const useMissionData = () => {
 
             setAssignment(mappedAssignment);
 
-            // Check if project already exists for this student+program combo
-            const existingProjQ = query(
+            // Check verified learner projects before creating. Project titles are
+            // never used as identity or de-duplication evidence.
+            const projectSnapshots = await Promise.all(identity.ownerIds.map(ownerId => getDocs(query(
                 collection(db, 'student_projects'),
-                where('studentId', '==', studentId),
-                where('templateId', '==', programId)
-            );
-            const existingProjSnap = await getDocs(existingProjQ);
+                where('studentId', '==', ownerId),
+                where('organizationId', '==', identity.organizationId)
+            ))));
+            const existingProjectDoc = projectSnapshots
+                .flatMap(snapshot => snapshot.docs)
+                .find(projectDoc => projectDoc.data().templateId === programId || projectDoc.data().programId === programId);
 
-            if (!existingProjSnap.empty) {
+            if (existingProjectDoc) {
                 // Use existing project - 🔥 CRITICAL FIX: Add document ID
-                const existingProj = { id: existingProjSnap.docs[0].id, ...existingProjSnap.docs[0].data() } as StudentProject;
+                const existingProj = { id: existingProjectDoc.id, ...existingProjectDoc.data() } as StudentProject;
                 console.log('[useMissionData] Found existing project for this program:', existingProj.id);
                 setProject(existingProj);
             } else {
-                // 🛡️ DOUBLE CHECK: Look for project by TITLE before creating new one
-                // This prevents duplicates if templateId mismatch occurs
-                const titleQuery = query(
-                    collection(db, 'student_projects'),
-                    where('studentId', '==', studentId),
-                    where('title', '==', mappedAssignment.title)
-                );
-                const titleSnap = await getDocs(titleQuery);
-
-                if (!titleSnap.empty) {
-                    // Start using this "orphaned" project instead of creating a duplicate
-                    const existingProj = { id: titleSnap.docs[0].id, ...titleSnap.docs[0].data() } as StudentProject;
-                    console.log('🛡️ [useMissionData] Found existing project by TITLE fallback:', existingProj.id);
-
-                    // Update it with templateId so it matches next time
-                    try {
-                        await setDoc(doc(db, 'student_projects', existingProj.id), {
-                            templateId: programId
-                        }, { merge: true });
-                    } catch (err) {
-                        console.warn("Could not link project to template", err);
-                    }
-
-                    setProject(existingProj);
-                } else {
-                    // Create new project with proper studentId
+                    // Create new project with verified student and organization IDs.
                     const newProject: StudentProject = {
-                        id: `proj_${studentId}_${Date.now()}`,
-                        studentId: studentId, // CRITICAL: Add studentId for queries to work
+                        id: `proj_${identity.studentId}_${Date.now()}`,
+                        studentId: identity.studentId,
                         studentName: user?.displayName || 'Student', // ✅ CRITICAL FIX: Add studentName for Manager View
-                        organizationId: userProfile?.organizationId,
+                        organizationId: identity.organizationId,
+                        programId,
                         templateId: programId,
                         title: mappedAssignment.title,
                         description: mappedAssignment.description,
@@ -339,7 +308,6 @@ export const useMissionData = () => {
                         createdAt: Timestamp.now(),
                         updatedAt: Timestamp.now()
                     };
-                    if (!newProject.organizationId) throw new Error('Your organization could not be resolved. Sign in again.');
                     console.log('[useMissionData] Creating new project:', newProject.id);
 
                     // ✅ CRITICAL FIX: Save to Firestore IMMEDIATELY to ensure persistence
@@ -357,7 +325,6 @@ export const useMissionData = () => {
                     }
 
                     setProject(newProject);
-                }
             }
         } catch (err: any) {
             console.error("Error fetching mission:", err);

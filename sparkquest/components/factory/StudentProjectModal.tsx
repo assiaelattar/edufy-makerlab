@@ -1,13 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { X, Save, Upload, Trash2, Link, Image as ImageIcon } from 'lucide-react';
-import { db, storage, auth } from '../../services/firebase';
+import { db } from '../../services/firebase';
 import { doc, setDoc, deleteDoc, Timestamp } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
 import { StudentProject, Station, StationType } from '../../types';
-import { useFactoryData } from '../../hooks/useFactoryData';
+import { api } from '../../services/api';
 
 interface StudentProjectModalProps {
     isOpen: boolean;
@@ -39,10 +37,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     onSave,
     mode = 'standard'
 }) => {
-    const { userProfile } = useFactoryData(); // Actually comes from Auth via Factory or directly
-    // Wait, useFactoryData might not expose userProfile directly or it might be different.
-    // Better use useAuth directly as planned.
-    const { userProfile: authProfile } = useAuth();
+    const { user, userProfile: authProfile } = useAuth();
     // Form State
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -53,9 +48,12 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
     // Upload State
     const [isUploading, setIsUploading] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const uploadScopeId = useRef(initialData?.id || `portfolio-${studentId}-${Date.now()}`).current;
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     useEffect(() => {
         if (initialData) {
@@ -71,10 +69,11 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             setDescription('');
             setStation('Robotics');
             setStatus(mode === 'showcase' ? 'published' : 'planning');
-            setStatus(mode === 'showcase' ? 'published' : 'planning');
             setThumbnailUrl('');
             setPresentationUrl('');
         }
+        setFormError(null);
+        setShowDeleteConfirm(false);
     }, [initialData, isOpen, mode]);
 
     // Helper to match string to StationType
@@ -86,70 +85,34 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     const processAndUploadImage = async (file: File) => {
         // Validation
         if (!file.type.startsWith('image/')) {
-            alert('Please upload an image file (JPG, PNG, WEBP)');
+            setUploadError('Choose an image file in JPG, PNG, or WEBP format.');
             return;
         }
         if (file.size > 5 * 1024 * 1024) { // 5MB limit
-            alert('File is too large. Please upload an image under 5MB.');
+            setUploadError('This image is too large. Choose a file under 5 MB.');
             return;
         }
 
         try {
             setUploadError(null);
             setIsUploading(true);
-            setUploadProgress(1);
 
-            // 1. Resize & Compress Image (Client-side)
-            const compressImage = (file: File) => new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.src = event.target?.result as string;
-                    img.onload = () => {
-                        const elem = document.createElement('canvas');
-                        const maxSize = 800; // Match Edufy's likely max size or keep 1200
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height) {
-                            if (width > maxSize) {
-                                height *= maxSize / width;
-                                width = maxSize;
-                            }
-                        } else {
-                            if (height > maxSize) {
-                                width *= maxSize / height;
-                                height = maxSize;
-                            }
-                        }
-
-                        elem.width = width;
-                        elem.height = height;
-                        const ctx = elem.getContext('2d');
-                        ctx?.drawImage(img, 0, 0, width, height);
-
-                        // Return Base64 Data URL directly
-                        const dataUrl = elem.toDataURL('image/jpeg', 0.7);
-                        resolve(dataUrl);
-                    };
-                    img.onerror = error => reject(error);
-                };
-                reader.onerror = error => reject(error);
-            });
-
-            const base64String = await compressImage(file);
-            console.log(`[Upload] Image processed. Size: ~${Math.round(base64String.length / 1024)} KB`);
-
-            // 2. Store Base64 directly (Edufy Style)
-            // No external upload needed.
-            setThumbnailUrl(base64String);
-            setUploadProgress(100);
-            setIsUploading(false);
+            if (!authProfile?.organizationId || !user?.uid) {
+                throw new Error('Your instructor account is not fully linked to an organization.');
+            }
+            setUploadProgress(0);
+            const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const url = await api.uploadFile(
+                file,
+                `instructor-projects/${authProfile.organizationId}/${user.uid}/${uploadScopeId}/cover-${Date.now()}-${safeFileName}`,
+                setUploadProgress
+            );
+            setThumbnailUrl(url);
 
         } catch (error: any) {
             console.error("Error processing image:", error);
-            setUploadError("Failed to process image.");
+            setUploadError(error?.message || 'The image could not be uploaded.');
+        } finally {
             setIsUploading(false);
         }
     };
@@ -176,31 +139,20 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
     const handleSave = async () => {
         if (!title.trim()) {
-            alert('Please enter a project title');
+            setFormError('Add a project title before saving.');
             return;
         }
 
-        // 🛡️ RESILIENCE: Ensure we are authenticated before writing
-        // This handles cases where Kiosk/Bridge tokens might have expired or not initialized correctly
-        if (auth && !auth.currentUser) {
-            console.log("👻 [Upload] No active user found. Attempting anonymous sign-in...");
-            try {
-                await signInAnonymously(auth);
-                console.log("✅ [Upload] Anonymous authentication successful.");
-            } catch (authError) {
-                console.error("❌ [Upload] Failed to auto-authenticate:", authError);
-                // We continue anyway, hoping permissions might be open (firewall.rules)
-            }
+        const orgId = initialData?.organizationId || authProfile?.organizationId;
+        if (!orgId) {
+            setFormError('Your account is not connected to an organization. Reopen the instructor session and try again.');
+            return;
         }
 
         setIsSaving(true);
+        setFormError(null);
         try {
             const projectId = initialData?.id || `proj_${studentId}_${Date.now()}`;
-
-            // Resolve Org ID (Use hook or passed prop if available, else standard fallback)
-            // Ideally we should pass currentOrgId as a prop, but for now we assume 'makerlab-academy' if missing
-            // to support legacy. In real SaaS, this comes from the Instructor's context.
-            const orgId = initialData?.organizationId || authProfile?.organizationId || 'makerlab-academy';
 
             const projectData: any = {
                 id: projectId,
@@ -236,7 +188,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             onClose();
         } catch (error) {
             console.error("Error saving project:", error);
-            alert("Failed to save project");
+            setFormError(error instanceof Error ? error.message : 'The project could not be saved.');
         } finally {
             setIsSaving(false);
         }
@@ -244,28 +196,18 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
     const handleDelete = async () => {
         if (!initialData?.id) return;
-
-        if (confirm("Are you sure you want to delete this project? This cannot be undone.")) {
-
-            // 🛡️ RESILIENCE: Auto-Auth for Delete too
-            if (auth && !auth.currentUser) {
-                console.log("👻 [Delete] No active user found. Attempting anonymous sign-in...");
-                try {
-                    await signInAnonymously(auth);
-                } catch (e) { console.error("Auto-auth failed during delete", e); }
-            }
-
-            setIsSaving(true);
-            try {
-                await deleteDoc(doc(db, 'student_projects', initialData.id));
-                if (onSave) onSave();
-                onClose();
-            } catch (error: any) {
-                console.error("Error deleting project:", error);
-                alert(`Failed to delete project: ${error.message}`);
-            } finally {
-                setIsSaving(false);
-            }
+        setIsSaving(true);
+        setFormError(null);
+        try {
+            await deleteDoc(doc(db, 'student_projects', initialData.id));
+            if (onSave) onSave();
+            onClose();
+        } catch (error: any) {
+            console.error("Error deleting project:", error);
+            setFormError(error?.message || 'The project could not be deleted.');
+            setShowDeleteConfirm(false);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -273,22 +215,26 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
     return (
         <div
-            className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-sm sm:p-6"
             onPaste={handlePaste}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="student-project-modal-title"
         >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50">
                     <div>
-                        <h2 className="text-xl font-black text-slate-800">
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Student portfolio</p>
+                        <h2 id="student-project-modal-title" className="mt-1 text-xl font-black text-slate-950">
                             {initialData ? 'Edit Mission' : mode === 'showcase' ? 'Upload Showcase' : 'New Mission'}
                         </h2>
                         <p className="text-xs font-bold text-indigo-500 uppercase tracking-wider">
                             For {studentName}
                         </p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
-                        <X size={24} />
+                    <button onClick={onClose} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-500 hover:bg-slate-200 hover:text-slate-900" aria-label="Close project editor">
+                        <X size={21} />
                     </button>
                 </div>
 
@@ -391,7 +337,7 @@ Critical thinking, design...`}
                                             : 'bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100'
                                             }`}
                                     >
-                                        {isUploading ? ('...') : (<Upload size={14} />)}
+                                        {isUploading ? (<span className="tabular-nums">{uploadProgress}%</span>) : (<Upload size={14} />)}
                                         {isUploading ? 'Uploading' : 'Upload'}
                                     </label>
                                 </div>
@@ -420,10 +366,11 @@ Critical thinking, design...`}
                 </div>
 
                 {/* Footer Actions */}
+                {formError && <div role="alert" className="mx-4 mb-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">{formError}</div>}
                 <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
                     {initialData ? (
                         <button
-                            onClick={handleDelete}
+                            onClick={() => setShowDeleteConfirm(true)}
                             disabled={isSaving}
                             className="text-red-400 hover:text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
                         >
@@ -441,13 +388,25 @@ Critical thinking, design...`}
                         <button
                             onClick={handleSave}
                             disabled={isSaving}
-                            className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 text-sm flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-2 text-sm font-extrabold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {isSaving ? 'Saving...' : <><Save size={16} /> {mode === 'showcase' ? 'Publish Showcase' : 'Save Mission'}</>}
                         </button>
                     </div>
                 </div>
             </div>
+            {showDeleteConfirm && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/50 p-4" role="alertdialog" aria-modal="true" aria-labelledby="delete-student-project-title">
+                    <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                        <h3 id="delete-student-project-title" className="text-xl font-black text-slate-950">Delete this project?</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-500">This action cannot be undone and removes the project from the learner portfolio.</p>
+                        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button onClick={() => setShowDeleteConfirm(false)} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700 hover:bg-slate-50">Keep project</button>
+                            <button onClick={handleDelete} disabled={isSaving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-extrabold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 size={17} /> Delete project</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

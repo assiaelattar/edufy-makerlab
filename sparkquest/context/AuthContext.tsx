@@ -1,14 +1,16 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { User, onAuthStateChanged, signInWithCustomToken, signInAnonymously, signOut as firebaseSignOut } from 'firebase/auth';
+import { User, onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, updateDoc, increment, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, increment, onSnapshot, query, Unsubscribe, updateDoc, where } from 'firebase/firestore';
 
 import { UserProfile } from '../types';
+import { createVerifiedStudentIdentity, verifyStudentRecord } from '../domain/studentIdentity';
 
 interface AuthContextType {
     user: User | null;
     userProfile: UserProfile | null;
     loading: boolean;
+    authIssue: string | null;
     signInWithToken: (token: string) => Promise<void>;
     signOut: () => Promise<void>;
     updateCredits: (amount: number) => Promise<void>;
@@ -22,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     userProfile: null,
     loading: true,
+    authIssue: null,
     signInWithToken: async () => { },
     signOut: async () => { },
     updateCredits: async () => { },
@@ -37,8 +40,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-    const [isKioskMode, setIsKioskMode] = useState(() => localStorage.getItem('sparkquest_kiosk_mode') === 'true');
-    const isDemoMode = useRef(false);
+    const [authIssue, setAuthIssue] = useState<string | null>(null);
+    const [isKioskMode, setIsKioskMode] = useState(false);
 
     const userProfileUnsubscribe = useRef<Unsubscribe | null>(null);
 
@@ -55,51 +58,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const unsubscribe = onSnapshot(doc(db, 'users', uid), async (userDoc) => {
                 if (userDoc.exists()) {
-                    const data = userDoc.data() as UserProfile;
-                    // SAAS & ID RECOVERY LOGIC
+                    const data = { ...userDoc.data() } as UserProfile;
                     if (!data.organizationId) {
-                        console.warn("⚠️ Legacy User detected: Defaulting to 'makerlab-academy'", data);
-                        data.organizationId = 'makerlab-academy';
+                        setUserProfile(null);
+                        setAuthIssue('This account is not connected to an Edufy organization. Ask an administrator to repair the account.');
+                        return;
                     }
 
-                    // Resolve the student record from the authenticated UID every
-                    // time. A stale studentId must never open another learner's data.
                     if (data.role === 'student') {
                         try {
-                            const { collection, query, where, getDocs, updateDoc } = await import('firebase/firestore');
-                            const q = query(
+                            const linkedQuery = query(
                                 collection(db, 'students'),
                                 where('loginInfo.uid', '==', uid),
                                 where('organizationId', '==', data.organizationId)
                             );
-                            const snap = await getDocs(q);
-                            if (!snap.empty) {
-                                const foundId = snap.docs[0].id;
-                                console.log("✨ [AuthContext] Verified Student ID:", foundId);
-                                data.studentId = foundId;
+                            const linkedSnapshot = await getDocs(linkedQuery);
+                            if (linkedSnapshot.size > 1) {
+                                setUserProfile(null);
+                                setAuthIssue('More than one learner profile is linked to this login. Ask an administrator to resolve the duplicate.');
+                                return;
+                            }
 
-                                if (userDoc.data().studentId !== foundId) {
-                                    await updateDoc(doc(db, 'users', uid), { studentId: foundId });
+                            let studentRecord = linkedSnapshot.empty
+                                ? null
+                                : { id: linkedSnapshot.docs[0].id, ...linkedSnapshot.docs[0].data() };
+
+                            if (!studentRecord && data.studentId) {
+                                const pointedSnapshot = await getDoc(doc(db, 'students', data.studentId));
+                                if (pointedSnapshot.exists()) {
+                                    const pointedRecord = { id: pointedSnapshot.id, ...pointedSnapshot.data() };
+                                    if (verifyStudentRecord(pointedRecord, uid, data.organizationId)) {
+                                        studentRecord = pointedRecord;
+                                    }
                                 }
                             }
+
+                            const identity = createVerifiedStudentIdentity({
+                                authUid: uid,
+                                organizationId: data.organizationId,
+                                student: studentRecord,
+                            });
+                            data.studentId = identity.studentId;
                         } catch (recoveryErr) {
-                            console.warn("Failed to verify student ID", recoveryErr);
+                            console.error('Failed to verify student identity', recoveryErr);
+                            setUserProfile(null);
+                            setAuthIssue('SparkQuest could not verify the learner profile. Ask an administrator to check the Edufy account link.');
+                            return;
                         }
                     }
 
+                    setAuthIssue(null);
                     setUserProfile(data);
                 } else {
-                    // Fallback if no user doc exists yet
-                    setUserProfile({
-                        uid,
-                        name: 'Student',
-                        email: '',
-                        role: 'student',
-                        organizationId: 'makerlab-academy' // Default for new uninitialized users too
-                    });
+                    setUserProfile(null);
+                    setAuthIssue('This login does not have an Edufy profile yet. Ask an administrator to finish the account setup.');
                 }
             }, (err) => {
                 console.error("Error fetching user profile:", err);
+                setUserProfile(null);
+                setAuthIssue('SparkQuest could not load the Edufy account profile. Check the connection and try again.');
             });
 
             userProfileUnsubscribe.current = unsubscribe;
@@ -109,44 +126,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     useEffect(() => {
-        // 1. Check for persisted Bridge Session (Local Mock)
-        const storedBridge = localStorage.getItem('sparkquest_bridge_user');
-        if (storedBridge) {
-            try {
-                const payload = JSON.parse(storedBridge);
-                if (payload && payload.uid) {
-                    console.log("Restoring Bridge Session from Storage");
-                    isDemoMode.current = true; // Prevent Firebase from clearing this
-                    const mockUser = {
-                        uid: payload.uid,
-                        displayName: payload.name || 'Explorer',
-                        email: payload.email,
-                        emailVerified: true,
-                        isAnonymous: false,
-                        getIdToken: async () => 'bridge-token',
-                        getIdTokenResult: async () => ({
-                            token: 'bridge-token',
-                            claims: { role: payload.role },
-                        }),
-                        photoURL: payload.photoURL || null,
-                    } as unknown as User;
-
-                    setUser(mockUser);
-                    setUserProfile(payload);
-
-                    // 🔑 Restore Firebase Session (needed for RLS)
-                    if (auth && !auth.currentUser) {
-                        signInAnonymously(auth).catch(e => console.warn("Restoring Anon Auth failed", e));
-                    }
-
-                    setLoading(false);
-                    // We still listen to Firebase, but isDemoMode protects us
-                }
-            } catch (e) {
-                console.error("Failed to restore bridge session", e);
-                localStorage.removeItem('sparkquest_bridge_user');
-            }
-        }
+        // Remove legacy client-authenticated bridge and kiosk sessions. They did
+        // not create a real Firebase identity and cannot satisfy tenant rules.
+        localStorage.removeItem('sparkquest_bridge_user');
+        localStorage.removeItem('sparkquest_kiosk_mode');
 
         if (!auth) {
             setLoading(false);
@@ -154,37 +137,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            // URL Token Priority: If we have a bridge token, ignore existing Firebase session
-            // forcing the app to use the signInWithToken logic instead.
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('token')) {
-                console.log("🔒 Bridge Token Detected: Ignoring Firebase Session to allow impersonation.");
-                return;
-            }
-
             if (currentUser) {
-                // GUARD: If we are in Kiosk/Demo Mode and the user is Anonymous, 
-                // it means we just signed in anonymously for Firestore access.
-                // We MUST NOT overwrite the Mock User/Student Profile with the raw anonymous user.
-                if (currentUser.isAnonymous && isDemoMode.current) {
-                    console.log("👻 Kiosk: Anonymous Auth verified. Keeping Kiosk Session active.");
-                    return;
-                }
-
-
-                isDemoMode.current = false;
                 setUser(currentUser);
                 subscribeToUserProfile(currentUser.uid);
             } else {
-                // Only clear if we are NOT in a bridge/demo mode
-                if (!isDemoMode.current) {
-                    setUser(null);
-                    setUserProfile(null);
-                    // Cleanup profile listener
-                    if (userProfileUnsubscribe.current) {
-                        userProfileUnsubscribe.current();
-                        userProfileUnsubscribe.current = null;
-                    }
+                setUser(null);
+                setUserProfile(null);
+                setAuthIssue(null);
+                if (userProfileUnsubscribe.current) {
+                    userProfileUnsubscribe.current();
+                    userProfileUnsubscribe.current = null;
                 }
             }
             setLoading(false);
@@ -200,142 +162,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const signInWithToken = async (token: string) => {
         if (!auth) return;
         try {
-            // In a real scenario, this 'token' should be a verify/custom token from Firebase Admin.
-            // For this demo/client-side, we might simulating or passing a real ID token if possible,
-            // BUT client SDK `signInWithCustomToken` requires a backend-minted token.
-
-            // TEMPORARY HACK: If we don't have a backend to mint custom tokens, 
-            // we can't fully "secure" this without a cloud function.
-            // OPTION: We will assume the user IS ALREADY LOGGED IN if they are on same domain (localStorage shares auth),
-            // OR we implement a simple "mock" login for now if the token is "demo-token".
-
-            // 1. Try Bridge Token (Base64 JSON from ERP)
-            try {
-                // Decode base64 with unicode support
-                const decoded = decodeURIComponent(atob(token).split('').map(function (c) {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                }).join(''));
-
-                // Simple validation to ensure it looks like JSON
-                if (decoded.trim().startsWith('{')) {
-                    const payload = JSON.parse(decoded);
-                    if (payload && payload.uid && payload.email) {
-                        console.log("Bridge Token Verified", payload);
-                        const mockUser = {
-                            uid: payload.uid,
-                            displayName: payload.name || 'Explorer',
-                            email: payload.email,
-                            emailVerified: true,
-                            isAnonymous: false,
-                            metadata: {},
-                            providerData: [],
-                            refreshToken: '',
-                            tenantId: null,
-                            delete: async () => { },
-                            getIdToken: async () => token,
-                            getIdTokenResult: async () => ({
-                                token: token,
-                                signInProvider: 'custom',
-                                claims: { role: payload.role },
-                                authTime: Date.now().toString(),
-                                issuedAtTime: Date.now().toString(),
-                                expirationTime: (Date.now() + 3600000).toString(),
-                                signInSecondFactor: null,
-                            }),
-                            reload: async () => { },
-                            toJSON: () => ({}),
-                            phoneNumber: null,
-                            photoURL: payload.photoURL || null,
-                        } as unknown as User;
-
-                        // PERSIST SESSION
-                        localStorage.setItem('sparkquest_bridge_user', JSON.stringify(payload));
-                        isDemoMode.current = true; // Mark as local session
-
-                        // 🔑 CRITICAL: Sign in anonymously to satisfy Firestore Security Rules
-                        try {
-                            if (!auth.currentUser) {
-                                await signInAnonymously(auth);
-                                console.log("🔑 Bridge: Signed in Anonymously for Firestore Access");
-                            }
-                        } catch (err) {
-                            console.warn("Bridge Anon Auth failed", err);
-                        }
-
-                        setUser(mockUser);
-                        setUserProfile(payload);
-                        return;
-                    }
-                }
-            } catch (e) {
-                // Not a base64 token or failed verification, fall through
-                console.debug("Token sent is not a bridge token", e);
-            }
-
-            if (token === 'demo-token') {
-                console.warn("Using demo token mode");
-                isDemoMode.current = true;
-                const mockUser = {
-                    uid: 'demo-student-id',
-                    displayName: 'Demo Student',
-                    email: 'student@makerlab.academy',
-                    emailVerified: true,
-                    isAnonymous: false,
-                    metadata: {},
-                    providerData: [],
-                    refreshToken: '',
-                    tenantId: null,
-                    delete: async () => { },
-                    getIdToken: async () => 'demo-token',
-                    getIdTokenResult: async () => ({
-                        token: 'demo-token',
-                        signInProvider: 'custom',
-                        claims: {},
-                        authTime: Date.now().toString(),
-                        issuedAtTime: Date.now().toString(),
-                        expirationTime: (Date.now() + 3600000).toString(),
-                        signInSecondFactor: null,
-                    }),
-                    reload: async () => { },
-                    toJSON: () => ({}),
-                    phoneNumber: null,
-                    photoURL: null,
-                } as unknown as User;
-
-                setUser(mockUser);
-                setUserProfile({
-                    uid: 'demo-student-id',
-                    name: 'Demo Student',
-                    email: 'student@makerlab.academy',
-                    role: 'student'
-                });
-            } else {
-                await signInWithCustomToken(auth, token);
-            }
-
+            if (!token.trim()) throw new Error('Missing sign-in token.');
+            await signInWithCustomToken(auth, token.trim());
         } catch (error) {
             console.error("Login failed", error);
+            setAuthIssue('The Edufy sign-in link is invalid or expired. Return to Edufy and launch SparkQuest again.');
             throw error;
         }
     };
 
     const signOut = async () => {
-        localStorage.removeItem('sparkquest_bridge_user'); // Clear local session
+        localStorage.removeItem('sparkquest_bridge_user');
         if (!auth) return;
         await firebaseSignOut(auth);
     };
 
     const updateCredits = async (amount: number) => {
-        if (!user || isDemoMode.current) {
-            // In demo/bridge mode, just update local state
-            if (userProfile) {
-                setUserProfile({
-                    ...userProfile,
-                    arcadeCredits: (userProfile.arcadeCredits || 0) + amount
-                });
-            }
-            return;
-        }
+        if (!user) return;
 
         try {
             if (db) {
@@ -356,8 +199,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const enableKioskMode = () => {
-        setIsKioskMode(true);
-        localStorage.setItem('sparkquest_kiosk_mode', 'true');
+        setIsKioskMode(false);
+        localStorage.removeItem('sparkquest_kiosk_mode');
+        setAuthIssue('Classroom PIN mode is temporarily unavailable while its secure sign-in service is being rebuilt. Students can sign in with their Edufy accounts.');
     };
 
     const exitKioskMode = () => {
@@ -365,69 +209,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('sparkquest_kiosk_mode');
     };
 
-    const kioskLogin = async (studentId: string, pin: string): Promise<boolean> => {
-        if (!db) return false;
-        try {
-            // Verify PIN against Firestore
-            const studentDoc = await getDoc(doc(db, 'students', studentId));
-            if (!studentDoc.exists()) return false;
-
-            const studentData = studentDoc.data();
-            if (studentData.pinCode !== pin) return false;
-
-            // PIN Valid -> Create Bridge Session
-            const payload = {
-                uid: studentData.loginInfo?.uid || studentData.id,
-                email: studentData.loginInfo?.email || studentData.email || `${studentData.id}@kiosk.local`,
-                role: 'student',
-                name: studentData.name,
-                photoURL: null,
-                organizationId: studentData.organizationId || 'makerlab-academy' // Ensure Org ID is captured
-            };
-
-            // PERSIST SESSION
-            localStorage.setItem('sparkquest_bridge_user', JSON.stringify(payload));
-            isDemoMode.current = true; // Mark as local session
-
-            // REAL AUTH: Sign in anonymously to satisfy Firestore Security Rules (request.auth != null)
-            // This allows us to pass 'isSignedIn()' checks in rules.
-            // The rules will then see we have no User Profile in 'users' collection (getOrgId() == null),
-            // and fallback to allowing access if we are Kiosk.
-            try {
-                await signInAnonymously(auth);
-                console.log("👻 Kiosk: Signed in Anonymously for Firestore Access");
-            } catch (authErr) {
-                console.warn("Kiosk Anon Auth failed, falling back to pure mock", authErr);
-            }
-
-            const mockUser = {
-                uid: payload.uid,
-                displayName: payload.name || 'Explorer',
-                email: payload.email,
-                emailVerified: true,
-                isAnonymous: true, // It IS anonymous now
-                getIdToken: async () => 'kiosk-token',
-                getIdTokenResult: async () => ({
-                    token: 'kiosk-token',
-                    claims: { role: 'student' },
-                }),
-                photoURL: null,
-            } as unknown as User;
-
-            setUser(mockUser);
-            setUserProfile(payload);
-            return true;
-
-
-
-        } catch (e) {
-            console.error("Kiosk Login Error", e);
-            return false;
-        }
-    };
+    const kioskLogin = async (): Promise<boolean> => false;
 
     return (
-        <AuthContext.Provider value={{ user, userProfile, loading, signInWithToken, signOut, updateCredits, kioskLogin, isKioskMode, enableKioskMode, exitKioskMode }}>
+        <AuthContext.Provider value={{ user, userProfile, loading, authIssue, signInWithToken, signOut, updateCredits, kioskLogin, isKioskMode, enableKioskMode, exitKioskMode }}>
             {children}
         </AuthContext.Provider>
     );

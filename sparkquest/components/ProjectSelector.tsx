@@ -22,7 +22,9 @@ import { ModernAlert } from './ModernAlert';
 import { SidebarItem } from './SidebarItem';
 import { Sidebar } from './Sidebar';
 import { MobileNavigation } from './MobileNavigation';
-import { currentAcademicYear, matchesAcademicYear, previousAcademicYear, projectAcademicYear } from '../utils/academicYear';
+import { currentAcademicYear, matchesAcademicYear, normalizeAcademicYear, previousAcademicYear, projectAcademicYear } from '../utils/academicYear';
+import { createVerifiedStudentIdentity } from '../domain/studentIdentity';
+import { missionIsVisibleToLearner } from '../domain/missionAssignment';
 
 interface ProjectSelectorProps {
     studentId: string;
@@ -59,6 +61,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Resolved ID state
     const [effectiveStudentId, setEffectiveStudentId] = useState<string | null>(null);
     const [verifiedStudentOwnerIds, setVerifiedStudentOwnerIds] = useState<string[]>([]);
+    const [identityIssue, setIdentityIssue] = useState<string | null>(null);
 
     // State for available templates
     const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
@@ -129,74 +132,67 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         const fetchStudentData = async () => {
             if (!db || !studentId) return;
             try {
-                // The authenticated UID is authoritative. Never trust a stale
-                // studentId pointer before verifying that relationship.
+                setIdentityIssue(null);
                 let studentSnap = null as any;
-                if (authUser?.uid) {
+
+                if (isAdminOrInstructor) {
+                    const directSnapshot = await getDoc(doc(db, 'students', studentId));
+                    if (directSnapshot.exists()) studentSnap = directSnapshot;
+                } else if (authUser?.uid && authProfile?.organizationId) {
                     const verifiedQuery = query(
                         collection(db, 'students'),
                         where('loginInfo.uid', '==', authUser.uid),
-                        where('organizationId', '==', authProfile?.organizationId || 'makerlab-academy')
+                        where('organizationId', '==', authProfile.organizationId)
                     );
                     const verifiedSnapshot = await getDocs(verifiedQuery);
+                    if (verifiedSnapshot.size > 1) {
+                        throw new Error('More than one learner profile is linked to this login.');
+                    }
                     if (!verifiedSnapshot.empty) studentSnap = verifiedSnapshot.docs[0];
-                }
-
-                if (!studentSnap) {
-                    const directSnapshot = await getDoc(doc(db, 'students', studentId));
-                    const directData = directSnapshot.exists() ? directSnapshot.data() : null;
-                    const directBelongsToUser = isAdminOrInstructor || !authUser?.uid || directData?.loginInfo?.uid === authUser.uid;
-                    if (directSnapshot.exists() && directBelongsToUser) studentSnap = directSnapshot;
+                    if (!studentSnap && studentId !== authUser.uid) {
+                        const directSnapshot = await getDoc(doc(db, 'students', studentId));
+                        const directData = directSnapshot.exists() ? directSnapshot.data() : null;
+                        if (
+                            directSnapshot.exists() &&
+                            directData?.organizationId === authProfile.organizationId &&
+                            directData?.loginInfo?.uid === authUser.uid
+                        ) studentSnap = directSnapshot;
+                    }
                 }
 
                 if (studentSnap?.exists()) {
                     const data = studentSnap.data();
-                    setEffectiveStudentId(studentSnap.id); // ✅ RESOLVED ID
+                    const record = { id: studentSnap.id, ...data };
+                    const ownerIds = isAdminOrInstructor
+                        ? Array.from(new Set([studentSnap.id, data.loginInfo?.uid].filter(Boolean))) as string[]
+                        : createVerifiedStudentIdentity({
+                            authUid: authUser!.uid,
+                            organizationId: authProfile!.organizationId,
+                            student: record,
+                        }).ownerIds;
+                    setEffectiveStudentId(studentSnap.id);
                     setAvatarUrl(data.avatarUrl || '');
                     setStudentName(data.name || data.firstName || 'Maker');
-                    setStudentProfileData(data); // Store full profile for visibility checks
-
-                    const normalizeText = (value: unknown) => String(value || '').trim().toLowerCase();
-                    const normalizePhone = (value: unknown) => String(value || '').replace(/\D/g, '');
-                    const primaryEmails = [data.email, data.loginInfo?.email].map(normalizeText).filter(Boolean);
-                    const primaryPhone = normalizePhone(data.parentPhone);
-                    const primaryBirthDate = normalizeText(data.birthDate);
-                    const linkedOwnerIds = new Set<string>([studentSnap.id]);
-                    if (data.loginInfo?.uid) linkedOwnerIds.add(data.loginInfo.uid);
-
-                    // Legacy imports sometimes created a second learner document.
-                    // Merge read aliases only when the duplicate shares a strong
-                    // identity field; an identical name alone is never sufficient.
-                    if (data.name) {
-                        const sameNameSnapshot = await getDocs(query(
-                            collection(db, 'students'),
-                            where('name', '==', data.name),
-                            where('organizationId', '==', authProfile?.organizationId || 'makerlab-academy')
-                        ));
-                        sameNameSnapshot.docs.forEach(candidateDoc => {
-                            if (candidateDoc.id === studentSnap.id) return;
-                            const candidate = candidateDoc.data();
-                            const candidateEmails = [candidate.email, candidate.loginInfo?.email].map(normalizeText).filter(Boolean);
-                            const emailMatches = primaryEmails.length > 0 && candidateEmails.some(email => primaryEmails.includes(email));
-                            const phoneMatches = primaryPhone.length >= 8 && primaryPhone === normalizePhone(candidate.parentPhone);
-                            const birthDateMatches = Boolean(primaryBirthDate) && primaryBirthDate === normalizeText(candidate.birthDate);
-                            if (!emailMatches && !phoneMatches && !birthDateMatches) return;
-                            linkedOwnerIds.add(candidateDoc.id);
-                            if (candidate.loginInfo?.uid) linkedOwnerIds.add(candidate.loginInfo.uid);
-                        });
-                    }
-                    setVerifiedStudentOwnerIds(Array.from(linkedOwnerIds));
+                    setStudentProfileData(record);
+                    setVerifiedStudentOwnerIds(ownerIds);
                 } else {
-                    // A project can legitimately be keyed directly by Auth UID
-                    // even when the richer student document is still missing.
-                    setEffectiveStudentId(authUser?.uid || studentId);
+                    if (!authUser?.uid || !authProfile?.organizationId) {
+                        throw new Error('The learner profile could not be resolved from Edufy.');
+                    }
+                    const identity = createVerifiedStudentIdentity({
+                        authUid: authUser.uid,
+                        organizationId: authProfile.organizationId,
+                    });
+                    setEffectiveStudentId(identity.studentId);
                     setStudentName(authProfile?.name || authUser?.displayName || 'Maker');
-                    setVerifiedStudentOwnerIds([authUser?.uid || studentId].filter(Boolean) as string[]);
+                    setVerifiedStudentOwnerIds(identity.ownerIds);
                 }
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Error fetching student profile:", e);
-                setEffectiveStudentId(authUser?.uid || studentId);
-                setVerifiedStudentOwnerIds([authUser?.uid || studentId].filter(Boolean) as string[]);
+                setEffectiveStudentId(null);
+                setVerifiedStudentOwnerIds([]);
+                setIdentityIssue(e?.message || 'The learner profile could not be verified.');
+                setLoading(false);
             }
         };
         fetchStudentData();
@@ -271,28 +267,9 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     );
 
     const handleSaveAvatar = async (url: string) => {
-        if (!db || !studentId) return;
+        if (!db || !effectiveStudentId) return;
         try {
-            // 1. Find the correct document ID
-            let targetDocId = studentId;
-            const directSnap = await getDoc(doc(db, 'students', studentId));
-
-            if (!directSnap.exists()) {
-                const q = query(collection(db, 'students'), where('loginInfo.uid', '==', studentId));
-                const qSnap = await getDocs(q);
-                if (!qSnap.empty) {
-                    targetDocId = qSnap.docs[0].id; // Found the real ID
-                } else {
-                    // Try parent login potentially
-                    const qParent = query(collection(db, 'students'), where('parentLoginInfo.uid', '==', studentId));
-                    const qParentSnap = await getDocs(qParent);
-                    if (!qParentSnap.empty) targetDocId = qParentSnap.docs[0].id;
-                    else throw new Error("Student profile not found");
-                }
-            }
-
-            // 2. Update the verified document
-            await (await import('firebase/firestore')).updateDoc(doc(db, 'students', targetDocId), {
+            await (await import('firebase/firestore')).updateDoc(doc(db, 'students', effectiveStudentId), {
                 avatarUrl: url
             });
             setAvatarUrl(url);
@@ -308,32 +285,51 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             // Must have DB. Must have Resolved ID (unless previewing).
             if (!db) return;
             const targetId = effectiveStudentId;
+            const organizationId = authProfile?.organizationId || studentProfileData?.organizationId;
 
             // Allow fetch if we have an ID OR if we are in preview mode (detached from student ID)
             if (!targetId && !previewGradeId) return;
+            if (targetId && !organizationId) {
+                setIdentityIssue('The learner does not have an organization link in Edufy.');
+                setLoading(false);
+                return;
+            }
 
             try {
                 // 1. Fetch Existing Student Projects (Only if we have a student ID)
                 const myProjects: StudentProject[] = [];
-
-                if (targetId) {
-                    const organizationId = authProfile?.organizationId || 'makerlab-academy';
-                    // Student sessions may only use the verified learner document and
-                    // its linked Auth UID. A stale users/{uid}.studentId pointer must
-                    // never pull another learner's projects into this dashboard.
-                    const ownerIds = verifiedStudentOwnerIds.length
+                const ownerIds = targetId
+                    ? (verifiedStudentOwnerIds.length
                         ? verifiedStudentOwnerIds
                         : Array.from(new Set([
                             targetId,
                             studentProfileData?.loginInfo?.uid,
                             role === 'student' ? authUser?.uid : undefined
-                        ].filter(Boolean))) as string[];
-                    const projectResults = await Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
+                        ].filter(Boolean))) as string[])
+                    : [];
+
+                // These reads do not depend on one another. Starting them as one
+                // batch removes several serial network round-trips from login.
+                const [projectResults, enrollmentResults, programsSnap, stationsSnap, templatesSnap] = await Promise.all([
+                    Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
                         collection(db, 'student_projects'),
                         where('studentId', '==', ownerId),
                         where('organizationId', '==', organizationId)
-                    ))));
+                    )))),
+                    Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
+                        collection(db, 'enrollments'),
+                        where('studentId', '==', ownerId),
+                        where('organizationId', '==', organizationId)
+                    )))),
+                    getDocs(collection(db, 'programs')),
+                    getDocs(collection(db, 'stations')),
+                    getDocs(collection(db, 'project_templates')),
+                ]);
 
+                if (targetId) {
+                    // Student sessions may only use the verified learner document and
+                    // its linked Auth UID. A stale users/{uid}.studentId pointer must
+                    // never pull another learner's projects into this dashboard.
                     projectResults.forEach(result => {
                         if (result.status !== 'fulfilled') return;
                         result.value.docs.forEach(projectDoc => {
@@ -359,18 +355,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 if (targetId) {
                     console.log(`🔍 [Enrollment] Fetching enrollments for Resolved ID: "${targetId}"`);
-                    const enrollmentOwnerIds = verifiedStudentOwnerIds.length
-                        ? verifiedStudentOwnerIds
-                        : Array.from(new Set([
-                            targetId,
-                            studentProfileData?.loginInfo?.uid,
-                            role === 'student' ? authUser?.uid : undefined
-                        ].filter(Boolean))) as string[];
-                    const enrollmentResults = await Promise.allSettled(enrollmentOwnerIds.map(ownerId => getDocs(query(
-                        collection(db, 'enrollments'),
-                        where('studentId', '==', ownerId),
-                        where('organizationId', '==', authProfile?.organizationId || 'makerlab-academy')
-                    ))));
                     const enrollmentMap = new Map<string, any>();
                     enrollmentResults.forEach(result => {
                         if (result.status !== 'fulfilled') return;
@@ -378,9 +362,22 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     });
                     allEnrollmentRecords = Array.from(enrollmentMap.values());
                     setEnrollmentHistory(allEnrollmentRecords);
-                    enrollments = allEnrollmentRecords.filter(enrollment =>
-                        String(enrollment.status || '').toLowerCase() === 'active' && matchesAcademicYear(enrollment.session, activeAcademicYear)
+                    const activeEnrollmentRecords = allEnrollmentRecords.filter(enrollment =>
+                        String(enrollment.status || '').toLowerCase() === 'active'
                     );
+                    const calendarYear = currentAcademicYear();
+                    const calendarEnrollments = activeEnrollmentRecords.filter(enrollment =>
+                        matchesAcademicYear(enrollment.session, calendarYear)
+                    );
+                    const latestActiveEnrollment = [...activeEnrollmentRecords].sort((left, right) =>
+                        String(normalizeAcademicYear(right.session) || '').localeCompare(String(normalizeAcademicYear(left.session) || ''))
+                    )[0];
+                    const fallbackAcademicYear = normalizeAcademicYear(latestActiveEnrollment?.session);
+                    enrollments = calendarEnrollments.length
+                        ? calendarEnrollments
+                        : activeEnrollmentRecords.filter(enrollment =>
+                            Boolean(fallbackAcademicYear) && matchesAcademicYear(enrollment.session, fallbackAcademicYear!)
+                        );
                     console.log(`📚 [Enrollment] Found ${enrollments.length} enrollments across linked IDs`);
                     gradeIds = enrollments.flatMap(e => [e.gradeId, e.gradeName]).filter(Boolean);
                     groupIds = enrollments.flatMap(e => [e.groupId, e.groupName]).filter(Boolean);
@@ -402,7 +399,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 console.log(`✅ [Enrollment] Extracted groupIds:`, groupIds);
 
                 // 🎭 INSTRUCTOR PREVIEW: Fetch all grades for preview dropdown
-                const programsSnap = await getDocs(collection(db, 'programs'));
                 const allGrades: Array<{ id: string, name: string, programName: string }> = [];
                 programsSnap.docs.forEach(doc => {
                     const program = doc.data();
@@ -425,8 +421,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 const effectiveGroupIds = previewGradeId ? [] : groupIds; // Preview mode assumes no specific group for now
                 console.log(`🎯 [Active Grades] Using gradeIds:`, effectiveGradeIds);
 
-                const stationsSnap = await getDocs(collection(db, 'stations'));
-
                 // Helper to get status
                 const getStationState = (s: Station) => {
                     // FIX: Robust string comparison for IDs
@@ -447,7 +441,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     .filter(s => s.status !== 'hidden'); // Show Active AND Future (Locked)
 
                 // 3. Fetch Available Templates
-                const templatesSnap = await getDocs(collection(db, 'project_templates'));
                 const allTemplates = templatesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
 
                 const targetStudentIds = (verifiedStudentOwnerIds.length
@@ -461,81 +454,29 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 const templates = allTemplates
                     .filter(t => {
-                        console.log(`🔍 [Filter Debug] Checking template: "${t.title}" (ID: ${t.id})`);
-
+                        // Tenant-owned templates must stay inside their organization.
+                        // Legacy templates without an organization remain readable
+                        // until an audited migration can classify them.
+                        if (t.organizationId && t.organizationId !== organizationId) return false;
                         // Basic status check
                         if (t.status === 'draft') {
-                            console.log(`❌ [Filter Debug] Rejected "${t.title}": Status is draft`);
                             return false;
                         }
 
-                        const hasGradeTargets = Array.isArray(t.targetAudience?.grades) && t.targetAudience.grades.length > 0;
-                        const hasGroupTargets = Array.isArray(t.targetAudience?.groups) && t.targetAudience.groups.length > 0;
-                        const hasStudentTargets = Array.isArray(t.targetAudience?.students) && t.targetAudience.students.length > 0;
-                        if (!hasGradeTargets && !hasGroupTargets && !hasStudentTargets) {
-                            console.log(`❌ [Filter Debug] Rejected "${t.title}": No explicit grade, group, or student assignment.`);
-                            return false;
-                        }
-                        if (t.status !== 'assigned' && t.status !== 'featured') {
-                            console.log(`❌ [Filter Debug] Rejected "${t.title}": Status ${t.status} not assigned/featured`);
-                            return false;
-                        }
-
-                        // 🚨 STRICT Grade filtering (Robust String Check)
-                        if (t.targetAudience?.grades && t.targetAudience.grades.length > 0) {
-                            const studentHasAccess = t.targetAudience.grades.some((gradeId: any) =>
-                                effectiveGradeIds.map(String).includes(String(gradeId))
-                            );
-                            if (!studentHasAccess) {
-                                console.log(`❌ [Filter Debug] Rejected "${t.title}": Grade mismatch. Student Grades: ${effectiveGradeIds}, Target Grades: ${t.targetAudience.grades}`);
-                                return false;
-                            }
-                        } else {
-                            console.log(`ℹ️ [Filter Debug] "${t.title}": No specific grades targeted (Open to all?)`);
-                        }
-
-                        // 🚨 STRICT Group filtering (Robust String Check)
-                        if (t.targetAudience?.groups && t.targetAudience.groups.length > 0) {
-                            if (previewGradeId) {
-                                console.log(`🎭 [Filter Debug] Instructor Preview: Bypassing group check for "${t.title}"`);
-                            } else {
-                                // 🔥 ROBUST MATCHING: Case-insensitive Check
-                                const normalizedStudentGroups = effectiveGroupIds.map(g => String(g).toLowerCase().trim());
-                                const studentHasGroupAccess = t.targetAudience.groups.some((groupId: any) =>
-                                    normalizedStudentGroups.includes(String(groupId).toLowerCase().trim())
-                                );
-
-                                if (!studentHasGroupAccess) {
-                                    console.log(`❌ [Filter Debug] Rejected "${t.title}": Group mismatch. Student Groups: ${JSON.stringify(normalizedStudentGroups)}, Target Groups: ${JSON.stringify(t.targetAudience.groups)}`);
-                                    return false;
-                                }
-                            }
-                        }
-
-                        // 🎯 STUDENT SPECIFIC TARGETING (Highest Priority)
-                        if (t.targetAudience?.students && t.targetAudience.students.length > 0) {
-                            // If explicit students are listed, ONLY they can see it
-                            const istargeted = t.targetAudience.students.some((candidateId: any) =>
-                                targetStudentIds.includes(String(candidateId))
-                            );
-                            if (!istargeted) {
-                                console.log(`❌ [Filter Debug] Rejected "${t.title}": Explicitly targeted to other students.`);
-                                return false;
-                            } else {
-                                console.log(`🎯 [Filter Debug] MATCH "${t.title}": Explicitly targeted to this student.`);
-                                return true; // Bypass other checks? No, we still want to respect status, but maybe it overrides Grade? 
-                                // Taking "Limit to specific students" literally: It implies it must match student ID.
-                                // It should probably STILL match Grade if we want to keep it organized, but usually specific targeting overrides weak grade matches.
-                                // However, keeping Grade match ensures it appears in the right "context" (Grade view). 
-                                // Let's keep strict AND logic: Must match Grade AND Student.
-                            }
-                        }
+                        if (!missionIsVisibleToLearner(t, {
+                            ownerIds: targetStudentIds,
+                            gradeIds: effectiveGradeIds.map(String),
+                            // Grade preview deliberately ignores group constraints so
+                            // instructors can inspect the complete grade experience.
+                            groupIds: previewGradeId
+                                ? (t.targetAudience?.groups || []).map(String)
+                                : effectiveGroupIds.map(String),
+                        })) return false;
 
                         // Station Logic
                         if (t.station) {
                             const type = t.station.toLowerCase();
                             if (type === 'general') {
-                                console.log(`✅ [Filter Debug] Accepted "${t.title}": General station`);
                                 return true;
                             }
 
@@ -545,7 +486,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             );
 
                             if (!matchingStation) {
-                                console.log(`❌ [Filter Debug] Rejected "${t.title}": Station "${t.station}" is not active for this grade.`);
                                 return false;
                             }
 
@@ -553,14 +493,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             if (matchingStation && matchingStation.status === 'future') {
                                 t.isLocked = true;
                                 t.unlockDate = matchingStation.startDate;
-                                console.log(`🔒 [Filter Debug] Accepted "${t.title}" but LOCKED (Future Station)`);
-                            } else {
-                                console.log(`✅ [Filter Debug] Accepted "${t.title}": Station Active (or bypassed)`);
                             }
                             return true;
                         }
 
-                        console.log(`✅ [Filter Debug] Accepted "${t.title}": No station constraints`);
                         return true;
                     });
 
@@ -646,10 +582,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
         // Force Naming for Free Build & Showcase
         if (template.id === 'free-build-template' || template.id === 'showcase-template') {
-            if (!assignmentContext.programId) {
-                alert(`No active enrollment exists for ${activeAcademicYear}. Ask the academy to assign the student's current program and grade first.`);
-                return;
-            }
             console.log("✏️ [ProjectSelector] Opening Naming Modal for custom project");
             setNamingModal({ isOpen: true, template, name: '' });
             return;
@@ -689,10 +621,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         setLoading(true);
 
         try {
+            const organizationId = authProfile?.organizationId || studentProfileData?.organizationId;
+            if (!organizationId) throw new Error('Your Edufy organization could not be resolved.');
             // 1. Create new Student Project
             const newProject = {
                 studentId: effectiveStudentId || studentId,
-                organizationId: authProfile?.organizationId || 'makerlab-academy',
+                organizationId,
                 academicYearId: activeAcademicYear,
                 ...(assignmentContext.programId ? { programId: assignmentContext.programId } : {}),
                 ...(assignmentContext.gradeId ? { gradeId: assignmentContext.gradeId } : {}),
@@ -730,6 +664,8 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
         setLoading(true);
         try {
+            const organizationId = authProfile?.organizationId || studentProfileData?.organizationId;
+            if (!organizationId) throw new Error('Your Edufy organization could not be resolved.');
             let initialSteps: any[] = [];
 
             // 1. Fetch Default Workflow if available
@@ -766,7 +702,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
             const newProject = {
                 studentId: effectiveStudentId || studentId,
-                organizationId: authProfile?.organizationId || 'makerlab-academy', // CRITICAL: Restore orgId
+                organizationId,
                 academicYearId: activeAcademicYear,
                 ...(assignmentContext.programId ? { programId: assignmentContext.programId } : {}),
                 ...(assignmentContext.gradeId ? { gradeId: assignmentContext.gradeId } : {}),
@@ -799,6 +735,22 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-slate-950 via-blue-950 to-slate-900">
                 <div className="text-white text-xl font-bold">Loading your missions...</div>
             </div>
+        );
+    }
+
+    if (identityIssue) {
+        return (
+            <main className="sq-entry-shell">
+                <section className="sq-entry-card sq-entry-card--issue">
+                    <p className="sq-entry-eyebrow">Learner link</p>
+                    <h1>This project bench needs an Edufy repair.</h1>
+                    <p className="sq-entry-copy">{identityIssue}</p>
+                    <div className="sq-entry-actions">
+                        <button className="sq-entry-primary" type="button" onClick={() => window.location.reload()}>Try again</button>
+                        {onLogout && <button className="sq-entry-secondary" type="button" onClick={onLogout}>Use a different account</button>}
+                    </div>
+                </section>
+            </main>
         );
     }
 
@@ -934,8 +886,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         <div className="flex items-center gap-4">
                             {/* START PROJECT BUTTON (Moved Here) */}
                             <button
-                                disabled={!assignmentContext.programId}
-                                title={!assignmentContext.programId ? `No active enrollment for ${activeAcademicYear}` : 'Start a personal project'}
+                                title="Start a personal project"
                                 onClick={() => handleStartMissionClick(availableTemplates.find(t => t.id === 'free-build-template') || {
                                     id: 'free-build-template',
                                     title: 'Free Build',
@@ -953,8 +904,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                             {/* Showcase Project Button */}
                             <button
-                                disabled={!assignmentContext.programId}
-                                title={!assignmentContext.programId ? `No active enrollment for ${activeAcademicYear}` : 'Create a showcase project'}
+                                title="Create a showcase project"
                                 onClick={() => handleStartMissionClick({
                                     id: 'showcase-template',
                                     title: 'Showcase Project',

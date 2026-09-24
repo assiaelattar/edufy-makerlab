@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { ProcessTemplate, ProcessPhase, Resource } from '../../types';
 import { Plus, Trash2, Edit2, GripVertical, Check, X, ArrowRight, LayoutList } from 'lucide-react';
+import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
 
 // Default tools available in every workflow step
 const DEFAULT_TOOLS: Resource[] = [
@@ -86,23 +87,18 @@ export const WorkflowManager: React.FC = () => {
     };
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h3 className="text-2xl font-black text-slate-800">Process Architect</h3>
-                    <p className="text-slate-500 font-medium">Design the learning journeys for your students.</p>
-                </div>
-                <button
-                    onClick={handleCreate}
-                    className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-1"
-                >
-                    <Plus size={20} /> New Workflow
-                </button>
-            </div>
+        <div className="space-y-6">
+            <FactoryPageHeader
+                icon={LayoutList}
+                eyebrow="Mission builder"
+                title="Design repeatable learning workflows"
+                description="Create the phases, instructions, and tools students follow inside a mission."
+                actions={<button type="button" onClick={handleCreate} className={factoryButton.primary}><Plus size={18} /> New workflow</button>}
+            />
 
             <div className="grid grid-cols-1 gap-4">
                 {processTemplates.map(wf => (
-                    <div key={wf.id} className="group relative bg-white border border-slate-200 rounded-2xl p-6 hover:shadow-xl transition-all hover:border-indigo-400">
+                    <div key={wf.id} className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <div className="flex items-center gap-3">
@@ -113,11 +109,11 @@ export const WorkflowManager: React.FC = () => {
                                 </div>
                                 <p className="text-slate-500 text-sm mt-1 max-w-xl">{wf.description}</p>
                             </div>
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => handleEdit(wf)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                            <div className="flex gap-1">
+                                <button onClick={() => handleEdit(wf)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-blue-50 hover:text-blue-700" aria-label={`Edit ${wf.name}`}>
                                     <Edit2 size={18} />
                                 </button>
-                                <button onClick={() => handleDelete(wf.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                <button onClick={() => handleDelete(wf.id)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${wf.name}`}>
                                     <Trash2 size={18} />
                                 </button>
                             </div>
@@ -141,18 +137,19 @@ export const WorkflowManager: React.FC = () => {
                         </div>
                     </div>
                 ))}
+                {processTemplates.length === 0 && <FactoryEmptyState icon={LayoutList} title="No workflows yet" description="Create a reusable sequence of phases, tools, and evidence requirements for your missions." action={<button type="button" onClick={handleCreate} className={factoryButton.primary}><Plus size={18} /> Create workflow</button>} />}
             </div>
 
             {/* Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div role="dialog" aria-modal="true" aria-labelledby="workflow-dialog-title" className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-                            <h3 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                            <h3 id="workflow-dialog-title" className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <LayoutList className="text-indigo-500" />
                                 {editingId ? 'Edit Workflow' : 'New Workflow'}
                             </h3>
-                            <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                            <button onClick={() => setIsModalOpen(false)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close workflow editor">
                                 <X size={24} />
                             </button>
                         </div>

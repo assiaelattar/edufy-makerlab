@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { Station } from '../../types';
 import { Settings, Zap, Edit2, Check, X } from 'lucide-react';
+import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
 
 // MOCK_GRADES removed - now using real data from useFactoryData
 
@@ -78,14 +79,15 @@ export const StationManager: React.FC = () => {
     };
 
     const renderEditor = () => (
-        <div className="bg-white border-2 border-indigo-500 rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+        <div className="rounded-2xl border border-blue-300 bg-white p-6 shadow-lg">
             <div className="flex justify-between items-start mb-6">
                 <h4 className="text-xl font-black text-slate-800">
                     {isCreating ? 'Create New Station' : 'Edit Station'}
                 </h4>
                 <button
                     onClick={() => { setEditingId(null); setIsCreating(false); }}
-                    className="p-2 hover:bg-slate-100 rounded-full text-slate-400"
+                    className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Close station editor"
                 >
                     <X size={20} />
                 </button>
@@ -166,13 +168,13 @@ export const StationManager: React.FC = () => {
                     )}
                     <button
                         onClick={() => { setEditingId(null); setIsCreating(false); }}
-                        className="px-6 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition-colors"
+                        className={factoryButton.secondary}
                     >
                         Cancel
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/30 transition-all hover:scale-105"
+                        className={factoryButton.primary}
                     >
                         {isCreating ? 'Create Station' : 'Save Changes'}
                     </button>
@@ -182,22 +184,14 @@ export const StationManager: React.FC = () => {
     );
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h3 className="text-2xl font-black text-slate-800">Station Command</h3>
-                    <p className="text-slate-500 font-medium">Activate learning zones for your classes.</p>
-                </div>
-                {!isCreating && !editingId && (
-                    <button
-                        onClick={handleCreate}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:-translate-y-1 transition-all"
-                    >
-                        <Zap size={18} className="text-yellow-400" fill="currentColor" />
-                        New Station
-                    </button>
-                )}
-            </div>
+        <div className="space-y-6">
+            <FactoryPageHeader
+                icon={Settings}
+                eyebrow="Studio configuration"
+                title="Configure learning stations"
+                description="Control which physical or digital learning zone is active for each grade."
+                actions={!isCreating && !editingId ? <button type="button" onClick={handleCreate} className={factoryButton.primary}><Zap size={18} /> New station</button> : undefined}
+            />
 
             {isCreating && <div className="max-w-2xl mx-auto">{renderEditor()}</div>}
 
@@ -208,7 +202,7 @@ export const StationManager: React.FC = () => {
                     }
 
                     return (
-                        <div key={station.id} className="bg-white border-2 border-slate-100 rounded-2xl p-6 hover:border-slate-300 transition-all group">
+                        <div key={station.id} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                             <div className="flex items-start justify-between mb-6">
                                 <div className="flex items-center gap-4">
                                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-sm border border-slate-100 bg-${station.color || 'blue'}-50`}>
@@ -227,7 +221,7 @@ export const StationManager: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <button onClick={() => handleEdit(station)} className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                <button onClick={() => handleEdit(station)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-blue-50 hover:text-blue-700" aria-label={`Edit ${station.label}`}>
                                     <Edit2 size={20} />
                                 </button>
                             </div>
@@ -271,6 +265,7 @@ export const StationManager: React.FC = () => {
                         </div>
                     );
                 })}
+                {stations.length === 0 && <FactoryEmptyState icon={Settings} title="No stations configured" description="Add the first learning station, then activate it for the grades that should use it." action={<button type="button" onClick={handleCreate} className={factoryButton.primary}><Zap size={18} /> Add station</button>} />}
             </div>
         </div>
     );

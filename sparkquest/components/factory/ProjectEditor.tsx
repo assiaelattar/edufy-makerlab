@@ -1,10 +1,10 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { ProjectTemplate, StationType } from '../../types';
-import { storage } from '../../services/firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../services/api';
+import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 interface ProjectEditorProps {
     templateId?: string | null;
@@ -16,6 +16,7 @@ const TABS = ['details', 'resources', 'workflow', 'targeting', 'publishing'];
 
 export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initialViewProject, onClose }) => {
     const { projectTemplates, stations, processTemplates, availableGrades, availableGroups, programs, enrollments, students, actions } = useFactoryData();
+    const { user, userProfile } = useAuth();
 
     // Initialize Form
     const defaults = {
@@ -44,21 +45,20 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         targetAudience: { ...defaults.targetAudience, ...(initialData?.targetAudience || {}) }
     };
 
-    // Smart grade matching: Validate existing IDs but DO NOT overwrite with fallback
-    if (mergedData.targetAudience?.grades?.length > 0) {
-        // We just keep the IDs as-is. 
-        // If they don't match availableGrades, it might be because we are editing a project from another program.
-        // Overwriting them causing the "Cross-Grade" bug.
-        console.log(`[ProjectEditor] Loaded target grades:`, mergedData.targetAudience.grades);
-    }
-
     const [form, setForm] = useState<Partial<ProjectTemplate>>(mergedData);
     const [activeTab, setActiveTab] = useState('details');
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Upload State
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const uploadScopeId = useRef(templateId || initialViewProject?.id || `draft-${Date.now()}`).current;
+    const resourceInputRef = useRef<HTMLInputElement>(null);
+    const [resourceUploadProgress, setResourceUploadProgress] = useState(0);
+    const [isResourceUploading, setIsResourceUploading] = useState(false);
 
     // Helper to map technology names to stylized objects (Simple version of Importer logic)
     const mapTechnologies = (input: string) => {
@@ -89,11 +89,11 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
     const processAndUploadImage = async (file: File) => {
         // Validation
         if (!file.type.startsWith('image/')) {
-            alert('Please upload an image file (JPG, PNG, WEBP)');
+            setUploadError('Choose an image file in JPG, PNG, or WEBP format.');
             return;
         }
         if (file.size > 5 * 1024 * 1024) { // 5MB limit
-            alert('File is too large. Please upload an image under 5MB.');
+            setUploadError('This image is too large. Choose a file under 5 MB.');
             return;
         }
 
@@ -102,57 +102,60 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             setIsUploading(true);
             setUploadProgress(1);
 
-            // 1. Resize & Compress Image (Client-side)
-            const compressImage = (file: File) => new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.src = event.target?.result as string;
-                    img.onload = () => {
-                        const elem = document.createElement('canvas');
-                        const maxSize = 800; // Match Edufy's likely max size
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height) {
-                            if (width > maxSize) {
-                                height *= maxSize / width;
-                                width = maxSize;
-                            }
-                        } else {
-                            if (height > maxSize) {
-                                width *= maxSize / height;
-                                height = maxSize;
-                            }
-                        }
-
-                        elem.width = width;
-                        elem.height = height;
-                        const ctx = elem.getContext('2d');
-                        ctx?.drawImage(img, 0, 0, width, height);
-
-                        // Return Base64 Data URL directly
-                        const dataUrl = elem.toDataURL('image/jpeg', 0.7);
-                        resolve(dataUrl);
-                    };
-                    img.onerror = error => reject(error);
-                };
-                reader.onerror = error => reject(error);
-            });
-
-            const base64String = await compressImage(file);
-            console.log(`[Upload] Image processed. Size: ~${Math.round(base64String.length / 1024)} KB`);
-
-            // 2. Store Key directly
-            setForm(prev => ({ ...prev, thumbnailUrl: base64String }));
-            setUploadProgress(100);
-            setIsUploading(false);
+            if (!userProfile?.organizationId || !user?.uid) {
+                throw new Error('Your instructor account is not fully linked to an organization.');
+            }
+            const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const url = await api.uploadFile(
+                file,
+                `instructor-projects/${userProfile.organizationId}/${user.uid}/${uploadScopeId}/cover-${Date.now()}-${safeFileName}`,
+                setUploadProgress
+            );
+            setForm(prev => ({ ...prev, thumbnailUrl: url }));
 
         } catch (error: any) {
             console.error("Error processing image:", error);
-            setUploadError("Failed to process image.");
+            setUploadError(error?.message || 'The cover image could not be uploaded.');
+        } finally {
             setIsUploading(false);
+        }
+    };
+
+    const handleResourceUpload = async (file: File) => {
+        if (!userProfile?.organizationId || !user?.uid) {
+            setUploadError('Your instructor account is not fully linked to an organization.');
+            return;
+        }
+        if (file.size > 20 * 1024 * 1024) {
+            setUploadError('This resource is too large. Choose a file under 20 MB.');
+            return;
+        }
+        const isAllowed = /^(image|video|audio)\//.test(file.type) || ['application/pdf', 'text/plain'].includes(file.type);
+        if (!isAllowed) {
+            setUploadError('Upload an image, video, audio clip, PDF, or text file.');
+            return;
+        }
+        setIsResourceUploading(true);
+        setResourceUploadProgress(0);
+        setUploadError(null);
+        try {
+            const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const url = await api.uploadFile(
+                file,
+                `instructor-projects/${userProfile.organizationId}/${user.uid}/${uploadScopeId}/resource-${Date.now()}-${safeFileName}`,
+                setResourceUploadProgress
+            );
+            const type = file.type.startsWith('video/') || file.type.startsWith('audio/')
+                ? 'video'
+                : file.type.startsWith('image/') ? 'image' : 'file';
+            setForm(current => ({
+                ...current,
+                resources: [...(current.resources || []), { id: `resource-${Date.now()}`, title: file.name, type, url }],
+            }));
+        } catch (error: any) {
+            setUploadError(error?.message || 'The resource could not be uploaded.');
+        } finally {
+            setIsResourceUploading(false);
         }
     };
 
@@ -176,50 +179,51 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         }
     };
 
-    // Debug: Log initial data
-    console.log('[ProjectEditor] Initialized with:', {
-        templateId,
-        initialViewProject,
-        mergedData: mergedData.targetAudience,
-        availableGrades: availableGrades.map(g => ({ id: g.id, name: g.name })),
-        preSelectedGrades: mergedData.targetAudience?.grades,
-        matchFound: mergedData.targetAudience?.grades?.map(gradeId =>
-            availableGrades.find(g => g.id === gradeId) ? 'MATCH' : 'NO MATCH for ' + gradeId
-        )
-    });
-
     const handleSave = async () => {
-        try {
-            console.log('💾 [ProjectEditor] Saving mission with targetAudience:', {
-                grades: form.targetAudience?.grades,
-                gradeNames: form.targetAudience?.grades?.map(gradeId =>
-                    availableGrades.find(g => g.id === gradeId)?.name || `Unknown (${gradeId})`
-                ),
-                groups: form.targetAudience?.groups
-            });
+        const title = String(form.title || '').trim();
+        if (!title) {
+            setActiveTab('details');
+            setSaveError('Add a mission title before saving.');
+            return;
+        }
+        const audience = form.targetAudience || {};
+        const hasAudience = Boolean(audience.grades?.length || audience.groups?.length || audience.students?.length);
+        if (form.status !== 'draft' && !hasAudience) {
+            setActiveTab('targeting');
+            setSaveError('Choose a grade, group, or specific students before publishing this mission.');
+            return;
+        }
 
+        setIsSaving(true);
+        setSaveError(null);
+        try {
             if (templateId) {
-                await actions.updateProjectTemplate(templateId, form);
+                await actions.updateProjectTemplate(templateId, { ...form, title });
             } else {
-                await actions.addProjectTemplate(form as any);
+                await actions.addProjectTemplate({ ...form, title } as any);
             }
             onClose();
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            alert("Error saving project template");
+            setSaveError(e?.message || 'The mission could not be saved. Check the required fields and try again.');
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleDelete = async () => {
         if (!templateId) return;
-        if (confirm("Are you sure you want to PERMANENTLY delete this mission?\n\nWARNING: This will also delete ALL student submissions associated with this mission. This action cannot be undone.")) {
-            try {
-                await actions.deleteProjectTemplate(templateId);
-                onClose();
-            } catch (e) {
-                console.error("Error deleting project:", e);
-                alert("Failed to delete project");
-            }
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+            await actions.deleteProjectTemplate(templateId);
+            onClose();
+        } catch (e: any) {
+            console.error("Error deleting project:", e);
+            setShowDeleteConfirm(false);
+            setSaveError(e?.message || 'The mission could not be deleted.');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -239,13 +243,12 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             {/* Header */}
             <div className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+                    <button onClick={onClose} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label="Close mission editor">
                         <X size={24} />
                     </button>
                     <div>
                         <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                            {templateId ? 'Edit Project' : 'New Project'}
-                            <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">v1.1</span>
+                            {templateId ? 'Edit mission' : 'New mission'}
                         </h2>
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{activeTab}</p>
                     </div>
@@ -253,20 +256,26 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                 <div className="flex gap-3">
                     {templateId && (
                         <button
-                            onClick={handleDelete}
-                            className="flex items-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold transition-all"
+                            onClick={() => setShowDeleteConfirm(true)}
+                            className="flex min-h-11 items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 font-bold text-red-700 transition hover:bg-red-50"
                         >
                             <Trash2 size={18} /> <span className="hidden md:inline">Delete</span>
                         </button>
                     )}
-                    <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all">
-                        <Save size={18} /> Save & Close
+                    <button onClick={handleSave} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} {isSaving ? 'Saving…' : 'Save mission'}
                     </button>
                 </div>
             </div>
 
+            {saveError && (
+                <div role="alert" className="mx-8 mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    {saveError}
+                </div>
+            )}
+
             {/* Tabs */}
-            <div className="flex px-8 border-b border-slate-200 bg-white shrink-0">
+            <div className="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-3 sm:px-8">
                 {TABS.map(tab => (
                     <button
                         key={tab}
@@ -344,15 +353,15 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                                     className="w-full h-full object-cover"
                                                     onError={(e) => (e.currentTarget.style.display = 'none')}
                                                 />
-                                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <p className="text-white text-xs font-bold">Preview</p>
+                                                <div className="absolute inset-x-0 bottom-0 bg-slate-950/75 px-2 py-1.5 text-center">
+                                                    <p className="text-xs font-bold text-white">Cover preview</p>
                                                 </div>
                                             </>
                                         ) : (
                                             // Fallback Preview (Auto-generated look)
-                                            <div className="w-full h-full bg-gradient-to-br from-indigo-900 to-slate-900 flex flex-col items-center justify-center p-4 text-center">
-                                                <span className="text-3xl mb-2">🚀</span>
-                                                <span className="text-[10px] text-indigo-200 font-bold uppercase tracking-wider">Auto-Generated</span>
+                                            <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 p-4 text-center">
+                                                <ImageIcon size={30} className="mb-2 text-slate-300" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Automatic cover</span>
                                             </div>
                                         )}
                                     </div>
@@ -435,7 +444,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                         {/* Error Display */}
                                         {uploadError && (
                                             <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg border border-red-200 mt-2 font-bold flex flex-col gap-1">
-                                                <span>⚠️ Upload Failed:</span>
+                                            <span>Upload failed:</span>
                                                 <span className="font-normal">{uploadError}</span>
                                             </div>
                                         )}
@@ -621,6 +630,26 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                     <option value="file">File 📄</option>
                                 </select>
                             </div>
+
+                            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+                                <input
+                                    ref={resourceInputRef}
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/*,video/*,audio/*,application/pdf,text/plain"
+                                    onChange={event => {
+                                        const file = event.target.files?.[0];
+                                        if (file) void handleResourceUpload(file);
+                                        event.currentTarget.value = '';
+                                    }}
+                                />
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div><p className="text-sm font-black text-slate-800">Upload a mission file</p><p className="mt-1 text-xs text-slate-500">Images, video, audio, PDF, or text · maximum 20 MB</p></div>
+                                    <button type="button" onClick={() => resourceInputRef.current?.click()} disabled={isResourceUploading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-extrabold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+                                        {isResourceUploading ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />} {isResourceUploading ? `${resourceUploadProgress}%` : 'Choose file'}
+                                    </button>
+                                </div>
+                            </div>
                             <div className="flex gap-2">
                                 <input
                                     placeholder="URL (https://...)"
@@ -745,7 +774,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                                                                 }
                                                                             });
                                                                         }}
-                                                                        className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 transition hover:bg-red-50 hover:text-red-600"
                                                                     >
                                                                         <Trash2 size={14} />
                                                                     </button>
@@ -1023,30 +1052,30 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                     <div className="space-y-8 animate-in slide-in-from-right-8 duration-300">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {[
-                                { id: 'draft', label: 'Draft', desc: 'Hidden from students', icon: Layout, color: 'slate' },
-                                { id: 'featured', label: 'Featured', desc: 'Promoted in the library', icon: Rocket, color: 'amber' },
-                                { id: 'assigned', label: 'Assigned', desc: 'Active for targeted grades', icon: Users, color: 'emerald' }
+                                { id: 'draft', label: 'Draft', desc: 'Hidden from students', icon: Layout, selected: 'border-slate-700 bg-slate-100', iconSelected: 'bg-slate-800 text-white', titleSelected: 'text-slate-950', textSelected: 'text-slate-700', checkSelected: 'text-slate-700' },
+                                { id: 'featured', label: 'Featured', desc: 'Promoted in the library', icon: Rocket, selected: 'border-amber-500 bg-amber-50', iconSelected: 'bg-amber-500 text-white', titleSelected: 'text-amber-950', textSelected: 'text-amber-800', checkSelected: 'text-amber-600' },
+                                { id: 'assigned', label: 'Assigned', desc: 'Active for targeted grades', icon: Users, selected: 'border-emerald-500 bg-emerald-50', iconSelected: 'bg-emerald-600 text-white', titleSelected: 'text-emerald-950', textSelected: 'text-emerald-800', checkSelected: 'text-emerald-600' }
                             ].map(opt => (
                                 <button
                                     key={opt.id}
                                     onClick={() => setForm({ ...form, status: opt.id as any })}
                                     className={`relative p-8 rounded-2xl border-2 text-left transition-all ${form.status === opt.id
-                                        ? `border-${opt.color}-500 bg-${opt.color}-50`
+                                        ? opt.selected
                                         : 'border-slate-200 bg-white hover:border-slate-300'
                                         }`}
                                 >
-                                    <div className={`w-12 h-12 rounded-xl mb-4 flex items-center justify-center ${form.status === opt.id ? `bg-${opt.color}-500 text-white` : 'bg-slate-100 text-slate-400'
+                                    <div className={`w-12 h-12 rounded-xl mb-4 flex items-center justify-center ${form.status === opt.id ? opt.iconSelected : 'bg-slate-100 text-slate-400'
                                         }`}>
                                         <opt.icon size={24} />
                                     </div>
-                                    <h3 className={`text-xl font-black ${form.status === opt.id ? `text-${opt.color}-900` : 'text-slate-800'}`}>
+                                    <h3 className={`text-xl font-black ${form.status === opt.id ? opt.titleSelected : 'text-slate-800'}`}>
                                         {opt.label}
                                     </h3>
-                                    <p className={`text-sm mt-1 font-medium ${form.status === opt.id ? `text-${opt.color}-700` : 'text-slate-500'}`}>
+                                    <p className={`text-sm mt-1 font-medium ${form.status === opt.id ? opt.textSelected : 'text-slate-500'}`}>
                                         {opt.desc}
                                     </p>
                                     {form.status === opt.id && (
-                                        <div className={`absolute top-4 right-4 text-${opt.color}-500`}>
+                                        <div className={`absolute top-4 right-4 ${opt.checkSelected}`}>
                                             <Check size={24} />
                                         </div>
                                     )}
@@ -1074,6 +1103,19 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                     Next <ArrowRight size={20} />
                 </button>
             </div>
+            {showDeleteConfirm && (
+                <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="delete-mission-title">
+                    <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+                        <div className="grid h-11 w-11 place-items-center rounded-xl bg-red-50 text-red-700"><Trash2 size={21} /></div>
+                        <h3 id="delete-mission-title" className="mt-4 text-xl font-black text-slate-950">Delete this mission?</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-500">The mission and all linked student submissions will be permanently deleted. This action cannot be undone.</p>
+                        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button onClick={() => setShowDeleteConfirm(false)} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700 hover:bg-slate-50">Keep mission</button>
+                            <button onClick={handleDelete} disabled={isSaving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-extrabold text-red-700 hover:bg-red-50 disabled:opacity-50">{isSaving ? <Loader2 size={17} className="animate-spin" /> : <Trash2 size={17} />} Delete mission</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

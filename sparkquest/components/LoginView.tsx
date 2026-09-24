@@ -1,14 +1,10 @@
 import React, { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { User, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Lock, ArrowRight, AlertCircle, Eye, EyeOff, Hammer, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { config } from '../utils/config';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
 export const LoginView: React.FC = () => {
-    // We don't need signIn from context if we use direct firebase auth
-    // The onAuthStateChanged in context will pick up the change
-    const { enableKioskMode } = useAuth();
     const [email, setEmail] = useState(() => localStorage.getItem('sparkquest_remember_email') || '');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -35,109 +31,79 @@ export const LoginView: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 p-4 relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
-                <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl animate-pulse" />
-                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse delay-1000" />
-            </div>
-
-            <div className="w-full max-w-md bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-3xl p-8 shadow-2xl relative z-10 animate-in fade-in zoom-in duration-500">
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto flex items-center justify-center mb-4 shadow-lg shadow-blue-500/20">
-                        <User className="text-white w-8 h-8" />
-                    </div>
-                    <h1 className="text-3xl font-black text-white mb-2 tracking-tight">SparkQuest</h1>
-                    <p className="text-slate-400">Student Portal Login</p>
+        <main className="sq-login-shell">
+            <section className="sq-login-story" aria-labelledby="sparkquest-title">
+                <div className="sq-login-brand"><span>MakerLab</span> / SparkQuest</div>
+                <div className="sq-login-story-copy">
+                    <p className="sq-entry-eyebrow">Your project workshop</p>
+                    <h1 id="sparkquest-title">Turn today’s idea into something real.</h1>
+                    <p>Open your mission, keep building, and show the evidence of what you made.</p>
                 </div>
+                <ol className="sq-bench-path" aria-label="SparkQuest project path">
+                    <li className="is-active"><span>1</span><div><strong>Enter</strong><small>Your secure workshop pass</small></div></li>
+                    <li><span>2</span><div><strong>Build</strong><small>Your current mission and tools</small></div></li>
+                    <li><span>3</span><div><strong>Show</strong><small>Evidence, feedback and portfolio</small></div></li>
+                </ol>
+            </section>
 
-                {error && (
-                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400 text-sm animate-in slide-in-from-top-2">
-                        <AlertCircle size={16} />
-                        {error}
-                    </div>
-                )}
+            <section className="sq-login-panel" aria-labelledby="sign-in-title">
+                <div className="sq-login-form-wrap">
+                    <div className="sq-entry-mark" aria-hidden="true"><Hammer /></div>
+                    <p className="sq-entry-eyebrow">Welcome back</p>
+                    <h2 id="sign-in-title">Open your project bench</h2>
+                    <p className="sq-entry-copy">Use the learner account created in Edufy.</p>
 
-                <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Email Address</label>
-                        <div className="relative group z-10">
-                            <div className="absolute inset-0 bg-blue-500/20 rounded-xl blur transition-opacity opacity-0 group-focus-within:opacity-100" />
+                    {error && (
+                        <div className="sq-login-error" role="alert">
+                            <AlertCircle size={18} />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="sq-login-form">
+                        <label>
+                            <span>Email address</span>
                             <input
                                 type="email"
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="relative w-full bg-slate-950 border border-slate-800 text-white px-4 py-3.5 rounded-xl outline-none focus:border-blue-500 transition-all placeholder:text-slate-600 z-20"
-                                placeholder="student@makerlab.edu"
+                                onChange={(event) => setEmail(event.target.value)}
+                                placeholder="student@makerlab.academy"
                                 required
                                 autoComplete="email"
                             />
-                        </div>
-                    </div>
+                        </label>
 
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
-                            <div className="relative group z-10">
-                                <div className="absolute inset-0 bg-blue-500/20 rounded-xl blur transition-opacity opacity-0 group-focus-within:opacity-100" />
-                                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 z-10">
-                                    <Lock size={16} />
-                                </div>
+                        <label>
+                            <span>Password</span>
+                            <div className="sq-password-field">
+                                <Lock size={18} aria-hidden="true" />
                                 <input
-                                    type={showPassword ? "text" : "password"}
+                                    type={showPassword ? 'text' : 'password'}
                                     value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="relative w-full bg-slate-950 border border-slate-800 text-white pl-10 pr-12 py-3.5 rounded-xl outline-none focus:border-blue-500 transition-all placeholder:text-slate-600 z-20"
-                                    placeholder="••••••••"
+                                    onChange={(event) => setPassword(event.target.value)}
+                                    placeholder="Your password"
                                     required
                                     autoComplete="current-password"
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white z-30 transition-colors"
+                                    onClick={() => setShowPassword(current => !current)}
+                                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                                 >
-                                    {showPassword ? (
-                                        <EyeOff size={16} />
-                                    ) : (
-                                        <Eye size={16} />
-                                    )}
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                 </button>
                             </div>
-                        </div>
+                        </label>
 
-                    </div>
+                        <button type="submit" disabled={loading} className="sq-entry-primary sq-login-submit">
+                            {loading ? <span className="sq-login-spinner" aria-label="Signing in" /> : <><span>Continue to my projects</span><ArrowRight size={19} /></>}
+                        </button>
+                    </form>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
-                    >
-                        {loading ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                            <>
-                                Enter Studio <ArrowRight size={18} />
-                            </>
-                        )}
-                    </button>
-                </form>
-
-                <div className="mt-8 pt-6 border-t border-slate-800 text-center">
-                    <p className="text-slate-500 text-sm mb-3">Using a shared classroom device?</p>
-                    <button
-                        onClick={() => {
-                            if (confirm("Switch to Classroom Kiosk Mode?\n\nThis will simplify the login screen for students using PINs.")) {
-                                enableKioskMode();
-                                window.location.reload(); // Reload to ensure clean state for Kiosk View
-                            }
-                        }}
-                        className="text-indigo-400 hover:text-indigo-300 text-sm font-bold flex items-center justify-center gap-2 transition-colors"
-                    >
-                        Switch to Kiosk Mode
-                    </button>
+                    <div className="sq-login-trust"><CheckCircle2 size={17} /><span>Projects stay linked to your verified Edufy learner profile.</span></div>
+                    <a className="sq-entry-text-action sq-login-back" href={config.erpUrl}><ArrowLeft size={16} /> Back to Edufy</a>
                 </div>
-            </div>
-        </div>
+            </section>
+        </main>
     );
 };

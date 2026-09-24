@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useDeferredValue, useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { ProjectEditor } from './ProjectEditor';
 import { AssignMissionModal } from './AssignMissionModal';
 import { MissionGallery } from './MissionGallery';
-import { Plus, Edit2, Trash2, Search, Users, Eye, Send, FilePlus, BookOpen, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, Eye, Send, FilePlus, BookOpen, CircleDot } from 'lucide-react';
+import { FactoryEmptyState } from './FactoryPage';
 
 interface ProjectManagerProps {
     onViewSubmissions?: (templateId: string) => void;
@@ -12,13 +13,15 @@ interface ProjectManagerProps {
 }
 
 export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmissions, onPreviewProject }) => {
-    const { projectTemplates, studentProjects, actions, availableGrades } = useFactoryData();
+    const { projectTemplates, actions } = useFactoryData();
     const [editingProject, setEditingProject] = useState<any | null>(null);
     const [assigningProject, setAssigningProject] = useState<any | null>(null);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [showSourceModal, setShowSourceModal] = useState(false);
     const [showGallerySelector, setShowGallerySelector] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'assigned'>('all');
+    const deferredSearchTerm = useDeferredValue(searchTerm);
 
     const handleCreateClick = () => {
         setShowSourceModal(true);
@@ -53,31 +56,43 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
     };
 
     const handleDelete = async (id: string) => {
-        if (confirm("⚠️ DANGER ZONE ⚠️\n\nDeleting this mission will PERMANENTLY DELETE ALL student submissions and history associated with it.\n\nAre you sure you want to proceed?")) {
+        if (confirm("Deleting this mission will permanently delete all student submissions and history associated with it.\n\nAre you sure you want to proceed?")) {
             await actions.deleteProjectTemplate(id);
         }
     };
 
     // Filter projects
-    const filteredProjects = projectTemplates.filter(p =>
-        p.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.station?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProjects = projectTemplates.filter(p => {
+        const matchesSearch = p.title?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
+            p.station?.toLowerCase().includes(deferredSearchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' ||
+            (statusFilter === 'draft' ? (!p.status || p.status === 'draft') : ['assigned', 'featured'].includes(p.status || ''));
+        return matchesSearch && matchesStatus;
+    });
+
+    const audienceSummary = (project: any) => {
+        const audience = project.targetAudience || {};
+        if (audience.students?.length) return `${audience.students.length} student${audience.students.length === 1 ? '' : 's'}`;
+        if (audience.groups?.length) return `${audience.groups.length} group target${audience.groups.length === 1 ? '' : 's'}`;
+        if (audience.grades?.length) return `${audience.grades.length} grade${audience.grades.length === 1 ? '' : 's'}`;
+        return 'No audience';
+    };
 
     if (isEditorOpen) {
         return <ProjectEditor templateId={editingProject?.id} initialViewProject={editingProject} onClose={() => setIsEditorOpen(false)} />;
     }
 
     return (
-        <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
-            <div className="flex justify-between items-end">
+        <div className="mx-auto max-w-[1320px] space-y-6 p-4 pb-24 sm:p-7 md:pb-8">
+            <div className="flex flex-col gap-5 rounded-[28px] bg-[#10233f] p-6 text-white shadow-xl shadow-slate-900/10 sm:flex-row sm:items-end sm:justify-between sm:p-8">
                 <div>
-                    <h3 className="text-3xl font-black text-slate-800 tracking-tight">Mission Control</h3>
-                    <p className="text-slate-500 font-medium text-lg">Design and deployment of learning missions.</p>
+                    <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-sky-300">Mission library</p>
+                    <h3 className="mt-2 text-3xl font-black tracking-tight">Build, target, assign</h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Create the learning brief, then assign it to a grade, selected groups, or specific learners. Assignment never changes Edufy enrollments.</p>
                 </div>
                 <button
                     onClick={handleCreateClick}
-                    className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-1"
+                    className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffb000] px-6 font-black text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                     <Plus size={20} /> New Mission
                 </button>
@@ -86,9 +101,9 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
             {/* SOURCE SELECTION MODAL */}
             {showSourceModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowSourceModal(false)}>
-                    <div className="bg-white rounded-3xl p-8 max-w-2xl w-full shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-2xl font-black text-slate-800 mb-6 text-center">Create New Mission</h3>
-                        <div className="grid grid-cols-2 gap-6">
+                    <div role="dialog" aria-modal="true" aria-labelledby="create-mission-title" className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8" onClick={e => e.stopPropagation()}>
+                        <h3 id="create-mission-title" className="mb-6 text-center text-2xl font-black text-slate-800">Create New Mission</h3>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
                             <button
                                 onClick={handleCreateBlank}
                                 className="flex flex-col items-center justify-center gap-4 p-8 rounded-2xl border-2 border-slate-100 hover:border-indigo-500 hover:bg-indigo-50 transition-all group text-center"
@@ -120,23 +135,42 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                 </div>
             )}
 
-            {/* Search Bar */}
-            <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                <input
-                    className="w-full pl-12 pr-4 py-4 bg-white border-2 border-slate-100 rounded-2xl font-bold text-slate-600 outline-none focus:border-indigo-500 transition-all"
-                    placeholder="Search missions by title or station..."
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                />
+            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="relative block flex-1">
+                    <span className="sr-only">Search missions</span>
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
+                    <input
+                        className="min-h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-base font-semibold text-slate-800 outline-none transition focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                        placeholder="Search missions by title or station"
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                    />
+                </label>
+                <div className="flex gap-2" aria-label="Filter missions by status">
+                    {[
+                        ['all', 'All'],
+                        ['draft', 'Drafts'],
+                        ['assigned', 'Assigned'],
+                    ].map(([id, label]) => (
+                        <button key={id} onClick={() => setStatusFilter(id as typeof statusFilter)} className={`min-h-11 rounded-xl px-4 text-sm font-bold transition ${statusFilter === id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>
+                    ))}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredProjects.map(project => (
-                    <div
+                    <article
                         key={project.id}
                         onClick={() => onPreviewProject && onPreviewProject(project.id)}
-                        className="group bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-indigo-400 transition-all flex flex-col h-full relative cursor-pointer"
+                        onKeyDown={event => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                onPreviewProject?.(project.id);
+                            }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-300 hover:shadow-md"
                     >
 
                         {/* COVER IMAGE */}
@@ -144,17 +178,13 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                             {project.thumbnailUrl ? (
                                 <img
                                     src={project.thumbnailUrl}
-                                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                                    alt=""
+                                    loading="lazy"
                                 />
                             ) : (
-                                <div className={`w-full h-full flex items-center justify-center relative
-                                    ${project.station === 'Robotics' ? 'bg-gradient-to-br from-red-500 to-orange-600' :
-                                        project.station === 'Coding' ? 'bg-gradient-to-br from-blue-500 to-cyan-600' :
-                                            project.station === 'Design' ? 'bg-gradient-to-br from-purple-500 to-pink-600' :
-                                                project.station === 'Circuits' ? 'bg-gradient-to-br from-yellow-400 to-amber-600' :
-                                                    'bg-gradient-to-br from-indigo-500 to-blue-600'
-                                    }`}>
-                                    <div className="text-white/20 transform scale-150 rotate-12">
+                                <div className="relative flex h-full w-full items-center justify-center bg-slate-900">
+                                    <div className="text-white/20">
                                         <Users size={64} />
                                     </div>
                                 </div>
@@ -167,22 +197,22 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                             <div className="absolute top-3 right-3 flex gap-1 z-10">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onPreviewProject && onPreviewProject(project.id); }}
-                                    className="p-1.5 bg-white/90 hover:bg-white text-slate-700 hover:text-indigo-600 rounded-lg shadow-sm backdrop-blur-sm transition-colors"
-                                    title="View Mission Details"
+                                    className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white/90 text-slate-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white hover:text-blue-700"
+                                    aria-label={`Preview ${project.title}`}
                                 >
                                     <Eye size={14} />
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleEdit(project); }}
-                                    className="p-1.5 bg-white/90 hover:bg-white text-slate-700 rounded-lg shadow-sm backdrop-blur-sm transition-colors"
-                                    title="Edit Mission"
+                                    className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white/90 text-slate-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white hover:text-blue-700"
+                                    aria-label={`Edit ${project.title}`}
                                 >
                                     <Edit2 size={14} />
                                 </button>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
-                                    className="p-1.5 bg-white/90 hover:bg-red-50 text-slate-700 hover:text-red-500 rounded-lg shadow-sm backdrop-blur-sm transition-colors"
-                                    title="Delete Mission"
+                                    className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white/90 text-slate-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-red-50 hover:text-red-600"
+                                    aria-label={`Delete ${project.title}`}
                                 >
                                     <Trash2 size={14} />
                                 </button>
@@ -197,6 +227,9 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                                     {project.station}
                                 </span>
                             </div>
+                            <div className="absolute bottom-3 right-3 rounded-lg border border-white/20 bg-slate-950/75 px-2 py-1 text-[10px] font-black uppercase tracking-wider text-white backdrop-blur-sm">
+                                {project.status || 'draft'}
+                            </div>
                         </div>
 
                         <div className="p-5 flex-1 flex flex-col">
@@ -205,28 +238,26 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                             </div>
                             <p className="text-sm text-slate-500 mb-6 line-clamp-3 flex-1">{project.description || 'No description provided.'}</p>
 
+                            <div className="mb-4 flex items-center gap-2 text-xs font-bold text-slate-500">
+                                <CircleDot size={14} className={project.targetAudience?.grades?.length || project.targetAudience?.students?.length ? 'text-emerald-600' : 'text-slate-300'} />
+                                {audienceSummary(project)}
+                            </div>
+
                             <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
                                 <button
                                     onClick={(e) => { e.stopPropagation(); setAssigningProject(project); }}
-                                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-900 hover:bg-indigo-600 text-white rounded-lg text-sm font-bold transition-all shadow-lg shadow-slate-900/10 hover:shadow-indigo-500/20 active:scale-95"
+                                    className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white shadow-lg shadow-slate-900/10 transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                                 >
                                     <Send size={16} />
-                                    Assign to Group
+                                    Assign audience
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </article>
                 ))}
 
                 {/* Empty State */}
-                {filteredProjects.length === 0 && (
-                    <div className="col-span-full py-20 text-center border-2 border-dashed border-slate-200 rounded-3xl">
-                        <p className="text-slate-400 font-bold text-lg">No missions found.</p>
-                        <button onClick={handleCreateClick} className="mt-4 text-indigo-600 font-bold hover:underline">
-                            Create your first mission
-                        </button>
-                    </div>
-                )}
+                {filteredProjects.length === 0 && <FactoryEmptyState icon={BookOpen} title="No missions match" description="Clear the filters or create the first mission for this organization." action={<button type="button" onClick={handleCreateClick} className="min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-black text-white hover:bg-blue-700">Create mission</button>} />}
             </div>
 
             {/* ASSIGN MODAL */}

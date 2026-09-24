@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { db } from '../services/firebase';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
@@ -27,6 +27,7 @@ interface FocusSessionContextType {
     incrementMissions: () => void;
     incrementArcade: (xp: number) => void;
     incrementSteps: () => void;
+    refreshHistory: () => Promise<void>;
     todayFocusMinutes: number;
     weekFocusMinutes: number;
 }
@@ -47,13 +48,6 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
     const [todayFocusMinutes, setTodayFocusMinutes] = useState(0);
     const [weekFocusMinutes, setWeekFocusMinutes] = useState(0);
 
-    // Load session history on mount
-    useEffect(() => {
-        if (user?.uid) {
-            loadSessionHistory();
-        }
-    }, [user?.uid, userProfile?.organizationId]);
-
     // Timer for active session
     useEffect(() => {
         if (!activeSession) {
@@ -72,8 +66,10 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
         return () => clearInterval(interval);
     }, [activeSession]);
 
-    const loadSessionHistory = async () => {
-        if (!db || !user?.uid) return;
+    const loadSessionHistory = useCallback(async () => {
+        const studentId = userProfile?.studentId || user?.uid;
+        const organizationId = userProfile?.organizationId;
+        if (!db || !studentId || !organizationId || userProfile?.role !== 'student') return;
 
         try {
             // Get last 30 days of sessions
@@ -82,8 +78,8 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
 
             const q = query(
                 collection(db, 'focus_sessions'),
-                where('studentId', '==', user.uid),
-                where('organizationId', '==', userProfile?.organizationId || 'makerlab-academy')
+                where('studentId', '==', studentId),
+                where('organizationId', '==', organizationId)
             );
 
             const snapshot = await getDocs(q);
@@ -114,14 +110,15 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
         } catch (error) {
             console.error('Error loading session history:', error);
         }
-    };
+    }, [user?.uid, userProfile?.organizationId, userProfile?.role, userProfile?.studentId]);
 
     const startSession = () => {
-        if (!user?.uid || activeSession) return;
+        const studentId = userProfile?.studentId || user?.uid;
+        if (!studentId || userProfile?.role !== 'student' || activeSession) return;
 
         const now = new Date();
         const newSession: FocusSession = {
-            studentId: user.uid,
+            studentId,
             startTime: now,
             date: now.toISOString().split('T')[0],
             stats: {
@@ -137,7 +134,9 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     const endSession = async () => {
-        if (!activeSession || !db || !user?.uid) return;
+        const studentId = userProfile?.studentId || user?.uid;
+        const organizationId = userProfile?.organizationId;
+        if (!activeSession || !db || !studentId || !organizationId || userProfile?.role !== 'student') return;
 
         const endTime = new Date();
         const duration = Math.floor((endTime.getTime() - activeSession.startTime.getTime()) / 60000); // minutes
@@ -151,8 +150,8 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
         try {
             // Save to Firestore
             await addDoc(collection(db, 'focus_sessions'), {
-                organizationId: userProfile?.organizationId || 'makerlab-academy',
-                studentId: user.uid,
+                organizationId,
+                studentId,
                 startTime: activeSession.startTime,
                 endTime: endTime,
                 duration,
@@ -212,6 +211,7 @@ export const FocusSessionProvider: React.FC<{ children: ReactNode }> = ({ childr
             incrementMissions,
             incrementArcade,
             incrementSteps,
+            refreshHistory: loadSessionHistory,
             todayFocusMinutes,
             weekFocusMinutes
         }}>

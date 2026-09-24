@@ -67,7 +67,8 @@ export const api = {
       } catch (error: any) {
         console.error(`❌ [SparkQuest] Failed to sync project (attempt ${attempt}/${MAX_RETRIES}):`, error);
 
-        if (attempt === MAX_RETRIES) {
+        const nonRetryableCodes = new Set(['permission-denied', 'unauthenticated', 'invalid-argument', 'not-found']);
+        if (attempt === MAX_RETRIES || nonRetryableCodes.has(String(error?.code || ''))) {
           return { success: false, error: error.message || 'Failed to save after multiple attempts' };
         }
 
@@ -105,7 +106,7 @@ export const api = {
    * Upload File to Firebase Storage
    * Use this instead of base64 for large images
    */
-  async uploadFile(file: File, path: string): Promise<string> {
+  async uploadFile(file: File, path: string, onProgress?: (progress: number) => void): Promise<string> {
     console.log(`[SparkQuest] Starting uploadFile... Path: ${path}, File: ${file.name} (${file.size} bytes)`);
 
     // 1. Storage Availability Check
@@ -128,13 +129,18 @@ export const api = {
 
     try {
       // Dynamic import 
-      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const { ref, uploadBytesResumable, getDownloadURL } = await import('firebase/storage');
       const storageRef = ref(storageInstance, path);
 
-      console.log("[SparkQuest] Storage Ref created. Starting uploadBytes...");
+      console.log("[SparkQuest] Storage Ref created. Starting resumable upload...");
 
-      // 2. Upload with Timeout Race
-      const uploadPromise = uploadBytes(storageRef, file);
+      const uploadPromise = new Promise<any>((resolve, reject) => {
+        const task = uploadBytesResumable(storageRef, file, { contentType: file.type || 'application/octet-stream' });
+        task.on('state_changed', snapshot => {
+          const progress = snapshot.totalBytes ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100) : 0;
+          onProgress?.(progress);
+        }, reject, () => resolve(task.snapshot));
+      });
 
       const timeoutPromise = new Promise<{ ref: any }>((_, reject) =>
         setTimeout(() => reject(new Error("Upload timed out after 180s. Check connection.")), 180000)
@@ -145,38 +151,12 @@ export const api = {
       console.log("[SparkQuest] Upload complete. Fetching Download URL...");
       const downloadURL = await getDownloadURL(snapshot.ref);
 
+      onProgress?.(100);
       console.log(`✅ [SparkQuest] File uploaded successfully:`, downloadURL);
       return downloadURL;
     } catch (error: any) {
       console.error("❌ [SparkQuest] Binary Upload failed:", error);
-
-      // FALLBACK: Base64 Upload (More robust for some network/CORS issues)
-      try {
-        console.log("⚠️ [SparkQuest] Attempting Base64 Fallback...");
-        const { ref, uploadString, getDownloadURL } = await import('firebase/storage');
-
-        // Convert File to Base64
-        const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = error => reject(error);
-        });
-
-        const dataUrl = await toBase64(file);
-        const storageRef = ref(storageInstance, path); // Re-use ref
-
-        await uploadString(storageRef, dataUrl, 'data_url');
-        console.log("✅ [SparkQuest] Base64 Fallback Upload success!");
-
-        const downloadURL = await getDownloadURL(storageRef);
-        return downloadURL;
-
-      } catch (fallbackError) {
-        console.error("❌ [SparkQuest] Component-level Fallback also failed:", fallbackError);
-        // Re-throw original error to show the root cause, or the fallback error
-        throw error;
-      }
+      throw error;
     }
   }
 };

@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Hammer, Plus, ExternalLink, Trash2, Search, Cpu, Box, CheckSquare, RotateCcw, Database } from 'lucide-react';
+import React, { useDeferredValue, useState, useEffect } from 'react';
+import { Hammer, Plus, ExternalLink, Trash2, Search, Cpu, Box, CheckSquare, RotateCcw } from 'lucide-react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { Modal } from '../Modal';
-import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, onSnapshot } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { ToolLink, Asset } from '../../types';
+import { FactoryEmptyState, FactoryPageHeader, FactoryToolbar, factoryButton } from './FactoryPage';
+import { useAuth } from '../../context/AuthContext';
 
 // Mock Data for seeding (Copied from ToolkitView)
 const MOCK_TOOLS: any[] = []; // Omitted for brevity, can import or empty
@@ -13,6 +15,8 @@ const MOCK_ASSETS: any[] = [];
 export const FactoryToolbox = () => {
     // Get students from Factory Data
     const { students } = useFactoryData();
+    const { userProfile } = useAuth();
+    const organizationId = userProfile?.organizationId;
     // Local state for tools and assets
     const [toolLinks, setToolLinks] = useState<ToolLink[]>([]);
     const [assets, setAssets] = useState<Asset[]>([]);
@@ -29,29 +33,31 @@ export const FactoryToolbox = () => {
 
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [searchQuery, setSearchQuery] = useState('');
+    const deferredSearchQuery = useDeferredValue(searchQuery);
 
     // Fetch Tools & Assets
     useEffect(() => {
-        if (!db) return;
-        const unsubTools = onSnapshot(collection(db, 'tool_links'), (snap) => {
+        if (!db || !organizationId) return;
+        const unsubTools = onSnapshot(query(collection(db, 'tool_links'), where('organizationId', '==', organizationId)), (snap) => {
             setToolLinks(snap.docs.map(d => ({ id: d.id, ...d.data() } as ToolLink)));
         });
-        const unsubAssets = onSnapshot(collection(db, 'assets'), (snap) => {
+        const unsubAssets = onSnapshot(query(collection(db, 'assets'), where('organizationId', '==', organizationId)), (snap) => {
             setAssets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)));
         });
         return () => {
             unsubTools();
             unsubAssets();
         };
-    }, []);
+    }, [organizationId]);
 
     // --- HANDLERS ---
 
     const handleSaveTool = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db) return;
+        if (!db || !organizationId) return;
         await addDoc(collection(db, 'tool_links'), {
             ...toolForm,
+            organizationId,
             createdAt: serverTimestamp()
         });
         setIsToolModalOpen(false);
@@ -60,9 +66,10 @@ export const FactoryToolbox = () => {
 
     const handleSaveAsset = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db) return;
+        if (!db || !organizationId) return;
         await addDoc(collection(db, 'assets'), {
             ...assetForm,
+            organizationId,
             createdAt: serverTimestamp()
         });
         setIsAssetModalOpen(false);
@@ -111,36 +118,35 @@ export const FactoryToolbox = () => {
 
     const filteredTools = toolLinks.filter(t => {
         const matchesCategory = categoryFilter === 'All' || t.category === categoryFilter;
-        const matchesSearch = t.title.toLowerCase().includes(searchQuery.toLowerCase()) || (t.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = t.title.toLowerCase().includes(deferredSearchQuery.toLowerCase()) || (t.description || '').toLowerCase().includes(deferredSearchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
 
     const filteredAssets = assets.filter(a => {
         const matchesCategory = categoryFilter === 'All' || a.category === categoryFilter;
-        const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) || (a.serialNumber || '').toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = a.name.toLowerCase().includes(deferredSearchQuery.toLowerCase()) || (a.serialNumber || '').toLowerCase().includes(deferredSearchQuery.toLowerCase());
         return matchesCategory && matchesSearch;
     });
 
     return (
-        <div className="space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-right-4">
-            {/* Header */}
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 shadow-sm">
-                <div>
-                    <h2 className="text-2xl font-bold text-[#2D2B6B] flex items-center gap-3"><Hammer className="text-orange-500" size={28} /> Maker Toolbox</h2>
-                    <p className="text-slate-500 text-sm mt-1">Manage digital resources and hardware inventory.</p>
-                </div>
-                <div className="flex bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+        <div className="flex h-full flex-col space-y-6">
+            <FactoryPageHeader
+                icon={Hammer}
+                eyebrow="Studio resources"
+                title="Tools and hardware inventory"
+                description="Keep approved digital resources and checkout-ready equipment in one operational view."
+                actions={<div className="flex rounded-xl border border-slate-200 bg-slate-100 p-1">
                     <button onClick={() => { setActiveTab('digital'); setCategoryFilter('All'); }} className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === 'digital' ? 'bg-white text-[#2D2B6B] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                         <ExternalLink size={16} /> Resources
                     </button>
                     <button onClick={() => { setActiveTab('inventory'); setCategoryFilter('All'); }} className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === 'inventory' ? 'bg-white text-[#2D2B6B] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                         <Box size={16} /> Hardware
                     </button>
-                </div>
-            </div>
+                </div>}
+            />
 
             {/* Sub-Header & Actions */}
-            <div className="flex flex-col sm:flex-row gap-4 items-center">
+            <FactoryToolbar className="sm:flex-wrap xl:flex-nowrap">
                 <div className="relative flex-1 w-full">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                     <input
@@ -164,31 +170,17 @@ export const FactoryToolbox = () => {
                     ))}
                 </div>
 
-                <button onClick={() => activeTab === 'digital' ? setIsToolModalOpen(true) : setIsAssetModalOpen(true)} className="flex items-center gap-2 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-400 hover:to-pink-500 text-white px-6 py-3 rounded-xl transition-colors shadow-lg shadow-pink-500/30 text-sm font-bold w-full sm:w-auto justify-center">
+                <button onClick={() => activeTab === 'digital' ? setIsToolModalOpen(true) : setIsAssetModalOpen(true)} className={factoryButton.primary}>
                     <Plus size={18} /> Add {activeTab === 'digital' ? 'Link' : 'Item'}
                 </button>
-
-                <button
-                    onClick={() => {
-                        if (!confirm("SECURE DEVICE?\n\nThis will wipe all saved emails ('Remember Me') and sign you out.\nUse this when leaving a public device.")) return;
-                        localStorage.removeItem('sparkquest_remember_email');
-                        localStorage.removeItem('sparkquest_session_start');
-                        // Reload to clear auth state via firebase
-                        window.location.reload();
-                    }}
-                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-colors border border-slate-700 text-sm font-bold w-full sm:w-auto justify-center"
-                    title="Clear saved data & Logout"
-                >
-                    <Database size={18} /> <span className="hidden sm:inline">Secure</span>
-                </button>
-            </div>
+            </FactoryToolbar>
 
             {/* --- VIEW: DIGITAL RESOURCES --- */}
             {activeTab === 'digital' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredTools.map(tool => (
-                        <div key={tool.id} className="bg-white border border-slate-100 hover:border-[#2D2B6B]/30 hover:shadow-xl hover:-translate-y-1 p-6 rounded-[2rem] transition-all group relative flex flex-col shadow-sm">
-                            <button onClick={() => handleDeleteTool(tool.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
+                        <div key={tool.id} className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                            <button onClick={() => handleDeleteTool(tool.id)} className="absolute right-2 top-2 grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${tool.title}`}><Trash2 size={16} /></button>
                             <div className="flex items-start gap-4 mb-4">
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${tool.category === 'robotics' ? 'bg-cyan-50 text-cyan-600 border-2 border-cyan-100' :
                                     tool.category === 'coding' ? 'bg-pink-50 text-pink-600 border-2 border-pink-100' :
@@ -214,23 +206,18 @@ export const FactoryToolbox = () => {
                             </a>
                         </div>
                     ))}
-                    {filteredTools.length === 0 && (
-                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-[2.5rem] border border-slate-100 border-dashed">
-                            <Search size={48} className="mb-4 opacity-20" />
-                            <p className="mb-6 font-medium">No tools found matching your criteria.</p>
-                        </div>
-                    )}
+                    {filteredTools.length === 0 && <FactoryEmptyState icon={Search} title="No resources match" description="Change the search or category, or add an approved link to this toolbox." />}
                 </div>
             )}
 
             {/* --- VIEW: HARDWARE INVENTORY --- */}
             {activeTab === 'inventory' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredAssets.map(asset => {
                         const isAvailable = asset.status === 'available';
                         return (
-                            <div key={asset.id} className="bg-white border border-slate-100 rounded-[2rem] p-6 hover:shadow-xl hover:-translate-y-1 transition-all group relative shadow-sm">
-                                <button onClick={() => handleDeleteAsset(asset.id)} className="absolute top-4 right-4 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
+                            <div key={asset.id} className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                                <button onClick={() => handleDeleteAsset(asset.id)} className="absolute right-2 top-2 grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${asset.name}`}><Trash2 size={16} /></button>
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-[#2D2B6B]"><Cpu size={24} /></div>
                                     <span className={`px-3 py-1 rounded-full text-[10px] uppercase font-bold border ${isAvailable ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
@@ -266,12 +253,7 @@ export const FactoryToolbox = () => {
                             </div>
                         )
                     })}
-                    {filteredAssets.length === 0 && (
-                        <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-400 bg-white rounded-[2.5rem] border border-slate-100 border-dashed">
-                            <Box size={48} className="mb-4 opacity-20" />
-                            <p className="mb-6 font-medium">No inventory items found.</p>
-                        </div>
-                    )}
+                    {filteredAssets.length === 0 && <FactoryEmptyState icon={Box} title="No inventory items match" description="Change the search or category, or add the first hardware item." />}
                 </div>
             )}
 
