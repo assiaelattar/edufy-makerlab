@@ -45,7 +45,13 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
             : 'grade';
     const initialGradeId = existingAudience.grades?.[0] || '';
     const initialProgram = programs.find((program: any) =>
-        program.grades?.some((grade: any) => String(grade.id) === String(initialGradeId))
+        existingAudience.programs?.some(value =>
+            normalize(value) === normalize(program.id) || normalize(value) === normalize(program.name || program.title)
+        ) || program.grades?.some((grade: any) =>
+            existingAudience.grades?.some(value =>
+                normalize(value) === normalize(grade.id) || normalize(value) === normalize(grade.name || grade.title)
+            )
+        )
     );
 
     const [mode, setMode] = useState<MissionAudienceMode>(initialMode);
@@ -97,6 +103,11 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
         );
     }, [students, activeEnrollments]);
 
+    const enrollmentMatchesProgram = (enrollment: any) => !programId ||
+        [enrollment.programId, enrollment.programName].some(value =>
+            normalize(value) === normalize(programId) || normalize(value) === normalize(selectedProgram?.name || selectedProgram?.title)
+        );
+
     const enrollmentMatchesGrade = (enrollment: any) => !gradeId ||
         [enrollment.gradeId, enrollment.gradeName].some(value => normalize(value) === normalize(gradeId) || normalize(value) === normalize(selectedGrade?.name));
 
@@ -116,15 +127,18 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
                 String(enrollment.studentId) === String(student.id) ||
                 String(enrollment.studentId) === String(student.loginInfo?.uid || '')
             );
-            const classMatches = !gradeId || memberships.some(enrollmentMatchesGrade);
+            const programMatches = !programId || memberships.some(enrollmentMatchesProgram);
+            const classMatches = !gradeId || memberships.some(enrollment =>
+                enrollmentMatchesProgram(enrollment) && enrollmentMatchesGrade(enrollment)
+            );
             const groupMatches = mode !== 'groups' || memberships.some(enrollment =>
-                enrollmentMatchesGrade(enrollment) && groupMatchesSelection(enrollment)
+                enrollmentMatchesProgram(enrollment) && enrollmentMatchesGrade(enrollment) && groupMatchesSelection(enrollment)
             );
             const searchMatches = !query || [student.name, student.firstName, student.lastName]
                 .some(value => normalize(value).includes(query));
-            return classMatches && groupMatches && searchMatches;
+            return programMatches && classMatches && groupMatches && searchMatches;
         });
-    }, [learnerRows, activeEnrollments, gradeId, selectedGrade?.name, mode, selectedGroupIds, availableGroups, search]);
+    }, [learnerRows, activeEnrollments, programId, selectedProgram?.name, selectedProgram?.title, gradeId, selectedGrade?.name, mode, selectedGroupIds, availableGroups, search]);
 
     const affectedLearners = useMemo(() => {
         if (mode === 'students') return learnerRows.filter((student: any) => selectedStudentIds.has(String(student.id)));
@@ -135,10 +149,10 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
                 String(enrollment.studentId) === String(student.loginInfo?.uid || '')
             );
             return memberships.some((enrollment: any) =>
-                enrollmentMatchesGrade(enrollment) && (mode === 'grade' || groupMatchesSelection(enrollment))
+                enrollmentMatchesProgram(enrollment) && enrollmentMatchesGrade(enrollment) && (mode === 'grade' || groupMatchesSelection(enrollment))
             );
         });
-    }, [mode, gradeId, learnerRows, activeEnrollments, selectedStudentIds, selectedGroupIds, selectedGrade?.name, availableGroups]);
+    }, [mode, programId, gradeId, learnerRows, activeEnrollments, selectedStudentIds, selectedGroupIds, selectedProgram?.name, selectedProgram?.title, selectedGrade?.name, availableGroups]);
 
     const groupNames = availableGroups
         .filter((group: any) => selectedGroupIds.has(String(group.id)) || selectedGroupIds.has(String(group.name)))
@@ -146,7 +160,7 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
 
     const canContinue = mode === 'students'
         ? selectedStudentIds.size > 0
-        : Boolean(gradeId) && (mode !== 'groups' || selectedGroupIds.size > 0);
+        : Boolean(programId && gradeId) && (mode !== 'groups' || selectedGroupIds.size > 0);
 
     const chooseProgram = (nextProgramId: string) => {
         setProgramId(nextProgramId);
@@ -188,7 +202,10 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
         try {
             await actions.assignProjectTemplate(mission.id, {
                 mode,
+                programId: programId || undefined,
+                programName: selectedProgram?.name || selectedProgram?.title,
                 gradeId: gradeId || undefined,
+                gradeName: selectedGrade?.name || selectedGrade?.title,
                 groupIds: Array.from(selectedGroupIds),
                 groupNames,
                 studentIds: Array.from(selectedStudentIds),

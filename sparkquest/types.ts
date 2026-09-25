@@ -202,6 +202,7 @@ export interface ProjectTemplate {
   resources?: Resource[]; // Instructor attached resources
   status?: 'draft' | 'featured' | 'assigned' | 'archived'; // Publishing status
   targetAudience?: {
+    programs?: string[];
     grades?: string[];
     groups?: string[];
     students?: string[]; // Specific student UIDs

@@ -345,6 +345,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                 let gradeIds: string[] = [];
                 let groupIds: string[] = [];
+                let programIds: string[] = [];
                 let enrollments: any[] = [];
                 let allEnrollmentRecords: any[] = [];
 
@@ -374,10 +375,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             Boolean(fallbackAcademicYear) && matchesAcademicYear(enrollment.session, fallbackAcademicYear!)
                         );
                     console.log(`📚 [Enrollment] Found ${enrollments.length} enrollments across linked IDs`);
+                    programIds = enrollments.flatMap(e => [e.programId, e.programName]).filter(Boolean);
                     gradeIds = enrollments.flatMap(e => [e.gradeId, e.gradeName]).filter(Boolean);
                     groupIds = enrollments.flatMap(e => [e.groupId, e.groupName]).filter(Boolean);
 
                     // Deduplicate
+                    programIds = [...new Set(programIds)];
                     gradeIds = [...new Set(gradeIds)];
                     groupIds = [...new Set(groupIds)];
                     const primaryEnrollment = enrollments[0];
@@ -414,6 +417,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 // 🎯 Use preview grade if instructor has set one, otherwise use real enrollment
                 const effectiveGradeIds = previewGradeId ? [previewGradeId] : gradeIds;
                 const effectiveGroupIds = previewGradeId ? [] : groupIds; // Preview mode assumes no specific group for now
+                const previewProgram = previewGradeId
+                    ? programsSnap.docs.find(programDoc => (programDoc.data().grades || []).some((grade: any) => String(grade.id) === String(previewGradeId)))
+                    : undefined;
+                const effectiveProgramIds = previewProgram
+                    ? [previewProgram.id, previewProgram.data().name, previewProgram.data().title].filter(Boolean).map(String)
+                    : programIds.map(String);
                 console.log(`🎯 [Active Grades] Using gradeIds:`, effectiveGradeIds);
 
                 // Helper to get status
@@ -460,6 +469,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                         if (!missionIsVisibleToLearner(t, {
                             ownerIds: targetStudentIds,
+                            programIds: effectiveProgramIds,
                             gradeIds: effectiveGradeIds.map(String),
                             // Grade preview deliberately ignores group constraints so
                             // instructors can inspect the complete grade experience.
@@ -481,7 +491,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                             );
 
                             if (!matchingStation) {
-                                return false;
+                                // Audience assignment is authoritative. A missing or
+                                // inactive station must not silently remove a mission
+                                // that an instructor explicitly dispatched.
+                                return true;
                             }
 
                             // Attach lock info to template if future
@@ -529,10 +542,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         const targetAudience = template.targetAudience || {};
                         if (includesValue(targetAudience.students, targetStudentIds)) return true;
                         return yearEnrollments.some(enrollment => {
+                            const programRequired = Array.isArray(targetAudience.programs) && targetAudience.programs.length > 0;
+                            const programMatches = !programRequired || includesValue(targetAudience.programs, [enrollment.programId, enrollment.programName]);
                             const gradeMatches = includesValue(targetAudience.grades, [enrollment.gradeId, enrollment.gradeName]);
                             const groupRequired = Array.isArray(targetAudience.groups) && targetAudience.groups.length > 0;
                             const groupMatches = !groupRequired || includesValue(targetAudience.groups, [enrollment.groupId, enrollment.groupName]);
-                            return gradeMatches && groupMatches;
+                            return programMatches && gradeMatches && groupMatches;
                         });
                     }
 
