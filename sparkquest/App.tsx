@@ -15,7 +15,7 @@ import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
 import { ToastProvider } from './context/ToastContext';
 import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
-import { isLocalHostname } from '../utils/appUrls';
+import { isLocalHostname } from './utils/appUrls';
 import { exchangeSparkQuestLaunch } from './services/appBridge';
 
 

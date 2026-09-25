@@ -1,4 +1,4 @@
-import { resolveAppUrl } from '../../utils/appUrls';
+import { resolveAppUrl } from './appUrls';
 
 export const config = {
     sparkQuestUrl: resolveAppUrl({
