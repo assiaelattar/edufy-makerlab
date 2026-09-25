@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, onAuthStateChanged, signInWithCustomToken, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { collection, doc, getDoc, getDocs, increment, onSnapshot, query, Unsubscribe, updateDoc, where } from 'firebase/firestore';
+import { doc, increment, onSnapshot, Unsubscribe, updateDoc } from 'firebase/firestore';
 
 import { UserProfile } from '../types';
-import { createVerifiedStudentIdentity, verifyStudentRecord } from '../domain/studentIdentity';
+import { createVerifiedStudentIdentity } from '../domain/studentIdentity';
+import { resolveLinkedStudentRecord } from '../services/studentIdentity';
 
 interface AuthContextType {
     user: User | null;
@@ -67,31 +68,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     if (data.role === 'student') {
                         try {
-                            const linkedQuery = query(
-                                collection(db, 'students'),
-                                where('loginInfo.uid', '==', uid),
-                                where('organizationId', '==', data.organizationId)
-                            );
-                            const linkedSnapshot = await getDocs(linkedQuery);
-                            if (linkedSnapshot.size > 1) {
-                                setUserProfile(null);
-                                setAuthIssue('More than one learner profile is linked to this login. Ask an administrator to resolve the duplicate.');
-                                return;
-                            }
-
-                            let studentRecord = linkedSnapshot.empty
-                                ? null
-                                : { id: linkedSnapshot.docs[0].id, ...linkedSnapshot.docs[0].data() };
-
-                            if (!studentRecord && data.studentId) {
-                                const pointedSnapshot = await getDoc(doc(db, 'students', data.studentId));
-                                if (pointedSnapshot.exists()) {
-                                    const pointedRecord = { id: pointedSnapshot.id, ...pointedSnapshot.data() };
-                                    if (verifyStudentRecord(pointedRecord, uid, data.organizationId)) {
-                                        studentRecord = pointedRecord;
-                                    }
-                                }
-                            }
+                            const studentRecord = await resolveLinkedStudentRecord({
+                                db,
+                                authUid: uid,
+                                organizationId: data.organizationId,
+                                pointedStudentId: data.studentId,
+                            });
 
                             const identity = createVerifiedStudentIdentity({
                                 authUid: uid,
@@ -102,7 +84,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         } catch (recoveryErr) {
                             console.error('Failed to verify student identity', recoveryErr);
                             setUserProfile(null);
-                            setAuthIssue('SparkQuest could not verify the learner profile. Ask an administrator to check the Edufy account link.');
+                            setAuthIssue(
+                                recoveryErr instanceof Error && recoveryErr.message.includes('More than one')
+                                    ? 'More than one learner profile is linked to this login. Ask an administrator to resolve the duplicate.'
+                                    : 'SparkQuest could not verify the learner profile. Ask an administrator to check the Edufy account link.'
+                            );
                             return;
                         }
                     }

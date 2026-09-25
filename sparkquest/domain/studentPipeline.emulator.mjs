@@ -109,6 +109,15 @@ try {
     loginInfo: { uid: student.uid },
   });
 
+  const linkedStudentQuery = query(
+    collection(student.db, 'students'),
+    where('loginInfo.uid', '==', student.uid),
+    where('organizationId', '==', organizationId)
+  );
+  const linkedStudentSnapshot = await getDocs(linkedStudentQuery);
+  assert.equal(linkedStudentSnapshot.size, 1,
+    'student can resolve their own learner profile with the constrained account-link query');
+
   const missionRef = await addDoc(collection(instructor.db, 'project_templates'), {
     organizationId,
     title: 'Instructor mission',
@@ -211,7 +220,7 @@ try {
     );
   }
 
-  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 13 : 18} assertions passed.`);
+  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 19} assertions passed.`);
 } finally {
   await Promise.all(clients.map(client => deleteApp(client.app)));
 }

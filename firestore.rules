@@ -418,6 +418,15 @@ service cloud.firestore {
         ) || guardianSubjectLinkedToRequester(studentId, orgId);
     }
 
+    function studentRecordOwnedByRequester(studentData) {
+      return isSignedIn() &&
+        hasUserProfile() &&
+        currentRole() == 'student' &&
+        studentData.organizationId == currentOrgId() &&
+        studentData.keys().hasAny(['loginInfo']) &&
+        studentData.loginInfo.uid == request.auth.uid;
+    }
+
     function guardianSubjectLinkedToRequester(subjectId, orgId) {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)) &&
@@ -709,7 +718,9 @@ service cloud.firestore {
 
     // --- Core Edufy tenant data ---
     match /students/{studentId} {
-      allow read: if canReadTenantDoc() || studentLinkedToRequester(studentId, resource.data.organizationId);
+      allow read: if canReadTenantDoc() ||
+        studentLinkedToRequester(studentId, resource.data.organizationId) ||
+        studentRecordOwnedByRequester(resource.data);
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();

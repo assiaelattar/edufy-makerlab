@@ -25,6 +25,7 @@ import { MobileNavigation } from './MobileNavigation';
 import { currentAcademicYear, matchesAcademicYear, normalizeAcademicYear, previousAcademicYear, projectAcademicYear } from '../utils/academicYear';
 import { createVerifiedStudentIdentity } from '../domain/studentIdentity';
 import { missionIsVisibleToLearner } from '../domain/missionAssignment';
+import { resolveLinkedStudentRecord } from '../services/studentIdentity';
 
 interface ProjectSelectorProps {
     studentId: string;
@@ -139,24 +140,18 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     const directSnapshot = await getDoc(doc(db, 'students', studentId));
                     if (directSnapshot.exists()) studentSnap = directSnapshot;
                 } else if (authUser?.uid && authProfile?.organizationId) {
-                    const verifiedQuery = query(
-                        collection(db, 'students'),
-                        where('loginInfo.uid', '==', authUser.uid),
-                        where('organizationId', '==', authProfile.organizationId)
-                    );
-                    const verifiedSnapshot = await getDocs(verifiedQuery);
-                    if (verifiedSnapshot.size > 1) {
-                        throw new Error('More than one learner profile is linked to this login.');
-                    }
-                    if (!verifiedSnapshot.empty) studentSnap = verifiedSnapshot.docs[0];
-                    if (!studentSnap && studentId !== authUser.uid) {
-                        const directSnapshot = await getDoc(doc(db, 'students', studentId));
-                        const directData = directSnapshot.exists() ? directSnapshot.data() : null;
-                        if (
-                            directSnapshot.exists() &&
-                            directData?.organizationId === authProfile.organizationId &&
-                            directData?.loginInfo?.uid === authUser.uid
-                        ) studentSnap = directSnapshot;
+                    const studentRecord = await resolveLinkedStudentRecord({
+                        db,
+                        authUid: authUser.uid,
+                        organizationId: authProfile.organizationId,
+                        pointedStudentId: authProfile.studentId || studentId,
+                    });
+                    if (studentRecord) {
+                        studentSnap = {
+                            id: studentRecord.id,
+                            exists: () => true,
+                            data: () => studentRecord,
+                        };
                     }
                 }
 
