@@ -2,6 +2,12 @@
 
 ## 2026-09-26
 
+- Granted the Firebase Storage service agent the dedicated `roles/firebaserules.firestoreServiceAgent` bridge role after production IAM inspection proved it was missing and blocking otherwise-valid uploads.
+- Verified the active Storage rules match the repository, then compiled and released Storage and Firestore rules together.
+- Reproduced the live permission failure with a legacy learner project that has no `organizationId`, then proved the safe one-time ownership repair.
+- Made every learner project save restore the verified Edufy organization and canonical learner identity before Firestore synchronization.
+- Made missing tenant fields safe in Firestore rules and added a lean learner-only ownership check so SparkQuest requests stay below the rules expression limit.
+- Expanded the isolated Firebase pipeline from 22 to 27 assertions, including the expected denial before tenant repair and the successful media/link submission afterward.
 - Reproduced the complete learner showcase transaction in isolated Firebase emulators: screenshot upload, download URL, external link, project cover/media update and `submitted` review status.
 - Clarified the learner action as “Submit showcase for review”, prevented duplicate submissions and added upload-versus-save progress plus actionable permission errors.
 - Confirmed submitted showcases enter the instructor review queue before becoming published portfolio work.

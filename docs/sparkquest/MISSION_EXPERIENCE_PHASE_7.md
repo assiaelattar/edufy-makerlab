@@ -31,10 +31,11 @@ The student page intentionally uses restrained blue, mint, amber, coral and viol
 - `node --experimental-strip-types domain/missionContent.smoke.ts` — 8 assertions
 - `node --experimental-strip-types domain/missionAssignment.smoke.ts` — 10 assertions
 - `cd sparkquest && npm.cmd run build` — passed; existing Firebase mixed-import and large main-chunk warnings remain
-- Firebase Auth/Firestore/Storage emulators — 22 assertions, including exact showcase screenshot + link + submitted-review transaction
+- Firebase Auth/Firestore/Storage emulators — 27 assertions, including exact showcase screenshot + link + submitted-review transaction and a production-shaped legacy project without `organizationId`
+- `npm.cmd run build` from the repository root — passed with 4,433 modules; existing Firebase mixed-import and large-chunk warnings remain
 - Development preview inspected at desktop and mobile widths — vertical scrolling works, with no horizontal overflow or console errors
 - `git diff --check` — passed
 
 ## Remaining gate
 
-Authenticated end-to-end QA is still required with designated instructor and learner accounts. No production data write or migration is part of the release. The existing tested Firestore and Storage rules must be deployed with the client so production permissions match the verified learner pipeline; this release does not broaden those rules.
+Authenticated learner end-to-end QA is still required after the tested web client is released. No production data write or bulk migration is part of the release: a linked learner repairs only their own legacy project on its next save. The Firebase Storage service agent now has the dedicated Firestore Rules bridge role, and the tested Storage and Firestore rules are live. The remaining release step is the matching client followed by a designated learner upload → submit → instructor-review smoke test.

@@ -64,11 +64,13 @@ service cloud.firestore {
     }
 
     function resourceHasOrg() {
-      return resource.data.organizationId is string;
+      return resource.data.keys().hasAny(['organizationId']) &&
+        resource.data.organizationId is string;
     }
 
     function requestHasOrg() {
-      return request.resource.data.organizationId is string;
+      return request.resource.data.keys().hasAny(['organizationId']) &&
+        request.resource.data.organizationId is string;
     }
 
     function canReadTenantDoc() {
@@ -427,6 +429,26 @@ service cloud.firestore {
         studentData.loginInfo.uid == request.auth.uid;
     }
 
+    // Lean learner-only ownership check used by SparkQuest. Keep this separate
+    // from the broader parent/guardian resolver: evaluating every guardian
+    // branch for learner queries can exhaust Firestore's rules expression
+    // budget before the direct loginInfo match is reached.
+    function learnerLinkedToRequester(studentId, orgId) {
+      let studentDocument = get(/databases/$(database)/documents/students/$(studentId));
+      return isSignedIn() &&
+        hasUserProfile() &&
+        currentRole() == 'student' &&
+        currentOrgId() == orgId &&
+        (
+          studentId == request.auth.uid ||
+          (
+            studentDocument.data.organizationId == orgId &&
+            studentDocument.data.keys().hasAny(['loginInfo']) &&
+            studentDocument.data.loginInfo.uid == request.auth.uid
+          )
+        );
+    }
+
     function guardianSubjectLinkedToRequester(subjectId, orgId) {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)) &&
@@ -448,27 +470,20 @@ service cloud.firestore {
     function canCreateOwnStudentProject() {
       return hasUserProfile() && currentRole() == 'student' && requestHasOrg() &&
         request.resource.data.organizationId == currentOrgId() &&
-        (
-          request.resource.data.studentId == request.auth.uid ||
-          studentLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId)
-        );
+        learnerLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId);
     }
 
     function canUpdateOwnStudentProject() {
       return hasUserProfile() && currentRole() == 'student' && resourceHasOrg() && requestHasOrg() &&
         request.resource.data.organizationId == resource.data.organizationId &&
         request.resource.data.studentId == resource.data.studentId &&
-        (
-          resource.data.studentId == request.auth.uid ||
-          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId)
-        );
+        learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId);
     }
 
     function canReadLegacyStudentProject() {
       return hasUserProfile() && !resourceHasOrg() && resource.data.studentId is string &&
         (
-          resource.data.studentId == request.auth.uid ||
-          studentLinkedToRequester(resource.data.studentId, currentOrgId()) ||
+          learnerLinkedToRequester(resource.data.studentId, currentOrgId()) ||
           guardianSubjectLinkedToRequester(resource.data.studentId, currentOrgId())
         );
     }
@@ -477,10 +492,7 @@ service cloud.firestore {
       return hasUserProfile() && currentRole() == 'student' && !resourceHasOrg() && requestHasOrg() &&
         request.resource.data.organizationId == currentOrgId() &&
         request.resource.data.studentId == resource.data.studentId &&
-        (
-          resource.data.studentId == request.auth.uid ||
-          studentLinkedToRequester(resource.data.studentId, currentOrgId())
-        );
+        learnerLinkedToRequester(resource.data.studentId, currentOrgId());
     }
 
     function validOwnUserCreate(userId) {
@@ -718,9 +730,9 @@ service cloud.firestore {
 
     // --- Core Edufy tenant data ---
     match /students/{studentId} {
-      allow read: if canReadTenantDoc() ||
-        studentLinkedToRequester(studentId, resource.data.organizationId) ||
-        studentRecordOwnedByRequester(resource.data);
+      allow read: if canReadTenantDoc();
+      allow read: if studentRecordOwnedByRequester(resource.data);
+      allow read: if studentLinkedToRequester(studentId, resource.data.organizationId);
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -786,15 +798,15 @@ service cloud.firestore {
     }
 
     match /student_projects/{projectId} {
-      allow read: if canReadTenantDoc() ||
-        canReadLegacyStudentProject() ||
-        (resourceHasOrg() && (
-          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
-          guardianSubjectLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
-          (hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid && resource.data.organizationId == currentOrgId())
-        ));
-      allow create: if canCreateTenantDoc() || canCreateOwnStudentProject();
-      allow update: if canUpdateTenantDoc() || canUpdateOwnStudentProject() || canMigrateOwnLegacyStudentProject();
+      allow read: if canReadTenantDoc();
+      allow read: if canReadLegacyStudentProject();
+      allow read: if resourceHasOrg() && learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId);
+      allow read: if resourceHasOrg() && studentLinkedToRequester(resource.data.studentId, resource.data.organizationId);
+      allow create: if canCreateTenantDoc();
+      allow create: if canCreateOwnStudentProject();
+      allow update: if canUpdateTenantDoc();
+      allow update: if canUpdateOwnStudentProject();
+      allow update: if canMigrateOwnLegacyStudentProject();
       allow delete: if canDeleteTenantDoc();
     }
 

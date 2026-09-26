@@ -1,6 +1,8 @@
-# Current task boundary — SparkQuest showcase repair and mission experience QA
+# Current task boundary — SparkQuest legacy showcase repair awaiting release
 
-Release the user-approved urgent learner showcase repair together with the completed mission-experience changes. The exact screenshot upload + external link + project submission transaction passes isolated Auth/Firestore/Storage emulators and the SparkQuest production build. Deploy the already-reviewed Firestore/Storage rules with the client so production matches the tested permission boundary. Preserve production data; after release, perform a public load check and ask for one designated learner-account smoke test of upload → submit → instructor review.
+The production-shaped failure has been reproduced without touching production: older `student_projects` records that lack `organizationId` cannot be updated by a learner. The client now restores verified tenant and learner ownership before the first save, while Firestore safely recognizes missing legacy fields and authorizes only the linked learner's one-time migration. The isolated Auth/Firestore/Storage suite passes 27 assertions, including the denied unscoped write followed by screenshot upload + external link + tenant repair + `submitted` review status. Scoped TypeScript, mission smoke suites, SparkQuest build, root Edufy build and whitespace validation pass.
+
+The user authorized the repair. Production IAM inspection confirmed that the Storage service agent lacked `roles/firebaserules.firestoreServiceAgent`; that dedicated bridge role is now granted and verified. Storage and Firestore rules compiled and were released together. Promote only the tested SparkQuest client and documentation delta to `origin/main`, preserve production data, verify the public bundle, and run one designated learner-account smoke test of upload → submit → instructor review.
 
 ---
 

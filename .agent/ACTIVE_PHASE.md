@@ -1,6 +1,6 @@
 # Current phase override — SparkQuest mission experience contract
 
-Release-approved on 2026-09-26. The mission-authoring wizard, instructor preview, learner briefing, project creation snapshot and workspace assignment share one backward-compatible `MissionBrief` contract. The learner must review the mission journey before a project document is created. The urgent showcase repair adds client UX and a full emulator regression while deploying the already-reviewed Firestore/Storage rules required by the learner pipeline; it introduces no rule broadening, index/API change or production data migration. See `docs/sparkquest/MISSION_EXPERIENCE_PHASE_7.md`.
+Release in progress on 2026-09-26 after explicit user confirmation. The mission-authoring wizard, instructor preview, learner briefing, project creation snapshot and workspace assignment share one backward-compatible `MissionBrief` contract. The learner must review the mission journey before a project document is created. The urgent showcase repair restores tenant ownership on legacy learner projects and adds a 27-assertion emulator regression. Production IAM now grants the Storage service agent only the dedicated cross-service Firestore Rules role, and the tested Storage/Firestore rules are live. The application rules remain limited to the linked learner in the same organization; there is no user-role broadening, index/API change or production data migration. See `docs/sparkquest/MISSION_EXPERIENCE_PHASE_7.md`.
 
 ---
 

@@ -13,3 +13,6 @@
 - Keep the design-preview query development-only so it cannot expose mock content in production.
 - Keep showcase publication moderated: learners upload media and a link, submit the project, and instructors publish it from the existing review queue.
 - Store learner files under `student-projects/{organizationId}/{authUid}/{projectId}` while Firestore projects retain the canonical Edufy learner record id.
+- Repair missing legacy `organizationId` values from the authenticated Edufy profile at the central project-save boundary; individual showcase/evidence controls must not bypass that boundary with a second direct write.
+- Keep legacy migration owner-scoped: an update must preserve the stored canonical learner id, add the current organization, and resolve the requesting Auth UID through that learner's Edufy login link.
+- Check Firestore map keys before reading optional legacy fields and use the lean learner resolver for SparkQuest operations to avoid expression-budget failures from unrelated guardian branches.

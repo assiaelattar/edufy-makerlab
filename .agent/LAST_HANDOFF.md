@@ -102,6 +102,14 @@ Previous Admissions handoff and QA runtime instructions retained below:
 
 # Last Handoff
 
+## Current override — urgent learner showcase permission repair
+
+The production error was reproduced locally with the relevant legacy data shape: a learner-owned `student_projects` record without `organizationId`. The client now routes evidence, progress and showcase saves through one synchronization boundary that restores the organization from the authenticated Edufy profile while preserving the canonical learner record id. Firestore rules now treat missing optional fields safely, keep the migration restricted to the linked learner in the same organization, and avoid the expression-budget failure caused by the broader guardian resolver.
+
+Validation is complete before deployment: the isolated Auth/Firestore/Storage suite passes 27 assertions, including screenshot upload, download URL, external link, a denied unscoped legacy update, the authorized ownership repair and `submitted` instructor-review status. SparkQuest TypeScript, both mission smoke suites, the SparkQuest production build, the root Edufy production build (4,433 modules) and `git diff --check` pass. Existing Firebase import-overlap and large-bundle warnings remain. No production data was written and this candidate has not been deployed.
+
+Next step: after explicit user confirmation, release the client and Firestore rules together, verify the public bundle, then have one designated learner submit a real showcase and confirm it enters the instructor review queue.
+
 ## Current override — SparkQuest mission experience
 
 The learner mission detail screen is now a dedicated visual mission path instead of a role-tinted copy of the instructor dossier. It leads with the challenge and finished outcome, then presents concise, color-coded icon cards for the build route, required proof, resources, learning outcomes and bench readiness. Motion uses transform/opacity only and respects reduced motion. The page owns its vertical scroll container so it works inside SparkQuest's body-locked shell, and the mobile action remains fixed and visible. New missions and legacy missions resolve through the same backward-compatible `MissionBrief` adapter. The representative development preview is available at `/?designPreview=mission` and does not read or write Firebase.

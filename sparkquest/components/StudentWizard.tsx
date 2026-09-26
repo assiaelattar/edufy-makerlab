@@ -936,10 +936,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         ...autoPromoteUpdates
       };
 
-      updateProject(updatedProject);
-
-      // Sync to API
-      await api.syncProject(updatedProject);
+      const saveResult = await updateProject(updatedProject);
+      if (!saveResult.success) throw new Error(saveResult.error || 'Evidence could not be saved.');
 
       playSound('success');
       alert('✅ Evidence Submitted! Great work, Cadet.');
@@ -974,8 +972,11 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       commits: [...(project.commits || []), newCommit]
     };
 
-    updateProject(updatedProject);
-    await api.syncProject(updatedProject);
+    const saveResult = await updateProject(updatedProject);
+    if (!saveResult.success) {
+      alert(`Progress could not be saved: ${saveResult.error || 'Unknown error'}`);
+      return;
+    }
 
     setCommitMessage('');
     setShowCommitInput(false);
@@ -1566,7 +1567,15 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
 
   // Helper to update project with IMMEDIATE sync (optimistic update)
   const updateProject = async (updates: Partial<StudentProject>) => {
-    const updatedProject = { ...project, ...updates };
+    const mergedProject = { ...project, ...updates };
+    // Older SparkQuest projects can predate tenant ownership fields. Always
+    // repair those fields from the verified Edufy session before writing so
+    // Firestore can authorize the one-time legacy migration.
+    const updatedProject: StudentProject = {
+      ...mergedProject,
+      organizationId: mergedProject.organizationId || userProfile?.organizationId,
+      studentId: mergedProject.studentId || userProfile?.studentId || user?.uid,
+    };
 
     // 1. Optimistically update UI immediately
     setProject(updatedProject);

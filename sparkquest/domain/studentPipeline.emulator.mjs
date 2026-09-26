@@ -213,6 +213,38 @@ try {
     assert.equal(submittedShowcase.presentationUrl, 'https://example.test/student-project', 'showcase link is saved');
     assert.deepEqual(submittedShowcase.mediaUrls, [showcaseUrl], 'showcase media URL is saved');
 
+    const legacyProjectId = 'legacy-showcase-without-tenant';
+    await seedDocument(`student_projects/${legacyProjectId}`, {
+      studentId: studentRecordId,
+      templateId: 'showcase-template',
+      title: 'Legacy learner showcase',
+      description: 'Created before organization ownership was required',
+      station: 'general',
+      status: 'planning',
+      steps: [],
+      commits: [],
+      skills: [],
+      resources: [],
+    });
+    const legacyProjectRef = doc(student.db, 'student_projects', legacyProjectId);
+    assert.equal((await getDoc(legacyProjectRef)).exists(), true, 'student can read their linked legacy showcase');
+    await expectDenied(
+      () => updateDoc(legacyProjectRef, { status: 'submitted', presentationUrl: 'https://example.test/legacy' }),
+      'legacy showcase update is denied until the client restores tenant ownership'
+    );
+    await updateDoc(legacyProjectRef, {
+      organizationId,
+      status: 'submitted',
+      presentationUrl: 'https://example.test/legacy',
+      thumbnailUrl: showcaseUrl,
+      coverImage: showcaseUrl,
+      mediaUrls: [showcaseUrl],
+    });
+    const migratedLegacyShowcase = (await getDoc(legacyProjectRef)).data();
+    assert.equal(migratedLegacyShowcase.organizationId, organizationId, 'legacy showcase is repaired with tenant ownership');
+    assert.equal(migratedLegacyShowcase.status, 'submitted', 'repaired legacy showcase enters instructor review');
+    assert.deepEqual(migratedLegacyShowcase.mediaUrls, [showcaseUrl], 'repaired legacy showcase keeps uploaded media');
+
     const instructorMediaRef = ref(instructor.storage, `instructor-projects/${organizationId}/${instructor.uid}/${missionRef.id}/briefing.mp4`);
     await uploadBytes(instructorMediaRef, new Uint8Array([0, 0, 0, 24]), { contentType: 'video/mp4' });
     assert.match(await getDownloadURL(instructorMediaRef), /^http:/, 'instructor mission media upload returns a download URL');
@@ -241,7 +273,7 @@ try {
     );
   }
 
-  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 22} assertions passed.`);
+  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 27} assertions passed.`);
 } finally {
   await Promise.all(clients.map(client => deleteApp(client.app)));
 }
