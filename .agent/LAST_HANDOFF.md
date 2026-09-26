@@ -102,6 +102,18 @@ Previous Admissions handoff and QA runtime instructions retained below:
 
 # Last Handoff
 
+## Current override — SparkQuest mission experience
+
+The learner mission detail screen is now a dedicated visual mission path instead of a role-tinted copy of the instructor dossier. It leads with the challenge and finished outcome, then presents concise, color-coded icon cards for the build route, required proof, resources, learning outcomes and bench readiness. Motion uses transform/opacity only and respects reduced motion. The page owns its vertical scroll container so it works inside SparkQuest's body-locked shell, and the mobile action remains fixed and visible. New missions and legacy missions resolve through the same backward-compatible `MissionBrief` adapter. The representative development preview is available at `/?designPreview=mission` and does not read or write Firebase.
+
+The learner showcase flow now prevents duplicate submits, validates full external links, reports whether upload or project save failed, and correctly explains that learner work enters instructor review before publication. The isolated Firebase suite reproduces the real operation—screenshot upload under the Auth UID path, download URL, project link/media/cover update and `submitted` status—and passes 22 assertions. The existing instructor dashboard consumes that status in its review queue.
+
+Scoped SparkQuest TypeScript, both mission smoke suites, the 22-assertion Firebase learner pipeline suite, the production SparkQuest build and the repository root build pass. Responsive visual QA found no horizontal overflow at desktop or mobile widths and proved vertical scrolling inside the app shell. The repository-wide parent TypeScript project still has many pre-existing diagnostics outside SparkQuest; use `sparkquest/tsconfig.json` for this phase. A production learner-account smoke test remains the final post-release product check. No production data migration is required.
+
+See `docs/sparkquest/MISSION_EXPERIENCE_PHASE_7.md`, `docs/sparkquest/DECISIONS.md`, `docs/sparkquest/KNOWN_ISSUES.md` and `docs/sparkquest/CHANGELOG.md`.
+
+---
+
 ## Current phase
 
 Phase 6 completed on 2026-09-09. Phase 7 provider readiness has not started.

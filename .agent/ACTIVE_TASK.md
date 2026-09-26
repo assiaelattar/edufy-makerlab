@@ -1,3 +1,9 @@
+# Current task boundary — SparkQuest showcase repair and mission experience QA
+
+Release the user-approved urgent learner showcase repair together with the completed mission-experience changes. The exact screenshot upload + external link + project submission transaction passes isolated Auth/Firestore/Storage emulators and the SparkQuest production build. Deploy the already-reviewed Firestore/Storage rules with the client so production matches the tested permission boundary. Preserve production data; after release, perform a public load check and ask for one designated learner-account smoke test of upload → submit → instructor review.
+
+---
+
 # Current task boundary — Post-release verification
 
 The consolidated Edufy operations/UI release is live on `origin/main` and Hostinger at commit `6652af16fd18f285436ece1984594c61d7c73e82`. The release includes the compact Education UI shell, Programs pause/resume controls, lifecycle-aware attendance/finance filtering, legacy school-cohort date inference, CRM template-slot and urgent custom-demo booking, and the existing invoice/service catalogue features from the prior main baseline. Existing records are preserved; no migration or production write was performed.

@@ -71,6 +71,31 @@ export interface Resource {
   url: string;
 }
 
+export type MissionEvidenceType = 'image' | 'video' | 'document' | 'link' | 'text' | 'any';
+
+export interface MissionDeliverable {
+  id: string;
+  title: string;
+  description?: string;
+  required?: boolean;
+  evidenceType?: MissionEvidenceType;
+}
+
+/**
+ * Learner-facing mission contract. This object is authored once and reused by
+ * the instructor preview, student briefing, project snapshot, and review flow.
+ * All properties remain optional so legacy missions continue to render.
+ */
+export interface MissionBrief {
+  goal?: string;
+  whyItMatters?: string;
+  finalOutcome?: string;
+  materials?: string[];
+  prerequisites?: string[];
+  safetyNotes?: string[];
+  deliverables?: MissionDeliverable[];
+}
+
 // Project Structure
 export interface ProjectStep {
   id: string;
@@ -105,6 +130,9 @@ export interface StudentProject {
   station: string;
   status: ProjectStatus;
   templateId?: string;
+  missionBrief?: MissionBrief;
+  hook?: string;
+  duration?: string;
 
   // Strategy
   workflowId?: string;
@@ -155,6 +183,12 @@ export interface Assignment {
   recommendedWorkflow: string;
   stepResources?: Record<string, Resource[]>; // Map stepId/phaseId -> specific resources
   resources?: Resource[]; // Global mission resources
+  missionBrief?: MissionBrief;
+  hook?: string;
+  duration?: string;
+  difficulty?: ProjectTemplate['difficulty'];
+  learningOutcomes?: ProjectTemplate['learningOutcomes'];
+  technologies?: ProjectTemplate['technologies'];
 }
 
 // Legacy Roadmap Types
@@ -211,6 +245,7 @@ export interface ProjectTemplate {
   assignedBy?: string;
   defaultWorkflowId?: string; // Legacy or specific workflow overide
   stepResources?: Record<string, Resource[]>; // Mission-specific resources for workflow steps
+  missionBrief?: MissionBrief;
 
   // Enhanced Fields
   realWorldApp?: {

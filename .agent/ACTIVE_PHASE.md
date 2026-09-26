@@ -1,3 +1,9 @@
+# Current phase override — SparkQuest mission experience contract
+
+Release-approved on 2026-09-26. The mission-authoring wizard, instructor preview, learner briefing, project creation snapshot and workspace assignment share one backward-compatible `MissionBrief` contract. The learner must review the mission journey before a project document is created. The urgent showcase repair adds client UX and a full emulator regression while deploying the already-reviewed Firestore/Storage rules required by the learner pipeline; it introduces no rule broadening, index/API change or production data migration. See `docs/sparkquest/MISSION_EXPERIENCE_PHASE_7.md`.
+
+---
+
 # Current phase override — Education UI coherence and compact navigation
 
 Completed locally on 2026-09-17. The authenticated Education shell now uses one compact desktop workbar instead of stacked title and workspace-tab rows. Mobile keeps only the compact contextual header, drawer trigger and bottom quick navigation; the workspace-tab strip and density controls are hidden. The desktop sidebar, content spacing and navigation items are denser without changing routes, permissions or callbacks. Atlas command surfaces, KPI cards and actions now share a restrained white/Volt system across unfinished modules, with module colors retained as small semantic signals. Expenses recurring-payment actions use the shared action primitive. Production build and authenticated desktop/mobile browser checks pass. No release was requested or performed.

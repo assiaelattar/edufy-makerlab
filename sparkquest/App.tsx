@@ -17,6 +17,7 @@ import { ToastProvider } from './context/ToastContext';
 import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
 import { isLocalHostname } from './utils/appUrls';
 import { exchangeSparkQuestLaunch } from './services/appBridge';
+import { ProcessTemplate, ProjectTemplate } from './types';
 
 
 import { LoadingScreen } from './components/LoadingScreen';
@@ -25,6 +26,55 @@ const StudentWizard = lazy(() => import('./components/StudentWizard').then(modul
 const InstructorFactory = lazy(() => import('./components/InstructorFactory').then(module => ({ default: module.InstructorFactory })));
 const ProjectDetailsEnhanced = lazy(() => import('./components/ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 const ParentShowcase = lazy(() => import('./components/ParentShowcase'));
+
+const missionDesignPreview: ProjectTemplate = {
+  id: 'design-preview-mission',
+  title: 'Build a smart plant guardian',
+  description: 'Create a small device that notices when a plant needs water and gives a clear signal.',
+  thumbnailUrl: '/mission-plant-guardian.svg',
+  hook: 'Healthy plants depend on observation, measurement, and thoughtful design.',
+  station: 'Circuits',
+  difficulty: 'intermediate',
+  duration: '3 workshop sessions',
+  skills: ['Electronics', 'Prototyping', 'Testing'],
+  defaultWorkflowId: 'design-preview-workflow',
+  status: 'assigned',
+  targetAudience: { programs: ['STEMQuest'], grades: ['Tiny Makers'] },
+  technologies: [{ name: 'Microcontroller', icon: 'Cpu' }, { name: 'Moisture sensor', icon: 'Zap' }],
+  learningOutcomes: [
+    { id: 'signal', title: 'Read a sensor', desc: 'Turn moisture measurements into a useful signal.', theme: 'blue' },
+    { id: 'iterate', title: 'Improve a prototype', desc: 'Test the device and make one evidence-based improvement.', theme: 'green' },
+  ],
+  missionBrief: {
+    goal: 'Design, wire, and test a plant monitor that tells someone when the soil is becoming dry.',
+    whyItMatters: 'Sensors help people care for living things consistently—even when they cannot check them all day.',
+    finalOutcome: 'A working plant guardian with a visible alert and proof that it responds to wet and dry soil.',
+    materials: ['Microcontroller', 'Moisture sensor', 'LED', 'Jumper wires', 'Plant or soil sample'],
+    prerequisites: ['Watch the sensor introduction', 'Ask your instructor to check the wiring before power-on'],
+    safetyNotes: ['Keep water away from the powered circuit.', 'Disconnect power before changing wires.'],
+    deliverables: [
+      { id: 'prototype', title: 'Working plant guardian', evidenceType: 'video', required: true },
+      { id: 'test', title: 'Wet-versus-dry test evidence', evidenceType: 'image', required: true },
+      { id: 'reflection', title: 'One improvement you would make next', evidenceType: 'text', required: true },
+    ],
+  },
+  resources: [
+    { id: 'sensor-guide', title: 'Moisture sensor quick guide', type: 'file', url: '#' },
+    { id: 'wiring-demo', title: 'Watch the wiring demonstration', type: 'video', url: '#' },
+  ],
+};
+
+const missionDesignWorkflow: ProcessTemplate = {
+  id: 'design-preview-workflow',
+  name: 'Maker build cycle',
+  description: 'Understand, plan, build, test, and share.',
+  phases: [
+    { id: 'understand', name: 'Understand the plant problem', description: 'Observe the plant and decide what the alert should communicate.', color: 'blue', icon: 'Brain', order: 1 },
+    { id: 'plan', name: 'Plan the circuit', description: 'Sketch the sensor, controller, and alert before connecting parts.', color: 'amber', icon: 'Pencil', order: 2 },
+    { id: 'build', name: 'Build the guardian', description: 'Wire the circuit and create a stable enclosure.', color: 'indigo', icon: 'Wrench', order: 3 },
+    { id: 'test', name: 'Test wet and dry soil', description: 'Collect proof, notice what fails, and improve the response.', color: 'green', icon: 'Check', order: 4 },
+  ],
+};
 
 const LazyView: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <Suspense fallback={<LoadingScreen mode="standard" message="Opening your workshop..." />}>
@@ -53,7 +103,7 @@ const SparkQuestApp: React.FC = () => {
   // 1. ALL HOOKS
   const { user, userProfile, signInWithToken, signOut, loading: authLoading, authIssue } = useAuth();
   const { fetchMission, clearMission, assignment, project, error, isConnected } = useMissionData();
-  const { projectTemplates, studentProjects } = useFactoryData();
+  const { projectTemplates, studentProjects, processTemplates } = useFactoryData();
 
   const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY' | 'SHOWCASE'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -168,6 +218,10 @@ const SparkQuestApp: React.FC = () => {
   // 2. EARLY RETURNS (Guard Clauses)
   // 2. EARLY RETURNS (Guard Clauses)
 
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'mission') {
+    return <LazyView><ProjectDetailsEnhanced project={missionDesignPreview} workflow={missionDesignWorkflow} role="student" onBack={() => { window.location.href = window.location.pathname; }} onLaunch={() => undefined} /></LazyView>;
+  }
+
   // Loading
   if (authLoading) {
     return <LoadingScreen mode="standard" message="Initializing System..." />;
@@ -242,6 +296,7 @@ const SparkQuestApp: React.FC = () => {
     return <LazyView>{(
       <ProjectDetailsEnhanced
         project={finalProject}
+        workflow={processTemplates.find(workflow => workflow.id === (finalProject as any).defaultWorkflowId || workflow.id === (finalProject as any).workflowId)}
         role={initialRole}
         onLaunch={() => {
           // If student wants to start, they click Launch.

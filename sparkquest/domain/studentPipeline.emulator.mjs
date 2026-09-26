@@ -192,6 +192,27 @@ try {
     await uploadBytes(studentPdfRef, new Uint8Array([37, 80, 68, 70]), { contentType: 'application/pdf' });
     assert.match(await getDownloadURL(studentPdfRef), /^http:/, 'student PDF evidence upload returns a download URL');
 
+    // Reproduce the actual Showcase UI transaction: upload a screenshot to the
+    // Auth UID-owned path, then persist its public URL together with the learner
+    // supplied project link and review status on the canonical student project.
+    const showcaseRef = ref(
+      student.storage,
+      `student-projects/${organizationId}/${student.uid}/${projectRef.id}/showcase-plant-guardian.png`
+    );
+    await uploadBytes(showcaseRef, new Uint8Array([137, 80, 78, 71]), { contentType: 'image/png' });
+    const showcaseUrl = await getDownloadURL(showcaseRef);
+    await updateDoc(projectRef, {
+      status: 'submitted',
+      presentationUrl: 'https://example.test/student-project',
+      thumbnailUrl: showcaseUrl,
+      coverImage: showcaseUrl,
+      mediaUrls: [showcaseUrl],
+    });
+    const submittedShowcase = (await getDoc(projectRef)).data();
+    assert.equal(submittedShowcase.status, 'submitted', 'student can submit a showcase for instructor review');
+    assert.equal(submittedShowcase.presentationUrl, 'https://example.test/student-project', 'showcase link is saved');
+    assert.deepEqual(submittedShowcase.mediaUrls, [showcaseUrl], 'showcase media URL is saved');
+
     const instructorMediaRef = ref(instructor.storage, `instructor-projects/${organizationId}/${instructor.uid}/${missionRef.id}/briefing.mp4`);
     await uploadBytes(instructorMediaRef, new Uint8Array([0, 0, 0, 24]), { contentType: 'video/mp4' });
     assert.match(await getDownloadURL(instructorMediaRef), /^http:/, 'instructor mission media upload returns a download URL');
@@ -220,7 +241,7 @@ try {
     );
   }
 
-  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 19} assertions passed.`);
+  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 22} assertions passed.`);
 } finally {
   await Promise.all(clients.map(client => deleteApp(client.app)));
 }

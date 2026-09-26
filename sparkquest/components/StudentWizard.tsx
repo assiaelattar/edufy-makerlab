@@ -17,6 +17,7 @@ import { useTheme, THEMES } from '../context/ThemeContext';
 import { useFocusSession } from '../context/FocusSessionContext';
 import { ResourceViewerModal } from './ResourceViewerModal';
 import { useToast } from '../context/ToastContext';
+import { resolveMissionContent } from '../domain/missionContent';
 
 
 // --- Sound Utility (Synthesizer) ---
@@ -1314,6 +1315,8 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
   const [link, setLink] = useState(project.presentationUrl || '');
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitPhase, setSubmitPhase] = useState<'idle' | 'uploading' | 'saving'>('idle');
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(project.mediaUrls?.[0] || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1344,13 +1347,23 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
   };
 
   const handleSubmit = async () => {
-    playSound('success');
+    if (submitting) return;
+    const trimmedLink = link.trim();
+    if (trimmedLink && !/^https?:\/\//i.test(trimmedLink)) {
+      setSubmitError('Add the full link beginning with https://');
+      return;
+    }
+
     setSubmitting(true);
+    setSubmitError(null);
+    let activePhase: 'uploading' | 'saving' = 'saving';
 
     try {
       let finalUrl = preview; // Default to existing preview if no new file
 
       if (file) {
+        activePhase = 'uploading';
+        setSubmitPhase('uploading');
         const organizationId = userProfile?.organizationId;
         if (!organizationId || !user?.uid) throw new Error('Your student account is not fully linked.');
         const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -1361,9 +1374,11 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
       }
 
       // update project status and media/link
+      activePhase = 'saving';
+      setSubmitPhase('saving');
       const result = await updateProject({
         status: 'submitted',
-        presentationUrl: link,
+        presentationUrl: trimmedLink,
         thumbnailUrl: file?.type.startsWith('image/') ? finalUrl || project.thumbnailUrl : project.thumbnailUrl,
         coverImage: file?.type.startsWith('image/') ? finalUrl || project.coverImage : project.coverImage,
         mediaUrls: finalUrl ? [finalUrl] : project.mediaUrls
@@ -1374,12 +1389,20 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
       }
 
       console.log('✅ [Showcase] Upload complete & Project synced.');
+      playSound('success');
       closeModal();
     } catch (e: any) {
       console.error("Showcase upload failed", e);
-      alert(`Failed to upload showcase: ${e.message || "Unknown error"}. Please check your connection and try again.`);
+      const permissionFailure = ['permission-denied', 'storage/unauthorized'].some(code =>
+        String(e?.code || e?.message || e).includes(code)
+      );
+      setSubmitError(permissionFailure
+        ? 'Your account could not save this showcase. Sign out and launch SparkQuest again from Edufy, then retry.'
+        : `We could not ${activePhase === 'saving' ? 'save' : 'upload'} your showcase. ${e?.message || 'Check your connection and try again.'}`
+      );
     } finally {
       setSubmitting(false);
+      setSubmitPhase('idle');
     }
   };
 
@@ -1420,13 +1443,24 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
           />
         </div>
 
+        {submitError && (
+          <div role="alert" className="rounded-2xl border-2 border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-6 text-rose-700">
+            {submitError}
+          </div>
+        )}
+
         <button
           onClick={handleSubmit}
-          disabled={!file && !preview && !link}
+          disabled={submitting || (!file && !preview && !link.trim())}
           className="w-full py-4 md:py-5 rounded-3xl bg-indigo-600 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30"
         >
-          {submitting ? 'Uploading...' : '🚀 Publish to Gallery'}
+          {submitPhase === 'uploading'
+            ? 'Uploading your file…'
+            : submitPhase === 'saving'
+              ? 'Sending for review…'
+              : '🚀 Submit showcase for review'}
         </button>
+        <p className="text-center text-xs font-bold leading-5 text-slate-400">Your instructor will review it before it appears as published work.</p>
       </div>
     </div>
   );
@@ -1457,6 +1491,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const [mindset] = useState(getRandomMindset()); // Random quote for this session
   const [projectIcon, setProjectIcon] = useState('⚡');
   const [showGlobalResources, setShowGlobalResources] = useState(false);
+  const [showMissionBrief, setShowMissionBrief] = useState(false);
   const [viewingResource, setViewingResource] = useState<any>(null);
 
   // Responsive Item Width
@@ -1481,6 +1516,10 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
 
   // Load Factory Data for Auto-Workflow
   const { processTemplates } = useFactoryData();
+  const missionContent = resolveMissionContent(
+    assignment,
+    processTemplates.find(template => template.id === assignment.recommendedWorkflow || template.id === project.workflowId),
+  );
 
   // Peer Mock Data (Simulating other students working)
   const [peers] = useState([
@@ -1954,6 +1993,23 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
               <p className="text-xs text-slate-300 italic">"{mindset.text}"</p>
               {mindset.author && <p className="text-[10px] text-slate-500 font-bold mt-1">- {mindset.author}</p>}
             </div>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowMissionBrief(!showMissionBrief)}
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 text-sm font-black text-blue-100 transition hover:bg-blue-500/20"
+            >
+              <FileText size={18} /> Mission brief
+            </button>
+            {showMissionBrief && (
+              <div className="absolute right-0 top-full z-50 mt-3 w-[min(90vw,26rem)] rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-2xl">
+                <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">Your mission</p><h4 className="mt-1 text-xl font-black text-slate-950">{assignment.title}</h4></div><button type="button" onClick={() => setShowMissionBrief(false)} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-600"><XIcon size={16} /></button></div>
+                <p className="mt-4 text-sm font-semibold leading-6 text-slate-600">{missionContent.goal}</p>
+                <div className="mt-5 rounded-2xl bg-amber-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Final outcome</p><p className="mt-1 text-sm font-extrabold text-amber-950">{missionContent.finalOutcome}</p></div>
+                {missionContent.deliverables.length > 0 && <div className="mt-5"><p className="text-xs font-black uppercase tracking-wider text-slate-500">What to submit</p><ul className="mt-3 space-y-2">{missionContent.deliverables.map(item => <li key={item.id} className="flex gap-2 text-sm font-bold text-slate-700"><Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />{item.title}</li>)}</ul></div>}
+              </div>
+            )}
           </div>
 
           {/* Global Resources Button */}

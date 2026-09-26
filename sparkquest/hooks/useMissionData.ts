@@ -3,6 +3,7 @@ import { db } from '../services/firebase';
 import { doc, getDoc, collection, query, where, getDocs, onSnapshot, setDoc, Timestamp } from 'firebase/firestore';
 import { User, Assignment, StudentProject, RoadmapStep, StepStatus } from '../types';
 import { createVerifiedStudentIdentity, projectBelongsToStudent } from '../domain/studentIdentity';
+import { assignmentFromMission } from '../domain/missionContent';
 
 // Helper to normalize station names to match ERP's expected keys
 const normalizeStation = (stationText: string): string => {
@@ -111,12 +112,14 @@ export const useMissionData = () => {
                     // 🔥 CRITICAL FIX: Fetch Template Resources
                     let stepResources = pData.stepResources || {};
                     let globalResources: any[] = pData.resources || [];
+                    let templateData: any = null;
 
                     if (pData.templateId) {
                         try {
                             const templateSnap = await getDoc(doc(db, 'project_templates', pData.templateId));
                             if (templateSnap.exists()) {
                                 const tData = templateSnap.data();
+                                templateData = tData;
                                 // Merge: Template resources (base) + Project (overrides)
                                 stepResources = { ...(tData.stepResources || {}), ...stepResources };
 
@@ -140,15 +143,12 @@ export const useMissionData = () => {
                     }
 
                     // Construct minimal assignment object needed for the wizard context
-                    const derivedAssignment: Assignment = {
-                        id: pData.templateId || 'custom-mission',
-                        title: pData.title,
-                        description: pData.description,
+                    const missionSource = templateData
+                        ? { ...templateData, ...pData, missionBrief: pData.missionBrief || templateData.missionBrief }
+                        : pData;
+                    const derivedAssignment = {
+                        ...assignmentFromMission(missionSource as StudentProject, globalResources, stepResources),
                         station: normalizeStation(pData.station),
-                        badges: [],
-                        recommendedWorkflow: pData.workflowId || 'default',
-                        stepResources: stepResources,
-                        resources: globalResources // Pass global resources
                     };
                     setAssignment(derivedAssignment);
                     setProject(pData);
@@ -199,12 +199,14 @@ export const useMissionData = () => {
                     // 🔥 CRITICAL FIX: Fetch Template Resources
                     let stepResources = pData.stepResources || {};
                     let globalResources: any[] = pData.resources || [];
+                    let templateData: any = null;
 
                     if (pData.templateId) {
                         try {
                             const templateSnap = await getDoc(doc(db, 'project_templates', pData.templateId));
                             if (templateSnap.exists()) {
                                 const tData = templateSnap.data();
+                                templateData = tData;
                                 // Merge: Template resources (base) + Project (overrides)
                                 stepResources = { ...(tData.stepResources || {}), ...stepResources };
 
@@ -226,15 +228,12 @@ export const useMissionData = () => {
                         }
                     }
 
-                    const derivedAssignment: Assignment = {
-                        id: pData.templateId || 'custom-mission',
-                        title: pData.title,
-                        description: pData.description,
+                    const missionSource = templateData
+                        ? { ...templateData, ...pData, missionBrief: pData.missionBrief || templateData.missionBrief }
+                        : pData;
+                    const derivedAssignment = {
+                        ...assignmentFromMission(missionSource as StudentProject, globalResources, stepResources),
                         station: normalizeStation(pData.station),
-                        badges: [],
-                        recommendedWorkflow: pData.workflowId || 'default',
-                        stepResources: stepResources,
-                        resources: globalResources
                     };
                     setAssignment(derivedAssignment);
                     setProject(pData);

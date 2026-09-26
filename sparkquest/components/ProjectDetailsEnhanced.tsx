@@ -1,364 +1,211 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React from 'react';
 import {
-    Clock, Code, Globe, MessageSquare, Rocket, Star, Users, Zap,
-    Cpu, Brain, Target, Briefcase, CheckCircle, ChevronRight, Wrench, Box
+    ArrowLeft, ArrowRight, BookOpen, Check, ClipboardCheck, Clock3,
+    ExternalLink, FileText, Flag, Image, Link2, PlayCircle, ShieldCheck,
+    Target, Users, Video, Wrench,
 } from 'lucide-react';
-import { ProjectTemplate, StudentProject } from '../types';
-
-// Helper for dynamic icon mapping
-const getIcon = (name: string) => {
-    const icons: any = { Code, Cpu, Box, Zap, Rocket, Globe, MessageSquare, Star, Clock, Users, Brain, Target, Briefcase, Wrench };
-    return icons[name] || Zap; // Default to Zap
-};
-
-// --- COMPONENTS ---
-const Badge = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-    <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm ${className}`}>
-        {children}
-    </span>
-);
-
-const SectionCard = ({ title, icon: Icon, children, className, headerColor = "text-slate-800" }: any) => (
-    <div className={`p-8 rounded-3xl border border-white/50 shadow-xl backdrop-blur-sm ${className}`}>
-        {title && (
-            <h3 className={`flex items-center gap-3 text-xl font-black mb-6 ${headerColor}`}>
-                {Icon && <div className="p-2 bg-white rounded-xl shadow-sm"><Icon size={24} /></div>}
-                {title}
-            </h3>
-        )}
-        {children}
-    </div>
-);
-
-const TechPill = ({ name, iconName, color, bg }: any) => {
-    const Icon = getIcon(iconName);
-    return (
-        <div className={`flex flex-col items-center justify-center p-4 rounded-2xl ${bg || 'bg-slate-100'} ${color || 'text-slate-600'} border-2 border-white shadow-sm hover:scale-105 transition-transform`}>
-            <Icon size={28} className="mb-2" />
-            <span className="font-bold text-sm text-center">{name}</span>
-        </div>
-    );
-};
-
-const CompanyLogo = ({ name, color }: any) => (
-    <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-xl shadow-sm border border-slate-100 font-bold text-slate-700">
-        <div className={`w-3 h-3 rounded-full ${color || 'bg-slate-400'}`}></div>
-        {name}
-    </div>
-);
+import { ProcessTemplate, ProjectTemplate, Resource, StudentProject } from '../types';
+import { getMissionReadiness, resolveMissionContent } from '../domain/missionContent';
+import { StudentMissionDetails as StudentMissionDetailsV2 } from './StudentMissionDetails';
 
 interface ProjectDetailsEnhancedProps {
     project: ProjectTemplate | StudentProject;
-    role?: 'parent' | 'instructor' | 'student'; // Default role view
+    workflow?: ProcessTemplate;
+    role?: 'parent' | 'instructor' | 'student';
     onLaunch?: () => void;
     onBack?: () => void;
     onEdit?: () => void;
 }
 
-export const ProjectDetailsEnhanced: React.FC<ProjectDetailsEnhancedProps> = ({ project, role: initialRole = 'parent', onLaunch, onBack, onEdit }) => {
-    const [role, setRole] = useState<'parent' | 'instructor' | 'student'>(initialRole);
+const resourceIcon = (resource: Resource) => {
+    if (resource.type === 'video') return Video;
+    if (resource.type === 'image') return Image;
+    if (resource.type === 'link') return Link2;
+    return FileText;
+};
 
-    // Data Normalization (Handle missing fields gracefully)
-    // Cast to any to access the enhanced fields we added to types.ts
-    const p = project as any;
+const evidenceLabel: Record<string, string> = {
+    image: 'Photo', video: 'Video', document: 'Document', link: 'Link', text: 'Reflection', any: 'Any proof',
+};
 
-    // Scroll fix effect
-    React.useEffect(() => {
-        const bodyClasses = document.body.className;
-        document.body.classList.remove('overflow-hidden');
-        document.body.classList.add('overflow-y-auto');
-        return () => {
-            document.body.className = bodyClasses;
-        };
-    }, []);
+const StudentMissionDetails: React.FC<{
+    project: ProjectTemplate | StudentProject;
+    workflow?: ProcessTemplate;
+    onLaunch?: () => void;
+    onBack?: () => void;
+}> = ({ project, workflow, onLaunch, onBack }) => {
+    const content = resolveMissionContent(project, workflow);
+    const resources = project.resources || [];
+    const isExistingProject = 'templateId' in project;
+    const actionLabel = isExistingProject ? 'Continue my build' : 'I understand — start mission';
+    const coverImage = project.thumbnailUrl || ('coverImage' in project ? project.coverImage : '');
+    const outcomes = 'learningOutcomes' in project ? project.learningOutcomes || [] : [];
 
-    if (!p) return <div>Loading Project...</div>;
+    return <main className="min-h-screen bg-[#f5f7fa] pb-24 text-[#10213b] sm:pb-0">
+        <header className="sticky top-0 z-40 border-b border-[#dce5f0] bg-white/95 backdrop-blur">
+            <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+                <div className="flex min-w-0 items-center gap-3">
+                    {onBack && <button type="button" onClick={onBack} className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-[#dce5f0] text-[#10213b] transition hover:bg-[#eef3f8]" aria-label="Back to missions"><ArrowLeft size={19} /></button>}
+                    <div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#0b5fff]">SparkQuest mission</p><p className="truncate text-sm font-black">{project.title}</p></div>
+                </div>
+                {onLaunch && <button type="button" onClick={onLaunch} className="hidden min-h-11 items-center gap-2 rounded-xl bg-[#ffb703] px-5 text-sm font-black text-[#2c2100] shadow-[0_4px_0_#d99b00] transition hover:-translate-y-0.5 hover:bg-[#ffc52c] sm:inline-flex">{actionLabel} <ArrowRight size={17} /></button>}
+            </div>
+        </header>
+
+        <section className="relative overflow-hidden bg-[#071525] text-white">
+            <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(92,143,201,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(92,143,201,.12)_1px,transparent_1px)] [background-size:32px_32px]" />
+            <div className="absolute -right-24 -top-24 h-80 w-80 rounded-full bg-[#0b5fff]/20 blur-3xl" />
+            <div className="relative mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-[1.15fr_.85fr] lg:px-8 lg:py-16">
+                <div className="flex flex-col justify-center">
+                    <div className="flex flex-wrap gap-2">
+                        <span className="rounded-full border border-[#5c8fc9]/40 bg-[#0b5fff]/15 px-3 py-1 text-xs font-black text-[#bcd8ff]">{project.station || 'MakerLab'}</span>
+                        {'difficulty' in project && project.difficulty && <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-black capitalize text-slate-200">{project.difficulty}</span>}
+                        {project.duration && <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-black text-slate-200"><Clock3 size={13} /> {project.duration}</span>}
+                    </div>
+                    <p className="mt-8 text-xs font-black uppercase tracking-[0.24em] text-[#ffca3a]">The challenge</p>
+                    <h1 className="mt-3 max-w-4xl text-4xl font-black leading-[1.02] tracking-[-0.04em] sm:text-6xl lg:text-7xl">{project.title}</h1>
+                    <p className="mt-6 max-w-2xl text-base font-semibold leading-7 text-[#c9d7e8] sm:text-xl sm:leading-8">{content.goal}</p>
+                    <nav className="mt-8 flex flex-wrap gap-2" aria-label="Mission sections">
+                        {[['#route', 'Build map'], ['#submit', 'What to submit'], ...(resources.length ? [['#resources', 'Resources']] : [])].map(([href, label]) => <a key={href} href={href} className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-black text-slate-200 transition hover:border-[#5c8fc9] hover:bg-white/10">{label}</a>)}
+                    </nav>
+                </div>
+                <div className="relative min-h-[320px] overflow-hidden rounded-[28px] border border-white/10 bg-[#10243d] shadow-2xl">
+                    {coverImage ? <img src={coverImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" /> : <div className="absolute inset-0 grid place-items-center"><div className="grid h-32 w-32 place-items-center rounded-full border border-dashed border-[#5c8fc9]/50 bg-[#0b5fff]/10 text-[#bcd8ff]"><Wrench size={48} strokeWidth={1.4} /></div></div>}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#071525] via-[#071525]/25 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#ffca3a]">You are making</p><p className="mt-2 text-2xl font-black leading-tight">{content.finalOutcome}</p></div>
+                </div>
+            </div>
+        </section>
+
+        <div className="mx-auto grid max-w-7xl items-start gap-6 px-4 py-7 sm:px-6 sm:py-10 lg:grid-cols-[minmax(0,1fr)_330px] lg:px-8">
+            <div className="space-y-6">
+                {content.whyItMatters && <section className="grid gap-5 rounded-3xl border border-[#dce5f0] bg-white p-6 shadow-sm sm:grid-cols-[150px_1fr] sm:p-8"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b5fff]">Why this matters</p></div><p className="text-lg font-bold leading-8 text-[#31445f]">{content.whyItMatters}</p></section>}
+
+                <section id="route" className="scroll-mt-24 overflow-hidden rounded-3xl border border-[#cbd8e7] bg-white shadow-sm">
+                    <div className="border-b border-[#dce5f0] px-6 py-6 sm:px-8"><div className="flex items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b5fff]">Your build route</p><h2 className="mt-2 text-3xl font-black tracking-[-0.03em]">One step at a time</h2></div><span className="rounded-lg bg-[#eef4ff] px-3 py-2 text-xs font-black text-[#0b5fff]">{content.steps.length} checkpoints</span></div></div>
+                    <ol className="relative grid gap-0 p-4 sm:p-6 md:grid-cols-2">
+                        {content.steps.map((step, index) => <li key={step.id} className="relative m-2 min-h-40 overflow-hidden rounded-2xl border border-[#dce5f0] bg-[#f8fafc] p-5"><div className="absolute right-3 top-1 text-6xl font-black text-[#dce5f0]/70">{String(index + 1).padStart(2, '0')}</div><h3 className="relative mt-1 pr-12 text-lg font-black">{step.title}</h3>{step.description && <p className="relative mt-3 text-sm font-semibold leading-6 text-[#60728a]">{step.description}</p>}{step.resourceCount > 0 && <p className="relative mt-3 inline-flex items-center gap-1 text-xs font-black text-[#0b5fff]"><BookOpen size={14} /> {step.resourceCount} resource{step.resourceCount === 1 ? '' : 's'}</p>}</li>)}
+                    </ol>
+                </section>
+
+                <section id="submit" className="scroll-mt-24 rounded-3xl border border-[#b9e5d6] bg-[#effaf6] p-6 sm:p-8">
+                    <div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#00a676] text-white"><ClipboardCheck size={24} /></span><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#007f5b]">Finish line</p><h2 className="mt-1 text-2xl font-black">Show what you made</h2><p className="mt-2 text-sm font-semibold leading-6 text-[#49675e]">Upload clear proof for every required item. Your instructor will review it and leave feedback.</p></div></div>
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">{(content.deliverables.length ? content.deliverables : [{ id: 'proof', title: 'A finished project with clear build evidence', evidenceType: 'any' as const }]).map(item => <div key={item.id} className="flex gap-3 rounded-2xl border border-[#c8eadf] bg-white p-4"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#d8f4e9] text-[#007f5b]"><Check size={15} strokeWidth={3} /></span><div><p className="text-sm font-black">{item.title}</p>{item.description && <p className="mt-1 text-sm leading-5 text-[#60728a]">{item.description}</p>}<p className="mt-2 text-[10px] font-black uppercase tracking-wider text-[#007f5b]">Proof: {evidenceLabel[item.evidenceType || 'any']}</p></div></div>)}</div>
+                </section>
+
+                {resources.length > 0 && <section id="resources" className="scroll-mt-24 rounded-3xl border border-[#dce5f0] bg-white p-6 shadow-sm sm:p-8"><p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b5fff]">Mission resources</p><h2 className="mt-2 text-2xl font-black">Open these before you build</h2><div className="mt-6 grid gap-3 sm:grid-cols-2">{resources.map(resource => { const Icon = resourceIcon(resource); return <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer" className="group flex min-h-20 items-center gap-3 rounded-2xl border border-[#dce5f0] p-4 transition hover:-translate-y-0.5 hover:border-[#8db9ff] hover:shadow-md"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#eef4ff] text-[#0b5fff]"><Icon size={20} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black">{resource.title}</span><span className="mt-1 block text-xs font-bold capitalize text-[#60728a]">{resource.type}</span></span><ExternalLink size={16} className="text-[#8ca0b8] transition group-hover:text-[#0b5fff]" /></a>; })}</div></section>}
+
+                {outcomes.length > 0 && <section className="rounded-3xl border border-[#dce5f0] bg-white p-6 shadow-sm sm:p-8"><p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b5fff]">Skills you will practice</p><div className="mt-5 grid gap-3 sm:grid-cols-2">{outcomes.map(outcome => <div key={outcome.id} className="border-l-4 border-[#0b5fff] bg-[#f8fafc] px-4 py-3"><p className="font-black">{outcome.title}</p><p className="mt-1 text-sm leading-5 text-[#60728a]">{outcome.desc}</p></div>)}</div></section>}
+            </div>
+
+            <aside className="space-y-4 lg:sticky lg:top-24">
+                <section className="rounded-3xl border border-[#dce5f0] bg-white p-6 shadow-sm">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#0b5fff]">Ready check</p><h2 className="mt-2 text-xl font-black">Before you begin</h2>
+                    <div className="mt-5 space-y-5">
+                        <div><p className="text-[10px] font-black uppercase tracking-wider text-[#60728a]">Bring to the bench</p>{content.materials.length ? <ul className="mt-2 space-y-2">{content.materials.map(item => <li key={item} className="flex gap-2 text-sm font-bold"><Check size={15} className="mt-0.5 shrink-0 text-[#00a676]" />{item}</li>)}</ul> : <p className="mt-2 text-sm font-semibold text-[#60728a]">Your instructor will confirm the materials.</p>}</div>
+                        {content.prerequisites.length > 0 && <div className="border-t border-[#e7edf4] pt-4"><p className="text-[10px] font-black uppercase tracking-wider text-[#60728a]">Do first</p><ul className="mt-2 space-y-2">{content.prerequisites.map(item => <li key={item} className="flex gap-2 text-sm font-bold"><span className="text-[#0b5fff]">→</span>{item}</li>)}</ul></div>}
+                        {content.safetyNotes.length > 0 && <div className="rounded-2xl border border-[#ffe29a] bg-[#fff8e6] p-4"><p className="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider text-[#916600]"><ShieldCheck size={15} /> Safety check</p><ul className="mt-2 space-y-2">{content.safetyNotes.map(item => <li key={item} className="text-sm font-bold text-[#624b0d]">{item}</li>)}</ul></div>}
+                    </div>
+                    {onLaunch && <button type="button" onClick={onLaunch} className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#ffb703] px-5 text-center font-black text-[#2c2100] shadow-[0_4px_0_#d99b00] transition hover:-translate-y-0.5 hover:bg-[#ffc52c]"><PlayCircle size={20} /> {actionLabel}</button>}
+                </section>
+            </aside>
+        </div>
+        {onLaunch && <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#dce5f0] bg-white p-3 sm:hidden"><button type="button" onClick={onLaunch} className="inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#ffb703] px-4 font-black text-[#2c2100] shadow-[0_3px_0_#d99b00]"><PlayCircle size={19} /> {actionLabel}</button></div>}
+    </main>;
+};
+
+export const ProjectDetailsEnhanced: React.FC<ProjectDetailsEnhancedProps> = ({
+    project, workflow, role = 'student', onLaunch, onBack, onEdit,
+}) => {
+    const content = resolveMissionContent(project, workflow);
+    const isInstructor = role === 'instructor';
+    const isStudent = role === 'student';
+    const template = project as ProjectTemplate;
+    const readiness = getMissionReadiness(template);
+    const resources = project.resources || [];
+    const isExistingProject = 'templateId' in project;
+    const learnerActionLabel = isExistingProject ? 'Continue project' : 'Start this mission';
+    const audience = template.targetAudience;
+    const audienceCount = (audience?.programs?.length || 0) + (audience?.grades?.length || 0)
+        + (audience?.groups?.length || 0) + (audience?.students?.length || 0);
+    const coverImage = project.thumbnailUrl || ('coverImage' in project ? project.coverImage : '');
+
+    if (isStudent) {
+        return <StudentMissionDetailsV2 project={project} workflow={workflow} onLaunch={onLaunch} onBack={onBack} />;
+    }
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans text-slate-600 pb-20 overflow-x-hidden">
-
-            {/* 1. HEADER CONTROLS */}
-            <div className="fixed top-0 inset-x-0 z-50 bg-slate-900/90 backdrop-blur-md text-white px-4 py-3 shadow-lg flex justify-between items-center border-b border-slate-700">
-                <div className="flex items-center gap-3">
-                    {onBack && (
-                        <button onClick={onBack} className="p-1 hover:bg-slate-700 rounded-lg transition-colors">
-                            <ChevronRight className="rotate-180" />
-                        </button>
-                    )}
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold shrink-0">SP</div>
-                    <div className="hidden sm:block">
-                        <span className="font-bold text-white block leading-none">{p.title}</span>
-                        <span className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">{role} VIEW</span>
+        <main className="min-h-screen bg-[#f3f6f9] text-slate-950">
+            <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+                <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+                    <div className="flex min-w-0 items-center gap-3">
+                        {onBack && <button type="button" onClick={onBack} className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50" aria-label="Back to missions"><ArrowLeft size={19} /></button>}
+                        <div className="min-w-0"><p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Mission dossier</p><p className="truncate text-sm font-extrabold text-slate-700">{project.title}</p></div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {isInstructor && onEdit && <button type="button" onClick={onEdit} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-800 hover:border-blue-300 hover:text-blue-700"><Wrench size={17} /> Edit mission</button>}
+                        {isStudent && onLaunch && <button type="button" onClick={onLaunch} className="hidden min-h-11 items-center gap-2 rounded-xl bg-amber-400 px-5 text-sm font-black text-amber-950 shadow-sm hover:bg-amber-300 sm:inline-flex">{learnerActionLabel} <ArrowRight size={17} /></button>}
                     </div>
                 </div>
-                {(initialRole !== 'student') && (
-                    <div className="flex bg-slate-800 rounded-xl p-1 border border-slate-700 overflow-x-auto max-w-[200px] sm:max-w-none mr-2">
-                        {['parent', 'instructor', 'student'].map((r) => (
-                            <button
-                                key={r}
-                                onClick={() => setRole(r as any)}
-                                className={`px-3 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all capitalize whitespace-nowrap ${role === r ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-700'
-                                    }`}
-                            >
-                                {r}
-                            </button>
-                        ))}
-                    </div>
-                )}
-                {onEdit && (
-                    <button
-                        onClick={onEdit}
-                        className="p-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow-lg shadow-indigo-500/20 transition-all ml-2"
-                        title="Edit Project"
-                    >
-                        <Wrench size={20} />
-                    </button>
-                )}
-            </div>
+            </header>
 
-            {/* 2. HERO SECTION */}
-            <div className="pt-24 sm:pt-28 pb-12 sm:pb-16 px-4 sm:px-6 relative overflow-hidden">
-                {/* Background Gradients */}
-                <div className="absolute inset-x-0 top-0 h-[400px] sm:h-[500px] bg-gradient-to-b from-indigo-50 via-purple-50 to-slate-50"></div>
-                <div className="absolute top-20 right-0 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-amber-200/20 rounded-full blur-[60px] sm:blur-[100px] pointer-events-none"></div>
-                <div className="absolute top-40 left-0 w-[200px] sm:w-[300px] h-[200px] sm:h-[300px] bg-blue-200/20 rounded-full blur-[50px] sm:blur-[80px] pointer-events-none"></div>
-
-                <div className="max-w-6xl mx-auto flex flex-col-reverse lg:grid lg:grid-cols-[1.2fr_0.8fr] gap-8 lg:gap-12 items-center relative z-10">
-
-                    <div className="space-y-6 sm:space-y-8 w-full text-center lg:text-left">
-                        <div className="flex flex-wrap justify-center lg:justify-start gap-3 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                            <Badge className="bg-indigo-600 text-white shadow-indigo-200">
-                                <Zap size={14} className="inline mr-1" /> {p.station}
-                            </Badge>
-                            <Badge className="bg-amber-500 text-white shadow-amber-200">
-                                <Star size={14} className="inline mr-1" /> {p.difficulty || 'Intermediate'}
-                            </Badge>
-                        </div>
-
-                        <div className="animate-in fade-in slide-in-from-bottom-6 duration-700 delay-100">
-                            <h1 className="text-3xl sm:text-5xl md:text-7xl font-black text-slate-900 tracking-tight leading-[1.1] mb-3 sm:mb-6">
-                                {p.title}
-                            </h1>
-                            <p className="text-lg sm:text-2xl md:text-3xl text-slate-500 font-medium leading-relaxed max-w-2xl mx-auto lg:mx-0 text-balance">
-                                {p.hook || p.description}
-                            </p>
-                        </div>
-
-                        <div className="flex flex-wrap justify-center lg:justify-start gap-4 sm:gap-8 pt-2 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
-                            <div className="flex items-center gap-3 text-slate-600 font-bold bg-white px-4 py-2 sm:px-5 sm:py-3 rounded-2xl shadow-sm border border-slate-100 text-sm sm:text-base">
-                                <Clock size={20} className="text-indigo-500" />
-                                <div className="text-left">
-                                    <span className="block text-[10px] text-slate-400 uppercase">Duration</span>
-                                    {p.duration || '4 Sessions'}
-                                </div>
+            <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
+                <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 text-white shadow-sm">
+                    <div className="grid lg:grid-cols-[1.25fr_0.75fr]">
+                        <div className="p-6 sm:p-9 lg:p-12">
+                            <div className="flex flex-wrap gap-2">
+                                <span className="rounded-full border border-blue-400/30 bg-blue-400/10 px-3 py-1 text-xs font-extrabold text-blue-200">{project.station || 'MakerLab'}</span>
+                                {'difficulty' in project && project.difficulty && <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-extrabold capitalize text-slate-200">{project.difficulty}</span>}
+                                {project.duration && <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-extrabold text-slate-200"><Clock3 size={13} /> {project.duration}</span>}
                             </div>
-                            <div className="flex items-center gap-3 text-slate-600 font-bold bg-white px-4 py-2 sm:px-5 sm:py-3 rounded-2xl shadow-sm border border-slate-100 text-sm sm:text-base">
-                                <Users size={20} className="text-purple-500" />
-                                <div className="text-left">
-                                    <span className="block text-[10px] text-slate-400 uppercase">Grade Level</span>
-                                    Ages 10-14
-                                </div>
-                            </div>
+                            <p className="mt-7 text-xs font-black uppercase tracking-[0.22em] text-amber-300">Your challenge</p>
+                            <h1 className="mt-3 max-w-4xl text-3xl font-black leading-tight tracking-tight sm:text-5xl lg:text-6xl">{project.title}</h1>
+                            <p className="mt-5 max-w-3xl text-base font-medium leading-7 text-slate-300 sm:text-lg">{content.goal}</p>
+                            {content.whyItMatters && <p className="mt-4 max-w-3xl border-l-2 border-amber-400 pl-4 text-sm leading-6 text-slate-400"><strong className="text-white">Why it matters:</strong> {content.whyItMatters}</p>}
+                        </div>
+                        <div className="relative min-h-64 border-t border-white/10 bg-[#14233a] lg:border-l lg:border-t-0">
+                            {coverImage ? <img src={coverImage} alt="" className="absolute inset-0 h-full w-full object-cover opacity-65" /> : <div className="absolute inset-0 bg-[linear-gradient(rgba(96,165,250,.09)_1px,transparent_1px),linear-gradient(90deg,rgba(96,165,250,.09)_1px,transparent_1px)] bg-[size:28px_28px]" />}
+                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/35 to-transparent" />
+                            <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8"><p className="text-xs font-black uppercase tracking-[0.18em] text-amber-300">Final outcome</p><p className="mt-2 text-xl font-black leading-snug text-white">{content.finalOutcome}</p></div>
                         </div>
                     </div>
+                </section>
 
-                    {/* Visual Element */}
-                    <div className="relative animate-in fade-in zoom-in duration-1000 w-full max-w-md lg:max-w-none">
-                        <div className="absolute inset-0 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-[2rem] sm:rounded-[3rem] rotate-6 opacity-20 blur-2xl"></div>
-                        <div className="relative aspect-[4/3] rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden shadow-2xl border-4 sm:border-8 border-white group">
-                            <img
-                                src={p.thumbnailUrl || p.coverImage || "https://images.unsplash.com/photo-1534078872842-88544d9f6524?auto=format&fit=crop&q=80&w=1000"}
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-6 sm:p-8">
-                                <div className="text-white text-left">
-                                    <p className="font-black text-lg sm:text-xl mb-1 flex items-center gap-2"><Brain className="text-amber-400" /> Key Outcome</p>
-                                    <p className="opacity-90 text-sm sm:text-base">{p.learningOutcomes?.[0]?.title || 'Mastery of Skills'}</p>
-                                </div>
-                            </div>
-                        </div>
+                <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                    <div className="space-y-6">
+                        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8" aria-labelledby="build-map-title">
+                            <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Build map</p><h2 id="build-map-title" className="mt-2 text-2xl font-black tracking-tight">How you will complete the mission</h2></div><span className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-600">{content.steps.length} steps</span></div>
+                            <ol className="mt-7 space-y-1">
+                                {content.steps.map((step, index) => <li key={step.id} className="grid grid-cols-[44px_1fr] gap-4"><div className="flex flex-col items-center"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-700 text-sm font-black text-white">{index + 1}</span>{index < content.steps.length - 1 && <span className="my-1 min-h-10 w-px flex-1 bg-slate-200" />}</div><div className="pb-6 pt-1"><h3 className="font-black text-slate-950">{step.title}</h3>{step.description && <p className="mt-1 text-sm leading-6 text-slate-500">{step.description}</p>}{step.resourceCount > 0 && <span className="mt-3 inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-extrabold text-blue-700"><BookOpen size={13} /> {step.resourceCount} step resource{step.resourceCount === 1 ? '' : 's'}</span>}</div></li>)}
+                            </ol>
+                        </section>
 
-                        {/* Floating Tech Stack */}
-                        {p.technologies && (
-                            <div className="absolute -bottom-6 sm:-bottom-8 -left-2 sm:-left-8 -right-2 sm:right-8 bg-white/95 backdrop-blur-xl p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-xl border border-white/50 flex justify-between items-center gap-2 sm:gap-4 overflow-x-auto">
-                                {p.technologies.slice(0, 3).map((tech: any) => {
-                                    const Icon = getIcon(tech.icon);
-                                    return (
-                                        <div key={tech.name} className="flex flex-col items-center min-w-[60px]">
-                                            <Icon size={20} className={tech.color || 'text-slate-600'} />
-                                            <span className="text-[9px] sm:text-[10px] font-bold uppercase mt-1 text-slate-600 text-center">{tech.name}</span>
-                                        </div>
-                                    );
-                                })}
-                                <div className="h-8 w-px bg-slate-200 shrink-0"></div>
-                                <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-tight text-center shrink-0">
-                                    Industry<br />Standard
-                                </div>
+                        <section className="grid gap-6 md:grid-cols-2">
+                            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                                <div className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><ClipboardCheck size={21} /></div><h2 className="mt-4 text-xl font-black">What to submit</h2>
+                                {content.deliverables.length ? <ul className="mt-5 space-y-4">{content.deliverables.map(item => <li key={item.id} className="flex gap-3"><span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-700"><Check size={14} strokeWidth={3} /></span><div><p className="text-sm font-extrabold text-slate-900">{item.title}</p>{item.description && <p className="mt-1 text-sm leading-5 text-slate-500">{item.description}</p>}<p className="mt-1 text-xs font-bold text-emerald-700">{evidenceLabel[item.evidenceType || 'any']}</p></div></li>)}</ul> : <p className="mt-4 text-sm leading-6 text-slate-500">Complete every build step, add proof of your work, and submit the finished project for review.</p>}
                             </div>
-                        )}
+                            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                                <div className="grid h-11 w-11 place-items-center rounded-xl bg-amber-50 text-amber-700"><Wrench size={21} /></div><h2 className="mt-4 text-xl font-black">Prepare your workspace</h2>
+                                {content.materials.length ? <ul className="mt-5 grid gap-2">{content.materials.map(item => <li key={item} className="flex gap-2 text-sm font-semibold text-slate-700"><span className="text-amber-600">•</span>{item}</li>)}</ul> : <p className="mt-4 text-sm leading-6 text-slate-500">Your instructor will confirm the tools and materials for this mission.</p>}
+                                {content.safetyNotes.length > 0 && <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-amber-800"><ShieldCheck size={15} /> Safety first</p><ul className="mt-2 space-y-1 text-sm text-amber-950">{content.safetyNotes.map(note => <li key={note}>{note}</li>)}</ul></div>}
+                            </div>
+                        </section>
+
+                        {resources.length > 0 && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"><p className="text-xs font-black uppercase tracking-[0.18em] text-blue-700">Mission resources</p><h2 className="mt-2 text-2xl font-black">Read, watch, and download</h2><div className="mt-6 grid gap-3 sm:grid-cols-2">{resources.map(resource => { const Icon = resourceIcon(resource); return <a key={resource.id} href={resource.url} target="_blank" rel="noreferrer" className="flex min-h-16 items-center gap-3 rounded-2xl border border-slate-200 p-4 text-left hover:border-blue-300 hover:bg-blue-50/50"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700"><Icon size={19} /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-extrabold text-slate-900">{resource.title}</span><span className="text-xs font-bold capitalize text-slate-500">{resource.type}</span></span><ExternalLink size={16} className="text-slate-400" /></a>; })}</div></section>}
                     </div>
+
+                    <aside className="space-y-4 lg:sticky lg:top-24">
+                        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Mission board</p>
+                            <dl className="mt-5 space-y-4"><div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-sm font-bold text-slate-500"><Flag size={16} /> Station</dt><dd className="text-right text-sm font-black">{project.station || 'General'}</dd></div><div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-sm font-bold text-slate-500"><Target size={16} /> Skills</dt><dd className="text-right text-sm font-black">{project.skills?.length || 0}</dd></div><div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-sm font-bold text-slate-500"><BookOpen size={16} /> Resources</dt><dd className="text-right text-sm font-black">{resources.length}</dd></div>{isInstructor && <div className="flex items-center justify-between gap-4"><dt className="flex items-center gap-2 text-sm font-bold text-slate-500"><Users size={16} /> Targets</dt><dd className="text-right text-sm font-black">{audienceCount}</dd></div>}</dl>
+                            {isInstructor ? <div className="mt-6 border-t border-slate-200 pt-5"><div className="flex items-center justify-between"><p className="text-sm font-black">Publish readiness</p><p className="text-sm font-black text-blue-700">{readiness.completed}/{readiness.total}</p></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-700" style={{ width: `${(readiness.completed / readiness.total) * 100}%` }} /></div><ul className="mt-4 space-y-2">{readiness.checks.map(check => <li key={check.id} className={`flex items-center gap-2 text-xs font-bold ${check.complete ? 'text-emerald-700' : 'text-slate-400'}`}><span className={`grid h-5 w-5 place-items-center rounded-full ${check.complete ? 'bg-emerald-100' : 'bg-slate-100'}`}>{check.complete && <Check size={12} strokeWidth={3} />}</span>{check.label}</li>)}</ul></div> : isStudent ? <button type="button" onClick={onLaunch} disabled={!onLaunch} className="mt-6 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 font-black text-amber-950 shadow-sm hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"><PlayCircle size={19} /> {onLaunch ? learnerActionLabel : 'Mission in progress'}</button> : null}
+                        </div>
+                        {content.prerequisites.length > 0 && <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h3 className="text-sm font-black">Before you start</h3><ul className="mt-3 space-y-2">{content.prerequisites.map(item => <li key={item} className="flex gap-2 text-sm leading-5 text-slate-600"><Check size={15} className="mt-0.5 shrink-0 text-blue-700" />{item}</li>)}</ul></div>}
+                    </aside>
                 </div>
             </div>
-
-            {/* 3. CONTENT AREA */}
-            <div className="max-w-6xl mx-auto px-6 py-12">
-                <AnimatePresence mode='wait'>
-
-                    {/* === PARENT VIEW === */}
-                    {role === 'parent' && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                            key="parent" className="grid lg:grid-cols-2 gap-10"
-                        >
-                            <div className="space-y-10">
-                                {/* Why it Matters */}
-                                {p.realWorldApp && (
-                                    <SectionCard
-                                        title="Real World Application"
-                                        icon={Globe}
-                                        className="bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-100/50"
-                                        headerColor="text-indigo-900"
-                                    >
-                                        <div className="text-lg text-slate-700 mb-8 leading-relaxed font-medium">
-                                            {p.realWorldApp.title && <h4 className="font-bold text-indigo-800 mb-2">{p.realWorldApp.title}</h4>}
-                                            {p.realWorldApp.description}
-                                        </div>
-
-                                        {p.realWorldApp.companies?.length > 0 && (
-                                            <div>
-                                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Technology Used By</h4>
-                                                <div className="flex flex-wrap gap-3">
-                                                    {p.realWorldApp.companies.map((c: any) => (
-                                                        <CompanyLogo key={c.name} name={c.name} color={c.color} />
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </SectionCard>
-                                )}
-
-                                {/* Skills Matrix */}
-                                {p.learningOutcomes && (
-                                    <SectionCard
-                                        title="Skills Unlocked"
-                                        icon={Zap}
-                                        className="bg-white"
-                                    >
-                                        <div className="grid grid-cols-1 gap-4">
-                                            {p.learningOutcomes.map((outcome: any) => (
-                                                <div key={outcome.id || outcome.title} className={`flex items-start gap-4 p-4 rounded-2xl transition-all border border-transparent hover:border-slate-100 hover:shadow-md bg-${outcome.theme || 'blue'}-50`}>
-                                                    <div className={`p-3 bg-white text-${outcome.theme || 'blue'}-500 rounded-xl shadow-sm`}>
-                                                        <CheckCircle size={20} strokeWidth={3} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-slate-900 text-lg">{outcome.title}</h4>
-                                                        <p className="text-slate-500 font-medium">{outcome.desc}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </SectionCard>
-                                )}
-                            </div>
-
-                            <div className="space-y-10">
-                                {/* Tools & Tech */}
-                                {p.technologies && (
-                                    <div>
-                                        <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-2">
-                                            <Wrench className="text-slate-400" /> Tools & Technologies
-                                        </h3>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                            {p.technologies.map((tech: any) => (
-                                                <TechPill key={tech.name} name={tech.name} iconName={tech.icon} color={tech.color} bg={tech.bg} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* === INSTRUCTOR VIEW === */}
-                    {role === 'instructor' && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                            key="instructor" className="space-y-10"
-                        >
-                            {/* Objectives & Prep */}
-                            <div className="grid md:grid-cols-3 gap-8">
-                                <SectionCard title="Learning Objectives" icon={Target} className="md:col-span-2 bg-white">
-                                    <div className="grid sm:grid-cols-2 gap-4">
-                                        {p.learningOutcomes?.map((o: any) => (
-                                            <div key={o.title} className="flex gap-4 p-4 rounded-xl bg-slate-50 border border-slate-100">
-                                                <div className={`w-2 h-full rounded-full bg-${o.theme || 'blue'}-500 shrink-0`}></div>
-                                                <div>
-                                                    <h5 className="font-bold text-slate-900">{o.title}</h5>
-                                                    <p className="text-sm text-slate-500">{o.desc}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </SectionCard>
-
-                                <div className="space-y-6">
-                                    <div className="bg-slate-900 text-white p-6 rounded-3xl text-center">
-                                        <h4 className="font-bold text-lg mb-2">Teaching Guide</h4>
-                                        <p className="text-slate-400 text-sm mb-4">Detailed lesson plans & slides not yet available.</p>
-                                        <button disabled className="w-full py-3 bg-slate-700 rounded-xl font-bold transition-colors opacity-50 cursor-not-allowed">Download PDF</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {/* === STUDENT VIEW === */}
-                    {role === 'student' && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                            key="student" className="space-y-16"
-                        >
-                            <div className="text-center max-w-3xl mx-auto">
-                                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 text-slate-500 font-bold text-sm mb-8 animate-bounce">
-                                    <Rocket size={16} /> Mission Briefing
-                                </div>
-                                <h2 className="text-4xl md:text-5xl font-black text-slate-900 mb-8 leading-tight">
-                                    Your Challenge:<br />
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{p.title}</span>
-                                </h2>
-                                <p className="text-xl md:text-2xl text-slate-500 leading-relaxed font-medium">
-                                    {p.description}
-                                </p>
-                            </div>
-
-                            {/* Challenges GRID */}
-                            <div className="grid md:grid-cols-3 gap-8">
-                                {p.keyChallenges?.map((challenge: any, i: number) => (
-                                    <div key={i} className="group cursor-pointer">
-                                        <div className={`h-full bg-white p-8 rounded-[2.5rem] border-2 border-slate-100 hover:border-transparent hover:ring-4 ring-indigo-100 transition-all shadow-sm hover:shadow-2xl relative overflow-hidden`}>
-                                            <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br ${challenge.color || 'from-indigo-400 to-purple-500'} opacity-10 rounded-bl-full -mr-8 -mt-8 pointer-events-none`}></div>
-
-                                            <div className="text-6xl font-black text-slate-100 mb-6 group-hover:scale-110 origin-left transition-transform duration-500">
-                                                0{i + 1}
-                                            </div>
-                                            <h3 className="text-2xl font-black text-slate-900 mb-3">{challenge.title}</h3>
-                                            <p className="text-slate-500 font-medium text-lg">{challenge.desc}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {/* Launch Button */}
-                            <div className="flex justify-center pt-8">
-                                <button onClick={() => onLaunch && onLaunch()} className="px-12 py-5 bg-amber-400 text-amber-900 rounded-2xl font-black text-xl hover:bg-amber-300 hover:scale-105 transition-all shadow-xl shadow-amber-500/20">
-                                    Launch Mission 🚀
-                                </button>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>
-        </div>
+            {isStudent && onLaunch && <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white p-3 sm:hidden"><button type="button" onClick={onLaunch} className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 font-black text-amber-950">{learnerActionLabel} <ArrowRight size={17} /></button></div>}
+        </main>
     );
-}
+};

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, Timestamp, addDoc } from 'firebase/firestore';
-import { StudentProject, Station } from '../types';
+import { ProcessTemplate, StudentProject, Station } from '../types';
 import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, LayoutGrid, List, Sparkles } from 'lucide-react';
 
 import { AvatarSelector } from './AvatarSelector';
@@ -26,6 +26,8 @@ import { currentAcademicYear, matchesAcademicYear, normalizeAcademicYear, previo
 import { createVerifiedStudentIdentity } from '../domain/studentIdentity';
 import { missionIsVisibleToLearner } from '../domain/missionAssignment';
 import { resolveLinkedStudentRecord } from '../services/studentIdentity';
+
+const ProjectDetailsEnhanced = React.lazy(() => import('./ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 
 interface ProjectSelectorProps {
     studentId: string;
@@ -66,6 +68,8 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
     // State for available templates
     const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+    const [briefingTemplate, setBriefingTemplate] = useState<any | null>(null);
+    const [briefingWorkflow, setBriefingWorkflow] = useState<ProcessTemplate | undefined>();
 
     // Student Profile Data (for Group/Grade visibility fallback)
     const [studentProfileData, setStudentProfileData] = useState<any>(null);
@@ -601,6 +605,19 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
         setStartMissionAlert({ isOpen: true, template });
     };
 
+    const openMissionBrief = async (template: any) => {
+        if (template.isLocked) return;
+        setBriefingTemplate(template);
+        setBriefingWorkflow(undefined);
+        if (!db || !template.defaultWorkflowId) return;
+        try {
+            const workflowSnap = await getDoc(doc(db, 'process_templates', template.defaultWorkflowId));
+            if (workflowSnap.exists()) setBriefingWorkflow({ id: workflowSnap.id, ...workflowSnap.data() } as ProcessTemplate);
+        } catch (error) {
+            console.warn('[ProjectSelector] Mission workflow preview unavailable:', error);
+        }
+    };
+
     const handleDeleteProject = async (projectId: string, projectTitle: string) => {
         if (!confirm(`Are you sure you want to delete "${projectTitle}"? This cannot be undone.`)) return;
 
@@ -644,12 +661,17 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 templateId: template.id,
                 title: name.trim(),
                 description: template.description || '',
+                missionBrief: template.missionBrief || {},
+                hook: template.hook || '',
+                duration: template.duration || '',
                 thumbnailUrl: template.thumbnailUrl || '',
                 station: template.station || 'General',
                 difficulty: template.difficulty || 'beginner',
                 status: 'planning',
                 workflowId: template.id === 'showcase-template' ? 'showcase' : (template.id === 'free-build-template' ? 'custom-workflow' : (template.defaultWorkflowId || '')),
                 steps: [],
+                resources: template.resources || [],
+                stepResources: template.stepResources || {},
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
@@ -720,12 +742,17 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 templateId: template.id,
                 title: projectTitle,
                 description: template.description || '',
+                missionBrief: template.missionBrief || {},
+                hook: template.hook || '',
+                duration: template.duration || '',
                 thumbnailUrl: template.thumbnailUrl || '',
                 station: template.station || 'General',
                 difficulty: template.difficulty || 'beginner',
                 status: 'planning',
                 workflowId: template.id === 'showcase-template' ? 'showcase' : (template.id === 'free-build-template' ? 'custom-workflow' : (template.defaultWorkflowId || '')), // CRITICAL: Save workflow ID
                 steps: initialSteps,
+                resources: template.resources || [],
+                stepResources: template.stepResources || {},
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
@@ -762,6 +789,10 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 </section>
             </main>
         );
+    }
+
+    if (briefingTemplate) {
+        return <React.Suspense fallback={<div className="grid min-h-screen place-items-center bg-slate-950 text-sm font-black text-white">Opening mission brief…</div>}><ProjectDetailsEnhanced project={briefingTemplate} workflow={briefingWorkflow} role="student" onBack={() => setBriefingTemplate(null)} onLaunch={() => { const template = briefingTemplate; setBriefingTemplate(null); handleStartMissionClick(template); }} /></React.Suspense>;
     }
 
     // Remove blocking "No Missions" screen - always show full dashboard with navigation
@@ -973,7 +1004,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                 return (
                                     <button
                                         key={template.id}
-                                        onClick={() => handleStartMissionClick(template)}
+                                        onClick={() => void openMissionBrief(template)}
                                         disabled={isLocked}
                                         className={`snap-start flex-none w-[280px] lg:w-[340px] aspect-[4/3] group relative rounded-[2rem] overflow-hidden border transition-all duration-300 text-left
                                         ${isLocked
@@ -1014,7 +1045,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                         <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
                                             {/* Info Button */}
                                             <div
-                                                onClick={(e) => { e.stopPropagation(); onPreviewProject?.(template.id); }}
+                                                onClick={(e) => { e.stopPropagation(); void openMissionBrief(template); }}
                                                 className="p-2 bg-slate-900/50 hover:bg-slate-900 text-white rounded-full border border-white/10 backdrop-blur-sm transition-all shadow-lg hover:scale-110"
                                             >
                                                 <Search size={16} />

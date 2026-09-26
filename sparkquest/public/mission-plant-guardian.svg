@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">Smart plant guardian prototype</title>
+  <desc id="desc">A plant, moisture sensor, microcontroller and alert light connected as a working prototype.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#132847"/>
+      <stop offset="1" stop-color="#24446a"/>
+    </linearGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#37c99a"/>
+      <stop offset="1" stop-color="#087f61"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#9fc0e8" stroke-opacity=".12"/>
+    </pattern>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#071525" flood-opacity=".35"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <rect width="1200" height="800" fill="url(#grid)"/>
+  <circle cx="1040" cy="90" r="190" fill="#7756e8" opacity=".18"/>
+  <circle cx="120" cy="720" r="240" fill="#0ea77e" opacity=".14"/>
+  <g filter="url(#shadow)">
+    <rect x="130" y="560" width="940" height="40" rx="20" fill="#eef4ff" opacity=".92"/>
+    <path d="M385 566h270l-38 152H423z" fill="#ef7b2d"/>
+    <path d="M405 565h230l-16 55H421z" fill="#713d20"/>
+    <path d="M512 560c-8-122-72-187-165-233 83-17 155 17 196 88 3-111 57-204 151-258 7 128-42 229-139 302 75-50 166-52 246-5-74 95-163 126-269 97l-6 9z" fill="url(#leaf)"/>
+    <path d="M525 558c2-141 25-260 79-354" fill="none" stroke="#8be4bd" stroke-width="15" stroke-linecap="round" opacity=".7"/>
+    <rect x="720" y="360" width="250" height="170" rx="26" fill="#eef4ff"/>
+    <rect x="748" y="392" width="126" height="82" rx="14" fill="#315efb"/>
+    <circle cx="779" cy="432" r="9" fill="#9db8ff"/>
+    <circle cx="811" cy="432" r="9" fill="#f4b942"/>
+    <circle cx="843" cy="432" r="9" fill="#37c99a"/>
+    <path d="M895 402h45M895 430h45M895 458h45M770 495h166" fill="none" stroke="#7285a0" stroke-width="11" stroke-linecap="round"/>
+    <path d="M743 520c-88 33-111 75-184 80" fill="none" stroke="#f4b942" stroke-width="12" stroke-linecap="round"/>
+    <path d="M743 492c-103 5-148-4-210 45" fill="none" stroke="#ed6a5a" stroke-width="12" stroke-linecap="round"/>
+    <path d="M335 590v-148" stroke="#b9c9dc" stroke-width="18" stroke-linecap="round"/>
+    <path d="M308 444h54l-8 116h-38z" fill="#a9bdd3"/>
+    <path d="M321 475h28M319 503h32M317 531h36" stroke="#315efb" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="946" cy="286" r="58" fill="#f4b942"/>
+    <circle cx="946" cy="286" r="28" fill="#fff1bd"/>
+    <path d="M946 214v-28M1008 240l22-18M884 240l-22-18M1018 301l29 7M874 301l-29 7" stroke="#f8d46f" stroke-width="12" stroke-linecap="round"/>
+  </g>
+  <g fill="none" stroke="#b7cae3" stroke-width="3" stroke-dasharray="9 12" opacity=".55">
+    <path d="M100 142h250"/>
+    <path d="M850 665h250"/>
+  </g>
+</svg>

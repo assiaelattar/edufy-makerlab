@@ -5,6 +5,7 @@ import { ProjectTemplate, StationType } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { getMissionReadiness, normalizeMissionBrief } from '../../domain/missionContent';
 
 interface ProjectEditorProps {
     templateId?: string | null;
@@ -13,6 +14,13 @@ interface ProjectEditorProps {
 }
 
 const TABS = ['details', 'resources', 'workflow', 'targeting', 'publishing'];
+const TAB_LABELS: Record<string, string> = {
+    details: 'Mission brief',
+    resources: 'Resources',
+    workflow: 'Build map',
+    targeting: 'Audience',
+    publishing: 'Review & publish',
+};
 
 export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initialViewProject, onClose }) => {
     const { projectTemplates, stations, processTemplates, availableGrades, availableGroups, programs, enrollments, students, actions } = useFactoryData();
@@ -30,7 +38,10 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         status: 'draft' as const,
         targetAudience: { grades: [], groups: [] },
         defaultWorkflowId: '',
-        stepResources: {} as Record<string, any[]>
+        stepResources: {} as Record<string, any[]>,
+        missionBrief: {
+            goal: '', whyItMatters: '', finalOutcome: '', materials: [], prerequisites: [], safetyNotes: [], deliverables: []
+        }
     };
 
     // Prioritize passed project data, then lookup, then defaults
@@ -49,6 +60,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
     const [activeTab, setActiveTab] = useState('details');
     const [isSaving, setIsSaving] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const readiness = getMissionReadiness(form);
 
     // Upload State
     const [isUploading, setIsUploading] = useState(false);
@@ -187,20 +199,30 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             return;
         }
         const audience = form.targetAudience || {};
-        const hasAudience = Boolean(audience.grades?.length || audience.groups?.length || audience.students?.length);
+        const hasAudience = Boolean(audience.programs?.length || audience.grades?.length || audience.groups?.length || audience.students?.length);
         if (form.status !== 'draft' && !hasAudience) {
             setActiveTab('targeting');
             setSaveError('Choose a grade, group, or specific students before publishing this mission.');
             return;
+        }
+        const normalizedBrief = normalizeMissionBrief(form);
+        if (form.status !== 'draft') {
+            const missing = getMissionReadiness({ ...form, missionBrief: normalizedBrief }).checks.filter(check => !check.complete);
+            if (missing.length) {
+                const first = missing[0];
+                setActiveTab(first.id === 'audience' ? 'targeting' : first.id === 'workflow' ? 'workflow' : 'details');
+                setSaveError(`Complete ${missing.map(item => item.label.toLowerCase()).join(', ')} before publishing.`);
+                return;
+            }
         }
 
         setIsSaving(true);
         setSaveError(null);
         try {
             if (templateId) {
-                await actions.updateProjectTemplate(templateId, { ...form, title });
+                await actions.updateProjectTemplate(templateId, { ...form, title, missionBrief: normalizedBrief });
             } else {
-                await actions.addProjectTemplate({ ...form, title } as any);
+                await actions.addProjectTemplate({ ...form, title, missionBrief: normalizedBrief } as any);
             }
             onClose();
         } catch (e: any) {
@@ -250,7 +272,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                         <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
                             {templateId ? 'Edit mission' : 'New mission'}
                         </h2>
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{activeTab}</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Step {TABS.indexOf(activeTab) + 1} of {TABS.length} · {TAB_LABELS[activeTab]}</p>
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -285,7 +307,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                             : 'border-transparent text-slate-400 hover:text-slate-600'
                             }`}
                     >
-                        {tab}
+                        <span className="mr-2 text-[10px] opacity-60">{TABS.indexOf(tab) + 1}</span>{TAB_LABELS[tab]}
                     </button>
                 ))}
             </div>
@@ -462,13 +484,50 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                             </div>
 
                             <div className="col-span-2">
-                                <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Mission Briefing</label>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Short mission summary <span className="text-red-500">*</span></label>
                                 <textarea
                                     className="w-full p-4 bg-white border-2 border-slate-200 rounded-xl font-medium text-slate-600 outline-none focus:border-indigo-500 h-40 resize-none"
-                                    placeholder="Describe the mission objectives..."
+                                    placeholder="In two or three sentences, explain the challenge in language a student will understand."
                                     value={form.description}
                                     onChange={e => setForm({ ...form, description: e.target.value })}
                                 />
+                            </div>
+
+                            <div className="col-span-2 rounded-3xl border border-blue-200 bg-blue-50/60 p-6">
+                                <div className="mb-6 flex items-start justify-between gap-4">
+                                    <div><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Learner contract</p><h3 className="mt-1 text-xl font-black text-slate-950">Make the mission unambiguous</h3><p className="mt-1 text-sm leading-6 text-slate-600">These fields appear unchanged in the instructor preview and student briefing.</p></div>
+                                    <span className="rounded-xl bg-white px-3 py-2 text-xs font-black text-blue-700">{readiness.completed}/{readiness.total} ready</span>
+                                </div>
+                                <div className="grid gap-5 md:grid-cols-2">
+                                    <div className="md:col-span-2">
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Mission goal</label>
+                                        <textarea className="min-h-24 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder="What should the learner achieve?" value={form.missionBrief?.goal || ''} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, goal: e.target.value } })} />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Why it matters</label>
+                                        <textarea className="min-h-28 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder="Connect the challenge to a real-world need." value={form.missionBrief?.whyItMatters || ''} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, whyItMatters: e.target.value } })} />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Final outcome</label>
+                                        <textarea className="min-h-28 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder="What finished result should exist?" value={form.missionBrief?.finalOutcome || ''} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, finalOutcome: e.target.value } })} />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Deliverables · one per line</label>
+                                        <textarea className="min-h-32 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder={'Working prototype\nBuild photos\nShort reflection'} value={(form.missionBrief?.deliverables || []).map(item => item.title).join('\n')} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, deliverables: e.target.value.split('\n').map((title, index) => ({ id: `deliverable-${index + 1}`, title, required: true, evidenceType: 'any' })) } })} />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Tools & materials · one per line</label>
+                                        <textarea className="min-h-32 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder={'Cardboard\nMicrocontroller\nSafety glasses'} value={(form.missionBrief?.materials || []).join('\n')} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, materials: e.target.value.split('\n') } })} />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Before students start · one per line</label>
+                                        <textarea className="min-h-28 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder={'Watch the introduction video\nComplete the circuit basics lesson'} value={(form.missionBrief?.prerequisites || []).join('\n')} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, prerequisites: e.target.value.split('\n') } })} />
+                                    </div>
+                                    <div>
+                                        <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">Safety & constraints · one per line</label>
+                                        <textarea className="min-h-28 w-full rounded-xl border-2 border-blue-100 bg-white p-4 font-medium text-slate-700 outline-none focus:border-blue-500" placeholder={'Ask an instructor before using powered tools\nKeep liquids away from electronics'} value={(form.missionBrief?.safetyNotes || []).join('\n')} onChange={e => setForm({ ...form, missionBrief: { ...form.missionBrief, safetyNotes: e.target.value.split('\n') } })} />
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="col-span-2">
@@ -859,10 +918,33 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                 )}
                 {activeTab === 'targeting' && (
                     <div className="space-y-8 animate-in slide-in-from-right-8 duration-300">
-                        <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-4">Target Grades</label>
+                        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <label className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-500">1 · Programs</label>
+                            <p className="mb-4 text-sm text-slate-500">Choose the program first so grades, groups, and learners remain in the same enrollment context.</p>
                             <div className="flex flex-wrap gap-3">
-                                {availableGrades.length > 0 ? availableGrades.map(g => {
+                                {programs.map((program: any) => {
+                                    const programName = String(program.name || program.title || '').trim();
+                                    const values = [String(program.id), programName].filter(Boolean);
+                                    const isSelected = values.some(value => form.targetAudience?.programs?.includes(value));
+                                    return <button key={program.id} type="button" onClick={() => {
+                                        const current = form.targetAudience?.programs || [];
+                                        const nextPrograms = isSelected ? current.filter(value => !values.includes(value)) : Array.from(new Set([...current, ...values]));
+                                        setForm({ ...form, targetAudience: { ...form.targetAudience, programs: nextPrograms, grades: [], groups: [], students: [] } });
+                                    }} className={`rounded-xl border-2 px-5 py-3 text-sm font-bold transition ${isSelected ? 'border-blue-700 bg-blue-700 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300'}`}>{isSelected && <Check size={15} className="mr-2 inline" />}{programName || 'Untitled program'}</button>;
+                                })}
+                                {programs.length === 0 && <p className="text-sm italic text-slate-400">No programs are available for this organization.</p>}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-4">2 · Target grades</label>
+                            <div className="flex flex-wrap gap-3">
+                                {(() => {
+                                    const selectedPrograms = form.targetAudience?.programs || [];
+                                    const programGrades = selectedPrograms.length > 0
+                                        ? programs.filter((program: any) => selectedPrograms.includes(String(program.id)) || selectedPrograms.includes(String(program.name || program.title || ''))).flatMap((program: any) => program.grades || [])
+                                        : availableGrades;
+                                    const uniqueGrades = programGrades.filter((grade: any, index: number, grades: any[]) => grades.findIndex(candidate => String(candidate.id) === String(grade.id)) === index);
+                                    return uniqueGrades.length > 0 ? uniqueGrades.map((g: any) => {
                                     const isSelected = form.targetAudience?.grades?.includes(g.id);
                                     return (
                                         <button
@@ -881,15 +963,16 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                             {g.name}
                                         </button>
                                     );
-                                }) : (
+                                    }) : (
                                     <p className="text-slate-400 italic">No grades found in Programs.</p>
-                                )}
+                                    );
+                                })()}
                             </div>
                         </div>
 
                         {/* Target Groups */}
                         <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Target Groups (Optional)</label>
+                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">3 · Target groups (optional)</label>
                             <p className="text-xs text-slate-500 mb-3 italic">Leave empty to target all groups in selected grades</p>
                             <div className="flex flex-wrap gap-3">
                                 {(() => {
@@ -969,7 +1052,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
 
                         {/* Target Specific Students */}
                         <div>
-                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Target Specific Students (Optional)</label>
+                            <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">4 · Specific students (optional)</label>
                             <p className="text-xs text-slate-500 mb-3 italic">Limit this mission to selected students. If selected, ONLY these students will see it.</p>
 
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 max-h-60 overflow-y-auto custom-scrollbar">
@@ -1050,6 +1133,15 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                 {/* PUBLISHING TAB */}
                 {activeTab === 'publishing' && (
                     <div className="space-y-8 animate-in slide-in-from-right-8 duration-300">
+                        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                                <div><p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Preflight check</p><h3 className="mt-1 text-xl font-black text-slate-950">Is this mission ready for learners?</h3></div>
+                                <span className={`rounded-xl px-4 py-2 text-sm font-black ${readiness.publishReady ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`}>{readiness.completed} of {readiness.total} complete</span>
+                            </div>
+                            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                                {readiness.checks.map(check => <div key={check.id} className={`rounded-xl border p-3 text-xs font-extrabold ${check.complete ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-slate-50 text-slate-500'}`}><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-white">{check.complete ? <Check size={12} strokeWidth={3} /> : '·'}</span>{check.label}</div>)}
+                            </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {[
                                 { id: 'draft', label: 'Draft', desc: 'Hidden from students', icon: Layout, selected: 'border-slate-700 bg-slate-100', iconSelected: 'bg-slate-800 text-white', titleSelected: 'text-slate-950', textSelected: 'text-slate-700', checkSelected: 'text-slate-700' },

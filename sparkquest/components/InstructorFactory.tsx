@@ -47,7 +47,7 @@ import { FactoryEmptyState, FactoryPage, FactoryPageHeader, factoryButton } from
 
 export const InstructorFactory: React.FC = () => {
   // Destructure projectTemplates here
-  const { projectTemplates } = useFactoryData();
+  const { projectTemplates, processTemplates } = useFactoryData();
   const { userProfile, signOut } = useAuth();
   const [view, setView] = useState<'dashboard' | 'projects' | 'gallery' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview' | 'gamification'>('dashboard');
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
@@ -253,6 +253,7 @@ export const InstructorFactory: React.FC = () => {
               {filterTemplateId ? (
                 <ProjectDetailsEnhanced
                   project={projectTemplates.find(p => p.id === filterTemplateId)!}
+                  workflow={processTemplates.find(workflow => workflow.id === projectTemplates.find(project => project.id === filterTemplateId)?.defaultWorkflowId)}
                   role="instructor"
                   onBack={() => {
                     setFilterTemplateId(null);
