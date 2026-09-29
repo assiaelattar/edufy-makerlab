@@ -56,7 +56,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
     };
 
     const handleDelete = async (id: string) => {
-        if (confirm("Deleting this mission will permanently delete all student submissions and history associated with it.\n\nAre you sure you want to proceed?")) {
+        if (confirm("Deleting this mission removes it from the mission library. Existing student projects, submissions, and history will be preserved.\n\nAre you sure you want to proceed?")) {
             await actions.deleteProjectTemplate(id);
         }
     };
@@ -163,6 +163,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                         key={project.id}
                         onClick={() => onPreviewProject && onPreviewProject(project.id)}
                         onKeyDown={event => {
+                            if (event.currentTarget !== event.target) return;
                             if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault();
                                 onPreviewProject?.(project.id);

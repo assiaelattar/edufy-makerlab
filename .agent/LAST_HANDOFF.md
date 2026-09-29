@@ -1,4 +1,14 @@
-# Latest handoff — Consolidated public release candidate
+# Latest handoff — SparkQuest mission operations repair
+
+Completed locally on 2026-09-28. A read-only production audit of all 20 mission templates proved that four old missions lack both organization and creator ownership; current tenant rules therefore deny their edit and assignment. All live missions also predate the structured brief, so the client was incorrectly blocking simple cover/content maintenance with first-publication readiness errors.
+
+The repair adds an audited MakerLab-only legacy claim on first write, allows incremental edits to already-assigned legacy missions, keeps first publication and audience-removal gates strict, preserves enrollment truth during grade/group/student assignment, and makes mission deletion preserve every learner project. SparkQuest TypeScript, 11 mission-content assertions, 10 assignment assertions, 31 Auth/Firestore/Storage assertions, the SparkQuest build and the root 4,433-module build pass. Existing Firebase import/chunk warnings remain.
+
+Next: deploy Firestore rules and the matching SparkQuest client together, then run authenticated production smoke tests for create, edit, cover/resource upload, grade/group/direct assignment, learner visibility and instructor review. The Firebase CLI session may require reauthentication. No bulk migration or production record mutation has been performed.
+
+---
+
+# Previous handoff — Consolidated public release candidate
 
 Prepared on 2026-09-19 from the latest `origin/main` using a three-way merge, preserving the public cache/deployment fixes while adding the complete local Edufy application delta. The release includes the Education UI and compact navigation work, program lifecycle and StemQuest attendance/membership rules, selectable family statements, visible catalogue/discount/negotiated amounts in parent finance documents, editable Finance history, independent formation/service numbering, Admissions stable links and assisted operations, reusable and urgent one-off workshop scheduling, service catalogue invoicing, and the related tenant rules/indexes/API configuration.
 

@@ -1,6 +1,6 @@
 # Atlas Build Context
 
-Last updated: 2026-09-19
+Last updated: 2026-09-29
 
 This is the living build context for Atlas, the SaaS evolution of Edufy MakerLab. Before each work loop, read this file first. After each work loop, update it with what changed, what was tested, what remains risky, and the next best module.
 
@@ -451,6 +451,8 @@ Left:
 - Public runtime visual/error checks are available; authenticated tenant visual regression coverage is still needed.
 
 ## Verification Log
+
+- 2026-09-29: Repaired SparkQuest instructor mission operations after a production audit found four legacy `project_templates` without tenant ownership and 20 older missions without the current structured brief. Added a narrowly scoped MakerLab legacy-claim rule, automatic claim stamps on edit/assignment, incremental editing for already-live legacy missions, strict readiness for first publication, and non-destructive mission deletion that preserves learner project evidence. The emulator now covers normal assignment, trusted legacy claim, cross-tenant denial, and evidence preservation; focused mission/assignment checks, SparkQuest TypeScript, SparkQuest production build, and the root production build pass. Production release remains gated on Firestore rule publication and the matching SparkQuest client deployment.
 
 - 2026-09-26: Audited the SparkQuest instructor and learner media pipeline end to end. The live upload path, authenticated admin UID, organization, role, MIME/size checks and active Storage rules all matched; the actual production blocker was the missing `roles/firebaserules.firestoreServiceAgent` binding on the Firebase Storage service agent. Granted and verified that dedicated bridge role, then compiled and released Storage and Firestore rules. The tested client repair centralizes learner saves and restores tenant ownership on legacy projects; the isolated pipeline passes 27 assertions and both SparkQuest/root production builds pass. No bulk data migration or user-role broadening was performed.
 

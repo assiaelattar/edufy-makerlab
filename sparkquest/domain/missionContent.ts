@@ -129,6 +129,36 @@ export const getMissionReadiness = (source: Partial<ProjectTemplate>) => {
   };
 };
 
+const hasMissionAudience = (source?: Partial<ProjectTemplate>) => {
+  const audience = source?.targetAudience || {};
+  return Boolean(
+    audience.programs?.length ||
+    audience.grades?.length ||
+    audience.groups?.length ||
+    audience.students?.length
+  );
+};
+
+const isLiveMissionStatus = (status?: ProjectTemplate['status']) =>
+  status === 'assigned' || status === 'featured';
+
+export const getMissionSavePolicy = (
+  next: Partial<ProjectTemplate>,
+  original?: Partial<ProjectTemplate>,
+) => {
+  const nextIsLive = isLiveMissionStatus(next.status);
+  const originalIsLive = isLiveMissionStatus(original?.status);
+  const publishingNow = nextIsLive && !originalIsLive;
+  const removedExistingAudience = originalIsLive && hasMissionAudience(original) && !hasMissionAudience(next);
+
+  return {
+    publishingNow,
+    removedExistingAudience,
+    requireFullReadiness: publishingNow,
+    allowIncrementalLegacySave: nextIsLive && originalIsLive,
+  };
+};
+
 export const assignmentFromMission = (
   source: ProjectTemplate | StudentProject,
   resources = source.resources || [],

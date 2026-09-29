@@ -1,4 +1,10 @@
-# Current phase override — SparkQuest mission experience contract
+# Current phase override — SparkQuest instructor mission operations
+
+Completed locally on 2026-09-28. The production audit found four unscoped legacy mission templates and a client preflight that treated every maintenance edit as a first publication. Phase 8 adds an audited MakerLab-only legacy claim, preserves strict tenant ownership, allows incremental maintenance of already-live missions, keeps first-publication readiness strict, and prevents mission deletion from deleting learner projects. The 31-assertion Auth/Firestore/Storage suite and both production builds pass. Release the rule and client together, then run authenticated CRUD/assignment smoke tests. See `docs/sparkquest/MISSION_OPERATIONS_PHASE_8.md`.
+
+---
+
+# Previous override — SparkQuest mission experience contract
 
 Release in progress on 2026-09-26 after explicit user confirmation. The mission-authoring wizard, instructor preview, learner briefing, project creation snapshot and workspace assignment share one backward-compatible `MissionBrief` contract. The learner must review the mission journey before a project document is created. The urgent showcase repair restores tenant ownership on legacy learner projects and adds a 27-assertion emulator regression. Production IAM now grants the Storage service agent only the dedicated cross-service Firestore Rules role, and the tested Storage/Firestore rules are live. The application rules remain limited to the linked learner in the same organization; there is no user-role broadening, index/API change or production data migration. See `docs/sparkquest/MISSION_EXPERIENCE_PHASE_7.md`.
 

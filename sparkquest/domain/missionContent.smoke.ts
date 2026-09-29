@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { assignmentFromMission, getMissionReadiness, resolveMissionContent } from './missionContent.ts';
+import { assignmentFromMission, getMissionReadiness, getMissionSavePolicy, resolveMissionContent } from './missionContent.ts';
 
 const mission = {
   id: 'mission-1',
@@ -48,4 +48,14 @@ const assignment = assignmentFromMission(mission);
 assert.equal(assignment.missionBrief?.deliverables?.[0].title, 'Working prototype');
 assert.equal(assignment.resources?.[0].title, 'Sensor guide');
 
-console.log('missionContent smoke: 8 assertions passed');
+assert.equal(getMissionSavePolicy(mission).requireFullReadiness, true);
+assert.equal(getMissionSavePolicy(
+  { ...mission, missionBrief: undefined },
+  { ...mission, missionBrief: undefined },
+).allowIncrementalLegacySave, true);
+assert.equal(getMissionSavePolicy(
+  { ...mission, targetAudience: { programs: [], grades: [], groups: [], students: [] } },
+  mission,
+).removedExistingAudience, true);
+
+console.log('missionContent smoke: 11 assertions passed');

@@ -243,6 +243,8 @@ export interface ProjectTemplate {
   };
   assignedAt?: Timestamp;
   assignedBy?: string;
+  legacyClaimedAt?: Timestamp;
+  legacyClaimedBy?: string;
   defaultWorkflowId?: string; // Legacy or specific workflow overide
   stepResources?: Record<string, Resource[]>; // Mission-specific resources for workflow steps
   missionBrief?: MissionBrief;

@@ -320,11 +320,23 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             updatedAt: serverTimestamp()
         });
     };
+
+    const legacyClaimPatch = (templateId: string) => {
+        const existing = projectTemplates.find(template => template.id === templateId);
+        if (existing?.organizationId) return {};
+        if (!user?.uid) throw new Error('Your instructor identity could not be resolved.');
+        return {
+            legacyClaimedBy: user.uid,
+            legacyClaimedAt: serverTimestamp(),
+        };
+    };
+
     const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>) => {
-        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
         await updateDoc(doc(db as Firestore, 'project_templates', id), {
             ...data,
             organizationId,
+            ...legacyClaimPatch(id),
             updatedAt: serverTimestamp()
         });
     };
@@ -336,22 +348,27 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const patch = buildMissionAssignmentPatch({ ...audience, organizationId });
         await updateDoc(doc(db as Firestore, 'project_templates', id), {
             ...patch,
+            ...legacyClaimPatch(id),
             assignedAt: serverTimestamp(),
             assignedBy: user.uid,
             updatedAt: serverTimestamp()
         });
     };
     const deleteProjectTemplate = async (id: string) => {
-        if (!db) return;
+        if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
         const firestore = db as Firestore;
-        const batch = (await import('firebase/firestore')).writeBatch(firestore);
-        batch.delete(doc(firestore, 'project_templates', id));
-        const submissionsQuery = query(collection(firestore, 'student_projects'), (await import('firebase/firestore')).where('templateId', '==', id));
-        const submissionsSnapshot = await (await import('firebase/firestore')).getDocs(submissionsQuery);
-        submissionsSnapshot.forEach(subDoc => {
-            batch.delete(subDoc.ref);
-        });
-        await batch.commit();
+        const templateRef = doc(firestore, 'project_templates', id);
+        const existing = projectTemplates.find(template => template.id === id);
+        if (!existing?.organizationId) {
+            await updateDoc(templateRef, {
+                organizationId,
+                ...legacyClaimPatch(id),
+                updatedAt: serverTimestamp(),
+            });
+        }
+        // Student projects are durable learner records with their own mission
+        // snapshot. Removing a template must never erase submitted work.
+        await deleteDoc(templateRef);
     };
 
     const toggleStationActivation = async (stationId: string, gradeId: string, currentStations: Station[]) => {

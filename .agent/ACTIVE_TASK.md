@@ -1,4 +1,12 @@
-# Current task boundary — SparkQuest legacy showcase repair awaiting release
+# Current task boundary — SparkQuest mission operations release candidate
+
+The instructor/admin CRUD and assignment repair is complete locally. Production has 20 missions: four unscoped legacy records and 16 `makerlab-academy` records. Release only the tested Firestore legacy-claim bridge and SparkQuest client changes. Do not bulk-rewrite mission content or learner projects. After release, verify create draft, edit tenant mission, edit/claim one legacy mission, assign by grade/group/student, upload instructor cover/resource, learner visibility and preservation of existing student work.
+
+Validation passed: SparkQuest TypeScript; mission content 11; mission assignment 10; isolated Auth/Firestore/Storage 31; SparkQuest build; root build (4,433 modules); whitespace check pending final diff. Firebase CLI reauthentication may be required before the rules release.
+
+---
+
+# Previous task boundary — SparkQuest legacy showcase repair awaiting release
 
 The production-shaped failure has been reproduced without touching production: older `student_projects` records that lack `organizationId` cannot be updated by a learner. The client now restores verified tenant and learner ownership before the first save, while Firestore safely recognizes missing legacy fields and authorizes only the linked learner's one-time migration. The isolated Auth/Firestore/Storage suite passes 27 assertions, including the denied unscoped write followed by screenshot upload + external link + tenant repair + `submitted` review status. Scoped TypeScript, mission smoke suites, SparkQuest build, root Edufy build and whitespace validation pass.
 

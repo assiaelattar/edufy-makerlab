@@ -5,11 +5,13 @@ import {
   addDoc,
   collection,
   connectFirestoreEmulator,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   getFirestore,
   query,
+  serverTimestamp,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -26,7 +28,7 @@ const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
 const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST || '127.0.0.1:9199';
 const skipStorage = process.env.SKIP_STORAGE_EMULATOR === 'true';
-const organizationId = 'org-pipeline';
+const organizationId = 'makerlab-academy';
 
 const firebaseConfig = {
   apiKey: 'fake-api-key',
@@ -59,7 +61,7 @@ const seedDocument = async (path, data) => {
   if (!response.ok) throw new Error(`Could not seed ${path}: ${response.status} ${await response.text()}`);
 };
 
-const createClient = async (label, email, role) => {
+const createClient = async (label, email, role, clientOrganizationId = organizationId) => {
   const app = initializeApp(firebaseConfig, label);
   const auth = getAuth(app);
   connectAuthEmulator(auth, `http://${authHost}`, { disableWarnings: true });
@@ -77,7 +79,7 @@ const createClient = async (label, email, role) => {
     email,
     name: label,
     role,
-    organizationId,
+    organizationId: clientOrganizationId,
     status: 'active',
   });
   return { app, auth, db, storage, uid: credential.user.uid };
@@ -100,7 +102,8 @@ try {
   const student = await createClient('pipeline-student', 'student.pipeline@example.test', 'student');
   const otherStudent = await createClient('pipeline-other', 'other.pipeline@example.test', 'student');
   const instructor = await createClient('pipeline-instructor', 'instructor.pipeline@example.test', 'instructor');
-  clients.push(student, otherStudent, instructor);
+  const otherTenantInstructor = await createClient('pipeline-other-instructor', 'other.instructor.pipeline@example.test', 'instructor', 'org-other');
+  clients.push(student, otherStudent, instructor, otherTenantInstructor);
 
   const studentRecordId = 'student-record-1';
   await seedDocument(`students/${studentRecordId}`, {
@@ -127,6 +130,47 @@ try {
   });
   assert.equal((await getDoc(doc(student.db, 'project_templates', missionRef.id))).exists(), true,
     'student can read an instructor-created mission');
+
+  await updateDoc(missionRef, {
+    status: 'assigned',
+    targetAudience: { programs: ['program-1'], grades: ['grade-1'], groups: [], students: [] },
+    assignedBy: instructor.uid,
+    assignedAt: serverTimestamp(),
+  });
+  assert.deepEqual((await getDoc(missionRef)).data().targetAudience.grades, ['grade-1'],
+    'instructor can update and assign a tenant-owned mission');
+
+  const legacyMissionId = 'legacy-mission-without-tenant';
+  await seedDocument(`project_templates/${legacyMissionId}`, {
+    title: 'Legacy mission',
+    description: 'Created before tenant ownership',
+    status: 'assigned',
+    targetAudience: { programs: [], grades: [], groups: [], students: [] },
+  });
+  const legacyMissionRef = doc(instructor.db, 'project_templates', legacyMissionId);
+  await updateDoc(legacyMissionRef, {
+    organizationId,
+    legacyClaimedBy: instructor.uid,
+    legacyClaimedAt: serverTimestamp(),
+    status: 'assigned',
+    targetAudience: { programs: ['program-1'], grades: ['grade-1'], groups: [], students: [] },
+  });
+  assert.equal((await getDoc(legacyMissionRef)).data().organizationId, organizationId,
+    'trusted MakerLab instructor can claim and assign a legacy mission');
+
+  const foreignLegacyMissionId = 'foreign-legacy-mission-without-tenant';
+  await seedDocument(`project_templates/${foreignLegacyMissionId}`, {
+    title: 'Unscoped mission',
+    status: 'assigned',
+  });
+  await expectDenied(
+    () => updateDoc(doc(otherTenantInstructor.db, 'project_templates', foreignLegacyMissionId), {
+      organizationId: 'org-other',
+      legacyClaimedBy: otherTenantInstructor.uid,
+      legacyClaimedAt: serverTimestamp(),
+    }),
+    'another tenant cannot claim the MakerLab legacy mission bridge'
+  );
 
   for (const [collectionName, payload] of [
     ['process_templates', { name: 'Design loop', description: 'Discover and build', phases: [] }],
@@ -254,6 +298,10 @@ try {
     () => getDoc(doc(otherStudent.db, 'student_projects', projectRef.id)),
     'another student cannot read the project'
   );
+
+  await deleteDoc(missionRef);
+  assert.equal((await getDoc(projectRef)).exists(), true,
+    'deleting a mission template preserves the learner project record');
   if (!skipStorage) {
     await expectDenied(
       () => uploadBytes(
@@ -273,7 +321,7 @@ try {
     );
   }
 
-  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 27} assertions passed.`);
+  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 18 : 31} assertions passed.`);
 } finally {
   await Promise.all(clients.map(client => deleteApp(client.app)));
 }

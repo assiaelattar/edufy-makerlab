@@ -93,6 +93,22 @@ service cloud.firestore {
       return isElevatedUser() && canReadTenantDoc();
     }
 
+    // SparkQuest predates tenant ownership on four MakerLab mission templates.
+    // Keep the compatibility bridge narrow: only trusted MakerLab mission
+    // operators may claim one of those unscoped records, and every claim is
+    // stamped with the authenticated actor and request time. Once claimed, the
+    // normal tenant rules above apply to every later write.
+    function canClaimLegacySparkQuestTemplate() {
+      return hasUserProfile() &&
+        currentRole() in ['super_admin', 'owner', 'admin', 'instructor'] &&
+        currentOrgId() == 'makerlab-academy' &&
+        !resourceHasOrg() &&
+        requestHasOrg() &&
+        request.resource.data.organizationId == currentOrgId() &&
+        request.resource.data.legacyClaimedBy == request.auth.uid &&
+        request.resource.data.legacyClaimedAt == request.time;
+    }
+
     function isAdmissionsOperator() {
       return hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
         currentRole() in ['super_admin', 'owner', 'admin', 'admission_officer'];
@@ -793,7 +809,7 @@ service cloud.firestore {
     match /project_templates/{templateId} {
       allow read: if true;
       allow create: if canCreateTenantDoc();
-      allow update: if canUpdateTenantDoc();
+      allow update: if canUpdateTenantDoc() || canClaimLegacySparkQuestTemplate();
       allow delete: if canDeleteTenantDoc();
     }
 

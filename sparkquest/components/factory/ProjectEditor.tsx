@@ -5,7 +5,7 @@ import { ProjectTemplate, StationType } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { getMissionReadiness, normalizeMissionBrief } from '../../domain/missionContent';
+import { getMissionReadiness, getMissionSavePolicy, normalizeMissionBrief } from '../../domain/missionContent';
 
 interface ProjectEditorProps {
     templateId?: string | null;
@@ -200,13 +200,14 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         }
         const audience = form.targetAudience || {};
         const hasAudience = Boolean(audience.programs?.length || audience.grades?.length || audience.groups?.length || audience.students?.length);
-        if (form.status !== 'draft' && !hasAudience) {
+        const savePolicy = getMissionSavePolicy(form, sourceData || undefined);
+        if ((savePolicy.publishingNow && !hasAudience) || savePolicy.removedExistingAudience) {
             setActiveTab('targeting');
             setSaveError('Choose a grade, group, or specific students before publishing this mission.');
             return;
         }
         const normalizedBrief = normalizeMissionBrief(form);
-        if (form.status !== 'draft') {
+        if (savePolicy.requireFullReadiness) {
             const missing = getMissionReadiness({ ...form, missionBrief: normalizedBrief }).checks.filter(check => !check.complete);
             if (missing.length) {
                 const first = missing[0];
@@ -227,7 +228,10 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             onClose();
         } catch (e: any) {
             console.error(e);
-            setSaveError(e?.message || 'The mission could not be saved. Check the required fields and try again.');
+            const isPermissionError = String(e?.code || e?.message || '').includes('permission');
+            setSaveError(isPermissionError
+                ? 'SparkQuest could not save this mission with your current organization access. Refresh your Edufy session and try again; an administrator may need to claim this legacy mission first.'
+                : e?.message || 'The mission could not be saved. Check the required fields and try again.');
         } finally {
             setIsSaving(false);
         }

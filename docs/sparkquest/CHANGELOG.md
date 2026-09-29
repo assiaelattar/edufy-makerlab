@@ -1,5 +1,14 @@
 # SparkQuest Mission Experience — Changelog
 
+## 2026-09-28
+
+- Audited all 20 live mission templates and identified four pre-tenant records with no organization or creator ownership.
+- Added a narrowly scoped, actor-stamped legacy claim for trusted MakerLab mission operators; cross-tenant claims remain denied.
+- Allowed incremental maintenance of already-live legacy missions while retaining strict readiness for first publication and audience removal.
+- Kept create/edit/assign writes on the authenticated organization and added clearer permission recovery copy.
+- Stopped mission deletion from cascading into learner project deletion.
+- Expanded the Firebase pipeline to 31 assertions covering mission CRUD, assignment, legacy claim, cross-tenant denial, uploads, learner submission and deletion preservation.
+
 ## 2026-09-26
 
 - Granted the Firebase Storage service agent the dedicated `roles/firebaserules.firestoreServiceAgent` bridge role after production IAM inspection proved it was missing and blocking otherwise-valid uploads.

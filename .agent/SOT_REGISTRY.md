@@ -17,6 +17,7 @@
 | `SOT:SPARKQUEST_MISSION_CONTENT` | `sparkquest/types.ts` (`MissionBrief`), `sparkquest/domain/missionContent.ts` | canonical learner-facing brief, readiness, workflow summary and assignment projection | current/local |
 | `SOT:SPARKQUEST_MISSION_DETAILS` | `sparkquest/components/ProjectDetailsEnhanced.tsx` | role-specific instructor dossier and learner build briefing | current/local |
 | `SOT:SPARKQUEST_SHOWCASE_PIPELINE` | `sparkquest/components/StudentWizard.tsx`, `sparkquest/services/api.ts`, `storage.rules`, `firestore.rules` | learner media upload, project submission and instructor-moderated publication | current/tested |
+| `SOT:SPARKQUEST_MISSION_OPERATIONS` | `sparkquest/context/FactoryContext.tsx`, `sparkquest/components/factory/ProjectEditor.tsx`, `sparkquest/components/factory/AssignMissionModal.tsx`, `sparkquest/domain/missionContent.ts`, `sparkquest/domain/missionAssignment.ts`, `firestore.rules` | instructor mission CRUD, legacy ownership claim, publish preflight and audience assignment | current/tested |
 | `SOT:MEMBERSHIP_LIFECYCLE` | `utils/membershipLifecycle.ts`, `utils/programLifecycle.ts` | enrollment coverage, attendance eligibility, rolling renewal detection and shared cohort periods | current/local |
 | `SOT:MEMBERSHIP_ATTENDANCE_UI` | `views/AbsenceView.tsx`, `components/programs/ProgramSetupWizard.tsx` | renewal visibility and fixed school-semester setup | current/local |
 | `SOT:ADMISSION_CASE` | `modules/admissions/domain/*` | typed read projection, evidence precedence, repair and age/search selectors | current |

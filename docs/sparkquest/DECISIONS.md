@@ -1,5 +1,9 @@
 # SparkQuest Mission Experience — Decisions
 
+- Treat existing assigned/featured missions as maintainable legacy records: small edits may be saved before the full new brief is complete, while first publication and removal of an existing audience remain strict gates.
+- Claim the four known unscoped templates only on their first trusted MakerLab operator write, stamping organization, actor and request time; do not introduce a general cross-tenant legacy claim.
+- Delete a mission template without deleting learner projects. Student work is a durable record with its own mission snapshot.
+
 - Keep `MissionBrief` additive and optional so published legacy missions remain readable.
 - Resolve learner-facing content in `domain/missionContent.ts`; UI components do not invent independent fallbacks.
 - Give learners a role-specific briefing while instructors retain readiness and audience information.
