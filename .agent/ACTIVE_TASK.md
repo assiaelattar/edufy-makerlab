@@ -1,8 +1,8 @@
-# Current task boundary — SparkQuest mission operations release candidate
+# Current task boundary — SparkQuest mission operations post-release verification
 
-The instructor/admin CRUD and assignment repair is complete locally. Production has 20 missions: four unscoped legacy records and 16 `makerlab-academy` records. Release only the tested Firestore legacy-claim bridge and SparkQuest client changes. Do not bulk-rewrite mission content or learner projects. After release, verify create draft, edit tenant mission, edit/claim one legacy mission, assign by grade/group/student, upload instructor cover/resource, learner visibility and preservation of existing student work.
+The instructor/admin CRUD and assignment repair is live in Firestore and at `https://sparkquest-makerlab.vercel.app/` from commit `22af1e4`. Production has 20 missions: four unscoped legacy records and 16 `makerlab-academy` records. Do not bulk-rewrite mission content or learner projects. Authenticated read-only QA confirmed the new bundle, mission library, legacy editor, and grade/group/student assignment wizard. A designated production mission/audience and learner account are still required for a real write-path smoke of claim/edit, upload, assignment and learner visibility.
 
-Validation passed: SparkQuest TypeScript; mission content 11; mission assignment 10; isolated Auth/Firestore/Storage 31; SparkQuest build; root build (4,433 modules); whitespace check pending final diff. Firebase CLI reauthentication may be required before the rules release.
+Validation passed: SparkQuest TypeScript; mission content 11; mission assignment 10; isolated Auth/Firestore/Storage 31; SparkQuest build; root build (4,433 modules); whitespace checks; Firestore rules compilation/release; Vercel production build and alias; remote `main` SHA.
 
 ---
 

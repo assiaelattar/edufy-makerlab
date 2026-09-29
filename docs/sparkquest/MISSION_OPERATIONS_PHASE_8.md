@@ -28,6 +28,6 @@ The live `project_templates` collection contains 20 missions. Four legacy missio
 - Root Edufy production build passes with 4,433 modules.
 - Existing Firebase mixed-import and large-chunk warnings remain.
 
-## Release gate
+## Release result
 
-Release the Firestore rule and SparkQuest client together, then verify in production with one existing legacy mission and one tenant-owned mission: edit a harmless field, assign by grade, confirm learner visibility, reassign by group/direct student, upload a cover/resource, and confirm student submissions remain present. No bulk data migration is required.
+Released on 2026-09-29 as `22af1e4`. Firestore rules compiled and were published to `edufy-makerlab`; the matching Vercel production build is live at `https://sparkquest-makerlab.vercel.app/`. Authenticated read-only QA confirmed the new bundle, 20-mission library, legacy editor and grade/group/student assignment wizard. No bulk migration or production record mutation was performed. One controlled write-path smoke still needs a designated mission/audience and learner account: edit a harmless field, assign by grade, confirm learner visibility, reassign by group/direct student, upload a cover/resource, and confirm existing student work remains present.

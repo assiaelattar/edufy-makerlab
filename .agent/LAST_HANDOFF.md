@@ -1,10 +1,10 @@
 # Latest handoff — SparkQuest mission operations repair
 
-Completed locally on 2026-09-28. A read-only production audit of all 20 mission templates proved that four old missions lack both organization and creator ownership; current tenant rules therefore deny their edit and assignment. All live missions also predate the structured brief, so the client was incorrectly blocking simple cover/content maintenance with first-publication readiness errors.
+Completed and released on 2026-09-29 as `22af1e4`. A read-only production audit of all 20 mission templates proved that four old missions lack both organization and creator ownership; current tenant rules therefore denied their edit and assignment. All live missions also predate the structured brief, so the client was incorrectly blocking simple cover/content maintenance with first-publication readiness errors.
 
 The repair adds an audited MakerLab-only legacy claim on first write, allows incremental edits to already-assigned legacy missions, keeps first publication and audience-removal gates strict, preserves enrollment truth during grade/group/student assignment, and makes mission deletion preserve every learner project. SparkQuest TypeScript, 11 mission-content assertions, 10 assignment assertions, 31 Auth/Firestore/Storage assertions, the SparkQuest build and the root 4,433-module build pass. Existing Firebase import/chunk warnings remain.
 
-Next: deploy Firestore rules and the matching SparkQuest client together, then run authenticated production smoke tests for create, edit, cover/resource upload, grade/group/direct assignment, learner visibility and instructor review. The Firebase CLI session may require reauthentication. No bulk migration or production record mutation has been performed.
+Firestore rules compiled and were released to `edufy-makerlab`; the matching Vercel build is aliased at `https://sparkquest-makerlab.vercel.app/`, and GitHub `origin/main` includes the release. Authenticated read-only QA confirmed asset `index-DQF5V5KA.js`, the 20-mission library, the legacy mission editor, and the assignment wizard with live program options. No real audience or learner record was changed. Next: use a designated mission and learner account for one controlled write-path smoke covering claim/edit, cover/resource upload, grade/group/direct assignment, learner visibility and instructor review.
 
 ---
 

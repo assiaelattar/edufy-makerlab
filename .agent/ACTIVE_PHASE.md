@@ -1,6 +1,6 @@
 # Current phase override — SparkQuest instructor mission operations
 
-Completed locally on 2026-09-28. The production audit found four unscoped legacy mission templates and a client preflight that treated every maintenance edit as a first publication. Phase 8 adds an audited MakerLab-only legacy claim, preserves strict tenant ownership, allows incremental maintenance of already-live missions, keeps first-publication readiness strict, and prevents mission deletion from deleting learner projects. The 31-assertion Auth/Firestore/Storage suite and both production builds pass. Release the rule and client together, then run authenticated CRUD/assignment smoke tests. See `docs/sparkquest/MISSION_OPERATIONS_PHASE_8.md`.
+Released on 2026-09-29 as `22af1e4`. The production audit found four unscoped legacy mission templates and a client preflight that treated every maintenance edit as a first publication. Phase 8 adds an audited MakerLab-only legacy claim, preserves strict tenant ownership, allows incremental maintenance of already-live missions, keeps first-publication readiness strict, and prevents mission deletion from deleting learner projects. The 31-assertion Auth/Firestore/Storage suite and both production builds pass. Firestore rules and the matching Vercel client are live; authenticated read-only production QA confirmed the new bundle, 20 missions, the legacy editor, and the grade/group/student assignment wizard without changing a real audience. See `docs/sparkquest/MISSION_OPERATIONS_PHASE_8.md`.
 
 ---
 
