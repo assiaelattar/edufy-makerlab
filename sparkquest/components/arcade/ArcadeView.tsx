@@ -1,112 +1,131 @@
-import React, { useState, useEffect } from 'react';
-import { Gamepad2, GraduationCap, X, Play, Clock, Search, Star, AlignLeft, Check, Trophy, BookOpen, Rocket, Plus } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { BookOpen, Check, Clock3, Gamepad2, GraduationCap, Play, Plus, Rocket, Search, Star, Ticket, X, Zap } from 'lucide-react';
+import { collection, doc, getDocs, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useSession } from '../../context/SessionContext';
-import { VideoQuiz } from './VideoQuiz';
+import { db } from '../../services/firebase';
+import { AddPlatformModal } from './AddPlatformModal';
 import { GameCard } from './GameCard';
 import { PlatformBrowser } from './PlatformBrowser';
-import { AddPlatformModal } from './AddPlatformModal';
-import { db } from '../../services/firebase';
-import { collection, onSnapshot, getDocs, setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { VideoQuiz } from './VideoQuiz';
 
 interface ArcadeViewProps {
     isOpen: boolean;
     onClose: () => void;
+    previewMode?: boolean;
 }
 
-export const ArcadeView: React.FC<ArcadeViewProps> = ({ isOpen, onClose }) => {
+const PREVIEW_CONTENT = [
+    { id: 'arcade-circuits', title: 'Why circuits need a complete loop', category: 'Electronics', xpReward: 30, duration: '6 min', videoUrl: 'https://www.youtube.com/watch?v=Q5akxaR7gOY', description: 'Trace the path of electricity, then answer a short bench quiz.' },
+    { id: 'arcade-prototypes', title: 'Prototype before you polish', category: 'Design', xpReward: 25, duration: '5 min', videoUrl: 'https://www.youtube.com/watch?v=Q5akxaR7gOY', description: 'See why rough models make ideas stronger.' },
+    { id: 'arcade-sensors', title: 'How a moisture sensor reads soil', category: 'Coding', xpReward: 40, duration: '8 min', videoUrl: 'https://www.youtube.com/watch?v=Q5akxaR7gOY', description: 'Connect a physical signal to a useful decision.' },
+];
+
+const PREVIEW_GAMES = [
+    { id: 'game-logic-grid', title: 'Logic grid', description: 'Solve short sequencing puzzles.', category: 'Coding', costPerMinute: 2, url: '#', thumbnail: '' },
+    { id: 'game-bridge', title: 'Bridge builder', description: 'Balance shape, span, and material.', category: 'Engineering', costPerMinute: 3, url: '#', thumbnail: '' },
+    { id: 'game-circuit', title: 'Circuit sprint', description: 'Complete the loop before time runs out.', category: 'Electronics', costPerMinute: 2, url: '#', thumbnail: '' },
+];
+
+const PREVIEW_PLATFORMS = [
+    { id: 'platform-tinkercad', name: 'Tinkercad', description: 'Build 3D models and simulate circuits.', category: 'Design & circuits', status: 'active', featured: true, logo: '' },
+    { id: 'platform-scratch', name: 'Scratch', description: 'Code interactive stories, games, and animations.', category: 'Creative coding', status: 'active', logo: '' },
+    { id: 'platform-onshape', name: 'Onshape', description: 'Turn precise sketches into engineered parts.', category: 'CAD', status: 'active', logo: '' },
+];
+
+export const ArcadeView: React.FC<ArcadeViewProps> = ({ isOpen, onClose, previewMode = false }) => {
     const { user, userProfile, updateCredits } = useAuth();
     const { startSession } = useSession();
     const [mode, setMode] = useState<'EARN' | 'PLAY' | 'LEARN'>('EARN');
     const [searchTerm, setSearchTerm] = useState('');
-
-    // Real credits from profile
-    const credits = userProfile?.arcadeCredits || 0;
-
-    // Data
     const [earnContent, setEarnContent] = useState<any[]>([]);
     const [playGames, setPlayGames] = useState<any[]>([]);
     const [platforms, setPlatforms] = useState<any[]>([]);
     const [completedContent, setCompletedContent] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // Active
     const [selectedVideo, setSelectedVideo] = useState<any>(null);
     const [selectedGame, setSelectedGame] = useState<any>(null);
     const [selectedPlatform, setSelectedPlatform] = useState<any>(null);
     const [showAddPlatform, setShowAddPlatform] = useState(false);
-
-    // Derived: Categories
-    const categories = Array.from(new Set(earnContent.map(c => c.category || 'General')));
+    const [notice, setNotice] = useState<string | null>(null);
+    const [previewCredits, setPreviewCredits] = useState(84);
+    const credits = previewMode ? previewCredits : (userProfile?.arcadeCredits || 0);
 
     useEffect(() => {
         if (!isOpen) return;
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (selectedVideo) setSelectedVideo(null);
+            else if (selectedGame) setSelectedGame(null);
+            else if (selectedPlatform) setSelectedPlatform(null);
+            else onClose();
+        };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [isOpen, onClose, selectedGame, selectedPlatform, selectedVideo]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (previewMode) {
+            setEarnContent(PREVIEW_CONTENT);
+            setPlayGames(PREVIEW_GAMES);
+            setPlatforms(PREVIEW_PLATFORMS);
+            setCompletedContent(['arcade-prototypes']);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
-
-        if (!db) { setLoading(false); return; }
-
-        const contentUnsub = onSnapshot(collection(db, 'arcade_content'), (snap) => {
-            setEarnContent(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-
-        const gamesUnsub = onSnapshot(collection(db, 'arcade_games'), (snap) => {
-            setPlayGames(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        if (!db) {
+            setLoading(false);
+            return;
+        }
+        const contentUnsub = onSnapshot(collection(db, 'arcade_content'), snap => setEarnContent(snap.docs.map(item => ({ id: item.id, ...item.data() }))));
+        const gamesUnsub = onSnapshot(collection(db, 'arcade_games'), snap => {
+            setPlayGames(snap.docs.map(item => ({ id: item.id, ...item.data() })));
             setLoading(false);
         });
+        if (user?.uid) void getDocs(collection(db, `users/${user.uid}/arcade_progress`)).then(snap => setCompletedContent(snap.docs.map(item => item.id)));
+        return () => { contentUnsub(); gamesUnsub(); };
+    }, [isOpen, previewMode, user?.uid]);
 
-        // Load Completed Progress
-        const fetchProgress = async () => {
-            if (user?.uid) {
-                if (!db) return;
-                const progRef = collection(db, `users/${user.uid}/arcade_progress`);
-                const snap = await getDocs(progRef);
-                setCompletedContent(snap.docs.map(d => d.id));
-            }
-        };
-        fetchProgress();
-
-        return () => {
-            contentUnsub();
-            gamesUnsub();
-        };
-    }, [isOpen, user?.uid]);
-
-    // Load platforms
     useEffect(() => {
-        if (!isOpen || !db) return;
-        const platformsUnsub = onSnapshot(collection(db, 'arcade_platforms'), (snap) => {
-            setPlatforms(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter((p: any) => p.status === 'active'));
-        });
-        return () => platformsUnsub();
-    }, [isOpen]);
+        if (!isOpen || previewMode || !db) return;
+        return onSnapshot(collection(db, 'arcade_platforms'), snap => setPlatforms(snap.docs.map(item => ({ id: item.id, ...item.data() })).filter((platform: any) => platform.status === 'active')));
+    }, [isOpen, previewMode]);
 
     const handleEarnComplete = async (reward: number) => {
-        if (!selectedVideo || !user?.uid) return;
-        if (!db) return;
-
-        // Optimistic update for UI
-        setCompletedContent(prev => [...prev, selectedVideo.id]);
-
+        if (!selectedVideo) return;
+        if (previewMode) {
+            setCompletedContent(previous => Array.from(new Set([...previous, selectedVideo.id])));
+            setPreviewCredits(value => value + reward);
+            setSelectedVideo(null);
+            setNotice(`${reward} arcade credits added in this preview.`);
+            return;
+        }
+        if (!user?.uid || !db) return;
+        setCompletedContent(previous => Array.from(new Set([...previous, selectedVideo.id])));
         try {
-            // Persist
-            await setDoc(doc(db, `users/${user.uid}/arcade_progress`, selectedVideo.id), {
-                completedAt: serverTimestamp(),
-                xpEarned: reward,
-                contentId: selectedVideo.id
-            });
-
+            await setDoc(doc(db, `users/${user.uid}/arcade_progress`, selectedVideo.id), { completedAt: serverTimestamp(), xpEarned: reward, contentId: selectedVideo.id });
             await updateCredits(reward);
             setSelectedVideo(null);
-            alert(`🎉 You earned ${reward} Credits!`);
-        } catch (e) {
-            console.error("Error saving progress", e);
+            setNotice(`${reward} arcade credits added.`);
+        } catch (saveError) {
+            console.error('Error saving arcade progress', saveError);
+            setNotice('Progress could not be saved. Check your connection and try again.');
         }
     };
 
     const handlePlayGame = async (game: any, minutes: number) => {
         const cost = game.costPerMinute * minutes;
         if (credits < cost) {
-            alert("Not enough credits!");
+            setSelectedGame(null);
+            setNotice(`You need ${cost - credits} more arcade credits for that session.`);
+            return;
+        }
+        if (previewMode) {
+            setPreviewCredits(value => value - cost);
+            setSelectedGame(null);
+            setNotice(`${minutes} preview minutes reserved for ${game.title}.`);
             return;
         }
         await updateCredits(-cost);
@@ -114,296 +133,61 @@ export const ArcadeView: React.FC<ArcadeViewProps> = ({ isOpen, onClose }) => {
         startSession(game.url, minutes, game.title);
     };
 
-    // Filter Logic
-    const filteredContent = earnContent.filter(c =>
-        c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Featured Content (First one or Random)
-    const featuredContent = earnContent.length > 0 ? earnContent[0] : null;
+    const visibleItems = useMemo(() => {
+        const queryText = searchTerm.trim().toLowerCase();
+        const source = mode === 'EARN' ? earnContent : mode === 'PLAY' ? playGames : platforms;
+        if (!queryText) return source;
+        return source.filter(item => `${item.title || item.name} ${item.category || ''} ${item.description || ''}`.toLowerCase().includes(queryText));
+    }, [earnContent, mode, platforms, playGames, searchTerm]);
 
     if (!isOpen) return null;
 
+    const tabCopy = {
+        EARN: { eyebrow: 'Watch & solve', title: 'Earn your next play ticket.', body: 'Short lessons and quick quizzes turn useful ideas into arcade credits.' },
+        PLAY: { eyebrow: 'Timed play', title: 'Spend credits with a plan.', body: 'Choose a game and a time window. The session ends when your ticket runs out.' },
+        LEARN: { eyebrow: 'Tool launchpad', title: 'Keep building elsewhere.', body: 'Open the learning platforms connected to your MakerLab workbench.' },
+    }[mode];
+
     return (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/95 backdrop-blur-md animate-in fade-in">
-            <div className="w-full max-w-7xl h-[90vh] bg-slate-950 border border-slate-800 rounded-[32px] overflow-hidden flex flex-col shadow-2xl">
+        <div className="sq-arcade-overlay" role="dialog" aria-modal="true" aria-labelledby="arcade-title">
+            <button className="sq-arcade-backdrop" type="button" onClick={onClose} aria-label="Close play lab" />
+            <section className="sq-arcade-shell">
+                <header className="sq-arcade-header">
+                    <div className="sq-arcade-brand"><span aria-hidden="true"><Gamepad2 size={24} /></span><div><p>Sparkbook play lab</p><h2 id="arcade-title">Learn first. Play on purpose.</h2></div></div>
+                    <div className="sq-arcade-balance"><Ticket size={18} /><span><small>Arcade credits</small><strong>{credits}</strong></span></div>
+                    <button type="button" className="sq-arcade-close" onClick={onClose} aria-label="Close play lab"><X size={24} /></button>
+                </header>
 
-                {/* Header */}
-                <div className="h-20 bg-slate-950/50 flex items-center justify-between px-8 border-b border-white/5 z-10 backdrop-blur-sm sticky top-0">
-                    <div className="flex items-center gap-4">
-                        <div className="p-2.5 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/20">
-                            <Gamepad2 className="text-white" size={24} />
-                        </div>
-                        <h2 className="text-2xl font-black text-white tracking-tight">ARCADE</h2>
-                    </div>
-
-                    {/* Search Bar */}
-                    <div className="flex-1 max-w-md mx-8 relative group">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-hover:text-indigo-400 transition-colors" size={20} />
-                        <input
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            placeholder="Search games, videos, topics..."
-                            className="w-full bg-slate-900/50 border border-slate-800 rounded-full py-3 pl-12 pr-6 text-white placeholder-slate-500 focus:bg-slate-900 focus:border-indigo-500/50 outline-none transition-all"
-                        />
-                    </div>
-
-                    <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-3 bg-slate-900/50 rounded-full pl-2 pr-5 py-1.5 border border-yellow-500/20">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 to-amber-600 flex items-center justify-center shadow-lg">
-                                <Trophy size={16} className="text-white fill-white/20" />
-                            </div>
-                            <div className="flex flex-col leading-none">
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Credits</span>
-                                <span className="text-lg font-black text-white">{credits}</span>
-                            </div>
-                        </div>
-                        <button onClick={onClose} className="p-3 bg-slate-900 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-all">
-                            <X size={24} />
-                        </button>
-                    </div>
+                <div className="sq-arcade-tabs" role="tablist" aria-label="Play lab sections">
+                    <button type="button" role="tab" aria-selected={mode === 'EARN'} onClick={() => setMode('EARN')}><GraduationCap size={18} /><span><strong>Earn</strong><small>Watch & solve</small></span></button>
+                    <button type="button" role="tab" aria-selected={mode === 'PLAY'} onClick={() => setMode('PLAY')}><Gamepad2 size={18} /><span><strong>Play</strong><small>Timed games</small></span></button>
+                    <button type="button" role="tab" aria-selected={mode === 'LEARN'} onClick={() => setMode('LEARN')}><BookOpen size={18} /><span><strong>Launchpad</strong><small>Learning tools</small></span></button>
                 </div>
 
-                {/* Sub-Nav */}
-                <div className="flex bg-slate-950 border-b border-white/5 z-10 sticky top-20">
-                    <button onClick={() => setMode('EARN')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-widest flex justify-center gap-3 transition-colors ${mode === 'EARN' ? 'text-indigo-400 bg-indigo-500/5 border-b-2 border-indigo-500' : 'text-slate-500 hover:text-white hover:bg-slate-900'}`}>
-                        <Play size={18} /> Watch & Earn
-                    </button>
-                    <button onClick={() => setMode('PLAY')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-widest flex justify-center gap-3 transition-colors ${mode === 'PLAY' ? 'text-purple-400 bg-purple-500/5 border-b-2 border-purple-500' : 'text-slate-500 hover:text-white hover:bg-slate-900'}`}>
-                        <Gamepad2 size={18} /> Play Games
-                    </button>
-                    <button onClick={() => setMode('LEARN')} className={`flex-1 py-4 font-bold text-sm uppercase tracking-widest flex justify-center gap-3 transition-colors ${mode === 'LEARN' ? 'text-emerald-400 bg-emerald-500/5 border-b-2 border-emerald-500' : 'text-slate-500 hover:text-white hover:bg-slate-900'}`}>
-                        <BookOpen size={18} /> Learn More
-                    </button>
-                </div>
+                {notice && <div className="sq-arcade-notice" role="status"><Check size={16} /> {notice}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message"><X size={14} /></button></div>}
 
-                {/* Main Content Area */}
-                <div className="flex-1 overflow-y-auto bg-[#0a0a0a] relative scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-                    {selectedVideo && (
-                        <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-xl p-8 flex items-center justify-center">
-                            <div className="w-full max-w-5xl h-[85vh]">
-                                <VideoQuiz
-                                    video={selectedVideo}
-                                    onClose={() => setSelectedVideo(null)}
-                                    onComplete={handleEarnComplete}
-                                    isCompleted={completedContent.includes(selectedVideo.id)}
-                                />
-                            </div>
+                <div className="sq-arcade-scroll">
+                    <section className={`sq-arcade-intro is-${mode.toLowerCase()}`}><div><p>{tabCopy.eyebrow}</p><h3>{tabCopy.title}</h3><span>{tabCopy.body}</span></div><label><Search size={18} /><input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Find a topic, game, or tool" /></label></section>
+
+                    {loading ? <div className="sq-arcade-state"><span className="sq-arcade-loader" /><h3>Setting up the play lab…</h3></div> : visibleItems.length === 0 ? <div className="sq-arcade-state"><Gamepad2 size={44} /><h3>No matches on this shelf.</h3><p>Try a different word or clear the search.</p></div> : (
+                        <div className="sq-arcade-grid">
+                            {mode === 'EARN' && visibleItems.map((content: any, index) => {
+                                const complete = completedContent.includes(content.id);
+                                return <article key={content.id} className={`sq-arcade-card is-lesson ${complete ? 'is-complete' : ''}`}><div className="sq-arcade-card-art"><span>{String(index + 1).padStart(2, '0')}</span><GraduationCap size={44} /></div><div className="sq-arcade-card-copy"><p>{content.category || 'Maker lesson'}</p><h4>{content.title}</h4><span>{content.description || 'Watch, think, and answer a short bench quiz.'}</span><div><small><Clock3 size={14} /> {content.duration || 'Quick lesson'}</small><small><Zap size={14} /> +{content.xpReward || 0}</small></div><button type="button" onClick={() => setSelectedVideo(content)}>{complete ? <><Check size={17} /> Review lesson</> : <><Play size={17} /> Start lesson</>}</button></div></article>;
+                            })}
+                            {mode === 'PLAY' && visibleItems.map((game: any, index) => <article key={game.id} className="sq-arcade-card is-game"><div className="sq-arcade-card-art"><span>{String(index + 1).padStart(2, '0')}</span><Gamepad2 size={44} /></div><div className="sq-arcade-card-copy"><p>{game.category || 'Maker game'}</p><h4>{game.title}</h4><span>{game.description || 'A focused game session for your break.'}</span><div><small><Ticket size={14} /> {game.costPerMinute || 0}/min</small><small><Star size={14} /> Timed</small></div><button type="button" onClick={() => setSelectedGame(game)}><Play size={17} /> Choose play time</button></div></article>)}
+                            {mode === 'LEARN' && visibleItems.map((platform: any, index) => <article key={platform.id} className="sq-arcade-card is-platform"><div className="sq-arcade-card-art"><span>{String(index + 1).padStart(2, '0')}</span>{platform.logo ? <img src={platform.logo} alt="" /> : <Rocket size={44} />}</div><div className="sq-arcade-card-copy"><p>{platform.category || 'Learning tool'}</p><h4>{platform.name}</h4><span>{platform.description || 'Open this tool from your MakerLab launchpad.'}</span><button type="button" onClick={() => previewMode ? setNotice(`${platform.name} would open from an authenticated learner session.`) : setSelectedPlatform(platform)}><Rocket size={17} /> Open tool</button></div></article>)}
                         </div>
                     )}
 
-                    {selectedGame && (
-                        <GameCard
-                            game={selectedGame}
-                            userCredits={credits}
-                            onClose={() => setSelectedGame(null)}
-                            onPlay={handlePlayGame}
-                        />
-                    )}
-
-                    <PlatformBrowser
-                        platform={selectedPlatform}
-                        isOpen={!!selectedPlatform}
-                        onClose={() => setSelectedPlatform(null)}
-                    />
-
-                    <AddPlatformModal
-                        isOpen={showAddPlatform}
-                        onClose={() => setShowAddPlatform(false)}
-                    />
-
-                    {mode === 'EARN' ? (
-                        <div className="pb-20">
-                            {/* Hero Section (Only if no search) */}
-                            {!searchTerm && featuredContent && (
-                                <div className="relative h-[400px] w-full group overflow-hidden">
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent z-10" />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent z-10" />
-                                    <img src={`https://img.youtube.com/vi/${featuredContent.videoUrl.split('/').pop()}/maxresdefault.jpg`} className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-[20s]" />
-
-                                    <div className="absolute bottom-0 left-0 p-12 z-20 max-w-2xl">
-                                        <span className="px-3 py-1 bg-indigo-600 text-white text-xs font-bold uppercase tracking-wider rounded-lg mb-4 inline-block shadow-lg shadow-indigo-500/30">Featured</span>
-                                        <h1 className="text-5xl font-black text-white mb-4 leading-tight">{featuredContent.title}</h1>
-                                        <div className="flex items-center gap-4 mb-8">
-                                            <div className="flex items-center gap-2 text-green-400 font-bold bg-green-950/30 border border-green-500/20 px-3 py-1.5 rounded-lg">
-                                                <Star size={16} className="fill-green-400" /> +{featuredContent.xpReward} XP
-                                            </div>
-                                            <span className="text-slate-400 text-sm font-medium">• {featuredContent.category}</span>
-                                        </div>
-                                        <button
-                                            onClick={() => setSelectedVideo(featuredContent)}
-                                            className="px-8 py-4 bg-white text-black rounded-xl font-bold flex items-center gap-3 hover:scale-105 transition-transform shadow-[0_0_40px_rgba(255,255,255,0.2)]"
-                                        >
-                                            <Play className="fill-black" /> Watch Now
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Category Rows */}
-                            <div className="px-12 space-y-12 mt-8">
-                                {categories.map(category => {
-                                    // If searching, only show if category has matches
-                                    const categoryContent = filteredContent.filter(c => c.category === category);
-                                    if (categoryContent.length === 0) return null;
-
-                                    return (
-                                        <div key={category}>
-                                            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
-                                                <AlignLeft className="text-indigo-500" size={20} />
-                                                {category}
-                                                <span className="text-slate-600 text-sm font-medium bg-slate-900 px-2 py-0.5 rounded-full border border-slate-800">{categoryContent.length}</span>
-                                            </h3>
-
-                                            <div className="flex gap-6 overflow-x-auto pb-8 snap-x no-scrollbar mask-linear">
-                                                {categoryContent.map(content => {
-                                                    const isCompleted = completedContent.includes(content.id);
-                                                    return (
-                                                        <div
-                                                            key={content.id}
-                                                            onClick={() => setSelectedVideo(content)}
-                                                            className={`flex-none w-[300px] group cursor-pointer snap-start relative rounded-2xl overflow-hidden border transition-all hover:scale-105 hover:z-20 hover:shadow-2xl hover:shadow-indigo-500/20 ${isCompleted ? 'border-green-500/30 opacity-70 hover:opacity-100' : 'border-slate-800 hover:border-indigo-500'}`}
-                                                        >
-                                                            <div className="aspect-video relative">
-                                                                <img src={content.thumbnail} className="w-full h-full object-cover" />
-                                                                <div className={`absolute inset-0 transition-opacity flex items-center justify-center ${isCompleted ? 'bg-black/60 opacity-100' : 'bg-black/20 opacity-0 group-hover:opacity-100'}`}>
-                                                                    {isCompleted ? (
-                                                                        <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center shadow-lg">
-                                                                            <Check className="text-white" size={24} />
-                                                                        </div>
-                                                                    ) : (
-                                                                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-lg">
-                                                                            <Play className="text-black fill-black ml-1" size={24} />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                                {!isCompleted && (
-                                                                    <div className="absolute top-3 right-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-lg">
-                                                                        +{content.xpReward} XP
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="p-4 bg-slate-900 h-[100px]">
-                                                                <h4 className="font-bold text-white text-sm line-clamp-2 mb-2 group-hover:text-indigo-400 transition-colors">{content.title}</h4>
-                                                                <div className="flex items-center gap-2">
-                                                                    {isCompleted ? (
-                                                                        <span className="text-xs font-bold text-green-400 flex items-center gap-1"><Check size={12} /> Completed</span>
-                                                                    ) : (
-                                                                        <span className="text-xs text-slate-500">Not watched</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {searchTerm && filteredContent.length === 0 && (
-                                <div className="text-center py-20">
-                                    <div className="text-6xl mb-4">👻</div>
-                                    <h3 className="text-xl font-bold text-white">No results found</h3>
-                                    <p className="text-slate-500">Try searching for something else.</p>
-                                </div>
-                            )}
-
-                        </div>
-                    ) : mode === 'PLAY' ? (
-                        // GAMES TAB (Grid is fine for games as there are fewer)
-                        <div className="p-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {playGames.map(game => (
-                                <div key={game.id} className="group relative bg-slate-900 rounded-3xl overflow-hidden border border-slate-800 hover:border-purple-500 transition-all hover:scale-[1.02] shadow-xl hover:shadow-purple-500/20">
-                                    <div className="aspect-[4/3] relative">
-                                        <img src={game.thumbnail} alt={game.title} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-90" />
-                                        <div className="absolute bottom-4 left-4 right-4">
-                                            <h3 className="text-xl font-black text-white mb-1">{game.title}</h3>
-                                            <div className="flex items-center gap-2 text-purple-400 text-xs font-bold bg-purple-500/10 w-fit px-2 py-1 rounded border border-purple-500/20">
-                                                <Clock size={12} /> {game.costPerMinute} Credits/min
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="p-5">
-                                        <p className="text-slate-400 text-sm mb-5 line-clamp-2">{game.description}</p>
-                                        <button
-                                            onClick={() => setSelectedGame(game)}
-                                            className="w-full py-3 bg-white text-black hover:bg-purple-500 hover:text-white rounded-xl font-bold transition-all shadow-lg"
-                                        >
-                                            Play Now
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="pb-20">
-                            {/* Featured Platform (if any) */}
-                            {platforms.find((p: any) => p.featured) && (
-                                <div className="relative h-[350px] w-full group overflow-hidden mb-12">
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent z-10" />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent z-10" />
-                                    {platforms.find((p: any) => p.featured).logo && (
-                                        <img src={platforms.find((p: any) => p.featured).logo} className="absolute right-12 top-1/2 -translate-y-1/2 h-32 w-32 opacity-20 blur-sm" />
-                                    )}
-
-                                    <div className="absolute bottom-0 left-0 p-12 z-20 max-w-2xl">
-                                        <span className="px-3 py-1 bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider rounded-lg mb-4 inline-block shadow-lg shadow-emerald-500/30">Featured Platform</span>
-                                        <h1 className="text-5xl font-black text-white mb-4 leading-tight">{platforms.find((p: any) => p.featured).name}</h1>
-                                        <p className="text-slate-300 text-lg mb-6">{platforms.find((p: any) => p.featured).description}</p>
-                                        <button
-                                            onClick={() => setSelectedPlatform(platforms.find((p: any) => p.featured))}
-                                            className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center gap-3 transition-all shadow-[0_0_40px_rgba(16,185,129,0.3)]"
-                                        >
-                                            <Rocket /> Launch Platform
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* All Platforms Grid */}
-                            <div className="px-12">
-                                <div className="flex items-center justify-between mb-6">
-                                    <h2 className="text-2xl font-black text-white">All Learning Platforms</h2>
-                                    {(userProfile?.role === 'admin' || userProfile?.role === 'instructor') && (
-                                        <button
-                                            onClick={() => setShowAddPlatform(true)}
-                                            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center gap-2 transition-colors border border-slate-700 hover:border-slate-600"
-                                        >
-                                            <Plus size={18} />
-                                            Add Platform
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                    {platforms.map((platform: any) => (
-                                        <button
-                                            key={platform.id}
-                                            onClick={() => setSelectedPlatform(platform)}
-                                            className="group bg-slate-900 rounded-2xl p-6 border border-slate-800 hover:border-emerald-500 transition-all hover:scale-[1.02] shadow-xl hover:shadow-emerald-500/20 text-left"
-                                        >
-                                            {platform.logo && (
-                                                <img src={platform.logo} alt={platform.name} className="h-16 w-16 rounded-xl mb-4 object-contain bg-white p-2" />
-                                            )}
-                                            <h3 className="text-xl font-black text-white mb-2">{platform.name}</h3>
-                                            <p className="text-slate-400 text-sm mb-4 line-clamp-2">{platform.description}</p>
-                                            <div className="flex items-center gap-2">
-                                                <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded border border-emerald-500/20">
-                                                    {platform.category || 'Learning'}
-                                                </span>
-                                                <Rocket size={14} className="text-emerald-400 ml-auto group-hover:translate-x-1 transition-transform" />
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    {mode === 'LEARN' && (userProfile?.role === 'admin' || userProfile?.role === 'instructor') && <button type="button" className="sq-arcade-add-platform" onClick={() => setShowAddPlatform(true)}><Plus size={18} /> Add learning platform</button>}
                 </div>
-            </div>
+
+                {selectedVideo && <div className="sq-arcade-nested"><div><VideoQuiz video={selectedVideo} onClose={() => setSelectedVideo(null)} onComplete={handleEarnComplete} isCompleted={completedContent.includes(selectedVideo.id)} /></div></div>}
+                {selectedGame && <GameCard game={selectedGame} userCredits={credits} onClose={() => setSelectedGame(null)} onPlay={handlePlayGame} />}
+                <PlatformBrowser platform={selectedPlatform} isOpen={!!selectedPlatform} onClose={() => setSelectedPlatform(null)} />
+                <AddPlatformModal isOpen={showAddPlatform} onClose={() => setShowAddPlatform(false)} />
+            </section>
         </div>
     );
 };

@@ -14,10 +14,12 @@ import { PickupNotification } from './components/PickupNotification';
 import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
 import { ToastProvider } from './context/ToastContext';
-import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
-import { isLocalHostname } from './utils/appUrls';
+import { ArrowLeft, RefreshCw, Wrench, X } from 'lucide-react';
+import { isLocalHostname } from '../utils/appUrls';
 import { exchangeSparkQuestLaunch } from './services/appBridge';
-import { ProcessTemplate, ProjectTemplate } from './types';
+import { Assignment, ProcessTemplate, ProjectTemplate, StudentProject } from './types';
+import { assignmentFromMission } from './domain/missionContent';
+import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from './domain/workflowPipeline';
 
 
 import { LoadingScreen } from './components/LoadingScreen';
@@ -26,6 +28,14 @@ const StudentWizard = lazy(() => import('./components/StudentWizard').then(modul
 const InstructorFactory = lazy(() => import('./components/InstructorFactory').then(module => ({ default: module.InstructorFactory })));
 const ProjectDetailsEnhanced = lazy(() => import('./components/ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 const ParentShowcase = lazy(() => import('./components/ParentShowcase'));
+const StudentProjectDetailsDemo = lazy(() => import('./components/StudentProjectDetailsDemo'));
+const SparkStore = lazy(() => import('./components/SparkStore').then(module => ({ default: module.SparkStore })));
+const StudentPortfolio = lazy(() => import('./components/StudentPortfolio').then(module => ({ default: module.StudentPortfolio })));
+const StudentGallery = lazy(() => import('./components/StudentGallery').then(module => ({ default: module.StudentGallery })));
+const CredentialWallet = lazy(() => import('./components/CredentialWallet').then(module => ({ default: module.CredentialWallet })));
+const ArcadeView = lazy(() => import('./components/arcade/ArcadeView').then(module => ({ default: module.ArcadeView })));
+const AvatarSelector = lazy(() => import('./components/AvatarSelector').then(module => ({ default: module.AvatarSelector })));
+const LearnerNavigationPreview = lazy(() => import('./components/LearnerNavigationPreview').then(module => ({ default: module.LearnerNavigationPreview })));
 
 const missionDesignPreview: ProjectTemplate = {
   id: 'design-preview-mission',
@@ -69,11 +79,89 @@ const missionDesignWorkflow: ProcessTemplate = {
   name: 'Maker build cycle',
   description: 'Understand, plan, build, test, and share.',
   phases: [
-    { id: 'understand', name: 'Understand the plant problem', description: 'Observe the plant and decide what the alert should communicate.', color: 'blue', icon: 'Brain', order: 1 },
-    { id: 'plan', name: 'Plan the circuit', description: 'Sketch the sensor, controller, and alert before connecting parts.', color: 'amber', icon: 'Pencil', order: 2 },
-    { id: 'build', name: 'Build the guardian', description: 'Wire the circuit and create a stable enclosure.', color: 'indigo', icon: 'Wrench', order: 3 },
-    { id: 'test', name: 'Test wet and dry soil', description: 'Collect proof, notice what fails, and improve the response.', color: 'green', icon: 'Check', order: 4 },
+    { id: 'understand', name: 'Understand the plant problem', description: 'Observe the plant and decide what the alert should communicate.', objective: 'Explain who needs the plant guardian and what it should notice.', instructions: 'Observe the plant and write one clear problem statement before choosing parts.', checklist: ['Observe wet and dry soil', 'Write the problem in one sentence'], tools: ['Notebook'], materials: ['Plant or soil sample'], evidenceRequirements: [{ id: 'understand-note', type: 'text', prompt: 'Write your problem statement.', required: true }], estimatedMinutes: 20, required: true, color: 'blue', icon: 'Brain', order: 1 },
+    { id: 'plan', name: 'Plan the circuit', description: 'Sketch the sensor, controller, and alert before connecting parts.', objective: 'Create a circuit plan another maker can understand.', instructions: 'Draw how the sensor, controller and LED connect. Ask for a quick mentor check.', checklist: ['Draw the circuit', 'Label every connection', 'Get a mentor check'], tools: ['Pencil', 'Circuit simulator'], materials: ['Planning sheet'], evidenceRequirements: [{ id: 'plan-photo', type: 'image', prompt: 'Add a photo or screenshot of your circuit plan.', required: true }], estimatedMinutes: 30, required: true, color: 'amber', icon: 'Pencil', order: 2 },
+    { id: 'build', name: 'Build the guardian', description: 'Wire the circuit and create a stable enclosure.', objective: 'Build a safe first prototype that can read the sensor.', instructions: 'Connect one part at a time. Keep power disconnected while changing wires.', checklist: ['Connect the sensor', 'Add the visible alert', 'Secure loose wires'], tools: ['Wire cutter', 'Computer'], materials: ['Microcontroller', 'Moisture sensor', 'LED', 'Jumper wires'], safetyNotes: ['Disconnect power before changing wires.', 'Keep water away from the powered circuit.'], evidenceRequirements: [{ id: 'build-photo', type: 'image', prompt: 'Photograph your first working prototype.', required: true }], estimatedMinutes: 60, required: true, color: 'indigo', icon: 'Wrench', order: 3 },
+    { id: 'test', name: 'Test and improve', description: 'Collect proof, notice what fails, and improve the response.', objective: 'Prove the guardian responds differently to wet and dry soil.', instructions: 'Run the same test twice, record what happens, then improve one part.', checklist: ['Test dry soil', 'Test wet soil', 'Make one improvement'], tools: ['Phone camera'], materials: ['Wet and dry soil samples'], evidenceRequirements: [{ id: 'test-video', type: 'video', prompt: 'Record the wet-versus-dry test.', required: true }], estimatedMinutes: 40, required: true, color: 'emerald', icon: 'Check', order: 4 },
   ],
+};
+
+const missionStudioPreviewAssignment: Assignment = assignmentFromMission(missionDesignPreview);
+const missionStudioPreviewSnapshot = createWorkflowSnapshot(missionDesignWorkflow, '2026-09-29T00:00:00.000Z');
+const missionStudioPreviewProject: StudentProject = {
+  id: 'design-preview-student-project',
+  studentId: 'design-preview-student',
+  organizationId: 'design-preview-organization',
+  templateId: missionDesignPreview.id,
+  title: missionDesignPreview.title,
+  description: missionDesignPreview.description,
+  thumbnailUrl: missionDesignPreview.thumbnailUrl,
+  coverImage: missionDesignPreview.thumbnailUrl,
+  station: missionDesignPreview.station,
+  status: 'building',
+  workflowId: missionDesignWorkflow.id,
+  workflowSnapshot: missionStudioPreviewSnapshot,
+  missionBrief: missionDesignPreview.missionBrief,
+  resources: missionDesignPreview.resources || [],
+  stepResources: {},
+  steps: buildProjectStepsFromWorkflow(missionStudioPreviewSnapshot).map((step, index) => ({ ...step, status: index === 0 ? 'done' : index === 1 ? 'doing' : 'todo' })),
+  commits: [],
+  skills: missionDesignPreview.skills,
+};
+
+type StudioPreviewState = 'build' | 'review' | 'revision' | 'approved' | 'complete' | 'submitted';
+
+const getMissionStudioPreviewProject = (state: StudioPreviewState): StudentProject => {
+  const steps = missionStudioPreviewProject.steps.map(step => ({ ...step }));
+
+  if (state === 'review') {
+    steps[0].status = 'done';
+    steps[1] = {
+      ...steps[1],
+      status: 'PENDING_REVIEW',
+      evidence: 'https://example.com/plant-guardian-plan',
+      note: 'I labelled the sensor, board, and LED, then checked each connection with my mentor.',
+    };
+    steps[2].status = 'todo';
+  }
+
+  if (state === 'revision') {
+    steps[0].status = 'done';
+    steps[1] = {
+      ...steps[1],
+      status: 'REJECTED',
+      evidence: 'https://example.com/plant-guardian-plan',
+      note: 'I drew the main connections before starting the build.',
+      reviewNotes: 'Your idea is clear. Add labels for power and ground so another maker can wire it safely.',
+    };
+    steps[2].status = 'todo';
+  }
+
+  if (state === 'approved') {
+    steps[0].status = 'done';
+    steps[1] = {
+      ...steps[1],
+      status: 'done',
+      evidence: '/mission-plant-guardian.svg',
+      note: 'I labelled every connection and checked the plan before wiring.',
+      reviewNotes: 'Clear plan and careful labels. You are ready to build.',
+    };
+    steps[2].status = 'doing';
+  }
+
+  if (state === 'complete' || state === 'submitted') {
+    steps.forEach((step, index) => {
+      step.status = 'done';
+      step.note = `Proof for step ${index + 1} is ready.`;
+      step.evidence = index === 1 ? '/mission-plant-guardian.svg' : `https://example.com/plant-guardian-step-${index + 1}`;
+    });
+  }
+
+  return {
+    ...missionStudioPreviewProject,
+    status: state === 'submitted' ? 'submitted' : 'building',
+    steps,
+  };
 };
 
 const LazyView: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -220,6 +308,42 @@ const SparkQuestApp: React.FC = () => {
 
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'mission') {
     return <LazyView><ProjectDetailsEnhanced project={missionDesignPreview} workflow={missionDesignWorkflow} role="student" onBack={() => { window.location.href = window.location.pathname; }} onLaunch={() => undefined} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'studio') {
+    const studioStateParam = new URLSearchParams(window.location.search).get('studioState');
+    const studioState: StudioPreviewState = ['review', 'revision', 'approved', 'complete', 'submitted'].includes(studioStateParam || '')
+      ? studioStateParam as StudioPreviewState
+      : 'build';
+    return <LazyView><StudentWizard assignment={missionStudioPreviewAssignment} initialProject={getMissionStudioPreviewProject(studioState)} isConnected previewMode onExit={() => { window.location.href = `${window.location.pathname}?designPreview=mission`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'store') {
+    return <LazyView><SparkStore isOpen previewMode defaultTab="gadgets" onClose={() => { window.location.href = `${window.location.pathname}?designPreview=studio`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'portfolio') {
+    return <LazyView><StudentPortfolio isOpen previewMode onSelectProject={() => undefined} onStartShowcase={() => undefined} onClose={() => { window.location.href = `${window.location.pathname}?designPreview=store`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'arcade') {
+    return <LazyView><ArcadeView isOpen previewMode onClose={() => { window.location.href = `${window.location.pathname}?designPreview=portfolio`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'gallery') {
+    return <LazyView><StudentGallery isOpen previewMode onClose={() => { window.location.href = `${window.location.pathname}?designPreview=arcade`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'inventory') {
+    return <LazyView><CredentialWallet isOpen previewMode onClose={() => { window.location.href = `${window.location.pathname}?designPreview=gallery`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'profile') {
+    return <LazyView><main className="sq-profile-preview"><button type="button" onClick={() => { window.location.href = `${window.location.pathname}?designPreview=inventory`; }} aria-label="Close maker profile"><X size={24} /></button><AvatarSelector previewMode studentName="Aya Maker" onSelect={() => undefined} /></main></LazyView>;
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'navigation') {
+    return <LazyView><LearnerNavigationPreview onClose={() => { window.location.href = `${window.location.pathname}?designPreview=profile`; }} /></LazyView>;
   }
 
   // Loading
@@ -420,10 +544,12 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 }
 
 const App: React.FC = () => {
-  const localPreview = isLocalHostname(window.location.hostname)
-    && new URLSearchParams(window.location.search).get('preview') === 'login';
+  const preview = isLocalHostname(window.location.hostname)
+    ? new URLSearchParams(window.location.search).get('preview')
+    : null;
 
-  if (localPreview) return <LoginView />;
+  if (preview === 'login') return <LoginView />;
+  if (preview === 'student-project') return <LazyView><StudentProjectDetailsDemo /></LazyView>;
 
   return (
     <ErrorBoundary>

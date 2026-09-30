@@ -1,45 +1,136 @@
-import React, { useState, useEffect } from 'react';
-import { Award, TrendingUp, Star, Download, X, ExternalLink } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Award, Download, ExternalLink, FileCheck2, Plus, Sparkles, Star, X } from 'lucide-react';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { StudentProject, Badge } from '../types';
+import { StudentProject } from '../types';
 
 interface StudentPortfolioProps {
     isOpen: boolean;
     onClose: () => void;
     onSelectProject?: (projectId: string) => void;
     onStartShowcase?: () => void;
+    previewMode?: boolean;
 }
 
-export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject, onStartShowcase }) => {
+const DEMO_PROJECTS: StudentProject[] = [
+    {
+        id: 'portfolio-plant-guardian',
+        title: 'Smart plant guardian',
+        description: 'A moisture-sensing device that warns its owner before the soil becomes too dry.',
+        station: 'Circuits',
+        status: 'published',
+        steps: [
+            { id: 'observe', title: 'Observe', status: 'done', evidence: 'proof' },
+            { id: 'plan', title: 'Plan', status: 'done', evidence: 'proof' },
+            { id: 'build', title: 'Build', status: 'done', evidence: 'proof' },
+            { id: 'test', title: 'Test', status: 'done', evidence: 'proof' },
+        ],
+        commits: [{ id: 'commit-1', message: 'Improved the dry-soil threshold.', timestamp: new Date('2026-09-18') }],
+        skills: ['Electronics', 'Prototyping', 'Testing'],
+        resources: [],
+        thumbnailUrl: '/mission-plant-guardian.svg',
+    },
+    {
+        id: 'portfolio-weather-station',
+        title: 'Pocket weather station',
+        description: 'A compact sensor station that records temperature and explains changing conditions.',
+        station: 'Coding',
+        status: 'delivered',
+        steps: [
+            { id: 'research', title: 'Research', status: 'done' },
+            { id: 'code', title: 'Code', status: 'done' },
+            { id: 'calibrate', title: 'Calibrate', status: 'done' },
+        ],
+        commits: [
+            { id: 'commit-2', message: 'Added a clearer temperature display.', timestamp: new Date('2026-08-28') },
+            { id: 'commit-3', message: 'Calibrated the room sensor.', timestamp: new Date('2026-08-29') },
+        ],
+        skills: ['Python', 'Sensors', 'Data'],
+        resources: [],
+    },
+    {
+        id: 'portfolio-arcade-controller',
+        title: 'Cardboard arcade controller',
+        description: 'A playable controller made from recycled board, conductive tape, and careful iteration.',
+        station: 'Engineering',
+        status: 'submitted',
+        steps: [
+            { id: 'shape', title: 'Shape', status: 'done' },
+            { id: 'wire', title: 'Wire', status: 'done' },
+            { id: 'playtest', title: 'Play-test', status: 'PENDING_REVIEW' },
+        ],
+        commits: [{ id: 'commit-4', message: 'Reinforced the button panel.', timestamp: new Date('2026-09-26') }],
+        skills: ['Creative engineering', 'Circuits', 'Iteration'],
+        resources: [],
+    },
+];
+
+const projectEmoji = (station: string) => {
+    const normalized = station.toLowerCase();
+    if (normalized.includes('robot')) return '🤖';
+    if (normalized.includes('cod')) return '🌦️';
+    if (normalized.includes('circuit')) return '🌱';
+    if (normalized.includes('engineer')) return '🕹️';
+    return '🛠️';
+};
+
+const statusLabel = (status: string) => {
+    if (['APPROVED', 'published', 'delivered', 'DONE', 'COMPLETED', 'completed'].includes(status)) return { label: 'Approved', className: 'is-approved' };
+    if (status === 'PENDING_REVIEW' || status === 'submitted') return { label: 'Mentor review', className: 'is-review' };
+    return { label: status.replaceAll('_', ' '), className: 'is-neutral' };
+};
+
+export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject, onStartShowcase, previewMode = false }) => {
     const { user, userProfile } = useAuth();
-    // Force Rebuild: Navigation Fix Applied
     const [projects, setProjects] = useState<StudentProject[]>([]);
-    const [badges, setBadges] = useState<Badge[]>([]);
     const [loading, setLoading] = useState(true);
-    const [totalXP, setTotalXP] = useState(0);
-    const [level, setLevel] = useState(1);
+    const [error, setError] = useState<string | null>(null);
+    const [exportMessage, setExportMessage] = useState<string | null>(null);
 
     useEffect(() => {
-        if (isOpen && user && userProfile) {
-            loadPortfolioData();
+        if (!isOpen) return;
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [isOpen, onClose]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (previewMode) {
+            setProjects(DEMO_PROJECTS);
+            setLoading(false);
+            setError(null);
+            return;
         }
-    }, [isOpen, user, userProfile]);
+        if (!user || !userProfile) {
+            setLoading(false);
+            setError('Sign in again to open your field log.');
+            return;
+        }
+        void loadPortfolioData();
+    }, [isOpen, previewMode, user, userProfile]);
 
     const loadPortfolioData = async () => {
         if (!db || !user || !userProfile) return;
+        if (!userProfile.organizationId) {
+            setLoading(false);
+            setError('Your academy connection is missing. Ask an instructor to repair it before opening the portfolio.');
+            return;
+        }
+
         setLoading(true);
+        setError(null);
         try {
             const ownerIds = Array.from(new Set([user.uid, userProfile.studentId].filter(Boolean))) as string[];
             const results = await Promise.allSettled(ownerIds.map(ownerId => getDocs(query(
                 collection(db, 'student_projects'),
                 where('studentId', '==', ownerId),
-                where('organizationId', '==', userProfile.organizationId || 'makerlab-academy')
+                where('organizationId', '==', userProfile.organizationId),
             ))));
-            if (results.length > 0 && results.every(result => result.status === 'rejected')) {
-                throw results[0].reason;
-            }
+            if (results.length > 0 && results.every(result => result.status === 'rejected')) throw results[0].reason;
 
             const visibleStatuses = new Set(['submitted', 'published', 'delivered', 'completed', 'PENDING_REVIEW', 'APPROVED', 'DONE', 'COMPLETED']);
             const projectMap = new Map<string, StudentProject>();
@@ -47,239 +138,119 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                 if (result.status !== 'fulfilled') return;
                 result.value.docs.forEach(projectDoc => {
                     const project = { id: projectDoc.id, ...projectDoc.data() } as StudentProject;
-                    const sameOrganization = !project.organizationId
-                        || project.organizationId === (userProfile.organizationId || 'makerlab-academy');
-                    if (sameOrganization && visibleStatuses.has(project.status)) projectMap.set(project.id, project);
+                    if (project.organizationId === userProfile.organizationId && visibleStatuses.has(project.status)) projectMap.set(project.id, project);
                 });
             });
-            const projectsData = Array.from(projectMap.values());
-            setProjects(projectsData);
-
-            // Calculate XP and Level (mock calculation)
-            const xp = projectsData.length * 100; // 100 XP per project
-            setTotalXP(xp);
-            setLevel(Math.floor(xp / 500) + 1);
-
-            // Load badges (mock for now)
-            setBadges([]);
-        } catch (err) {
-            console.error('Error loading portfolio:', err);
+            setProjects(Array.from(projectMap.values()));
+        } catch (portfolioError) {
+            console.error('Error loading portfolio:', portfolioError);
+            setError('Your field log could not load. Check your connection and try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleExportPDF = () => {
-        alert('PDF Export feature coming soon!');
-    };
+    const totalXP = projects.length * 100;
+    const level = Math.floor(totalXP / 500) + 1;
+    const skills = useMemo(() => Array.from(new Set(projects.flatMap(project => project.skills || []))), [projects]);
+    const proofCount = projects.reduce((total, project) => total + (project.steps || []).filter(step => Boolean(step.evidence)).length, 0);
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-6xl h-[90vh] bg-slate-900/95 backdrop-blur-xl border border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.3)] rounded-3xl overflow-hidden flex flex-col">
-                {/* Header */}
-                <div className="p-6 border-b border-slate-700/50 bg-gradient-to-r from-emerald-950/50 to-slate-900 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-emerald-950/50 rounded-2xl border border-emerald-500/20">
-                            <Award className="w-8 h-8 text-emerald-400" />
-                        </div>
+        <div className="sq-portfolio-overlay" role="dialog" aria-modal="true" aria-labelledby="portfolio-title">
+            <button className="sq-portfolio-backdrop" type="button" onClick={onClose} aria-label="Close field log" />
+            <section className="sq-portfolio-shell">
+                <header className="sq-portfolio-header">
+                    <div className="sq-portfolio-brand">
+                        <span className="sq-portfolio-mark" aria-hidden="true"><Award size={26} /></span>
                         <div>
-                            <h2 className="text-3xl font-black text-white">My Portfolio</h2>
-                            <p className="text-sm text-slate-400">Showcase of completed projects</p>
+                            <p>MakerLab field log</p>
+                            <h2 id="portfolio-title">Work worth remembering.</h2>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={handleExportPDF}
-                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white rounded-xl text-emerald-400 font-bold transition-all"
-                        >
-                            <Download size={18} />
-                            <span className="hidden md:inline">Export PDF</span>
-                        </button>
-                        <button
-                            onClick={onClose}
-                            className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
-                        >
-                            <X size={24} />
-                        </button>
+                    <div className="sq-portfolio-actions">
+                        <button type="button" className="sq-portfolio-export" onClick={() => setExportMessage('PDF export is being prepared for a future release. Your projects remain saved here.')}><Download size={18} /> <span>Export log</span></button>
+                        <button type="button" className="sq-portfolio-close" onClick={onClose} aria-label="Close field log"><X size={24} /></button>
                     </div>
-                </div>
+                </header>
 
-                {/* Stats Bar */}
-                <div className="p-6 border-b border-slate-700/50 bg-slate-950/50">
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="text-center p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                            <div className="text-3xl font-black text-emerald-400">{projects.length}</div>
-                            <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Projects</div>
-                        </div>
-                        <div className="text-center p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                            <div className="text-3xl font-black text-amber-400">{totalXP}</div>
-                            <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Total XP</div>
-                        </div>
-                        <div className="text-center p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                            <div className="text-3xl font-black text-indigo-400">Level {level}</div>
-                            <div className="text-xs text-slate-400 uppercase tracking-wider mt-1">Current Level</div>
-                        </div>
-                    </div>
-                </div>
+                {exportMessage && <div className="sq-portfolio-notice" role="status"><FileCheck2 size={18} /> {exportMessage}<button type="button" onClick={() => setExportMessage(null)} aria-label="Dismiss export message"><X size={16} /></button></div>}
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="sq-portfolio-scroll">
+                    <section className="sq-portfolio-hero">
+                        <div>
+                            <p className="sq-portfolio-eyebrow">Your making story</p>
+                            <h3>Every build leaves a trail of proof.</h3>
+                            <p>This is where finished projects, mentor feedback, and growing skills become a record you can share.</p>
+                        </div>
+                        <div className="sq-portfolio-stats" aria-label="Portfolio summary">
+                            <div><strong>{projects.length}</strong><span>Projects</span></div>
+                            <div><strong>{proofCount}</strong><span>Proof items</span></div>
+                            <div><strong>{totalXP}</strong><span>Sparks earned</span></div>
+                            <div><strong>L{level}</strong><span>Maker level</span></div>
+                        </div>
+                    </section>
+
                     {loading ? (
-                        <div className="flex items-center justify-center h-full">
-                            <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
+                        <div className="sq-portfolio-state"><span className="sq-portfolio-loader" /><h3>Opening your field log…</h3></div>
+                    ) : error ? (
+                        <div className="sq-portfolio-state is-error"><Award size={42} /><h3>Field log unavailable</h3><p>{error}</p><button type="button" onClick={() => void loadPortfolioData()}>Try again</button></div>
                     ) : projects.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-full text-center">
-                            <Award className="w-24 h-24 text-slate-700 mb-4" />
-                            <h3 className="text-2xl font-bold text-slate-400 mb-2">No Completed Projects Yet</h3>
-                            <p className="text-slate-500">Complete and submit projects to build your portfolio!</p>
-                        </div>
+                        <div className="sq-portfolio-state"><Award size={48} /><h3>Your first project belongs here.</h3><p>Complete and submit a mission to start your field log.</p></div>
                     ) : (
-                        <div className="space-y-8">
-                            {/* Skills Section */}
-                            <div>
-                                <h3 className="text-lg font-black text-white mb-4 flex items-center gap-2">
-                                    <Star className="w-5 h-5 text-amber-400" />
-                                    Skills Gained
-                                </h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {Array.from(new Set(projects.flatMap(p => p.skills || []))).map(skill => (
-                                        <span key={skill} className="px-3 py-1 bg-emerald-500/10 text-emerald-400 text-sm font-bold rounded-full border border-emerald-500/20">
-                                            {skill}
-                                        </span>
-                                    ))}
+                        <>
+                            <section className="sq-portfolio-skills" aria-labelledby="portfolio-skills-title">
+                                <div>
+                                    <p>Skills collected</p>
+                                    <h3 id="portfolio-skills-title">What your work proves</h3>
                                 </div>
-                            </div>
-
-                            {/* Projects Grid */}
-                            <div>
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-black text-white">Completed Projects & Showcase</h3>
-                                    {onStartShowcase && (
-                                        <button
-                                            onClick={() => {
-                                                onStartShowcase();
-                                                onClose();
-                                            }}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl flex items-center gap-2 transition-colors shadow-lg shadow-indigo-500/20"
-                                        >
-                                            <Award size={16} />
-                                            Upload External Work
-                                        </button>
-                                    )}
+                                <div className="sq-portfolio-skill-list">
+                                    {skills.map((skill, index) => <span key={skill}><Star size={14} fill={index < 3 ? 'currentColor' : 'none'} /> {skill}</span>)}
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {projects.map(project => {
-                                        // Helper for Status Badge
-                                        const getStatusConfig = (status: string) => {
-                                            switch (status) {
-                                                case 'APPROVED':
-                                                case 'published':
-                                                    return { label: 'Approved', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
-                                                case 'PENDING_REVIEW':
-                                                    return { label: 'Waiting Approval', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20' };
-                                                case 'submitted':
-                                                    return { label: 'Submitted', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
-                                                case 'DONE':
-                                                case 'COMPLETED':
-                                                    return { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
-                                                default:
-                                                    return { label: status, color: 'bg-slate-700/50 text-slate-400 border-slate-600' };
-                                            }
-                                        };
-                                        const statusConfig = getStatusConfig(project.status);
+                            </section>
 
+                            <section className="sq-portfolio-projects" aria-labelledby="portfolio-projects-title">
+                                <div className="sq-portfolio-section-head">
+                                    <div><p>Project archive</p><h3 id="portfolio-projects-title">Built, tested, shared.</h3></div>
+                                    {onStartShowcase && <button type="button" onClick={() => { onStartShowcase(); onClose(); }}><Plus size={18} /> Add outside work</button>}
+                                </div>
+
+                                <div className="sq-portfolio-grid">
+                                    {projects.map((project, index) => {
+                                        const status = statusLabel(String(project.status));
+                                        const completedSteps = project.steps?.filter(step => step.status === 'done').length || 0;
                                         return (
-                                            <div
-                                                key={project.id}
-                                                onClick={() => {
-                                                    console.log('🖱️ [Portfolio] Project Clicked:', project.id);
-                                                    console.log('🖱️ [Portfolio] onSelectProject exists?', !!onSelectProject);
-                                                    if (onSelectProject) {
-                                                        console.log('🖱️ [Portfolio] Invoking onSelectProject...');
-                                                        onSelectProject(project.id);
-                                                        onClose();
-                                                    } else {
-                                                        console.warn('⚠️ [Portfolio] onSelectProject prop IS MISSING');
-                                                    }
-                                                }}
-                                                className="group bg-slate-800/50 rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all overflow-hidden hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)] cursor-pointer"
-                                            >
-                                                {/* Project Thumbnail */}
-                                                <div className="aspect-video bg-gradient-to-br from-emerald-900/20 to-slate-900 flex items-center justify-center border-b border-slate-700 relative group">
-                                                    {(project.thumbnailUrl || project.coverImage) ? (
-                                                        <img src={project.thumbnailUrl || project.coverImage} alt={project.title} className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <div className="text-6xl">{project.station === 'robotics' ? '🤖' : project.station === 'coding' ? '💻' : '🎨'}</div>
-                                                    )}
-
-                                                    {/* Overlay Link */}
-                                                    {project.presentationUrl && (
-                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
-                                                            <a
-                                                                href={project.presentationUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-all shadow-lg"
-                                                                onClick={e => e.stopPropagation()}
-                                                            >
-                                                                <ExternalLink size={16} />
-                                                                View Project
-                                                            </a>
-                                                        </div>
-                                                    )}
+                                            <article key={project.id} className="sq-portfolio-card">
+                                                <div className="sq-portfolio-card-media">
+                                                    {(project.thumbnailUrl || project.coverImage)
+                                                        ? <img src={project.thumbnailUrl || project.coverImage} alt={`${project.title} project`} loading="lazy" />
+                                                        : <span aria-hidden="true">{projectEmoji(project.station)}</span>}
+                                                    <span className={`sq-portfolio-status ${status.className}`}>{status.label}</span>
+                                                    <small>Log entry {String(index + 1).padStart(2, '0')}</small>
                                                 </div>
-
-                                                {/* Project Info */}
-                                                <div className="p-4">
-                                                    <h3 className="font-bold text-white mb-2 line-clamp-1">{project.title}</h3>
-                                                    <p className="text-xs text-slate-400 line-clamp-3 mb-3 whitespace-pre-wrap">{project.description}</p>
-
-                                                    {/* Stats */}
-                                                    <div className="flex items-center justify-between text-xs mb-3">
-                                                        <span className="text-slate-500">
-                                                            {project.steps?.filter(s => s.status === 'done').length || 0}/{project.steps?.length || 0} steps
-                                                        </span>
-                                                        <span className="text-emerald-400 font-bold">
-                                                            {project.commits?.length || 0} commits
-                                                        </span>
+                                                <div className="sq-portfolio-card-copy">
+                                                    <p>{project.station || 'Maker project'}</p>
+                                                    <h4>{project.title}</h4>
+                                                    <div className="sq-portfolio-card-description">{project.description}</div>
+                                                    <div className="sq-portfolio-card-proof">
+                                                        <span><FileCheck2 size={15} /> {completedSteps}/{project.steps?.length || 0} stages</span>
+                                                        <span><Sparkles size={15} /> {project.commits?.length || 0} improvements</span>
                                                     </div>
-
-                                                    <div className="flex items-center justify-between gap-3">
-                                                        <span className={`px-3 py-1 text-xs font-bold rounded-full border ${statusConfig.color}`}>
-                                                            {statusConfig.label}
-                                                        </span>
-
-                                                        {/* Explicit View Button */}
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                // DEBUG: Alert to confirm click and ID
-                                                                // window.alert(`Navigating to: ${project.id}`);
-
-                                                                if (onSelectProject) {
-                                                                    onSelectProject(project.id);
-                                                                    onClose();
-                                                                }
-                                                            }}
-                                                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-colors shadow-lg flex items-center gap-1"
-                                                        >
-                                                            View Details
-                                                        </button>
+                                                    <div className="sq-portfolio-card-actions">
+                                                        <button type="button" disabled={!onSelectProject} onClick={() => { onSelectProject?.(project.id); onClose(); }}>Open project <ArrowRight size={16} /></button>
+                                                        {project.presentationUrl && <a href={project.presentationUrl} target="_blank" rel="noopener noreferrer">Presentation <ExternalLink size={15} /></a>}
                                                     </div>
                                                 </div>
-                                            </div>
-
+                                            </article>
                                         );
                                     })}
                                 </div>
-                            </div>
-                        </div>
+                            </section>
+                        </>
                     )}
                 </div>
-            </div>
-        </div >
+            </section>
+        </div>
     );
 };

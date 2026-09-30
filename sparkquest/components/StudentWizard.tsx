@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { FileText, Video, Image, Link as LinkIcon, Globe, File, Download, GripVertical, Pencil, Check, X as XIcon, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Camera, Check, ChevronDown, Clock3, Download, File, FileText, Globe, GripVertical, Image, Link as LinkIcon, ListChecks, Map, PackageCheck, Pencil, RotateCcw, Save, Send, Target, Trash2, Trophy, Upload, Video, Wrench, X as XIcon } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { StudentProject, Workflow, ProjectStep, TaskStatus, Assignment } from '../types';
 import { generateCoverArt, analyzeSubmission } from '../services/gemini';
@@ -11,13 +11,18 @@ import { ConnectionStatus } from './ConnectionStatus';
 import { useSession } from '../context/SessionContext';
 import { useAuth } from '../context/AuthContext';
 import { useFactoryData } from '../hooks/useFactoryData';
-import { getRandomMindset, getProjectIcon, MINDSET_LIBRARY } from '../utils/MindsetLibrary';
 import { TypingChallenge } from './TypingChallenge';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useFocusSession } from '../context/FocusSessionContext';
 import { ResourceViewerModal } from './ResourceViewerModal';
 import { useToast } from '../context/ToastContext';
 import { resolveMissionContent } from '../domain/missionContent';
+import {
+  buildProjectStepsFromWorkflow,
+  createStudentTask,
+  createWorkflowSnapshot,
+  refreshProjectStepsFromWorkflow,
+} from '../domain/workflowPipeline';
 
 
 // --- Sound Utility (Synthesizer) ---
@@ -425,63 +430,16 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
         return;
       }
 
-      if (templateData) {
-        console.log("🔥 [StudentWizard] Using Workflow Template Data:", templateData);
+      if (templateData?.phases) {
+        const templateWithId = { id: targetId, ...templateData };
+        const workflowSnapshot = project.workflowSnapshot?.workflowId === targetId
+          ? project.workflowSnapshot
+          : createWorkflowSnapshot(templateWithId);
+        const updatedSteps = (project.steps || []).length === 0
+          ? buildProjectStepsFromWorkflow(workflowSnapshot, assignment.stepResources || {})
+          : refreshProjectStepsFromWorkflow(project.steps, workflowSnapshot, assignment.stepResources || {});
 
-        if (templateData?.phases) {
-          let updatedSteps = [...(project.steps || [])];
-          let hasChanges = false;
-
-          // SCENARIO 1: No steps yet -> Generate all
-          if (updatedSteps.length === 0) {
-            updatedSteps = templateData.phases.map((p: any) => {
-              // 1. Get fundamental workflow resources
-              const workflowResources = p.resources || [];
-
-              // 2. Get mission-specific resources for this phase
-              // Assignment.stepResources is keyed by phaseId
-              const missionResources = assignment.stepResources?.[p.id] || [];
-
-              console.log(`[StudentWizard] Step ${p.name} resources:`, { workflow: workflowResources, mission: missionResources });
-
-              return {
-                id: p.id || Date.now().toString() + Math.random(),
-                title: p.name,
-                status: 'todo',
-                resources: [...workflowResources, ...missionResources]
-              };
-            });
-            hasChanges = true;
-            console.log('✨ Generated new steps from workflow with merged resources');
-          }
-          // SCENARIO 2: Steps exist -> MERGE Resources (Fix for existing missions)
-          else {
-            updatedSteps = updatedSteps.map((step, idx) => {
-              const phase = templateData.phases[idx];
-              // If titles match (or index alignment assumed), update resources
-              if (phase && (phase.name === step.title || idx < templateData.phases.length)) {
-                // 1. Get fundamental workflow resources
-                const workflowResources = phase.resources || [];
-
-                // 2. Get mission-specific resources
-                const missionResources = assignment.stepResources?.[phase.id] || [];
-
-                // Force update resources
-                return { ...step, resources: [...workflowResources, ...missionResources] };
-              }
-              return step;
-            });
-            hasChanges = true;
-            console.log('🔧 Merged resources into existing steps');
-          }
-
-          if (hasChanges) {
-            updateProject({
-              workflowId: targetId,
-              steps: updatedSteps
-            });
-          }
-        }
+        updateProject({ workflowId: targetId, workflowSnapshot, steps: updatedSteps });
       } else {
         console.warn("⚠️ [StudentWizard] Workflow template not found for ID:", targetId);
       }
@@ -493,7 +451,7 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
   };
 
   // Loading State
-  if (processTemplates.length === 0) {
+  if (processTemplates.length === 0 && !assignment.recommendedWorkflow && !project.workflowSnapshot) {
     return (
       <div className="text-center py-12">
         <div className="text-4xl animate-spin mb-4">⏳</div>
@@ -516,49 +474,55 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
       assignment.recommendedWorkflow
     )
     : null;
+  const assignedWorkflow = processTemplates.find(template =>
+    template.id === assignment.recommendedWorkflow || template.name === assignment.recommendedWorkflow
+  );
+  const assignedPhases = (assignedWorkflow?.phases || project.workflowSnapshot?.phases || [])
+    .slice()
+    .sort((left, right) => left.order - right.order);
+  const assignedDescription = assignedWorkflow?.description || project.workflowSnapshot?.description || '';
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
       {assignment.recommendedWorkflow ? (
-        <div className="text-center space-y-6 max-w-lg mx-auto">
-          <div className="w-24 h-24 bg-indigo-100 rounded-full mx-auto flex items-center justify-center text-5xl shadow-inner animate-pulse">
-            🎯
-          </div>
-          <div>
-            <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tight mb-2">Protocol Assigned</h3>
-            <p className="text-slate-500 font-bold text-lg leading-relaxed">
-              Commander has designated the <span className="text-indigo-600 font-black">"{recommendedName}"</span> strategy for your mission.
-            </p>
+        <div className="mx-auto max-w-2xl space-y-6">
+          <div className="rounded-3xl border border-blue-100 bg-blue-50/70 p-6 text-left">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Your project process</p>
+            <h3 className="mt-2 text-2xl font-black text-slate-950">{recommendedName}</h3>
+            <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{assignedDescription || 'Your instructor set this path for the mission. Follow the steps in the roadmap, then add proof as you work.'}</p>
           </div>
 
-          <div className="bg-blue-50 p-6 rounded-3xl border-4 border-blue-100/50">
-            <p className="text-blue-800 font-bold italic">
-              "Are you ready to initialize this strategy and discover your tasks?"
-            </p>
-          </div>
+          {assignedPhases.length > 0 && (
+            <div className="space-y-3">
+              {assignedPhases.map((phase, index) => (
+                <div key={phase.id || `${phase.name}-${index}`} className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-sm font-black text-slate-600">{index + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-black text-slate-900">{phase.name}</h4>
+                      {phase.required !== false && <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-blue-700">Required</span>}
+                    </div>
+                    {(phase.objective || phase.description) && <p className="mt-1 text-sm font-semibold leading-5 text-slate-600">{phase.objective || phase.description}</p>}
+                    <p className="mt-2 text-xs font-bold text-slate-400">{phase.checklist?.length || 0} checklist items{phase.estimatedMinutes ? ` · ${phase.estimatedMinutes} min` : ''}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
-          <div className="pt-4">
-            {/* We only show the ONE card, centered and larger */}
-            {relevantWorkflows.map(wf => (
-              <div key={wf.id} className="hidden">
-                {/* Hidden because we just want the button to act as the confirmation now, or we can show a mini preview */}
-              </div>
-            ))}
-
-            <button
-              onClick={() => {
-                // Force selection of the first matching workflow
-                const targetWf = relevantWorkflows[0];
-                const targetId = targetWf ? targetWf.id : assignment.recommendedWorkflow;
-
-                console.log("🚀 Initializing Protocol:", targetId);
-                handleLockIn(targetId);
-              }}
-              className="w-full py-5 rounded-3xl bg-indigo-600 text-white font-black text-2xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-3"
-            >
-              <span>🚀 Initialize {recommendedName}</span>
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              const targetId = assignedWorkflow?.id || project.workflowId || relevantWorkflows[0]?.id || assignment.recommendedWorkflow;
+              if (project.workflowSnapshot) {
+                closeModal();
+                return;
+              }
+              handleLockIn(targetId);
+            }}
+            className="w-full rounded-2xl bg-blue-700 px-5 py-4 text-base font-black text-white shadow-lg shadow-blue-700/20 transition hover:bg-blue-800"
+          >
+            {project.workflowSnapshot || project.workflowId === (assignedWorkflow?.id || assignment.recommendedWorkflow) ? 'Continue to roadmap' : `Start ${recommendedName}`}
+          </button>
         </div>
       ) : (
         <>
@@ -603,7 +567,7 @@ const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProje
   const addStep = () => {
     if (!newStep.trim()) return;
     playSound('click');
-    const step: ProjectStep = { id: Date.now().toString(), title: newStep, status: 'todo' };
+    const step = createStudentTask(newStep);
     updateProject({ steps: [...(project.steps || []), step] });
     setNewStep('');
   };
@@ -770,6 +734,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const [showCommitInput, setShowCommitInput] = useState(false);
   const [isProMode, setIsProMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const taskSheetRef = useRef<HTMLDivElement>(null);
 
   // Toast notifications
   const { showToast } = useToast();
@@ -796,6 +761,19 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
           ${project.studentId || 'Cadet'}`;
 
   if (!step) return <div>Error: Step not found</div>;
+
+  const checklistTotal = step.checklist?.length || 0;
+  const checklistDone = step.checklist?.filter((_, index) => Boolean(step.checklistCompleted?.[index])).length || 0;
+  const toggleChecklistItem = (index: number) => {
+    const nextChecklist = (step.checklist || []).map((_, itemIndex) => Boolean(step.checklistCompleted?.[itemIndex]));
+    nextChecklist[index] = !nextChecklist[index];
+    playSound('click');
+    void updateProject({
+      steps: project.steps.map(projectStep => projectStep.id === realId
+        ? { ...projectStep, checklistCompleted: nextChecklist }
+        : projectStep),
+    });
+  };
 
   // INITIALIZE PREVIEW FROM EXISTING EVIDENCE (only on mount or when step changes)
   React.useEffect(() => {
@@ -830,6 +808,11 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
     setWizardStep(prev => Math.max(1, prev - 1));
     playSound('click');
   };
+
+  useEffect(() => {
+    const scroller = taskSheetRef.current?.closest('.sq-work-modal__content') as HTMLElement | null;
+    scroller?.scrollTo({ top: 0, behavior: 'auto' });
+  }, [wizardStep]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -940,14 +923,14 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       if (!saveResult.success) throw new Error(saveResult.error || 'Evidence could not be saved.');
 
       playSound('success');
-      alert('✅ Evidence Submitted! Great work, Cadet.');
+      showToast('Proof sent for mentor review.', 'success');
 
       // Close modal or refresh view handled by parent re-render on project update
       closeModal();
 
     } catch (error) {
       console.error("Submission failed:", error);
-      alert("❌ Submission execution failed. Comm link unstable. Try again.");
+      showToast('Your proof could not be sent. Check the file or link and try again.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -955,7 +938,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
   const handleSaveProgress = async () => {
     if (!commitMessage.trim()) {
-      alert('Please enter a commit message');
+      showToast('Add a short note before saving this checkpoint.', 'error');
       return;
     }
 
@@ -974,29 +957,35 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
     const saveResult = await updateProject(updatedProject);
     if (!saveResult.success) {
-      alert(`Progress could not be saved: ${saveResult.error || 'Unknown error'}`);
+      showToast(`Progress could not be saved: ${saveResult.error || 'Unknown error'}`, 'error');
       return;
     }
 
     setCommitMessage('');
     setShowCommitInput(false);
     playSound('success');
-    alert('✅ Progress saved!');
+    showToast('Checkpoint saved.', 'success');
   };
 
   const evidenceLooksLikeImage = (url?: string) => Boolean(url && (
-    url.startsWith('data:image/') || /\.(png|jpe?g|gif|webp|avif)(?:\?|$)/i.test(url)
+    url.startsWith('data:image/') || /\.(png|jpe?g|gif|webp|avif|svg)(?:\?|$)/i.test(url)
   ));
 
   if (step.status === 'done') {
     return (
-      <div className="text-center py-4 md:py-8">
-        <div className="text-4xl md:text-6xl mb-2 md:mb-4 animate-bounce">🏆</div>
-        <h3 className="text-xl md:text-2xl font-black text-slate-800">Step Completed!</h3>
-        <p className="text-green-600 font-bold text-sm md:text-base">Commander Approved</p>
+      <div className="sq-task-result is-approved text-center py-4 md:py-8">
+        <div className="sq-task-progress" aria-label="Task progress">
+          <span className="is-done"><Check size={13} /> Understand</span>
+          <span className="is-done"><Check size={13} /> Proof added</span>
+          <span className="is-current"><Check size={13} /> Approved</span>
+        </div>
+        <span className="sq-task-result__icon"><Trophy size={30} /></span>
+        <p className="sq-task-result__eyebrow">Checkpoint passed</p>
+        <h3 className="text-xl md:text-2xl font-black text-slate-800">This step is approved.</h3>
+        <p className="sq-task-result__copy">Your proof is safely logged. You can move to the next part of the build.</p>
         {step.evidence && (evidenceLooksLikeImage(step.evidence)
-          ? <img src={step.evidence} className="mt-4 md:mt-6 rounded-2xl shadow-lg mx-auto max-h-40 md:max-h-60 border-4 border-white transform -rotate-1" alt="Evidence" />
-          : <a href={step.evidence} target="_blank" rel="noreferrer" className="mx-auto mt-5 inline-flex min-h-11 items-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700"><FileText size={18} /> Open submitted file</a>)}
+          ? <img src={step.evidence} className="sq-task-result__evidence" alt="Approved proof" />
+          : <a href={step.evidence} target="_blank" rel="noreferrer" className="sq-task-result__link"><FileText size={18} /> Open approved proof</a>)}
       </div>
     );
   }
@@ -1004,26 +993,32 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   // REJECTED STATE
   if (step.status === 'REJECTED') {
     return (
-      <div className="text-center py-8 space-y-6">
-        <div className="w-24 h-24 mx-auto bg-red-100 rounded-full flex items-center justify-center animate-bounce">
-          <span className="text-5xl">⚠️</span>
+      <div className="sq-task-result is-revision text-center py-8 space-y-6">
+        <div className="sq-task-progress" aria-label="Task progress">
+          <span className="is-done"><Check size={13} /> Understand</span>
+          <span className="is-done"><Check size={13} /> Proof added</span>
+          <span className="is-current">Update</span>
         </div>
+        <span className="sq-task-result__icon"><AlertTriangle size={30} /></span>
         <div>
-          <h3 className="text-2xl font-black text-red-600">Revision Required</h3>
-          <p className="text-slate-500 font-bold">Commander Feedback:</p>
+          <p className="sq-task-result__eyebrow">Mentor note</p>
+          <h3 className="text-2xl font-black">One small update, then try again.</h3>
+          <p className="sq-task-result__copy">Your work is saved. Read the note below and improve only what is needed.</p>
         </div>
-        <div className="bg-red-50 p-6 rounded-2xl border-2 border-red-100 text-left max-w-sm mx-auto shadow-sm">
-          <p className="text-red-800 font-bold">"{step.reviewNotes || 'Please review instructions and try again.'}"</p>
+        <div className="sq-task-feedback text-left">
+          <span>What to change</span>
+          <p>{step.reviewNotes || 'Please review the instructions and update your proof.'}</p>
         </div>
+        {step.evidence && <a href={step.evidence} target="_blank" rel="noreferrer" className="sq-task-result__link"><FileText size={18} /> View my previous proof</a>}
         <button
           onClick={() => {
             // Reset to DOING to allow retry
             const updatedSteps = project.steps.map(s => s.id === realId ? { ...s, status: 'DOING' as TaskStatus } : s);
             updateProject({ steps: updatedSteps });
           }}
-          className="w-full py-4 rounded-3xl bg-slate-800 text-white font-black text-xl uppercase tracking-wider hover:bg-slate-700 transition-colors shadow-lg"
+          className="sq-task-retry w-full py-4 rounded-3xl bg-slate-800 text-white font-black text-lg hover:bg-slate-700 transition-colors"
         >
-          Retry Mission Step
+          <RotateCcw size={18} /> Update this step
         </button>
       </div>
     );
@@ -1032,32 +1027,36 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   console.log('TaskStepContent step:', step);
 
   return (
-    <div className="space-y-6">
-      <div className="bg-blue-50 p-6 rounded-3xl border-4 border-blue-100 text-blue-900 font-bold text-center text-lg relative overflow-hidden">
+    <div ref={taskSheetRef} className="sq-task-sheet space-y-6">
+      <div className="sq-task-nameplate bg-blue-50 p-6 rounded-3xl border-4 border-blue-100 text-blue-900 font-bold text-center text-lg relative overflow-hidden">
         <div className="relative z-10">{step.title}</div>
         <div className="absolute top-0 right-0 w-16 h-16 bg-blue-200 rounded-bl-full opacity-50"></div>
       </div>
 
       {step.status === 'PENDING_REVIEW' && (
-        <div className="bg-amber-50 p-6 rounded-3xl border-4 border-amber-100 flex flex-col items-center text-center space-y-4 animate-in fade-in slide-in-from-top-4">
-          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center animate-pulse text-3xl">
-            ⏳
+        <div className="sq-task-review-state bg-amber-50 p-6 rounded-3xl border-4 border-amber-100 flex flex-col items-center text-center space-y-4 animate-in fade-in slide-in-from-top-4">
+          <div className="sq-task-progress w-full" aria-label="Task progress">
+            <span className="is-done"><Check size={13} /> Understand</span>
+            <span className="is-done"><Check size={13} /> Proof added</span>
+            <span className="is-current">In review</span>
           </div>
+          <span className="sq-task-review-state__icon"><Clock3 size={26} /></span>
           <div>
-            <h3 className="text-lg font-black text-amber-600 uppercase tracking-wide">Under Review</h3>
-            <p className="text-amber-800/70 font-bold text-sm">Mission Control is analyzing your data...</p>
+            <p className="sq-task-review-state__eyebrow">Proof received</p>
+            <h3>Waiting for mentor review</h3>
+            <p>Your proof is safe. You can keep building another unlocked step while your mentor checks this one.</p>
           </div>
 
           {/* SUBMITTED EVIDENCE PREVIEW */}
           {step.evidence && (
-            <div className="w-full bg-white p-4 rounded-2xl border-2 border-amber-200 space-y-3">
-              <p className="text-xs font-black uppercase text-amber-600 text-left">Your Submitted Evidence</p>
+            <div className="sq-task-review-proof w-full space-y-3">
+              <p>Proof you sent</p>
               <div className="relative">
                 {evidenceLooksLikeImage(step.evidence) ? <img
                   src={step.evidence}
-                  alt="Submitted Evidence"
-                  className="w-full max-h-48 object-cover rounded-xl shadow-md"
-                /> : <a href={step.evidence} target="_blank" rel="noreferrer" className="flex min-h-24 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-black text-amber-800"><FileText size={20} /> Open submitted file</a>}
+                  alt="Proof sent for review"
+                  className="w-full max-h-48 object-cover rounded-xl"
+                /> : <a href={step.evidence} target="_blank" rel="noreferrer" className="sq-task-review-proof__link"><FileText size={20} /> Open submitted proof</a>}
                 <button
                   onClick={() => {
                     setIsEditing(true);
@@ -1065,7 +1064,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                     // Delay click to ensure file input is rendered
                     setTimeout(() => fileInputRef.current?.click(), 100);
                   }}
-                  className="absolute top-2 right-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-lg text-sm font-black flex items-center gap-2 border-2 border-white"
+                  className="sq-task-review-proof__replace absolute top-2 right-2"
                 >
                   <Pencil className="w-4 h-4" />
                   <span>Replace</span>
@@ -1074,9 +1073,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             </div>
           )}
 
-          <div className="w-full bg-white/50 p-4 rounded-xl border border-amber-200/50 text-left">
-            <p className="text-xs font-black uppercase text-amber-400 mb-1">Your Note</p>
-            <p className="text-slate-600 text-sm italic">"{step.note || 'No notes'}"</p>
+          <div className="sq-task-review-note w-full text-left">
+            <p>Your build note</p>
+            <blockquote>{step.note || 'No build note was added.'}</blockquote>
           </div>
         </div>
       )}
@@ -1085,15 +1084,38 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       {/* WIZARD STEP 1: INSTRUCTIONS & RESOURCES */}
       {(wizardStep === 1 && step.status !== 'PENDING_REVIEW') && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <div className="bg-slate-50 p-6 rounded-3xl border-4 border-slate-100 text-center">
-            <p className="text-slate-500 font-bold text-lg mb-4">
-              Execute the tasks below using your tools.
-            </p>
+          <div className="sq-task-progress" aria-label="Task progress">
+            <span className="is-current">1 Understand</span>
+            <span>2 Add proof</span>
+            <span>3 Mentor review</span>
+          </div>
+          <div className="sq-task-instructions rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm md:p-7">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">What to do</p>
+            <h4 className="mt-2 text-xl font-black text-slate-950">{step.objective || step.description || step.title}</h4>
+            {step.instructions && <p className="mt-3 text-sm font-semibold leading-6 text-slate-600">{step.instructions}</p>}
+
+            {step.checklist && step.checklist.length > 0 && (
+              <div className="sq-task-checklist mt-5 rounded-2xl bg-blue-50 p-4">
+                <div className="flex items-center justify-between gap-3"><p className="text-[10px] font-black uppercase tracking-wider text-blue-700">Checklist</p><span className="rounded-full bg-white px-2 py-1 text-[10px] font-black text-blue-700">{checklistDone}/{checklistTotal} checked</span></div>
+                <ul className="mt-3 space-y-2">{step.checklist.map((item, index) => {
+                  const isChecked = Boolean(step.checklistCompleted?.[index]);
+                  return <li key={`${item}-${index}`}><button type="button" onClick={() => toggleChecklistItem(index)} className={`flex w-full items-start gap-2 rounded-xl px-2 py-2 text-left text-sm font-bold transition ${isChecked ? 'bg-white/80 text-slate-500 line-through' : 'text-slate-700 hover:bg-white/70'}`}><span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 text-[10px] ${isChecked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-blue-300 bg-white text-blue-700'}`}>{isChecked ? <Check size={13} strokeWidth={3} /> : index + 1}</span><span>{item}</span></button></li>;
+                })}</ul>
+              </div>
+            )}
+
+            {(step.tools?.length || step.materials?.length) ? <div className="sq-task-kit mt-5 grid gap-3 sm:grid-cols-2">
+              {step.tools && step.tools.length > 0 && <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-violet-700">Tools</p><p className="mt-2 text-sm font-bold leading-6 text-slate-700">{step.tools.join(' · ')}</p></div>}
+              {step.materials && step.materials.length > 0 && <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Materials</p><p className="mt-2 text-sm font-bold leading-6 text-slate-700">{step.materials.join(' · ')}</p></div>}
+            </div> : null}
+
+            {step.safetyNotes && step.safetyNotes.length > 0 && <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-rose-700">Work safely</p><p className="mt-2 text-sm font-bold leading-6 text-slate-700">{step.safetyNotes.join(' · ')}</p></div>}
+            {step.evidenceRequirements && step.evidenceRequirements.length > 0 && <div className="sq-task-proof-callout mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Proof to add</p><p className="mt-2 text-sm font-bold leading-6 text-slate-700">{step.evidenceRequirements.map(requirement => requirement.prompt).join(' · ')}</p></div>}
 
             {/* Resources */}
-            <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4 md:mb-6">
+            <div className="mt-5 flex flex-wrap gap-2 md:gap-3">
               {(!step.resources || step.resources.length === 0) && (
-                <div className="text-xs md:text-sm text-slate-400 italic">No specific tools required for this step.</div>
+                <div className="text-xs italic text-slate-400 md:text-sm">No extra links or files attached to this step.</div>
               )}
               {step.resources && step.resources.map((res, idx) => (
                 <button
@@ -1115,7 +1137,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                       }
                     }
                   }}
-                  className="flex items-center gap-2 md:gap-3 px-4 py-3 md:px-6 md:py-4 bg-white border-b-4 border-slate-200 rounded-2xl font-black text-slate-600 hover:border-blue-400 hover:text-blue-600 hover:-translate-y-1 transition-all shadow-sm text-sm md:text-lg"
+                  className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                 >
                   <span>{res.title}</span>
                   <span className="text-[10px] md:text-xs opacity-50 bg-slate-100 px-2 py-1 rounded-md">↗</span>
@@ -1127,9 +1149,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
             <button
               onClick={() => { playSound('click'); handleWizardNext(); }}
-              className="w-full py-4 md:py-5 rounded-3xl bg-indigo-600 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-3"
+              className="sq-task-next flex min-h-13 w-full items-center justify-center gap-3 rounded-xl bg-blue-700 px-4 py-4 text-base font-black text-white transition hover:bg-blue-800"
             >
-              <span>✅ I Have Finished This Step</span>
+              <span>Add my proof</span>
             </button>
           </div>
         </div>
@@ -1137,19 +1159,24 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
       {/* WIZARD STEP 2: EVIDENCE UPLOAD - Show when on step 2 OR editing submitted evidence */}
       {((wizardStep === 2 && step.status !== 'PENDING_REVIEW') || (step.status === 'PENDING_REVIEW' && isEditing)) && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="sq-proof-sheet space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="sq-task-progress" aria-label="Task progress">
+            <span className="is-done"><Check size={13} /> Understand</span>
+            <span className="is-current">2 Add proof</span>
+            <span>3 Mentor review</span>
+          </div>
           <button
             onClick={() => handleWizardBack()}
-            className="text-slate-400 font-bold hover:text-slate-600 flex items-center gap-2 mb-2"
+            className="sq-task-back text-slate-500 font-bold flex items-center gap-2 mb-2"
           >
-            <span>← Back to Instructions</span>
+            <ArrowLeft size={16} /><span>Back to instructions</span>
           </button>
 
           <div>
-            <label className="block text-sm font-black text-slate-400 uppercase tracking-wider mb-3">Evidence</label>
+            <div className="sq-proof-heading"><p>Add proof</p><h4>Show what you made or tested.</h4><span>A clear photo, file, recording, or project link is enough.</span></div>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
+              className="sq-proof-drop border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
             >
               {preview && (!file || file.type.startsWith('image/')) ? (
                 <div className="relative z-10">
@@ -1159,8 +1186,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                 <div className="relative z-10 rounded-2xl border border-blue-200 bg-white px-5 py-4 text-center shadow-sm"><FileText className="mx-auto text-blue-600" size={30} /><p className="mt-2 max-w-xs truncate text-sm font-black text-slate-800">{file.name}</p><p className="mt-1 text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(1)} MB</p></div>
               ) : (
                 <div className="relative z-10 flex flex-col items-center">
-                  <div className="w-12 h-12 md:w-16 md:h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4 text-blue-500 group-hover:scale-110 transition-transform shadow-sm text-2xl md:text-4xl">📷</div>
-                  <span className="text-base md:text-lg font-bold text-slate-400 text-center">Upload photo, video, audio, PDF, or text</span>
+                  <span className="sq-proof-drop__icon"><Upload size={27} /></span>
+                  <strong>Choose a proof file</strong>
+                  <span className="text-sm font-bold text-slate-500 text-center">Photo, video, audio, PDF, or text · up to 20 MB</span>
                 </div>
               )}
               <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
@@ -1183,12 +1211,12 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             )}
 
             {/* NEW: Evidence Link Input */}
-            <div className="mt-4">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Or add a Link (Google Doc, Video, etc.)</label>
+            <div className="sq-proof-link mt-4">
+              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2"><LinkIcon size={14} /> Or paste a project link</label>
               <input
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
-                placeholder="https://..."
+                placeholder="https://docs.google.com/..."
                 className="w-full p-4 rounded-2xl border-2 border-slate-200 font-bold text-slate-600 focus:border-blue-400 outline-none"
               />
             </div>
@@ -1208,36 +1236,36 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                         playSound('click');
                       });
                   } else {
-                    alert("No screenshot found! Take a photo in the Mission Tool/Session first.");
+                    showToast('No workshop screenshot is available yet.', 'error');
                   }
                 }}
-                className="text-xs font-bold text-indigo-500 hover:text-indigo-700 underline flex items-center justify-center gap-1 py-2"
+                className="sq-proof-helper text-sm font-bold flex items-center justify-center gap-2 py-2"
               >
-                📸 Use Last Session Screenshot
+                <Camera size={16} /> Use my latest workshop screenshot
               </button>
 
               <button
                 onClick={() => setShowCommitInput(!showCommitInput)}
-                className="w-full py-3 bg-cyan-50 text-cyan-600 rounded-xl font-bold border-2 border-cyan-100 hover:bg-cyan-100 transition-colors"
+                className="sq-proof-helper w-full py-3 rounded-xl font-bold border-2 transition-colors"
               >
-                💾 Save Progress for Later
+                <Save size={16} /> Save a checkpoint for later
               </button>
 
               {showCommitInput && (
                 <div className="p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100 animate-in fade-in slide-in-from-top-2">
-                  <label className="block text-xs font-black text-cyan-600 uppercase tracking-wider mb-2">Commit Message</label>
+                  <label className="block text-xs font-black text-cyan-700 uppercase tracking-wider mb-2">Checkpoint note</label>
                   <input
                     type="text"
                     value={commitMessage}
                     onChange={(e) => setCommitMessage(e.target.value)}
-                    placeholder="e.g., Finished motor assembly"
+                    placeholder="Example: Circuit plan is ready for wiring"
                     className="w-full p-3 bg-white border-2 border-cyan-200 rounded-xl font-medium text-slate-600 outline-none focus:border-cyan-500 mb-2"
                   />
                   <button
                     onClick={handleSaveProgress}
                     className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold transition-colors"
                   >
-                    Save Commit
+                    Save checkpoint
                   </button>
                 </div>
               )}
@@ -1248,9 +1276,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
           <div className="flex justify-end mb-2 mt-4">
             <button
               onClick={() => setIsProMode(!isProMode)}
-              className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border transition-all ${isProMode ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-slate-400 border-slate-300'}`}
+              className={`sq-writing-challenge text-xs font-black px-3 py-2 rounded-xl border-2 transition-all ${isProMode ? 'is-active' : ''}`}
             >
-              {isProMode ? '⚡ Pro Mode Active' : 'Enable Pro Mode'}
+              {isProMode ? 'Writing challenge active' : 'Try the writing challenge'}
             </button>
           </div>
 
@@ -1268,25 +1296,25 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
-              className="w-full rounded-3xl border-4 border-slate-200 p-4 font-bold text-slate-600 min-h-[100px] focus:border-blue-400 outline-none transition-colors resize-none"
-              placeholder="How did it go? Notes for Commander..."
+              className="sq-proof-note w-full rounded-2xl border-2 border-slate-200 p-4 font-bold text-slate-700 min-h-[110px] outline-none transition-colors resize-none"
+              placeholder="What did you try? What changed? What did you notice?"
             />
           )}
 
           <button
             onClick={handleSubmit}
             disabled={submitting || (!note && !file && !link)}
-            className="w-full py-4 rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black text-xl uppercase tracking-wider border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:to-indigo-500 transition-all shadow-xl shadow-blue-500/20"
+            className="sq-proof-submit w-full py-4 rounded-xl text-white font-black text-lg disabled:opacity-50 transition-all"
           >
-            {submitting ? 'Transmitting...' : 'Submit Evidence & Complete'}
+            <Send size={18} /> {submitting ? 'Sending proof…' : 'Send proof for review'}
           </button>
         </div>
       )}
 
       {/* PENDING REVIEW VIEW (Read Only) */}
       {(step.status === 'PENDING_REVIEW' && !isEditing) && (
-        <button onClick={closeModal} className="w-full py-4 rounded-3xl bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 transition-colors">
-          Close
+        <button onClick={closeModal} className="sq-task-review-close w-full py-4 font-bold transition-colors">
+          Back to my roadmap
         </button>
       )}
 
@@ -1294,22 +1322,37 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   );
 };
 
-const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => (
-  <div className="text-center space-y-8">
-    <div className="text-6xl animate-bounce">🎉</div>
-    <h3 className="text-3xl font-black text-slate-800">Ready to Launch!</h3>
-    <p className="text-slate-500 font-bold">You've completed all steps. Share your victory!</p>
-    <div className="max-w-md mx-auto bg-slate-50 p-6 rounded-3xl border-4 border-slate-200">
-      <input className="w-full text-lg font-bold p-3 rounded-2xl border-2 border-slate-200 mb-4" placeholder="YouTube Link..." />
-      <button
-        onClick={() => { playSound('success'); updateProject({ status: 'submitted' }); closeModal(); }}
-        className="w-full bg-indigo-500 text-white py-3 rounded-2xl font-black border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1 hover:bg-indigo-400 transition-colors"
-      >
-        🚀 PUBLISH TO WORLD
-      </button>
+const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
+  const isSubmitted = project.status === 'submitted' || project.status === 'published';
+
+  return (
+    <div className={`sq-mission-submit text-center space-y-6 ${isSubmitted ? 'is-submitted' : ''}`}>
+      <span className="sq-mission-submit__icon">{isSubmitted ? <Check size={34} /> : <Trophy size={34} />}</span>
+      <div>
+        <p>{isSubmitted ? 'Mission received' : 'Mission complete'}</p>
+        <h3>{isSubmitted ? 'Your project is with your instructor.' : 'Ready for mentor review'}</h3>
+        <span>{isSubmitted ? 'Your roadmap and every approved proof are safely logged. You can still look back through your work.' : 'Your build steps and proof are together. Send the mission when you are ready.'}</span>
+      </div>
+      <div className="sq-mission-submit__summary" aria-label="Submission checklist">
+        <span><Check size={16} /> All build steps complete</span>
+        <span><Check size={16} /> Proof attached to the roadmap</span>
+        <span><Check size={16} /> Reflection notes saved</span>
+      </div>
+      <div className="sq-mission-submit__action max-w-md mx-auto p-6 rounded-3xl">
+        {isSubmitted ? (
+          <button onClick={closeModal} className="w-full py-4 rounded-xl font-black transition-colors"><ArrowLeft size={18} /> Back to my roadmap</button>
+        ) : (
+          <button
+            onClick={() => { playSound('success'); updateProject({ status: 'submitted' }); closeModal(); }}
+            className="w-full py-4 rounded-xl font-black transition-colors"
+          >
+            <Send size={18} /> Send mission to my instructor
+          </button>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
   const { user, userProfile } = useAuth();
@@ -1325,16 +1368,17 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
     if (e.target.files?.[0]) {
       const selectedFile = e.target.files[0];
       if (selectedFile.size > 20 * 1024 * 1024) {
-        alert('File too large. Maximum size is 20 MB.');
+        setSubmitError('This file is larger than 20 MB. Choose a smaller file and try again.');
         e.target.value = '';
         return;
       }
       const allowed = /^(image|video|audio)\//.test(selectedFile.type) || ['application/pdf', 'text/plain'].includes(selectedFile.type);
       if (!allowed) {
-        alert('Upload an image, video, audio clip, PDF, or text file.');
+        setSubmitError('Choose an image, video, audio clip, PDF, or text file.');
         e.target.value = '';
         return;
       }
+      setSubmitError(null);
       playSound('click');
       setFile(selectedFile);
       if (selectedFile.type.startsWith('image/')) {
@@ -1408,17 +1452,18 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-right-8">
-      <div className="text-center space-y-4">
-        <h3 className="text-3xl font-black text-slate-800">Showcase Your Work 📸</h3>
-        <p className="text-slate-500 font-bold">Upload a photo or paste a link to your completed project.</p>
+    <div className="sq-showcase-sheet space-y-8 animate-in fade-in slide-in-from-right-8">
+      <div className="sq-showcase-heading text-center space-y-3">
+        <span><Camera size={26} /></span>
+        <h3 className="text-3xl font-black text-slate-800">Build showcase</h3>
+        <p className="text-slate-500 font-bold">Choose one strong image or file, then add a project link if you have one.</p>
       </div>
 
       <div className="flex flex-col gap-4 md:gap-6 max-w-xl mx-auto">
         {/* File Upload */}
         <div
           onClick={() => fileInputRef.current?.click()}
-          className="border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
+          className="sq-proof-drop border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
         >
           {preview ? (
             <img src={preview} alt="Preview" className="h-32 md:h-48 object-cover rounded-2xl shadow-md transform rotate-2 group-hover:rotate-0 transition-transform relative z-10" />
@@ -1426,8 +1471,9 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
             <div className="relative z-10 rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-center shadow-sm"><FileText className="mx-auto text-indigo-600" size={30} /><p className="mt-2 max-w-xs truncate text-sm font-black text-slate-800">{file.name}</p><p className="mt-1 text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(1)} MB</p></div>
           ) : (
             <div className="relative z-10 flex flex-col items-center">
-              <div className="w-12 h-12 md:w-16 md:h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4 text-indigo-500 group-hover:scale-110 transition-transform shadow-sm text-2xl md:text-3xl">📷</div>
-              <span className="text-base md:text-lg font-bold text-slate-400">Upload project media or file</span>
+              <span className="sq-proof-drop__icon"><Upload size={27} /></span>
+              <strong>Choose showcase media</strong>
+              <span className="text-sm font-bold text-slate-500">Photo, video, audio, PDF, or text · up to 20 MB</span>
             </div>
           )}
           <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
@@ -1435,7 +1481,7 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
 
         {/* Link Input */}
         <div>
-          <label className="block text-xs font-black text-slate-400 uppercase tracking-wider mb-2">Video / Project Link</label>
+          <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-wider mb-2"><LinkIcon size={14} /> Project link</label>
           <input
             value={link}
             onChange={(e) => setLink(e.target.value)}
@@ -1453,13 +1499,13 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
         <button
           onClick={handleSubmit}
           disabled={submitting || (!file && !preview && !link.trim())}
-          className="w-full py-4 md:py-5 rounded-3xl bg-indigo-600 text-white font-black text-lg md:text-xl uppercase tracking-wider border-b-4 md:border-b-8 border-indigo-800 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-indigo-500 transition-all shadow-xl shadow-indigo-500/30"
+          className="sq-proof-submit w-full py-4 md:py-5 rounded-xl text-white font-black text-lg disabled:opacity-50 transition-all"
         >
           {submitPhase === 'uploading'
             ? 'Uploading your file…'
             : submitPhase === 'saving'
               ? 'Sending for review…'
-              : '🚀 Submit showcase for review'}
+              : 'Send showcase for review'}
         </button>
         <p className="text-center text-xs font-bold leading-5 text-slate-400">Your instructor will review it before it appears as published work.</p>
       </div>
@@ -1467,16 +1513,15 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
   );
 };
 
-
-
 interface StudentWizardProps {
   assignment: Assignment;
   initialProject: StudentProject;
   isConnected?: boolean;
   onExit?: () => void;
+  previewMode?: boolean;
 }
 
-export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initialProject, isConnected = true, onExit }) => {
+export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initialProject, isConnected = true, onExit, previewMode = false }) => {
   const { user, userProfile } = useAuth();
 
   // Theme
@@ -1488,32 +1533,9 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [mindset] = useState(getRandomMindset()); // Random quote for this session
-  const [projectIcon, setProjectIcon] = useState('⚡');
   const [showGlobalResources, setShowGlobalResources] = useState(false);
   const [showMissionBrief, setShowMissionBrief] = useState(false);
   const [viewingResource, setViewingResource] = useState<any>(null);
-
-  // Responsive Item Width
-  const [itemWidth, setItemWidth] = useState(300);
-
-  // Drag Scroll State
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setItemWidth(window.innerWidth < 768 ? 200 : 300);
-    };
-
-    // Initial check
-    handleResize();
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Load Factory Data for Auto-Workflow
   const { processTemplates } = useFactoryData();
@@ -1521,20 +1543,6 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     assignment,
     processTemplates.find(template => template.id === assignment.recommendedWorkflow || template.id === project.workflowId),
   );
-
-  // Peer Mock Data (Simulating other students working)
-  const [peers] = useState([
-    { id: 'p1', name: 'Alex', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex', stepId: 'strategy', color: 'bg-pink-500' },
-    { id: 'p2', name: 'Sam', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sam', stepId: 'step-1700000000000', color: 'bg-blue-500' }, // ID match logic needed if real
-    { id: 'p3', name: 'Jordan', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jordan', stepId: 'publish', color: 'bg-emerald-500' }
-  ]);
-
-  // Update icon when title changes
-  useEffect(() => {
-    if (project.title) {
-      setProjectIcon(getProjectIcon(project.title));
-    }
-  }, [project.title]);
 
   // Focus Session: Auto-start when working on project
   const { startSession, endSession, activeSession, incrementMissions } = useFocusSession();
@@ -1579,6 +1587,10 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
 
     // 1. Optimistically update UI immediately
     setProject(updatedProject);
+
+    if (previewMode) {
+      return { success: true };
+    }
 
     // 2. Save to Firestore in background
     setIsSaving(true);
@@ -1638,80 +1650,31 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
 
 
 
-  // --- AUTO-APPLY RECOMMENDED WORKFLOW ---
+  // --- APPLY THE ASSIGNED WORKFLOW THROUGH THE CANONICAL PIPELINE ---
   useEffect(() => {
-    // Only run if:
-    // 1. Assignment has a recommended workflow
-    // 2. Project doesn't imply it's already set up (no steps or explicit ID mismatch)
-    // 3. We have templates loaded
-    // 3. We have templates loaded
     if (assignment.recommendedWorkflow && processTemplates.length > 0) {
       const template = processTemplates.find(t => t.id === assignment.recommendedWorkflow);
 
       if (template && template.phases) {
-        // CASE 1: Brand New Project (No Workflow)
+        const workflowSnapshot = project.workflowSnapshot?.workflowId === template.id
+          ? project.workflowSnapshot
+          : createWorkflowSnapshot(template);
+
         if (!project.workflowId) {
-          console.log("⚡ [Auto-Workflow] Applying NEW workflow:", template.name);
-          const newSteps = template.phases.map((p: any) => {
-            const templateResources = p.resources || [];
-            const specificResources = assignment.stepResources?.[p.id] || [];
-            return {
-              id: p.id || Date.now().toString() + Math.random(),
-              title: p.name,
-              status: 'todo' as TaskStatus,
-              resources: [...templateResources, ...specificResources]
-            };
+          updateProject({
+            workflowId: template.id,
+            workflowSnapshot,
+            steps: buildProjectStepsFromWorkflow(workflowSnapshot, assignment.stepResources || {}),
           });
-          updateProject({ workflowId: template.id, steps: newSteps });
-        }
-        // CASE 2: Existing Project (Sync Resources)
-        else if (project.workflowId === template.id) {
-          // Check if we need to inject missing resources (Mission-Specific ones)
-          let hasUpdates = false;
-          const updatedSteps = project.steps.map((step, index) => {
-            // STRATEGY 1: Match by ID (Best)
-            let phase = template.phases.find((p: any) => p.id === step.id);
-
-            // STRATEGY 2: Match by Index (Fallback for legacy steps with random IDs)
-            // We only do this if IDs don't match but we are confident found the corresponding phase
-            if (!phase && template.phases[index]) {
-              // Verify title similarity or just trust index for locked workflows?
-              // For now, valid assumption: workflow steps don't move.
-              phase = template.phases[index];
-              console.log(`[Auto-Workflow] Matched step '${step.title}' to phase '${phase.name}' by index ${index}`);
-            }
-
-            if (!phase) return step; // No corresponding template phase found
-
-            // Get resources keyed by the TEMPLATE PHASE ID
-            const specificResources = assignment.stepResources?.[phase.id] || [];
-
-            // 🔥 FORCE SYNC: Ensure all specific resources are present
-            if (specificResources.length > 0) {
-              const currentResources = step.resources || [];
-              const currentUrls = new Set(currentResources.map(r => r.url));
-
-              const missingResources = specificResources.filter(r => !currentUrls.has(r.url));
-
-              if (missingResources.length > 0) {
-                hasUpdates = true;
-                console.log(`⚡ [Auto-Workflow] Injecting ${missingResources.length} new resources into step '${step.title}'`);
-                return {
-                  ...step,
-                  resources: [...currentResources, ...missingResources]
-                };
-              }
-            }
-            return step;
+        } else if (project.workflowId === template.id && !project.workflowSnapshot) {
+          updateProject({
+            workflowSnapshot,
+            steps: refreshProjectStepsFromWorkflow(project.steps, workflowSnapshot, assignment.stepResources || {}),
           });
-
-          if (hasUpdates) {
-            updateProject({ steps: updatedSteps });
-          }
         }
       }
     }
-  }, [assignment.recommendedWorkflow, project.workflowId, processTemplates, updateProject, assignment.stepResources]); // Added assignment.stepResources to dependency
+  }, [assignment.recommendedWorkflow, project.workflowId, project.workflowSnapshot, processTemplates, updateProject, assignment.stepResources]);
 
   const handleNodeClick = (id: string) => {
     playSound('open');
@@ -1726,7 +1689,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     nodes.push({
       id: 'identity',
       type: 'IDENTITY',
-      title: 'The Spark',
+      title: 'Project brief',
       status: project.title ? 'COMPLETED' : 'ACTIVE',
       icon: '✨',
       onClick: () => handleNodeClick('identity'),
@@ -1741,7 +1704,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       nodes.push({
         id: 'strategy',
         type: 'STRATEGY',
-        title: 'Compass',
+        title: 'Project process',
         status: !project.title ? 'LOCKED' : project.workflowId ? 'COMPLETED' : 'ACTIVE',
         icon: '🧭',
         onClick: () => handleNodeClick('strategy'),
@@ -1766,7 +1729,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       nodes.push({
         id: 'blueprint',
         type: 'BLUEPRINT',
-        title: project.workflowId === 'custom-workflow' ? 'Workbench' : 'Blueprint',
+        title: project.workflowId === 'custom-workflow' ? 'Plan my tasks' : 'Review my tasks',
         status: !project.workflowId ? 'LOCKED' : (project.status === 'building' || project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : 'ACTIVE',
         icon: project.workflowId === 'custom-workflow' ? '🔨' : '📝',
         onClick: () => handleNodeClick('blueprint'),
@@ -1818,7 +1781,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       nodes.push({
         id: 'publish',
         type: 'PUBLISH',
-        title: 'Launch',
+        title: 'Submit project',
         status: (project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : canPublish ? 'ACTIVE' : 'LOCKED',
         icon: '🚀',
         onClick: () => handleNodeClick('publish'),
@@ -1830,78 +1793,43 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   };
 
   const nodes = getRoadmapNodes();
-  const activeNodeIndex = nodes.findIndex(n => n.status === 'ACTIVE' || n.status === 'REVIEW');
+  // Keep the learner moving: an unlocked build action outranks a previously
+  // submitted step that is waiting for mentor review. Review becomes the
+  // bench focus only when there is no active making work.
+  const activeNodeIndex = (() => {
+    const activeIndex = nodes.findIndex(node => node.status === 'ACTIVE');
+    return activeIndex >= 0 ? activeIndex : nodes.findIndex(node => node.status === 'REVIEW');
+  })();
 
-  // Auto-scroll
-  useEffect(() => {
-    if (scrollContainerRef.current && activeNodeIndex !== -1) {
-      // Use state itemWidth
-      const scrollPos = (activeNodeIndex * itemWidth) + (itemWidth / 2) - (window.innerWidth / 2) + (itemWidth / 2); // Center alignment fix
-      scrollContainerRef.current.scrollTo({ left: Math.max(0, scrollPos), behavior: 'smooth' });
-    }
-  }, [activeNodeIndex, project.steps.length, project.status, itemWidth]);
-
-
-  // --- Logic to Generate Two Paths (Base + Progress) ---
-  const generatePaths = useCallback(() => {
-    const nodeCount = nodes.length;
-    if (nodeCount < 2) return { basePath: '', progressPath: '' };
-
-    // Use state itemWidth
-    const startY = 200; // Adjusted for padding
-
-    let d = `M 150 ${startY}`;
-
-    for (let i = 0; i < nodeCount - 1; i++) {
-      const currentX = 150 + (i * itemWidth);
-      const nextX = 150 + ((i + 1) * itemWidth);
-
-      const currentY = startY + (i % 2 === 0 ? 0 : 40);
-      const nextY = startY + ((i + 1) % 2 === 0 ? 0 : 40);
-
-      const cp1X = currentX + (itemWidth / 2);
-      const cp1Y = currentY;
-      const cp2X = currentX + (itemWidth / 2);
-      const cp2Y = nextY;
-
-      d += ` C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${nextX} ${nextY}`;
-    }
-
-    // Progress Path: Same logic but truncated based on active node + partial curve
-    // For simplicity, we just rebuild the path string up to the active node.
-    // If a node is ACTIVE, we draw the line TO it.
-
-    let pD = `M 150 ${startY}`;
-    let progressLimit = -1;
-
-    // Find the last completed or active node index
-    // Actually, we want the line to go solid up to the active node.
-    if (activeNodeIndex > 0) {
-      progressLimit = activeNodeIndex;
-    } else if (activeNodeIndex === -1 && project.status === 'published') {
-      progressLimit = nodeCount; // All done
-    }
-
-    for (let i = 0; i < progressLimit; i++) {
-      // If we are at the end of nodes, stop
-      if (i >= nodeCount - 1) break;
-
-      const currentX = 150 + (i * itemWidth);
-      const nextX = 150 + ((i + 1) * itemWidth);
-      const currentY = startY + (i % 2 === 0 ? 0 : 40);
-      const nextY = startY + ((i + 1) % 2 === 0 ? 0 : 40);
-      const cp1X = currentX + (itemWidth / 2);
-      const cp1Y = currentY;
-      const cp2X = currentX + (itemWidth / 2);
-      const cp2Y = nextY;
-
-      pD += ` C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${nextX} ${nextY}`;
-    }
-
-    return { basePath: d, progressPath: progressLimit > 0 ? pD : '' };
-  }, [nodes, activeNodeIndex, project.status, itemWidth]);
-
-  const { basePath, progressPath } = generatePaths();
+  // Orientation cards help learners understand the mission but should not
+  // inflate the build progress. The meter follows actual project tasks so a
+  // learner can immediately tell how much making work remains.
+  const taskNodes = nodes.filter(node => node.type === 'TASK');
+  const progressNodes = taskNodes.length > 0 ? taskNodes : nodes.filter(node => node.type !== 'IDENTITY');
+  const completedNodeCount = progressNodes.filter(node => node.status === 'COMPLETED').length;
+  const progressPercent = progressNodes.length ? Math.round((completedNodeCount / progressNodes.length) * 100) : 0;
+  const progressLabel = taskNodes.length
+    ? `${completedNodeCount} of ${taskNodes.length} tasks complete`
+    : `${completedNodeCount} of ${progressNodes.length} steps complete`;
+  const nextNode = nodes[activeNodeIndex] || nodes[nodes.length - 1];
+  const foundationNodes = nodes.filter(node => ['IDENTITY', 'STRATEGY', 'BLUEPRINT'].includes(node.type));
+  const journeyNodes = nodes.filter(node => ['TASK', 'PUBLISH'].includes(node.type));
+  const isWaitingForReview = nextNode?.status === 'REVIEW';
+  const isMissionSubmitted = project.status === 'submitted' || project.status === 'published';
+  const benchLabel = isMissionSubmitted ? 'Mission sent' : isWaitingForReview ? 'Mentor checkpoint' : 'At the bench now';
+  const benchCopy = isMissionSubmitted
+    ? 'Your complete mission is with your instructor. Your build log and proof stay available here.'
+    : isWaitingForReview
+      ? 'Your proof is safe and waiting for feedback. Open it any time to review what you sent.'
+      : nextNode?.id === 'publish'
+        ? 'Every build step is approved. Check the mission once more, then send it to your instructor.'
+        : 'Open the next action, add your proof, and keep the build moving.';
+  const benchAction = isMissionSubmitted ? 'View completed mission' : isWaitingForReview ? 'View submitted proof' : nextNode?.id === 'publish' ? 'Review and submit' : 'Open next action';
+  const journeyActiveIndex = journeyNodes.findIndex(node => node.id === nextNode?.id);
+  const journeyProgress = journeyNodes.length > 1
+    ? Math.max(0, Math.min(100, Math.round(((journeyActiveIndex >= 0 ? journeyActiveIndex : 0) / (journeyNodes.length - 1)) * 100)))
+    : 0;
+  const heroImage = project.thumbnailUrl || project.coverImage || assignment.thumbnailUrl;
 
   // --- SPECIAL VIEW: SHOWCASE MODE ---
   if (project.workflowId === 'showcase' || project.templateId === 'showcase-template') {
@@ -1942,282 +1870,116 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   }
 
   return (
-    <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
-
-      {/* Connection Status Indicator */}
+    <div className={`sq-studio-shell ${activeThemeDef.font || ''}`}>
       <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} />
 
-      {/* --- COSMIC BACKGROUND --- */}
-      {/* Grid */}
-      <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
-        <svg width="100%" height="100%"><pattern id="cosmic-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#60a5fa" strokeWidth="1" /></pattern><rect width="100%" height="100%" fill="url(#cosmic-grid)" /></svg>
-      </div>
-      {/* Stars/Particles */}
-      <div className="absolute inset-0 z-0 pointer-events-none">
-        <div className="absolute top-10 left-1/4 w-2 h-2 bg-white rounded-full animate-pulse opacity-50"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-1 h-1 bg-blue-300 rounded-full animate-pulse opacity-70" style={{ animationDelay: '1s' }}></div>
-        <div className="absolute top-1/2 left-10 w-3 h-3 bg-indigo-400 rounded-full animate-pulse opacity-40" style={{ animationDelay: '2s' }}></div>
-        {/* Glowing Orbs */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px]"></div>
-      </div>
-
-      {/* Header */}
-      {/* Header - Compact for Laptop */}
-      <div className="relative z-20 px-3 py-2 md:px-6 md:py-3 bg-slate-900/90 backdrop-blur-md border-b border-slate-700 flex justify-between items-center shadow-lg shrink-0">
-        <div className="flex items-center gap-3 md:gap-6 overflow-hidden">
-          {/* Student Avatar & XP */}
-          <div className="flex items-center gap-2 pr-4 border-r border-slate-700 shrink-0">
-            <div className="relative">
-              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${project.studentId || 'You'}`} className="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-slate-500 bg-slate-800" />
-              <div className="absolute -bottom-1 -right-1 bg-amber-500 text-amber-900 text-[9px] font-black px-1 py-0.5 rounded-md border border-amber-400">
-                L3
-              </div>
-            </div>
-            <div className="hidden lg:block">
-              <h4 className="text-white font-bold text-xs leading-tight">Cadet</h4>
-              <div className="w-16 h-1 bg-slate-700 rounded-full mt-1 overflow-hidden">
-                <div className="h-full bg-blue-500 w-[60%] animate-pulse"></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="min-w-0 overflow-hidden">
-            <h1 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight flex items-center gap-2 md:gap-3 filter drop-shadow-lg truncate">
-              <span className="text-2xl md:text-3xl animate-bounce shrink-0">{projectIcon}</span>
-              <span className="truncate">{project.title || assignment.title}</span>
-            </h1>
-            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider pl-10 md:pl-12 flex items-center gap-2 truncate">
-              <span className="text-blue-400 shrink-0">{assignment.station}</span>
-              <span className="text-slate-600 hidden md:inline">•</span>
-              <span className="hidden md:inline shrink-0">Mission</span>
-            </p>
+      <header className="sq-studio-topbar">
+        <div className="sq-studio-brand">
+          <span className="sq-studio-brand-mark" aria-hidden="true"><Wrench size={19} /></span>
+          <div className="sq-studio-brand-copy">
+            <strong>{project.title || assignment.title}</strong>
+            <span>{assignment.station || 'Maker workshop'} · My project space</span>
           </div>
         </div>
-        <div className="flex gap-4 items-center">
-          {/* Mindset Widget */}
-          <div className="hidden lg:flex flex-col items-end mr-4 max-w-[200px]">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Creator's Mindset</p>
-            <div className="bg-slate-800/50 border border-slate-700 p-2 rounded-xl text-right">
-              <p className="text-xs text-slate-300 italic">"{mindset.text}"</p>
-              {mindset.author && <p className="text-[10px] text-slate-500 font-bold mt-1">- {mindset.author}</p>}
+        <div className="sq-studio-topbar-actions">
+          <span className="sq-studio-status">{isSaving ? 'Saving' : 'Your work is safe'}</span>
+          <button type="button" className="sq-studio-quiet-button" onClick={() => setShowMissionBrief(value => !value)}><FileText size={15} /> Brief</button>
+          {onExit && <button type="button" className="sq-studio-quiet-button" onClick={onExit}>Exit <ArrowUpRight size={15} /></button>}
+        </div>
+      </header>
+
+      <main className="sq-studio-main">
+        <section className="sq-studio-hero" aria-labelledby="studio-heading">
+          <div className="sq-studio-hero-copy">
+            <div>
+              <p className="sq-studio-kicker">Your maker challenge · {assignment.difficulty || 'guided mission'}</p>
+              <h1 id="studio-heading">{project.title || assignment.title}</h1>
+              <p className="sq-studio-hero-intro">{missionContent.goal}</p>
+              <div className="sq-studio-hero-meta">
+                {assignment.duration && <span className="sq-studio-chip"><Clock3 size={13} /> {assignment.duration}</span>}
+                {assignment.technologies?.slice(0, 2).map(item => <span className="sq-studio-chip" key={item.name}><Target size={13} /> {item.name}</span>)}
+              </div>
+            </div>
+            <div className="sq-studio-hero-footer">
+              <div className="sq-studio-meter"><div className="sq-studio-meter-line"><span>{progressLabel}</span><span>{progressPercent}%</span></div><div className="sq-studio-meter-track" aria-label={`${progressPercent}% complete`}><span style={{ width: `${progressPercent}%` }} /></div></div>
             </div>
           </div>
-
-          <div className="relative">
-            <button
-              onClick={() => setShowMissionBrief(!showMissionBrief)}
-              className="flex min-h-11 items-center gap-2 rounded-xl border border-blue-400/30 bg-blue-500/10 px-4 text-sm font-black text-blue-100 transition hover:bg-blue-500/20"
-            >
-              <FileText size={18} /> Mission brief
-            </button>
-            {showMissionBrief && (
-              <div className="absolute right-0 top-full z-50 mt-3 w-[min(90vw,26rem)] rounded-3xl border border-slate-200 bg-white p-6 text-left shadow-2xl">
-                <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-blue-700">Your mission</p><h4 className="mt-1 text-xl font-black text-slate-950">{assignment.title}</h4></div><button type="button" onClick={() => setShowMissionBrief(false)} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-600"><XIcon size={16} /></button></div>
-                <p className="mt-4 text-sm font-semibold leading-6 text-slate-600">{missionContent.goal}</p>
-                <div className="mt-5 rounded-2xl bg-amber-50 p-4"><p className="text-[10px] font-black uppercase tracking-wider text-amber-800">Final outcome</p><p className="mt-1 text-sm font-extrabold text-amber-950">{missionContent.finalOutcome}</p></div>
-                {missionContent.deliverables.length > 0 && <div className="mt-5"><p className="text-xs font-black uppercase tracking-wider text-slate-500">What to submit</p><ul className="mt-3 space-y-2">{missionContent.deliverables.map(item => <li key={item.id} className="flex gap-2 text-sm font-bold text-slate-700"><Check size={16} className="mt-0.5 shrink-0 text-emerald-600" />{item.title}</li>)}</ul></div>}
-              </div>
-            )}
+          <div className="sq-studio-hero-media">
+            {heroImage ? <img src={heroImage} alt="Mission preview" /> : <div className="sq-studio-hero-media-empty"><Map size={38} /></div>}
+            <span className="sq-studio-hero-media-label">Mission inspiration</span>
           </div>
+        </section>
 
-          {/* Global Resources Button */}
-          {assignment.resources && assignment.resources.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setShowGlobalResources(!showGlobalResources)}
-                className="px-6 py-3 bg-indigo-500 hover:bg-indigo-400 text-white border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1 rounded-2xl font-black transition-all text-lg flex items-center gap-2 shadow-lg shadow-indigo-500/20"
-              >
-                🧰 Resources
-              </button>
-
-              {/* Resources Popover */}
-              {showGlobalResources && (
-                <div className="absolute top-full right-0 mt-4 w-96 bg-white rounded-3xl shadow-2xl border-4 border-indigo-100 p-6 z-50 animate-in fade-in slide-in-from-top-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-xl font-black text-slate-800">Mission Resources</h4>
-                    <button onClick={() => setShowGlobalResources(false)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200">❌</button>
-                  </div>
-                  <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-                    {assignment.resources.map((res, idx) => {
-                      const isPdf = res.url.toLowerCase().endsWith('.pdf') || res.title.toLowerCase().includes('pdf');
-                      let Icon = LinkIcon;
-                      let colorClass = "text-slate-500 bg-slate-100";
-
-                      if (res.type === 'video') { Icon = Video; colorClass = "text-red-500 bg-red-50"; }
-                      else if (res.type === 'image') { Icon = Image; colorClass = "text-purple-500 bg-purple-50"; }
-                      else if (isPdf) { Icon = FileText; colorClass = "text-orange-500 bg-orange-50"; }
-                      else if (res.type === 'file') { Icon = File; colorClass = "text-blue-500 bg-blue-50"; }
-                      else { Icon = Globe; colorClass = "text-emerald-500 bg-emerald-50"; }
-
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            playSound('click');
-                            // Check for embeddable types
-                            const isEmbeddable =
-                              res.type === 'video' ||
-                              res.type === 'image' ||
-                              res.url.includes('youtube.com') ||
-                              res.url.includes('youtu.be');
-
-                            if (isEmbeddable) {
-                              setViewingResource(res);
-                            } else {
-                              window.open(res.url, '_blank');
-                            }
-                          }}
-                          className="flex items-center gap-4 p-4 w-full text-left bg-slate-50 border-2 border-slate-100 rounded-2xl hover:border-indigo-400 hover:-translate-y-1 transition-all group"
-                        >
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm border border-slate-100 group-hover:scale-110 transition-transform ${colorClass}`}>
-                            <Icon size={24} />
-                          </div>
-                          <div className="flex-1">
-                            <h5 className="font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">{res.title}</h5>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-md ${colorClass} bg-opacity-50`}>
-                                {isPdf ? 'PDF' : res.type}
-                              </span>
-                              <p className="text-xs text-slate-400 truncate max-w-[150px]">{res.url}</p>
-                            </div>
-                          </div>
-                          <span className="text-slate-300 group-hover:text-indigo-400">
-                            <Download size={18} />
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+        <div className="sq-studio-grid">
+          <section className="sq-studio-journey" aria-labelledby="roadmap-heading">
+            <p className="sq-studio-section-label">Your build journey</p>
+            <h2 id="roadmap-heading" className="sq-studio-section-title">Make it, step by step.</h2>
+            <p className="sq-studio-section-intro">Follow the path, save proof as you go, and watch your project come alive.</p>
+            {foundationNodes.length > 0 && <div className="sq-studio-foundation" aria-label="Mission setup">
+              <div className="sq-studio-foundation-copy"><span>Mission set</span><strong>Your brief and build plan are ready.</strong></div>
+              <div className="sq-studio-foundation-actions">
+                {foundationNodes.map(node => {
+                  const FoundationIcon = node.type === 'IDENTITY' ? FileText : node.type === 'STRATEGY' ? Map : ListChecks;
+                  return <button key={node.id} type="button" disabled={node.status === 'LOCKED'} onClick={node.onClick} className={node.status === 'COMPLETED' ? 'is-ready' : node.status === 'ACTIVE' ? 'is-current' : ''}><FoundationIcon size={15} /><span>{node.title}</span>{node.status === 'COMPLETED' && <Check size={13} strokeWidth={3} />}</button>;
+                })}
+              </div>
+            </div>}
+            <div className="sq-studio-roadmap" style={{ '--journey-progress': `${journeyProgress}%` } as React.CSSProperties}>
+              {journeyNodes.map((node) => {
+                const task = node.id.startsWith('step-') ? project.steps.find(step => `step-${step.id}` === node.id) : undefined;
+                const taskPosition = task ? project.steps.findIndex(step => step.id === task.id) : -1;
+                const checklistTotal = task?.checklist?.length || 0;
+                const checklistDone = task?.checklist?.filter((_, itemIndex) => Boolean(task.checklistCompleted?.[itemIndex])).length || 0;
+                const isLocked = node.status === 'LOCKED';
+                const isComplete = node.status === 'COMPLETED';
+                const isReview = node.status === 'REVIEW';
+                const isCurrent = node.status === 'ACTIVE';
+                const statusLabel = isComplete ? 'Done' : isReview ? 'Mentor review' : isLocked ? 'Coming next' : 'You’re here';
+                const TaskIcon = taskPosition === 0 ? Target : taskPosition === 1 ? Pencil : taskPosition === 2 ? Wrench : Check;
+                const StepIcon = task ? TaskIcon : Send;
+                const marker = isComplete ? <Check size={15} strokeWidth={3} /> : <StepIcon size={16} strokeWidth={2.4} />;
+                const phaseClass = task ? `is-task phase-${(taskPosition % 4) + 1}` : 'is-publish';
+                return (
+                  <button key={node.id} type="button" disabled={isLocked} onClick={node.onClick} className={`sq-studio-step ${phaseClass} ${isCurrent ? 'is-current' : ''} ${isComplete ? 'is-complete' : ''} ${isReview ? 'is-review' : ''}`}>
+                    <span className="sq-studio-step-marker">{marker}</span>
+                    <span className="sq-studio-step-main">
+                      <span className="sq-studio-step-title">{node.title}{task?.source === 'student' && <span className="sq-studio-tag">My task</span>}{task?.required && <span className="sq-studio-tag">Required</span>}</span>
+                      {(task?.objective || task?.description) && <span className="sq-studio-step-summary">{task.objective || task.description}</span>}
+                      {task && <span className="sq-studio-step-meta">{checklistTotal ? <span><ListChecks size={12} /> {checklistDone}/{checklistTotal} checks</span> : null}{task.resources?.length ? <span><PackageCheck size={12} /> {task.resources.length} resources</span> : null}{task.estimatedMinutes ? <span><Clock3 size={12} /> {task.estimatedMinutes} min</span> : null}</span>}
+                    </span>
+                    <span className="sq-studio-step-state">{statusLabel}</span>
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </section>
 
-          {/* Resource Viewer Modal for Global Resources */}
-          {viewingResource && (
-            <ResourceViewerModal
-              isOpen={!!viewingResource}
-              onClose={() => setViewingResource(null)}
-              resource={viewingResource}
-            />
-          )}
-
-          {/* Step Counter - Enlarged */}
-          <div className="px-6 py-3 bg-slate-800 text-blue-400 rounded-2xl font-black border-2 border-slate-700 shadow-inner text-lg">
-            Step {activeNodeIndex !== -1 ? activeNodeIndex + 1 : nodes.length} <span className="text-slate-600">/</span> {nodes.length}
-          </div>
-          {onExit && (
-            <button
-              onClick={onExit}
-              className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-white border-b-4 border-emerald-700 active:border-b-0 active:translate-y-1 rounded-2xl font-black transition-all text-lg flex items-center gap-2 shadow-lg shadow-emerald-500/20"
-            >
-              Exit Mission 🚪
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Roadmap Container */}
-      {/* Roadmap Container */}
-      <div
-        ref={scrollContainerRef}
-        className={`flex-1 overflow-x-auto overflow-y-hidden relative no-scrollbar flex items-center ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-        onWheel={(e) => {
-          if (scrollContainerRef.current) {
-            if (e.deltaY !== 0) {
-              scrollContainerRef.current.scrollLeft += e.deltaY;
-            }
-          }
-        }}
-        onMouseDown={(e) => {
-          setIsDragging(true);
-          setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
-          setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
-        }}
-        onMouseLeave={() => {
-          setIsDragging(false);
-        }}
-        onMouseUp={() => {
-          setIsDragging(false);
-        }}
-        onMouseMove={(e) => {
-          if (!isDragging) return;
-          e.preventDefault();
-          const x = e.pageX - (scrollContainerRef.current?.offsetLeft || 0);
-          const walk = (x - startX) * 2; // Scroll-fast
-          if (scrollContainerRef.current) {
-            scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-          }
-        }}
-      >
-        {/* Dynamic height container for better scaling on small screens */}
-        <div className="relative h-[50vh] min-h-[350px] flex items-center px-[calc(50vw-75px)] md:px-[calc(50vw-150px)] min-w-max">
-
-          {/* SVG Path Layer */}
-          <svg className="absolute top-0 left-0 w-full h-full pointer-events-none z-0 overflow-visible">
-            {/* 1. Base dashed path */}
-            <path d={basePath} stroke="#334155" strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray="20 10" />
-
-            {/* 2. Glow underlying progress */}
-            {progressPath && (
-              <path d={progressPath} stroke="#3b82f6" strokeWidth="12" fill="none" strokeLinecap="round" className="opacity-30 blur-md" />
-            )}
-
-            {/* 3. Solid Progress path */}
-            {progressPath && (
-              <path d={progressPath} stroke="#3b82f6" strokeWidth="8" fill="none" strokeLinecap="round" className="animate-pulse" />
-            )}
-          </svg>
-
-          {/* Nodes */}
-          <div className="flex z-10 pl-[50px]" style={{ gap: `${itemWidth - 140}px` }}> {/* 300 width - ~120 node width? dynamic gap calculation */}
-            {/* Note: In original it was fixed gap-[108px] for 300px item width.
-                 Node centers were 300px apart.
-                 Node width approx 192px (w-48).
-                 Gap was 108px.
-                 If ItemWidth 200: Node w-32 (128px). Gap should be 72px.
-                 Let's just use style gap.
-             */}
-            {nodes.map((node, i) => (
-              <div key={node.id} className={`transform transition-all duration-500 ${i % 2 === 0 ? '-translate-y-0' : 'translate-y-10'} relative group`}>
-                {/* Peer Avatars on Node - ALWAYS VISIBLE & LARGER */}
-                {/* Peer Avatars on Node - ALWAYS VISIBLE & LARGER */}
-                <div className="absolute -top-20 left-1/2 -translate-x-1/2 flex -space-x-4 z-50 pointer-events-auto">
-                  {/* Logic: Show peers based on stepId match OR fallback distribution for liveness */}
-                  {peers.filter(p => p.stepId === node.id || (
-                    // Fallback: Distribute peers to generic nodes based on index to ensure they appear
-                    !nodes.some(n => n.id === p.stepId) && ((i + 1) % 2 === parseInt(p.id.replace(/\D/g, '')) % 2)
-                  )).map(peer => (
-                    <div
-                      key={peer.id}
-                      className="w-14 h-14 rounded-full border-4 border-slate-900 bg-slate-700 overflow-hidden relative shadow-xl transform hover:scale-125 hover:z-50 transition-all cursor-pointer"
-                      title={`${peer.name} is working on ${node.title}`}
-                    >
-                      <img src={peer.avatar} className="w-full h-full object-cover" alt={peer.name} />
-                      {/* Status Indicator */}
-                      <div className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-slate-900 ${peer.color || 'bg-green-500'}`}></div>
-                    </div>
-                  ))}
-                </div>
-
-                <WizardNode
-                  {...node}
-                  isFirst={i === activeNodeIndex}
-                />
+          <aside className="sq-studio-dock">
+            <div className="sq-studio-rail">
+              <div className="sq-studio-rail-head">
+                <p>{benchLabel}</p>
+                <h3>{nextNode?.title || 'Review your project'}</h3>
+                <p className="sq-studio-bench-copy">{benchCopy}</p>
+                {nextNode && <button type="button" className="sq-studio-primary" disabled={nextNode.status === 'LOCKED'} onClick={nextNode.onClick}>{benchAction} <ArrowUpRight size={16} /></button>}
               </div>
-            ))}
-          </div>
 
-          {/* End Flag */}
-          <div className="ml-24 opacity-50 flex flex-col items-center">
-            <span className="text-6xl filter drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">🏁</span>
-          </div>
+              <div className="sq-studio-rail-section">
+                <button type="button" onClick={() => setShowMissionBrief(value => !value)}><span className="flex items-center gap-2"><FileText size={16} /> Mission brief</span><ChevronDown size={16} className={showMissionBrief ? 'rotate-180' : ''} /></button>
+                {showMissionBrief && <div><p>{missionContent.whyItMatters || 'Build, test, and explain a useful solution.'}</p>{missionContent.deliverables.length > 0 && <ul className="sq-studio-rail-list">{missionContent.deliverables.map(item => <li key={item.id}><Check size={14} /> {item.title}</li>)}</ul>}</div>}
+              </div>
 
+              <div className="sq-studio-rail-section">
+                <button type="button" onClick={() => setShowGlobalResources(value => !value)}><span className="flex items-center gap-2"><Download size={16} /> Mission kit</span><ChevronDown size={16} className={showGlobalResources ? 'rotate-180' : ''} /></button>
+                {showGlobalResources && <div className="sq-studio-rail-list">{assignment.resources?.map(resource => <button key={resource.id || resource.url} type="button" onClick={() => setViewingResource(resource)}><LinkIcon size={14} /><span className="truncate">{resource.title}</span></button>)}</div>}
+                {missionContent.materials.length > 0 && <div className="sq-studio-build-note"><strong>Bring to the bench:</strong> {missionContent.materials.slice(0, 4).join(' · ')}</div>}
+              </div>
+            </div>
+          </aside>
         </div>
-      </div>
+      </main>
 
-      {/* Modals */}
+      {viewingResource && <ResourceViewerModal isOpen={!!viewingResource} onClose={() => setViewingResource(null)} resource={viewingResource} />}
+
       {activeNodeId && (
         <WizardModal
           title={nodes.find(n => n.id === activeNodeId)?.title || ''}
@@ -2233,7 +1995,6 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           {activeNodeId === 'publish' && <PublishStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
         </WizardModal>
       )}
-
     </div>
   );
 };

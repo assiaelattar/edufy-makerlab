@@ -26,6 +26,7 @@ import { currentAcademicYear, matchesAcademicYear, normalizeAcademicYear, previo
 import { createVerifiedStudentIdentity } from '../domain/studentIdentity';
 import { missionIsVisibleToLearner } from '../domain/missionAssignment';
 import { resolveLinkedStudentRecord } from '../services/studentIdentity';
+import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from '../domain/workflowPipeline';
 
 const ProjectDetailsEnhanced = React.lazy(() => import('./ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 
@@ -41,7 +42,6 @@ interface ProjectSelectorProps {
 export const ProjectSelector: React.FC<ProjectSelectorProps> = (props) => {
     return <ProjectSelectorContent {...props} />;
 };
-
 const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onSelectProject, onPreviewProject, onLogout, userRole }) => {
     const { activeTheme, coins, playSound } = useTheme();
     const activeThemeDef = THEMES.find(t => t.id === activeTheme) || THEMES[0];
@@ -699,23 +699,16 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             const organizationId = authProfile?.organizationId || studentProfileData?.organizationId;
             if (!organizationId) throw new Error('Your Edufy organization could not be resolved.');
             let initialSteps: any[] = [];
+            let workflowSnapshot = template.workflowSnapshot;
 
             // 1. Fetch Default Workflow if available
             if (template.defaultWorkflowId) {
                 try {
                     const workflowSnap = await getDoc(doc(db, 'process_templates', template.defaultWorkflowId));
                     if (workflowSnap.exists()) {
-                        const workflowData = workflowSnap.data();
-                        if (workflowData.phases && Array.isArray(workflowData.phases)) {
-                            // Map Process Phases to Project Steps
-                            initialSteps = workflowData.phases.map((phase: any) => ({
-                                id: phase.id || Date.now().toString() + Math.random(),
-                                title: phase.name,
-                                status: 'todo',
-                                description: phase.description || '',
-                                isLocked: false
-                            }));
-                        }
+                        const workflowData = { id: workflowSnap.id, ...workflowSnap.data() } as ProcessTemplate;
+                        workflowSnapshot = createWorkflowSnapshot(workflowData);
+                        initialSteps = buildProjectStepsFromWorkflow(workflowSnapshot, template.stepResources || {});
                     }
                 } catch (err) {
                     console.error("Error fetching default workflow:", err);
@@ -750,6 +743,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 difficulty: template.difficulty || 'beginner',
                 status: 'planning',
                 workflowId: template.id === 'showcase-template' ? 'showcase' : (template.id === 'free-build-template' ? 'custom-workflow' : (template.defaultWorkflowId || '')), // CRITICAL: Save workflow ID
+                ...(workflowSnapshot ? { workflowSnapshot } : {}),
                 steps: initialSteps,
                 resources: template.resources || [],
                 stepResources: template.stepResources || {},
@@ -799,14 +793,14 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Students can access Arcade, Gallery, Portfolio, Pickup, Inventory even without missions
 
     return (
-        <div className={`sparkquest-dashboard flex h-screen w-full overflow-hidden relative selection:bg-cyan-400 selection:text-slate-950 transition-colors duration-700 ${activeThemeDef.font || ''}`}>
+        <div className={`sparkquest-dashboard sq-sparkbook flex h-screen w-full overflow-hidden relative selection:bg-orange-300 selection:text-slate-950 transition-colors duration-700 ${activeThemeDef.font || ''}`}>
 
             {/* Background Effects */}
             <div className="sq-atmosphere absolute inset-0 z-0"></div>
             <div className="sq-grid absolute inset-0 z-0 pointer-events-none">
                 <svg width="100%" height="100%">
                     <pattern id="selector-grid" width="60" height="60" patternUnits="userSpaceOnUse">
-                        <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#60a5fa" strokeWidth="0.5" />
+                        <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#191920" strokeWidth="0.5" />
                     </pattern>
                     <rect width="100%" height="100%" fill="url(#selector-grid)" />
                 </svg>
@@ -937,7 +931,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                     isLocked: false,
                                     defaultWorkflowId: 'custom-workflow'
                                 })}
-                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-amber-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-amber-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-amber-500"
+                                className="sq-new-project hidden md:flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-400 text-amber-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-amber-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-amber-500"
                             >
                                 <Zap size={18} fill="currentColor" />
                                 <span>New Project</span>
@@ -955,7 +949,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                     isLocked: false,
                                     defaultWorkflowId: 'showcase-workflow'
                                 })}
-                                className="hidden md:flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-400 text-purple-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-purple-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-purple-500"
+                                className="sq-showcase-project hidden md:flex items-center gap-2 px-6 py-3 bg-purple-500 hover:bg-purple-400 text-purple-950 rounded-xl font-black uppercase tracking-wide shadow-lg shadow-purple-500/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-purple-500"
                             >
                                 <Award size={18} fill="currentColor" />
                                 <span>Showcase Project</span>
@@ -994,7 +988,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         </div>
                         <div className="flex overflow-x-auto pb-12 -mx-8 px-8 snap-x scroll-pl-8 gap-6 no-scrollbar mask-linear">
                             {availableTemplates.length === 0 && (
-                                <div className="w-full rounded-2xl border border-dashed border-cyan-400/30 bg-cyan-400/5 p-8 text-center">
+                                <div className="sq-empty-state w-full rounded-2xl border border-dashed border-cyan-400/30 bg-cyan-400/5 p-8 text-center">
                                     <h4 className="text-lg font-black text-white">No mission assigned to this grade yet</h4>
                                     <p className="mt-2 text-sm text-slate-400">Only projects explicitly assigned to the active grade, group, or student appear here.</p>
                                 </div>
@@ -1006,7 +1000,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                         key={template.id}
                                         onClick={() => void openMissionBrief(template)}
                                         disabled={isLocked}
-                                        className={`snap-start flex-none w-[280px] lg:w-[340px] aspect-[4/3] group relative rounded-[2rem] overflow-hidden border transition-all duration-300 text-left
+                                        className={`sq-mission-card snap-start flex-none w-[280px] lg:w-[340px] aspect-[4/3] group relative rounded-[2rem] overflow-hidden border transition-all duration-300 text-left
                                         ${isLocked
                                                 ? 'bg-slate-900/50 border-slate-800 opacity-60 grayscale'
                                                 : 'bg-slate-900/40 border-white/10 hover:border-indigo-500/50 hover:shadow-[0_0_40px_-10px_rgba(99,102,241,0.4)] hover:-translate-y-2'
@@ -1360,16 +1354,11 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             {/* Profile Modal */}
             {
                 isProfileOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsProfileOpen(false)}></div>
-                        <div className="relative w-full max-w-2xl animate-in zoom-in-95 duration-200">
-                            <button
-                                onClick={() => setIsProfileOpen(false)}
-                                className="absolute -top-12 right-0 text-white hover:text-red-400 transition-colors"
-                            >
-                                <X size={32} />
-                            </button>
-                            <AvatarSelector currentAvatarUrl={avatarUrl} onSelect={handleSaveAvatar} />
+                    <div className="sq-profile-overlay" role="dialog" aria-modal="true" aria-label="Maker profile">
+                        <button type="button" className="sq-profile-backdrop" onClick={() => setIsProfileOpen(false)} aria-label="Close maker profile" />
+                        <div className="sq-profile-dialog">
+                            <button type="button" onClick={() => setIsProfileOpen(false)} className="sq-profile-close" aria-label="Close maker profile"><X size={24} /></button>
+                            <AvatarSelector currentAvatarUrl={avatarUrl} onSelect={handleSaveAvatar} studentName={studentName} />
                         </div>
                     </div>
                 )

@@ -1,79 +1,46 @@
-
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useMemo, useState } from 'react';
+import { Check, Sparkles, UserRound } from 'lucide-react';
 import { AVATAR_CATEGORIES, getAvatarUrl } from '../utils/avatars';
-import { Check, RefreshCw } from 'lucide-react';
 
 interface AvatarSelectorProps {
     currentAvatarUrl?: string;
     onSelect: (url: string) => void;
+    studentName?: string;
+    previewMode?: boolean;
 }
 
-export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ currentAvatarUrl, onSelect }) => {
+export const AvatarSelector: React.FC<AvatarSelectorProps> = ({ currentAvatarUrl, onSelect, studentName = 'Maker', previewMode = false }) => {
     const [activeCategory, setActiveCategory] = useState(AVATAR_CATEGORIES[0].id);
-    const [selectedUrl, setSelectedUrl] = useState(currentAvatarUrl || '');
+    const fallbackAvatar = useMemo(() => getAvatarUrl(AVATAR_CATEGORIES[0].id, AVATAR_CATEGORIES[0].seeds[0]), []);
+    const [selectedUrl, setSelectedUrl] = useState(currentAvatarUrl || fallbackAvatar);
 
     const handleSelect = (url: string) => {
         setSelectedUrl(url);
-        onSelect(url);
+        if (!previewMode) onSelect(url);
     };
 
     return (
-        <div className="bg-slate-900 rounded-3xl p-6 border border-slate-800">
-            <h3 className="text-xl font-black text-white mb-6 text-center">Choose Your Hero Look 🦸‍♂️</h3>
-
-            {/* Category Tabs */}
-            <div className="flex justify-center gap-2 mb-8 flex-wrap">
-                {AVATAR_CATEGORIES.map(cat => (
-                    <button
-                        key={cat.id}
-                        onClick={() => setActiveCategory(cat.id)}
-                        className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeCategory === cat.id
-                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50 scale-105'
-                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                            }`}
-                    >
-                        {cat.label}
-                    </button>
-                ))}
+        <section className="sq-profile-card" aria-labelledby="profile-card-title">
+            <div className="sq-profile-pass">
+                <div className="sq-profile-pass-copy"><p>Sparkbook maker ID</p><h2 id="profile-card-title">Build as yourself.</h2><span>Choose the face that travels with you through missions, proof, and reviews.</span></div>
+                <div className="sq-profile-pass-avatar"><img src={selectedUrl} alt="Selected maker avatar" /><span aria-hidden="true"><Sparkles size={17} /></span></div>
+                <div className="sq-profile-pass-name"><small>Maker</small><strong>{studentName}</strong></div>
             </div>
 
-            {/* Avatar Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4 max-h-[400px] overflow-y-auto custom-scrollbar p-2">
-                {AVATAR_CATEGORIES.find(c => c.id === activeCategory)?.seeds.map(seed => {
-                    const url = getAvatarUrl(activeCategory, seed);
-                    const isSelected = selectedUrl === url;
-
-                    return (
-                        <motion.button
-                            key={seed}
-                            whileHover={{ scale: 1.1 }}
-                            whileTap={{ scale: 0.95 }}
-                            onClick={() => handleSelect(url)}
-                            className={`aspect-square rounded-2xl p-2 relative transition-all ${isSelected
-                                ? 'bg-indigo-600 ring-4 ring-indigo-400/30 shadow-xl'
-                                : 'bg-slate-800 hover:bg-slate-700 border-2 border-slate-700 hover:border-slate-500'
-                                }`}
-                        >
-                            <img
-                                src={url}
-                                alt={seed}
-                                className="w-full h-full object-contain drop-shadow-md"
-                                loading="lazy"
-                            />
-                            {isSelected && (
-                                <div className="absolute -top-2 -right-2 bg-emerald-500 text-white rounded-full p-1 shadow-lg border border-slate-900">
-                                    <Check size={12} strokeWidth={4} />
-                                </div>
-                            )}
-                        </motion.button>
-                    );
-                })}
+            <div className="sq-profile-picker">
+                <div className="sq-profile-picker-head"><span aria-hidden="true"><UserRound size={21} /></span><div><p>Avatar drawer</p><h3>Pick your workshop look</h3></div></div>
+                <div className="sq-profile-tabs" role="tablist" aria-label="Avatar styles">
+                    {AVATAR_CATEGORIES.map(category => <button key={category.id} type="button" role="tab" aria-selected={activeCategory === category.id} onClick={() => setActiveCategory(category.id)}>{category.label}</button>)}
+                </div>
+                <div className="sq-profile-grid">
+                    {AVATAR_CATEGORIES.find(category => category.id === activeCategory)?.seeds.map(seed => {
+                        const url = getAvatarUrl(activeCategory, seed);
+                        const selected = selectedUrl === url;
+                        return <button key={seed} type="button" className={selected ? 'is-selected' : ''} onClick={() => handleSelect(url)} aria-label={`Use ${seed} avatar`} aria-pressed={selected}><img src={url} alt="" loading="lazy" />{selected && <span><Check size={14} /></span>}</button>;
+                    })}
+                </div>
+                <p className="sq-profile-note">{previewMode ? 'Preview choices stay in this browser view.' : 'Your selection saves immediately to your learner profile.'}</p>
             </div>
-
-            <div className="mt-6 text-center text-slate-500 text-xs">
-                Select an avatar that represents your creative power!
-            </div>
-        </div>
+        </section>
     );
 };

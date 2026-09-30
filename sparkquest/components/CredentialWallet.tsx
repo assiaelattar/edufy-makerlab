@@ -1,259 +1,182 @@
-import React, { useState, useEffect } from 'react';
-import { X, Key, Copy, Plus, Save, Trash2, Eye, EyeOff } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Check, Copy, Eye, EyeOff, KeyRound, Plus, Save, Trash2, X } from 'lucide-react';
+import { arrayRemove, arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { Credential } from '../types';
-import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { Credential } from '../types';
 
 interface CredentialWalletProps {
     isOpen: boolean;
     onClose: () => void;
-    highlightService?: string; // Optional: Service to highlight/filter
+    highlightService?: string;
+    previewMode?: boolean;
 }
 
-export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onClose, highlightService }) => {
+const PREVIEW_CREDENTIALS: Credential[] = [
+    { id: 'credential-tinkercad', service: 'Tinkercad', label: 'Class workspace', username: 'maker.aya', password: 'Spark-2046', url: 'https://www.tinkercad.com' },
+    { id: 'credential-scratch', service: 'Scratch', label: 'Studio account', username: 'aya_builds', password: '', url: 'https://scratch.mit.edu' },
+    { id: 'credential-canva', service: 'Canva', label: 'Presentation kit', username: 'aya@makerlab.test', password: 'Canvas-77', url: 'https://www.canva.com' },
+];
+
+const serviceMark = (service: string) => {
+    if (service === 'Tinkercad') return '3D';
+    if (service === 'Scratch') return 'SC';
+    if (service === 'Canva') return 'CV';
+    if (service === 'Google') return 'G';
+    if (service === 'Onshape') return 'OS';
+    return 'KEY';
+};
+
+export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onClose, highlightService, previewMode = false }) => {
     const { user, userProfile } = useAuth();
     const [credentials, setCredentials] = useState<Credential[]>([]);
     const [loading, setLoading] = useState(false);
-
-    // Form State
+    const [notice, setNotice] = useState<string | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<Credential | null>(null);
     const [isAdding, setIsAdding] = useState(false);
-    const [newCred, setNewCred] = useState<Partial<Credential>>({
-        service: highlightService || 'Tinkercad',
-        label: 'My Account'
-    });
+    const [newCred, setNewCred] = useState<Partial<Credential>>({ service: highlightService || 'Tinkercad', label: 'My account' });
     const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
-        if (userProfile?.credentials) {
-            sortAndSetCredentials(userProfile.credentials);
-        } else if (user) {
-            getFreshCredentials();
+        if (!isOpen) return;
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') pendingDelete ? setPendingDelete(null) : onClose();
+        };
+        window.addEventListener('keydown', closeOnEscape);
+        return () => window.removeEventListener('keydown', closeOnEscape);
+    }, [isOpen, onClose, pendingDelete]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (previewMode) {
+            sortAndSetCredentials(PREVIEW_CREDENTIALS);
+            return;
         }
-    }, [userProfile, user, isOpen, highlightService]);
+        if (userProfile?.credentials) sortAndSetCredentials(userProfile.credentials);
+        else if (user) void getFreshCredentials();
+    }, [userProfile, user, isOpen, highlightService, previewMode]);
 
     const sortAndSetCredentials = (creds: Credential[]) => {
         if (!highlightService) {
             setCredentials(creds);
             return;
         }
-        // Move exact match to top
-        const sorted = [...creds].sort((a, b) => {
+        setCredentials([...creds].sort((a, b) => {
             const aMatch = a.service.toLowerCase() === highlightService.toLowerCase();
             const bMatch = b.service.toLowerCase() === highlightService.toLowerCase();
             return aMatch === bMatch ? 0 : aMatch ? -1 : 1;
-        });
-        setCredentials(sorted);
+        }));
     };
 
     const getFreshCredentials = async () => {
         if (!user || !db) return;
-        const ref = doc(db, 'users', user.uid);
-        const snap = await getDoc(ref);
-        if (snap.exists()) {
-            const data = snap.data();
-            sortAndSetCredentials(data.credentials || []);
-        }
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) sortAndSetCredentials(snap.data().credentials || []);
     };
 
     const handleSave = async () => {
-        if (!user || !db || !newCred.username) return;
-        setLoading(true);
-
+        if (!newCred.username) return;
         const credential: Credential = {
             id: Date.now().toString(),
             service: newCred.service || 'Custom',
             label: newCred.label || 'Account',
             username: newCred.username,
             password: newCred.password || '',
-            url: newCred.url || ''
+            url: newCred.url || '',
         };
-
-        try {
-            const ref = doc(db, 'users', user.uid);
-            await updateDoc(ref, {
-                credentials: arrayUnion(credential)
-            });
-            setCredentials(prev => [...prev, credential]);
+        if (previewMode) {
+            setCredentials(previous => [...previous, credential]);
             setIsAdding(false);
-            setNewCred({ service: 'Tinkercad', label: 'My Account' });
-        } catch (e) {
-            console.error("Error saving credential", e);
-            alert("Failed to save key. Are you online?");
+            setNewCred({ service: 'Tinkercad', label: 'My account' });
+            setNotice('Preview key added to this session only.');
+            return;
+        }
+        if (!user || !db) return;
+        setLoading(true);
+        setNotice(null);
+        try {
+            await updateDoc(doc(db, 'users', user.uid), { credentials: arrayUnion(credential) });
+            setCredentials(previous => [...previous, credential]);
+            setIsAdding(false);
+            setNewCred({ service: 'Tinkercad', label: 'My account' });
+            setNotice('Key saved to your cabinet.');
+        } catch (saveError) {
+            console.error('Error saving credential', saveError);
+            setNotice('This key could not be saved. Check your connection and try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = async (cred: Credential) => {
+    const handleDelete = async (credential: Credential) => {
+        if (previewMode) {
+            setCredentials(previous => previous.filter(item => item.id !== credential.id));
+            setPendingDelete(null);
+            setNotice('Preview key removed.');
+            return;
+        }
         if (!user || !db) return;
-        if (!confirm("Delete this key?")) return;
-
         try {
-            const ref = doc(db, 'users', user.uid);
-            await updateDoc(ref, {
-                credentials: arrayRemove(cred)
-            });
-            setCredentials(prev => prev.filter(c => c.id !== cred.id));
-        } catch (e) {
-            console.error("Error deleting", e);
+            await updateDoc(doc(db, 'users', user.uid), { credentials: arrayRemove(credential) });
+            setCredentials(previous => previous.filter(item => item.id !== credential.id));
+            setPendingDelete(null);
+            setNotice('Key removed from your cabinet.');
+        } catch (deleteError) {
+            console.error('Error deleting credential', deleteError);
+            setNotice('This key could not be removed. Try again.');
         }
     };
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        // Could show a toast here?
+    const copyToClipboard = async (text: string, label: string) => {
+        await navigator.clipboard.writeText(text);
+        setNotice(`${label} copied.`);
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-5xl h-[600px] bg-slate-900/95 backdrop-blur-xl border border-cyan-500/30 shadow-[0_0_50px_rgba(8,145,178,0.3)] rounded-3xl flex overflow-hidden relative">
+        <div className="sq-keys-overlay" role="dialog" aria-modal="true" aria-labelledby="keys-title">
+            <button className="sq-keys-backdrop" type="button" onClick={onClose} aria-label="Close key cabinet" />
+            <section className="sq-keys-shell">
+                <header className="sq-keys-header">
+                    <div className="sq-keys-brand"><span aria-hidden="true"><KeyRound size={24} /></span><div><p>Sparkbook key cabinet</p><h2 id="keys-title">Tools ready. Logins together.</h2></div></div>
+                    <div className="sq-keys-header-actions"><button type="button" aria-label="Add key" onClick={() => setIsAdding(value => !value)}><Plus size={18} /> <span>Add key</span></button><button type="button" onClick={onClose} aria-label="Close key cabinet"><X size={24} /></button></div>
+                </header>
 
-                {/* Close Button */}
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 z-50 p-2 bg-slate-800/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-full transition-all"
-                >
-                    <X className="w-6 h-6" />
-                </button>
+                {notice && <div className="sq-keys-notice" role="status"><Check size={16} /> {notice}<button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message"><X size={14} /></button></div>}
 
-                {/* LEFT SIDE - SAVED KEYS (65%) */}
-                <div className="w-[65%] flex flex-col border-r border-slate-700/50 bg-slate-900/50">
-                    <div className="p-8 border-b border-slate-700/50 flex items-center gap-4">
-                        <div className="p-3 bg-cyan-950/50 rounded-2xl border border-cyan-500/20 shadow-inner">
-                            <Key className="w-8 h-8 text-cyan-400" />
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-black tracking-wide text-white uppercase italic">Holokeys</h2>
-                            <div className="flex items-center gap-2 text-cyan-500 font-bold text-xs tracking-[0.3em] uppercase">
-                                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
-                                Secure Wallet
-                            </div>
-                        </div>
-                    </div>
+                <div className="sq-keys-scroll">
+                    <section className="sq-keys-intro"><div><p>Tool access</p><h3>Your digital<br />workbench keys.</h3></div><p>Keep class codes and learning-tool accounts in one place. Passwords stay covered until you choose to reveal them.</p></section>
 
-                    <div className="flex-1 overflow-y-auto p-8">
-                        {credentials.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/50">
-                                <Key className="w-16 h-16 mb-4 opacity-10" />
-                                <p className="text-lg font-bold text-slate-400">Your wallet is empty</p>
-                                <p className="text-sm opacity-60">Add your first key on the right →</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {credentials.map(cred => (
-                                    <div key={cred.id} className="group relative bg-slate-800/80 hover:bg-slate-800 rounded-2xl p-5 border border-slate-700 hover:border-cyan-500/50 transition-all hover:shadow-[0_4px_20px_-5px_rgba(8,145,178,0.3)] hover:-translate-y-1">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-lg shadow-inner">
-                                                    {cred.service === 'Tinkercad' ? '🟧' :
-                                                        cred.service === 'Canva' ? '🟦' :
-                                                            cred.service === 'Scratch' ? '😺' :
-                                                                cred.service === 'Google' ? '🌈' : '🔑'}
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-white leading-tight">{cred.service}</h3>
-                                                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{cred.label}</div>
-                                                </div>
-                                            </div>
-                                            <button onClick={() => handleDelete(cred)} className="text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="flex items-center gap-2 bg-slate-900 rounded-lg p-2 border border-slate-700/50">
-                                                <span className="text-[10px] font-bold text-slate-600 uppercase w-8">ID</span>
-                                                <code className="flex-1 text-xs text-cyan-300 font-mono truncate cursor-pointer hover:text-white transition-colors" onClick={() => copyToClipboard(cred.username)} title="Click to copy">
-                                                    {cred.username}
-                                                </code>
-                                                <Copy className="w-3 h-3 text-slate-500" />
-                                            </div>
-
-                                            {cred.password && (
-                                                <div className="flex items-center gap-2 bg-slate-900 rounded-lg p-2 border border-slate-700/50">
-                                                    <span className="text-[10px] font-bold text-slate-600 uppercase w-8">Key</span>
-                                                    <code className="flex-1 text-xs text-yellow-300 font-mono truncate cursor-pointer hover:text-white transition-colors" onClick={() => copyToClipboard(cred.password!)} title="Click to copy">
-                                                        {showPassword[cred.id] ? cred.password : '••••••••'}
-                                                    </code>
-                                                    <button onClick={(e) => { e.stopPropagation(); setShowPassword(p => ({ ...p, [cred.id]: !p[cred.id] })); }} className="text-slate-500 hover:text-white">
-                                                        {showPassword[cred.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                    <div className={`sq-keys-layout ${isAdding ? 'is-adding' : ''}`}>
+                        <section className="sq-keys-cabinet" aria-label="Saved keys">
+                            {credentials.length === 0 ? (
+                                <div className="sq-keys-empty"><KeyRound size={42} /><h3>No keys saved yet.</h3><p>Add the first account you use at the bench.</p><button type="button" onClick={() => setIsAdding(true)}>Add a key</button></div>
+                            ) : credentials.map((credential, index) => (
+                                <article key={credential.id} className="sq-key-card">
+                                    <div className="sq-key-tab"><span>{String(index + 1).padStart(2, '0')}</span><strong>{serviceMark(credential.service)}</strong></div>
+                                    <div className="sq-key-copy">
+                                        <div className="sq-key-title"><div><p>{credential.label}</p><h3>{credential.service}</h3></div><button type="button" onClick={() => setPendingDelete(credential)} aria-label={`Remove ${credential.service} key`}><Trash2 size={17} /></button></div>
+                                        <button type="button" className="sq-key-field" onClick={() => void copyToClipboard(credential.username, 'Username')}><span>Username</span><code>{credential.username}</code><Copy size={15} /></button>
+                                        {credential.password && <div className="sq-key-field"><span>Password</span><code>{showPassword[credential.id] ? credential.password : '••••••••'}</code><button type="button" onClick={() => setShowPassword(previous => ({ ...previous, [credential.id]: !previous[credential.id] }))} aria-label={showPassword[credential.id] ? 'Hide password' : 'Show password'}>{showPassword[credential.id] ? <EyeOff size={16} /> : <Eye size={16} />}</button><button type="button" onClick={() => void copyToClipboard(credential.password!, 'Password')} aria-label="Copy password"><Copy size={15} /></button></div>}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                </article>
+                            ))}
+                        </section>
+
+                        {isAdding && <aside className="sq-key-form">
+                            <div><p>New drawer</p><h3>Add a workbench key</h3></div>
+                            <label><span>Service</span><select value={newCred.service} onChange={event => setNewCred({ ...newCred, service: event.target.value })}><option>Tinkercad</option><option>Canva</option><option>Google</option><option>Scratch</option><option>Onshape</option><option>Other</option></select></label>
+                            <label><span>Label</span><input value={newCred.label || ''} onChange={event => setNewCred({ ...newCred, label: event.target.value })} placeholder="Class workspace" /></label>
+                            <label><span>Username or class code</span><input value={newCred.username || ''} onChange={event => setNewCred({ ...newCred, username: event.target.value })} placeholder="maker.aya" /></label>
+                            <label><span>Password (optional)</span><input value={newCred.password || ''} onChange={event => setNewCred({ ...newCred, password: event.target.value })} placeholder="Leave blank for class codes" /></label>
+                            <div className="sq-key-form-actions"><button type="button" onClick={() => setIsAdding(false)}>Cancel</button><button type="button" disabled={loading || !newCred.username?.trim()} onClick={() => void handleSave()}><Save size={17} /> {loading ? 'Saving…' : 'Save key'}</button></div>
+                        </aside>}
                     </div>
                 </div>
 
-                {/* RIGHT SIDE - ADD NEW (35%) */}
-                <div className="w-[35%] bg-slate-800/30 p-8 flex flex-col justify-center border-l border-slate-700/50 relative overflow-hidden">
-                    {/* Background Pattern */}
-                    <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #06b6d4 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-
-                    <div className="relative z-10">
-                        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                            <span className="flex items-center justify-center w-8 h-8 rounded-full bg-cyan-600 text-white text-sm shadow-lg shadow-cyan-500/30">
-                                <Plus className="w-5 h-5" />
-                            </span>
-                            Add New Key
-                        </h3>
-
-                        <div className="space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Service</label>
-                                <select
-                                    className="w-full bg-slate-900 border border-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 rounded-xl p-3 text-white font-medium outline-none transition-all"
-                                    value={newCred.service}
-                                    onChange={e => setNewCred({ ...newCred, service: e.target.value })}
-                                >
-                                    <option value="Tinkercad">🟧 Tinkercad</option>
-                                    <option value="Canva">🟦 Canva</option>
-                                    <option value="Google">🌈 Google</option>
-                                    <option value="Scratch">😺 Scratch</option>
-                                    <option value="Onshape">⚙️ Onshape</option>
-                                    <option value="Other">🔑 Other</option>
-                                </select>
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Username / Class Code</label>
-                                <input
-                                    type="text"
-                                    className="w-full bg-slate-900 border border-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 rounded-xl p-3 text-white outline-none transition-all placeholder:text-slate-600 font-mono text-sm"
-                                    placeholder="Explorer123"
-                                    value={newCred.username || ''}
-                                    onChange={e => setNewCred({ ...newCred, username: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
-                                <input
-                                    type="text"
-                                    className="w-full bg-slate-900 border border-slate-600 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 rounded-xl p-3 text-yellow-300 outline-none transition-all placeholder:text-slate-600 font-mono text-sm"
-                                    placeholder="Secret123!"
-                                    value={newCred.password || ''}
-                                    onChange={e => setNewCred({ ...newCred, password: e.target.value })}
-                                />
-                            </div>
-
-                            <button
-                                onClick={handleSave}
-                                disabled={loading}
-                                className="w-full mt-4 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white py-4 rounded-xl text-md font-bold flex justify-center items-center gap-2 shadow-xl shadow-cyan-900/30 transform hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {loading ? 'Saving securely...' : <><Save className="w-5 h-5" /> Save to Wallet</>}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                {pendingDelete && <div className="sq-key-confirm" role="alertdialog" aria-modal="true" aria-labelledby="remove-key-title"><div><p>Remove key</p><h3 id="remove-key-title">Remove {pendingDelete.service}?</h3><p>This only removes the saved login from SparkQuest. It does not close the external account.</p><div><button type="button" onClick={() => setPendingDelete(null)}>Keep key</button><button type="button" onClick={() => void handleDelete(pendingDelete)}>Remove key</button></div></div></div>}
+            </section>
         </div>
     );
 };

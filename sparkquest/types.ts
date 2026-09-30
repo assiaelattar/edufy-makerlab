@@ -51,16 +51,29 @@ export interface ProcessPhase {
   icon: string; // Lucide icon name
   order: number;
   description?: string;
+  objective?: string;
+  instructions?: string;
+  checklist?: string[];
+  tools?: string[];
+  materials?: string[];
+  safetyNotes?: string[];
+  evidenceRequirements?: MissionEvidenceRequirement[];
+  estimatedMinutes?: number;
+  required?: boolean;
   resources?: Resource[]; // Default resources for this phase
 }
 
 export interface ProcessTemplate {
   id: string;
+  organizationId?: string;
   name: string;
   description: string;
   phases: ProcessPhase[];
   isDefault?: boolean;
+  version?: number;
+  status?: 'draft' | 'published' | 'archived';
   createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 // Resources
@@ -73,6 +86,22 @@ export interface Resource {
 
 export type MissionEvidenceType = 'image' | 'video' | 'document' | 'link' | 'text' | 'any';
 
+export interface MissionEvidenceRequirement {
+  id: string;
+  type: MissionEvidenceType;
+  prompt: string;
+  required?: boolean;
+}
+
+export interface WorkflowSnapshot {
+  workflowId: string;
+  version: number;
+  name: string;
+  description: string;
+  capturedAt: string;
+  phases: ProcessPhase[];
+}
+
 export interface MissionDeliverable {
   id: string;
   title: string;
@@ -81,11 +110,6 @@ export interface MissionDeliverable {
   evidenceType?: MissionEvidenceType;
 }
 
-/**
- * Learner-facing mission contract. This object is authored once and reused by
- * the instructor preview, student briefing, project snapshot, and review flow.
- * All properties remain optional so legacy missions continue to render.
- */
 export interface MissionBrief {
   goal?: string;
   whyItMatters?: string;
@@ -101,6 +125,20 @@ export interface ProjectStep {
   id: string;
   title: string;
   status: TaskStatus;
+  phaseId?: string;
+  order?: number;
+  source?: 'workflow' | 'mission' | 'student';
+  required?: boolean;
+  description?: string;
+  objective?: string;
+  instructions?: string;
+  checklist?: string[];
+  checklistCompleted?: boolean[];
+  tools?: string[];
+  materials?: string[];
+  safetyNotes?: string[];
+  evidenceRequirements?: MissionEvidenceRequirement[];
+  estimatedMinutes?: number;
   evidence?: string; // URL or Base64
   note?: string; // Student reflection
   resources?: Resource[]; // Tool links
@@ -136,6 +174,7 @@ export interface StudentProject {
 
   // Strategy
   workflowId?: string;
+  workflowSnapshot?: WorkflowSnapshot;
 
   // Process
   steps: ProjectStep[];
@@ -179,6 +218,7 @@ export interface Assignment {
   title: string;
   station: string;
   description: string;
+  thumbnailUrl?: string;
   badges: Badge[];
   recommendedWorkflow: string;
   stepResources?: Record<string, Resource[]>; // Map stepId/phaseId -> specific resources
@@ -246,6 +286,7 @@ export interface ProjectTemplate {
   legacyClaimedAt?: Timestamp;
   legacyClaimedBy?: string;
   defaultWorkflowId?: string; // Legacy or specific workflow overide
+  workflowSnapshot?: WorkflowSnapshot;
   stepResources?: Record<string, Resource[]>; // Mission-specific resources for workflow steps
   missionBrief?: MissionBrief;
 
