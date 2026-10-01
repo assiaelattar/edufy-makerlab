@@ -17,6 +17,7 @@ import { STUDIO_THEME, studioClass } from '../utils/studioTheme';
 import { generateProjectThumbnail } from '../utils/thumbnailGenerator';
 import { MOCK_PROJECT_TEMPLATES } from '../utils/mockData';
 import { requestSparkQuestLaunch } from '../services/sparkquestLaunch';
+import { config } from '../utils/config';
 
 import { NotificationBell } from '../components/NotificationBell';
 import { ProjectFactoryModal } from './learning/ProjectFactoryModal';
@@ -363,21 +364,36 @@ export const LearningView = () => {
     const launchSparkQuest = async (projectId?: string) => {
         const launchWindow = window.open('about:blank', '_blank');
         if (launchWindow) launchWindow.opener = null;
+
+        if (!launchWindow) {
+            await showAlert(
+                'SparkQuest could not open',
+                'Allow pop-ups for Edufy, then try opening SparkQuest again.',
+                'danger'
+            );
+            return;
+        }
+
+        if (!user) {
+            launchWindow.close();
+            await showAlert('SparkQuest could not open', 'Sign in to Edufy before opening SparkQuest.', 'danger');
+            return;
+        }
+
         try {
-            if (!user) throw new Error('Sign in to Edufy before opening SparkQuest.');
             const launch = await requestSparkQuestLaunch({ user, organizationId: tenantOrgId, projectId });
-            if (launchWindow && !launchWindow.closed) {
+            if (!launchWindow.closed) {
                 launchWindow.location.replace(launch.launchUrl);
             } else {
                 throw new Error('Allow pop-ups for Edufy, then try opening SparkQuest again.');
             }
         } catch (error) {
-            if (launchWindow && !launchWindow.closed) launchWindow.close();
-            await showAlert(
-                'SparkQuest could not open',
-                error instanceof Error ? error.message : 'The secure SparkQuest launch could not be created.',
-                'danger'
-            );
+            console.warn('Secure SparkQuest launch unavailable; using the authenticated direct route.', error);
+            if (!launchWindow.closed) {
+                const fallbackUrl = new URL(config.sparkQuestUrl);
+                if (projectId) fallbackUrl.searchParams.set('projectId', projectId);
+                launchWindow.location.replace(fallbackUrl.toString());
+            }
         }
     };
 
