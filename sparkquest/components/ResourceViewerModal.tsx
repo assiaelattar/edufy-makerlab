@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
-import { Modal } from './Modal';
-
+import { ExternalLink, FileText, Image as ImageIcon, Link2, Video } from 'lucide-react';
 import { useSession } from '../context/SessionContext';
+import { SparkbookDialog } from './SparkbookDialog';
 
 interface ResourceViewerModalProps {
     isOpen: boolean;
@@ -28,104 +28,44 @@ export const ResourceViewerModal: React.FC<ResourceViewerModalProps> = ({ isOpen
     const isPdf = resource.url.toLowerCase().endsWith('.pdf') || resource.type === 'file';
     const isImage = resource.type === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(resource.url);
     const isVideo = resource.type === 'video' || resource.url.includes('youtube.com') || resource.url.includes('youtu.be');
+    const canEmbed = isPdf || isImage || isVideo;
+    const icon = isPdf ? <FileText /> : isVideo ? <Video /> : isImage ? <ImageIcon /> : <Link2 />;
+    const embedUrl = resource.url.includes('youtube.com/watch?v=')
+        ? resource.url.replace('watch?v=', 'embed/')
+        : resource.url.includes('youtu.be/')
+            ? resource.url.replace('youtu.be/', 'youtube.com/embed/')
+            : resource.url;
 
-    // Helper to get embed URL
-    const getEmbedUrl = (url: string) => {
-        if (url.includes('youtube.com/watch?v=')) {
-            return url.replace('watch?v=', 'embed/');
+    const openResource = () => {
+        if ((window as any).electron) {
+            startSession(resource.url, 30, resource.title);
+            onClose();
+            return;
         }
-        if (url.includes('youtu.be/')) {
-            return url.replace('youtu.be/', 'youtube.com/embed/');
-        }
-        return url;
+        window.open(resource.url, '_blank', 'noopener,noreferrer');
     };
 
-    const showEmbed = isPdf || isImage || isVideo;
-
-    const modalContent = (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in duration-200">
-            {/* Close Overlay Click */}
-            <div className="absolute inset-0" onClick={onClose}></div>
-
-            <div className="bg-white w-full h-full max-w-6xl max-h-[90vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl relative z-10 pointer-events-auto">
-
-                {/* Header */}
-                <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
-                            {isPdf ? '📄' : isVideo ? '🎥' : '🖼️'}
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-slate-800 text-lg">{resource.title}</h3>
-                            <button
-                                onClick={() => {
-                                    const isElectron = !!(window as any).electron;
-                                    if (isElectron) {
-                                        startSession(resource.url, 30, resource.title);
-                                        onClose();
-                                    } else {
-                                        window.open(resource.url, '_blank');
-                                    }
-                                }}
-                                className="text-xs text-indigo-500 hover:underline"
-                            >
-                                Open in Browser ↗
-                            </button>
-                        </div>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-3 hover:bg-slate-200 rounded-full transition-colors text-slate-500 font-bold"
-                    >
-                        ✕ Close
-                    </button>
+    return ReactDOM.createPortal(
+        <SparkbookDialog
+            isOpen
+            onClose={onClose}
+            eyebrow="Mission resource"
+            title={resource.title}
+            description={canEmbed ? 'Review this reference without losing your place in the mission.' : 'This reference opens in a separate browser tab.'}
+            icon={icon}
+            tone="blue"
+            size="full"
+            bodyClassName="sq-resource-viewer"
+            footer={<><span>Return to the worksheet when you are ready to continue.</span><button type="button" className="sq-action sq-action--primary" onClick={openResource}><ExternalLink size={17} /> Open separately</button></>}
+        >
+            {canEmbed ? (
+                <div className="sq-resource-stage">
+                    {isVideo ? <iframe src={embedUrl} title={resource.title} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : isImage ? <img src={resource.url} alt={resource.title} /> : <iframe src={embedUrl} title={resource.title} />}
                 </div>
-
-                {/* Content */}
-                <div className="flex-1 bg-slate-900 relative flex items-center justify-center p-2">
-                    {showEmbed ? (
-                        isVideo ? (
-                            <iframe
-                                src={getEmbedUrl(resource.url)}
-                                className="w-full h-full rounded-xl border-none"
-                                title={resource.title}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                            />
-                        ) : isImage ? (
-                            <img src={resource.url} alt={resource.title} className="max-w-full max-h-full object-contain" />
-                        ) : (
-                            <iframe
-                                src={getEmbedUrl(resource.url)}
-                                className="w-full h-full bg-white rounded-xl"
-                                title={resource.title}
-                            />
-                        )
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-4">
-                            <div className="text-6xl">🔗</div>
-                            <p className="font-bold text-lg">This resource cannot be embedded.</p>
-                            <button
-                                onClick={() => {
-                                    const isElectron = !!(window as any).electron;
-                                    if (isElectron) {
-                                        startSession(resource.url, 30, resource.title);
-                                        onClose();
-                                    } else {
-                                        window.open(resource.url, '_blank');
-                                    }
-                                }}
-                                className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
-                            >
-                                Open External Link
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
+            ) : (
+                <div className="sq-resource-empty"><Link2 /><strong>This link cannot be shown inside SparkQuest.</strong><span>Open it separately, then come back to your worksheet when you are done.</span><button type="button" className="sq-action sq-action--primary" onClick={openResource}><ExternalLink size={17} /> Open resource</button></div>
+            )}
+        </SparkbookDialog>,
+        document.body,
     );
-
-    return ReactDOM.createPortal(modalContent, document.body);
 };
-

@@ -60,9 +60,9 @@ export const MissionGallery: React.FC<MissionGalleryProps> = ({ onSelectTemplate
         if (template.status !== 'assigned' && template.status !== 'featured') return null;
         const audience = template.targetAudience || {};
         if (selectedGradeId && !audience.grades?.includes(selectedGradeId)) return null;
-        if (audience.students?.length) return `${audience.students.length} learner${audience.students.length === 1 ? '' : 's'}`;
-        if (audience.groups?.length) return `${audience.groups.length} group${audience.groups.length === 1 ? '' : 's'}`;
-        if (audience.grades?.length) return `${audience.grades.length} grade${audience.grades.length === 1 ? '' : 's'}`;
+        const primary = audience.students?.length ? `${audience.students.length} learners` : audience.groups?.length ? `${audience.groups.length} groups` : audience.grades?.length ? `${audience.grades.length} grades` : audience.programs?.length ? `${audience.programs.length} programs` : '';
+        const profiles = audience.additionalStudents?.length ? `${audience.additionalStudents.length} profile learners` : '';
+        return [primary, profiles].filter(Boolean).join(' + ') || null;
         return template.status === 'featured' ? 'Featured' : 'Assigned';
     };
 

@@ -445,11 +445,11 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             await showAlert('Proof upload failed', 'Use a supported image and try again.', 'danger');
         }
     };
-    const isCurrentProgramVisible = (programId: string) => {
+    function isCurrentProgramVisible(programId: string) {
         const program = programs.find(item => item.id === programId);
         if (!program) return true;
         return ['running', 'upcoming', 'evergreen'].includes(getProgramOperationalState(program));
-    };
+    }
 
     const handleTransactionProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

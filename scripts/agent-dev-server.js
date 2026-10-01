@@ -101,6 +101,27 @@ async function resolveHandler(pathname, query) {
     };
   }
 
+  if (pathname === "/api/app-bridge/sparkquest/launch") {
+    return {
+      mod: await import("../api/app-bridge/sparkquest/launch.js"),
+      query,
+    };
+  }
+
+  if (pathname === "/api/app-bridge/sparkquest/exchange") {
+    return {
+      mod: await import("../api/app-bridge/sparkquest/exchange.js"),
+      query,
+    };
+  }
+
+  if (pathname === "/api/app-bridge/sparkquest/reconciliation") {
+    return {
+      mod: await import("../api/app-bridge/sparkquest/reconciliation.js"),
+      query,
+    };
+  }
+
   const accountMatch = pathname.match(/^\/api\/agent\/students\/([^/]+)\/account$/);
   if (accountMatch) {
     return {

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useSession } from '../context/SessionContext';
 import { useAuth } from '../context/AuthContext';
 import { Credential } from '../types';
-import { X, Clock, Plus, Minus, Maximize, Camera, Key, Copy, Eye, EyeOff, Info } from 'lucide-react';
+import { X, Clock, Plus, Minus, Maximize, Camera, Key, Copy, Eye, EyeOff, Info, CheckCircle2, AlertCircle } from 'lucide-react';
 import { CredentialWallet } from './CredentialWallet';
 import { ProjectDetailsEnhanced } from './ProjectDetailsEnhanced';
 
@@ -12,6 +12,7 @@ export const SessionOverlay: React.FC = () => {
     const webviewRef = useRef<any>(null);
     const [showWallet, setShowWallet] = React.useState(false);
     const [showDetails, setShowDetails] = useState(false);
+    const [sessionNotice, setSessionNotice] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
 
     // Quick Match Logic
     const [matchingCred, setMatchingCred] = useState<Credential | null>(null);
@@ -51,8 +52,13 @@ export const SessionOverlay: React.FC = () => {
         }
     }, [sessionUrl, isActive, userProfile]);
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
+    const copyToClipboard = async (text: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setSessionNotice({ tone: 'success', message: `${label} copied.` });
+        } catch {
+            setSessionNotice({ tone: 'error', message: `${label} could not be copied. Select and copy it manually.` });
+        }
     };
 
     if (!isActive || !sessionUrl) return null;
@@ -71,22 +77,22 @@ export const SessionOverlay: React.FC = () => {
             const image = await webviewRef.current.capturePage();
             const dataUrl = image.toDataURL();
             sessionStorage.setItem('temp_evidence', dataUrl);
-            alert("📸 Screenshot Captured! You can upload it as evidence after ending the session.");
+            setSessionNotice({ tone: 'success', message: 'Proof captured. You can attach it after ending this tool session.' });
         } catch (e) {
             console.error("Screenshot failed", e);
-            alert("Failed to capture screenshot.");
+            setSessionNotice({ tone: 'error', message: 'Proof capture failed. Try again or take a screenshot with your device.' });
         }
     };
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-slate-900 flex flex-col">
+        <div className="sq-session-overlay fixed inset-0 z-[9999] bg-slate-900 flex flex-col">
             {/* TOOLBAR */}
-            <div className="h-[60px] bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shrink-0 shadow-xl">
+            <div className="sq-session-toolbar h-[60px] bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shrink-0 shadow-xl">
                 <div className="flex items-center gap-4">
-                    <span className="font-bold text-lg bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent hidden sm:inline">
-                        SparkQuest Session
+                    <span className="sq-session-title font-bold text-lg hidden sm:inline">
+                        Sparkbook tool session
                     </span>
-                    <div className="flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
+                    <div className="sq-session-timer flex items-center gap-2 px-3 py-1 bg-slate-800 rounded-full border border-slate-700">
                         <Clock className="w-4 h-4 text-blue-400" />
                         <span className="font-mono text-lg font-bold tracking-widest text-blue-100">
                             {formatTime(timeLeft)}
@@ -95,7 +101,7 @@ export const SessionOverlay: React.FC = () => {
 
                     {/* QUICK CREDENTIALS BAR */}
                     {matchingCred && (
-                        <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-cyan-950/40 border border-cyan-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 ml-4">
+                        <div className="sq-session-credentials hidden lg:flex items-center gap-2 px-3 py-1 bg-cyan-950/40 border border-cyan-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 ml-4">
                             <div className="flex items-center gap-1.5 text-cyan-400 border-r border-cyan-500/20 pr-2 mr-1">
                                 <Key className="w-3.5 h-3.5" />
                                 <span className="text-xs font-bold uppercase tracking-wider">{matchingCred.service}:</span>
@@ -104,7 +110,7 @@ export const SessionOverlay: React.FC = () => {
                             <div className="flex items-center gap-1 bg-slate-900/50 rounded px-2 py-0.5">
                                 <span className="text-[10px] text-slate-500 font-bold uppercase">User</span>
                                 <code className="text-xs text-white font-mono">{matchingCred.username}</code>
-                                <button onClick={() => copyToClipboard(matchingCred.username)} className="text-slate-400 hover:text-white ml-1">
+                                <button onClick={() => void copyToClipboard(matchingCred.username, 'Username')} className="text-slate-400 hover:text-white ml-1" aria-label="Copy username">
                                     <Copy className="w-3 h-3" />
                                 </button>
                             </div>
@@ -118,7 +124,7 @@ export const SessionOverlay: React.FC = () => {
                                     <button onClick={() => setShowQuickPass(!showQuickPass)} className="text-slate-400 hover:text-white ml-1">
                                         {showQuickPass ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                                     </button>
-                                    <button onClick={() => copyToClipboard(matchingCred.password!)} className="text-slate-400 hover:text-white ml-1">
+                                    <button onClick={() => void copyToClipboard(matchingCred.password!, 'Password')} className="text-slate-400 hover:text-white ml-1" aria-label="Copy password">
                                         <Copy className="w-3 h-3" />
                                     </button>
                                 </div>
@@ -127,7 +133,7 @@ export const SessionOverlay: React.FC = () => {
                     )}
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="sq-session-actions flex items-center gap-4">
                     {/* ZOOM CONTROLS */}
                     <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
                         <button onClick={() => handleZoom('out')} className="p-1.5 hover:bg-slate-700 rounded text-slate-300 hover:text-white" title="Zoom Out">
@@ -168,6 +174,8 @@ export const SessionOverlay: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {sessionNotice && <div className={`sq-session-notice is-${sessionNotice.tone}`} role="status">{sessionNotice.tone === 'success' ? <CheckCircle2 /> : <AlertCircle />}<span>{sessionNotice.message}</span><button type="button" onClick={() => setSessionNotice(null)} aria-label="Dismiss message"><X /></button></div>}
 
             {/* WALLET DRAWER */}
             <CredentialWallet

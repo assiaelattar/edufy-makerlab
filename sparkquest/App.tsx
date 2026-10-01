@@ -19,6 +19,8 @@ import { isLocalHostname } from './utils/appUrls';
 import { exchangeSparkQuestLaunch } from './services/appBridge';
 import { Assignment, ProcessTemplate, ProjectTemplate, StudentProject } from './types';
 import { assignmentFromMission } from './domain/missionContent';
+import { currentAcademicYear, projectAcademicYear } from './utils/academicYear';
+import { projectLane } from './domain/learnerWorkbench';
 import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from './domain/workflowPipeline';
 
 
@@ -36,6 +38,11 @@ const CredentialWallet = lazy(() => import('./components/CredentialWallet').then
 const ArcadeView = lazy(() => import('./components/arcade/ArcadeView').then(module => ({ default: module.ArcadeView })));
 const AvatarSelector = lazy(() => import('./components/AvatarSelector').then(module => ({ default: module.AvatarSelector })));
 const LearnerNavigationPreview = lazy(() => import('./components/LearnerNavigationPreview').then(module => ({ default: module.LearnerNavigationPreview })));
+const MissionImportPreview = lazy(() => import('./components/factory/MissionImportPreview'));
+const LearnerWorkbenchPreview = lazy(() => import('./components/LearnerWorkbenchPreview'));
+const ReviewLoopPreview = lazy(() => import('./components/factory/ReviewLoopPreview'));
+const InstructorLearnerPreview = lazy(() => import('./components/factory/InstructorLearnerPreview'));
+const ReviewModal = lazy(() => import('./components/factory/ReviewModal').then(module => ({ default: module.ReviewModal })));
 
 const missionDesignPreview: ProjectTemplate = {
   id: 'design-preview-mission',
@@ -159,7 +166,18 @@ const getMissionStudioPreviewProject = (state: StudioPreviewState): StudentProje
 
   return {
     ...missionStudioPreviewProject,
-    status: state === 'submitted' ? 'submitted' : 'building',
+    status: state === 'submitted' ? 'submitted' : state === 'revision' ? 'changes_requested' : state === 'approved' ? 'published' : 'building',
+    ...(state === 'revision' ? {
+      feedback: 'Your concept is strong. Label the power path and add one photo of the rover during testing, then send it again.',
+      reviewedByName: 'Ms. Lina',
+      reviewedAt: '2026-09-30T09:30:00.000Z',
+    } : {}),
+    ...(state === 'approved' ? {
+      feedback: 'Excellent iteration. Your evidence explains both the design choice and what changed after testing.',
+      reviewedByName: 'Ms. Lina',
+      reviewedAt: '2026-09-30T10:15:00.000Z',
+      xpReward: 120,
+    } : {}),
     steps,
   };
 };
@@ -196,6 +214,7 @@ const SparkQuestApp: React.FC = () => {
   const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY' | 'SHOWCASE'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
+  const [previewProjectData, setPreviewProjectData] = useState<StudentProject | null>(null);
 
   // URL State Hooks (Moved Up)
   const [initialProjectId, setInitialProjectId] = useState<string | null>(() => {
@@ -318,6 +337,35 @@ const SparkQuestApp: React.FC = () => {
     return <LazyView><StudentWizard assignment={missionStudioPreviewAssignment} initialProject={getMissionStudioPreviewProject(studioState)} isConnected previewMode onExit={() => { window.location.href = `${window.location.pathname}?designPreview=mission`; }} /></LazyView>;
   }
 
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'review') {
+    const reviewProject: StudentProject = {
+      ...getMissionStudioPreviewProject('submitted'),
+      id: 'design-preview-showcase',
+      title: 'Solar rover field showcase',
+      templateId: 'showcase-template',
+      workflowId: 'showcase',
+      studentName: 'Aya Maker',
+      mediaUrls: ['/mission-plant-guardian.svg'],
+      presentationUrl: 'https://example.com/solar-rover',
+    };
+    return <LazyView><ReviewModal projectId={reviewProject.id} previewProject={reviewProject} previewStudentName="Aya Maker" onClose={() => { window.location.href = `${window.location.pathname}?designPreview=studio&studioState=submitted`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && ['showcase', 'showcaseReview'].includes(new URLSearchParams(window.location.search).get('designPreview') || '')) {
+    const outcome = new URLSearchParams(window.location.search).get('outcome') === 'approved' ? 'published' : 'changes_requested';
+    const showcaseProject: StudentProject = {
+      ...getMissionStudioPreviewProject(outcome === 'published' ? 'approved' : 'revision'),
+      id: 'design-preview-showcase',
+      title: 'Solar rover field showcase',
+      templateId: 'showcase-template',
+      workflowId: 'showcase',
+      status: new URLSearchParams(window.location.search).get('designPreview') === 'showcase' ? 'building' : outcome,
+      mediaUrls: new URLSearchParams(window.location.search).get('designPreview') === 'showcase' ? [] : ['/mission-plant-guardian.svg'],
+      presentationUrl: new URLSearchParams(window.location.search).get('designPreview') === 'showcase' ? '' : 'https://example.com/solar-rover',
+    };
+    return <LazyView><StudentWizard assignment={missionStudioPreviewAssignment} initialProject={showcaseProject} isConnected previewMode onExit={() => { window.location.href = `${window.location.pathname}?designPreview=review`; }} /></LazyView>;
+  }
+
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'store') {
     return <LazyView><SparkStore isOpen previewMode defaultTab="gadgets" onClose={() => { window.location.href = `${window.location.pathname}?designPreview=studio`; }} /></LazyView>;
   }
@@ -408,7 +456,8 @@ const SparkQuestApp: React.FC = () => {
       }
     }
 
-    const finalProject = template || {
+    const ownedPreview = previewProjectData?.id === effectivePreviewId ? previewProjectData : studentProjects?.find(project => project.id === effectivePreviewId);
+    const finalProject = ownedPreview || template || {
       id: effectivePreviewId,
       title: 'Mission Loading...',
       description: 'Fetching details from server...',
@@ -422,7 +471,7 @@ const SparkQuestApp: React.FC = () => {
         project={finalProject}
         workflow={processTemplates.find(workflow => workflow.id === (finalProject as any).defaultWorkflowId || workflow.id === (finalProject as any).workflowId)}
         role={initialRole}
-        onLaunch={() => {
+        onLaunch={ownedPreview && (projectAcademicYear(ownedPreview) !== currentAcademicYear() || !['active', 'feedback'].includes(projectLane(ownedPreview.status))) ? undefined : () => {
           // If student wants to start, they click Launch.
           // We clear preview, set "selected" which triggers the fetchMission effect
           setPreviewProjectId(null);
@@ -464,7 +513,8 @@ const SparkQuestApp: React.FC = () => {
         }}
         // We'll need to modify ProjectSelector to accept an onPreview prop if we want the button
         // For now, let's assume we will add it.
-        onPreviewProject={(projectId) => {
+        onPreviewProject={(projectId, record) => {
+          setPreviewProjectData(record || null);
           setPreviewProjectId(projectId);
         }}
         onLogout={handleLogout}
@@ -550,6 +600,10 @@ const App: React.FC = () => {
 
   if (preview === 'login') return <LoginView />;
   if (preview === 'student-project') return <LazyView><StudentProjectDetailsDemo /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'import') return <LazyView><MissionImportPreview /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'workbench') return <LazyView><LearnerWorkbenchPreview /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'reviewLoop') return <LazyView><ReviewLoopPreview /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'learnerDesk') return <LazyView><InstructorLearnerPreview /></LazyView>;
 
   return (
     <ErrorBoundary>

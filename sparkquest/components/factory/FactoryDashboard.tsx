@@ -10,12 +10,14 @@ import {
     UsersRound,
 } from 'lucide-react';
 import { useFactoryData } from '../../hooks/useFactoryData';
+import { reviewQueue } from '../../domain/projectReview';
 
 interface FactoryDashboardProps {
     onReviewProject: (projectId: string) => void;
     onNavigate: (view: 'projects' | 'workflows' | 'stations' | 'badges') => void;
     filterTemplateId?: string | null;
     onClearFilter?: () => void;
+    initialFilter?: 'active' | 'review' | 'published' | null;
 }
 
 const toTime = (value: any) => {
@@ -31,18 +33,17 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     onNavigate,
     filterTemplateId,
     onClearFilter,
+    initialFilter = null,
 }) => {
-    const { studentProjects, students, projectTemplates } = useFactoryData();
-    const [filter, setFilter] = useState<'active' | 'review' | 'published' | null>(null);
+    const { studentProjects, students, projectTemplates, studentProjectsLoading, studentProjectsError, retryStudentProjects } = useFactoryData();
+    const [filter, setFilter] = useState<'active' | 'review' | 'published' | null>(initialFilter);
 
     const data = useMemo(() => {
         const pool = filterTemplateId
             ? studentProjects.filter((project: any) => project.templateId === filterTemplateId)
             : studentProjects;
         const active = pool.filter((project: any) => ['planning', 'building', 'testing'].includes(project.status));
-        const review = pool.filter((project: any) =>
-            project.status === 'submitted' || project.steps?.some((step: any) => step.status === 'PENDING_REVIEW')
-        );
+        const review = reviewQueue(pool).map(item => item.project);
         const published = pool.filter((project: any) => project.status === 'published');
         const recent = [...pool].sort((left: any, right: any) => toTime(right.updatedAt) - toTime(left.updatedAt)).slice(0, 7);
         const draftTemplates = projectTemplates.filter((template: any) => !template.status || template.status === 'draft');
@@ -61,6 +62,11 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     const studentName = (project: any) => project.studentName ||
         students.find((student: any) => student.id === project.studentId || student.loginInfo?.uid === project.studentId)?.name ||
         'Learner';
+    const projectKind = (project: any) => project.templateId === 'showcase-template' || project.workflowId === 'showcase'
+        ? 'Showcase'
+        : project.templateId
+            ? 'Assigned mission'
+            : 'Independent project';
 
     const pipeline = [
         { label: 'Draft', value: data.draftTemplates.length, icon: FilePenLine, detail: 'Ready to finish' },
@@ -82,6 +88,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                     </div>
                     <span className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-600">{selectedProjects.length} projects</span>
                 </div>
+                {studentProjectsLoading && <p role="status">Loading learner projects…</p>}
+                {studentProjectsError && <div role="alert" className="sq-review-alert">{studentProjectsError}<button type="button" onClick={retryStudentProjects}>Retry loading projects</button></div>}
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {selectedProjects.map((project: any) => (
                         <button key={project.id} onClick={() => onReviewProject(project.id)} className="group min-h-44 rounded-2xl border border-slate-200 bg-white p-5 text-left transition hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
@@ -89,11 +97,12 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide text-slate-600">{project.status}</span>
                                 <span className="truncate text-xs font-bold text-slate-500">{studentName(project)}</span>
                             </div>
-                            <h2 className="mt-5 line-clamp-2 text-xl font-black text-slate-950 group-hover:text-blue-700">{project.title || 'Untitled mission'}</h2>
+                            <p className="mt-4 text-[10px] font-black uppercase tracking-[0.16em] text-blue-700">{projectKind(project)}</p>
+                            <h2 className="mt-2 line-clamp-2 text-xl font-black text-slate-950 group-hover:text-blue-700">{project.title || 'Untitled mission'}</h2>
                             <span className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 text-sm font-bold text-slate-500"><span>Open project</span><ArrowRight size={17} /></span>
                         </button>
                     ))}
-                    {selectedProjects.length === 0 && (
+                    {selectedProjects.length === 0 && !studentProjectsLoading && !studentProjectsError && (
                         <div className="col-span-full rounded-3xl border-2 border-dashed border-slate-200 bg-white px-6 py-16 text-center">
                             <CheckCircle2 size={36} className="mx-auto text-emerald-600" />
                             <h2 className="mt-4 text-xl font-black text-slate-900">Nothing waiting here</h2>
@@ -107,6 +116,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
     return (
         <div className="mx-auto max-w-[1320px] space-y-7 p-4 pb-24 sm:p-7 md:pb-8">
+            {studentProjectsLoading && <p role="status">Loading learner projects…</p>}
+            {studentProjectsError && <div role="alert" className="sq-review-alert">{studentProjectsError}<button type="button" onClick={retryStudentProjects}>Retry loading projects</button></div>}
             <section className="overflow-hidden rounded-[28px] bg-[#10233f] text-white shadow-xl shadow-slate-900/10">
                 <div className="grid gap-8 px-6 py-7 sm:px-8 lg:grid-cols-[1fr_auto] lg:items-end">
                     <div>
@@ -182,7 +193,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 <span className="text-xs font-semibold text-slate-400">{toTime(project.updatedAt) ? new Date(toTime(project.updatedAt)).toLocaleDateString() : 'Now'}</span>
                             </button>
                         ))}
-                        {data.recent.length === 0 && <p className="px-5 py-12 text-center text-sm font-semibold text-slate-500">No learner activity yet.</p>}
+                        {data.recent.length === 0 && !studentProjectsLoading && !studentProjectsError && <p className="px-5 py-12 text-center text-sm font-semibold text-slate-500">No learner activity yet.</p>}
                     </div>
                 </div>
             </section>

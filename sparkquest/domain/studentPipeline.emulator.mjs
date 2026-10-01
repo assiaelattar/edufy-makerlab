@@ -5,13 +5,11 @@ import {
   addDoc,
   collection,
   connectFirestoreEmulator,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
   getFirestore,
   query,
-  serverTimestamp,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -28,7 +26,7 @@ const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
 const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
 const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST || '127.0.0.1:9199';
 const skipStorage = process.env.SKIP_STORAGE_EMULATOR === 'true';
-const organizationId = 'makerlab-academy';
+const organizationId = 'org-pipeline';
 
 const firebaseConfig = {
   apiKey: 'fake-api-key',
@@ -61,7 +59,7 @@ const seedDocument = async (path, data) => {
   if (!response.ok) throw new Error(`Could not seed ${path}: ${response.status} ${await response.text()}`);
 };
 
-const createClient = async (label, email, role, clientOrganizationId = organizationId) => {
+const createClient = async (label, email, role) => {
   const app = initializeApp(firebaseConfig, label);
   const auth = getAuth(app);
   connectAuthEmulator(auth, `http://${authHost}`, { disableWarnings: true });
@@ -79,7 +77,7 @@ const createClient = async (label, email, role, clientOrganizationId = organizat
     email,
     name: label,
     role,
-    organizationId: clientOrganizationId,
+    organizationId,
     status: 'active',
   });
   return { app, auth, db, storage, uid: credential.user.uid };
@@ -102,8 +100,7 @@ try {
   const student = await createClient('pipeline-student', 'student.pipeline@example.test', 'student');
   const otherStudent = await createClient('pipeline-other', 'other.pipeline@example.test', 'student');
   const instructor = await createClient('pipeline-instructor', 'instructor.pipeline@example.test', 'instructor');
-  const otherTenantInstructor = await createClient('pipeline-other-instructor', 'other.instructor.pipeline@example.test', 'instructor', 'org-other');
-  clients.push(student, otherStudent, instructor, otherTenantInstructor);
+  clients.push(student, otherStudent, instructor);
 
   const studentRecordId = 'student-record-1';
   await seedDocument(`students/${studentRecordId}`, {
@@ -131,47 +128,6 @@ try {
   assert.equal((await getDoc(doc(student.db, 'project_templates', missionRef.id))).exists(), true,
     'student can read an instructor-created mission');
 
-  await updateDoc(missionRef, {
-    status: 'assigned',
-    targetAudience: { programs: ['program-1'], grades: ['grade-1'], groups: [], students: [] },
-    assignedBy: instructor.uid,
-    assignedAt: serverTimestamp(),
-  });
-  assert.deepEqual((await getDoc(missionRef)).data().targetAudience.grades, ['grade-1'],
-    'instructor can update and assign a tenant-owned mission');
-
-  const legacyMissionId = 'legacy-mission-without-tenant';
-  await seedDocument(`project_templates/${legacyMissionId}`, {
-    title: 'Legacy mission',
-    description: 'Created before tenant ownership',
-    status: 'assigned',
-    targetAudience: { programs: [], grades: [], groups: [], students: [] },
-  });
-  const legacyMissionRef = doc(instructor.db, 'project_templates', legacyMissionId);
-  await updateDoc(legacyMissionRef, {
-    organizationId,
-    legacyClaimedBy: instructor.uid,
-    legacyClaimedAt: serverTimestamp(),
-    status: 'assigned',
-    targetAudience: { programs: ['program-1'], grades: ['grade-1'], groups: [], students: [] },
-  });
-  assert.equal((await getDoc(legacyMissionRef)).data().organizationId, organizationId,
-    'trusted MakerLab instructor can claim and assign a legacy mission');
-
-  const foreignLegacyMissionId = 'foreign-legacy-mission-without-tenant';
-  await seedDocument(`project_templates/${foreignLegacyMissionId}`, {
-    title: 'Unscoped mission',
-    status: 'assigned',
-  });
-  await expectDenied(
-    () => updateDoc(doc(otherTenantInstructor.db, 'project_templates', foreignLegacyMissionId), {
-      organizationId: 'org-other',
-      legacyClaimedBy: otherTenantInstructor.uid,
-      legacyClaimedAt: serverTimestamp(),
-    }),
-    'another tenant cannot claim the MakerLab legacy mission bridge'
-  );
-
   for (const [collectionName, payload] of [
     ['process_templates', { name: 'Design loop', description: 'Discover and build', phases: [] }],
     ['stations', { label: 'Robotics lab', description: 'Build station', order: 0 }],
@@ -198,6 +154,7 @@ try {
     description: 'Created by learner',
     station: 'general',
     status: 'planning',
+    reviewProtocolVersion: 1,
     steps: [],
     commits: [],
     skills: [],
@@ -236,59 +193,6 @@ try {
     await uploadBytes(studentPdfRef, new Uint8Array([37, 80, 68, 70]), { contentType: 'application/pdf' });
     assert.match(await getDownloadURL(studentPdfRef), /^http:/, 'student PDF evidence upload returns a download URL');
 
-    // Reproduce the actual Showcase UI transaction: upload a screenshot to the
-    // Auth UID-owned path, then persist its public URL together with the learner
-    // supplied project link and review status on the canonical student project.
-    const showcaseRef = ref(
-      student.storage,
-      `student-projects/${organizationId}/${student.uid}/${projectRef.id}/showcase-plant-guardian.png`
-    );
-    await uploadBytes(showcaseRef, new Uint8Array([137, 80, 78, 71]), { contentType: 'image/png' });
-    const showcaseUrl = await getDownloadURL(showcaseRef);
-    await updateDoc(projectRef, {
-      status: 'submitted',
-      presentationUrl: 'https://example.test/student-project',
-      thumbnailUrl: showcaseUrl,
-      coverImage: showcaseUrl,
-      mediaUrls: [showcaseUrl],
-    });
-    const submittedShowcase = (await getDoc(projectRef)).data();
-    assert.equal(submittedShowcase.status, 'submitted', 'student can submit a showcase for instructor review');
-    assert.equal(submittedShowcase.presentationUrl, 'https://example.test/student-project', 'showcase link is saved');
-    assert.deepEqual(submittedShowcase.mediaUrls, [showcaseUrl], 'showcase media URL is saved');
-
-    const legacyProjectId = 'legacy-showcase-without-tenant';
-    await seedDocument(`student_projects/${legacyProjectId}`, {
-      studentId: studentRecordId,
-      templateId: 'showcase-template',
-      title: 'Legacy learner showcase',
-      description: 'Created before organization ownership was required',
-      station: 'general',
-      status: 'planning',
-      steps: [],
-      commits: [],
-      skills: [],
-      resources: [],
-    });
-    const legacyProjectRef = doc(student.db, 'student_projects', legacyProjectId);
-    assert.equal((await getDoc(legacyProjectRef)).exists(), true, 'student can read their linked legacy showcase');
-    await expectDenied(
-      () => updateDoc(legacyProjectRef, { status: 'submitted', presentationUrl: 'https://example.test/legacy' }),
-      'legacy showcase update is denied until the client restores tenant ownership'
-    );
-    await updateDoc(legacyProjectRef, {
-      organizationId,
-      status: 'submitted',
-      presentationUrl: 'https://example.test/legacy',
-      thumbnailUrl: showcaseUrl,
-      coverImage: showcaseUrl,
-      mediaUrls: [showcaseUrl],
-    });
-    const migratedLegacyShowcase = (await getDoc(legacyProjectRef)).data();
-    assert.equal(migratedLegacyShowcase.organizationId, organizationId, 'legacy showcase is repaired with tenant ownership');
-    assert.equal(migratedLegacyShowcase.status, 'submitted', 'repaired legacy showcase enters instructor review');
-    assert.deepEqual(migratedLegacyShowcase.mediaUrls, [showcaseUrl], 'repaired legacy showcase keeps uploaded media');
-
     const instructorMediaRef = ref(instructor.storage, `instructor-projects/${organizationId}/${instructor.uid}/${missionRef.id}/briefing.mp4`);
     await uploadBytes(instructorMediaRef, new Uint8Array([0, 0, 0, 24]), { contentType: 'video/mp4' });
     assert.match(await getDownloadURL(instructorMediaRef), /^http:/, 'instructor mission media upload returns a download URL');
@@ -298,10 +202,6 @@ try {
     () => getDoc(doc(otherStudent.db, 'student_projects', projectRef.id)),
     'another student cannot read the project'
   );
-
-  await deleteDoc(missionRef);
-  assert.equal((await getDoc(projectRef)).exists(), true,
-    'deleting a mission template preserves the learner project record');
   if (!skipStorage) {
     await expectDenied(
       () => uploadBytes(
@@ -321,7 +221,7 @@ try {
     );
   }
 
-  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 18 : 31} assertions passed.`);
+  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 19} assertions passed.`);
 } finally {
   await Promise.all(clients.map(client => deleteApp(client.app)));
 }

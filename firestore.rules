@@ -93,11 +93,9 @@ service cloud.firestore {
       return isElevatedUser() && canReadTenantDoc();
     }
 
-    // SparkQuest predates tenant ownership on four MakerLab mission templates.
-    // Keep the compatibility bridge narrow: only trusted MakerLab mission
-    // operators may claim one of those unscoped records, and every claim is
-    // stamped with the authenticated actor and request time. Once claimed, the
-    // normal tenant rules above apply to every later write.
+    // Keep the production compatibility bridge for the four legacy MakerLab
+    // mission templates narrow and auditable. Once claimed, normal tenant
+    // rules govern every later write.
     function canClaimLegacySparkQuestTemplate() {
       return hasUserProfile() &&
         currentRole() in ['super_admin', 'owner', 'admin', 'instructor'] &&
@@ -445,10 +443,8 @@ service cloud.firestore {
         studentData.loginInfo.uid == request.auth.uid;
     }
 
-    // Lean learner-only ownership check used by SparkQuest. Keep this separate
-    // from the broader parent/guardian resolver: evaluating every guardian
-    // branch for learner queries can exhaust Firestore's rules expression
-    // budget before the direct loginInfo match is reached.
+    // Lean learner-only ownership check. This avoids exhausting Firestore's
+    // rules expression budget on learner project queries.
     function learnerLinkedToRequester(studentId, orgId) {
       let studentDocument = get(/databases/$(database)/documents/students/$(studentId));
       return isSignedIn() &&
@@ -486,13 +482,70 @@ service cloud.firestore {
     function canCreateOwnStudentProject() {
       return hasUserProfile() && currentRole() == 'student' && requestHasOrg() &&
         request.resource.data.organizationId == currentOrgId() &&
+        learnerCreatesUnreviewedProject() &&
         learnerLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId);
+    }
+
+    function learnerCreatesUnreviewedProject() {
+      return request.resource.data.get('reviewHistory', null) == null &&
+        request.resource.data.get('reviewedAt', null) == null &&
+        request.resource.data.get('reviewedById', null) == null &&
+        request.resource.data.get('reviewedByName', null) == null &&
+        request.resource.data.get('feedback', null) == null &&
+        request.resource.data.get('xpReward', null) == null &&
+        request.resource.data.get('publishedAt', null) == null &&
+        request.resource.data.get('stepReviews', null) == null &&
+        request.resource.data.get('reviewProtocolVersion', 0) == 1 &&
+        request.resource.data.get('status', 'planning') != 'published' &&
+        request.resource.data.get('status', 'planning') != 'changes_requested';
+    }
+
+    function projectReviewFieldsAreUnchanged() {
+      return request.resource.data.get('reviewHistory', null) == resource.data.get('reviewHistory', null) &&
+        request.resource.data.get('reviewedAt', null) == resource.data.get('reviewedAt', null) &&
+        request.resource.data.get('reviewedById', null) == resource.data.get('reviewedById', null) &&
+        request.resource.data.get('reviewedByName', null) == resource.data.get('reviewedByName', null) &&
+        request.resource.data.get('feedback', null) == resource.data.get('feedback', null) &&
+        request.resource.data.get('xpReward', null) == resource.data.get('xpReward', null) &&
+        request.resource.data.get('publishedAt', null) == resource.data.get('publishedAt', null) &&
+        request.resource.data.get('stepReviews', null) == resource.data.get('stepReviews', null) &&
+        request.resource.data.get('reviewProtocolVersion', null) == resource.data.get('reviewProtocolVersion', null);
+    }
+
+    function learnerPreservesProjectReviewTruth() {
+      return projectReviewFieldsAreUnchanged() &&
+        resource.data.get('status', '') != 'published' &&
+        request.resource.data.get('status', '') != 'published' &&
+        (
+          request.resource.data.get('status', '') != 'changes_requested' ||
+          resource.data.get('status', '') == 'changes_requested'
+        );
+    }
+
+    function isProjectReviewer() {
+      return currentRole() in ['super_admin', 'owner', 'admin', 'instructor'];
+    }
+
+    function canCreateTenantStudentProject() {
+      return canCreateTenantDoc() && (
+        isProjectReviewer() || learnerCreatesUnreviewedProject()
+      );
+    }
+
+    function canUpdateTenantStudentProject() {
+      return canUpdateTenantDoc() && (
+        isProjectReviewer() || (
+          projectReviewFieldsAreUnchanged() &&
+          request.resource.data.get('status', '') == resource.data.get('status', '')
+        )
+      );
     }
 
     function canUpdateOwnStudentProject() {
       return hasUserProfile() && currentRole() == 'student' && resourceHasOrg() && requestHasOrg() &&
         request.resource.data.organizationId == resource.data.organizationId &&
         request.resource.data.studentId == resource.data.studentId &&
+        learnerPreservesProjectReviewTruth() &&
         learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId);
     }
 
@@ -508,7 +561,24 @@ service cloud.firestore {
       return hasUserProfile() && currentRole() == 'student' && !resourceHasOrg() && requestHasOrg() &&
         request.resource.data.organizationId == currentOrgId() &&
         request.resource.data.studentId == resource.data.studentId &&
+        learnerPreservesProjectReviewTruth() &&
         learnerLinkedToRequester(resource.data.studentId, currentOrgId());
+    }
+
+    function canCreateStudentProject() {
+      return hasUserProfile() && (
+        currentRole() == 'student'
+          ? canCreateOwnStudentProject()
+          : canCreateTenantStudentProject()
+      );
+    }
+
+    function canUpdateStudentProject() {
+      return hasUserProfile() && (
+        currentRole() == 'student'
+          ? (canUpdateOwnStudentProject() || canMigrateOwnLegacyStudentProject())
+          : canUpdateTenantStudentProject()
+      );
     }
 
     function validOwnUserCreate(userId) {
@@ -746,9 +816,9 @@ service cloud.firestore {
 
     // --- Core Edufy tenant data ---
     match /students/{studentId} {
-      allow read: if canReadTenantDoc();
-      allow read: if studentRecordOwnedByRequester(resource.data);
-      allow read: if studentLinkedToRequester(studentId, resource.data.organizationId);
+      allow read: if canReadTenantDoc() ||
+        studentLinkedToRequester(studentId, resource.data.organizationId) ||
+        studentRecordOwnedByRequester(resource.data);
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -814,15 +884,15 @@ service cloud.firestore {
     }
 
     match /student_projects/{projectId} {
-      allow read: if canReadTenantDoc();
-      allow read: if canReadLegacyStudentProject();
-      allow read: if resourceHasOrg() && learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId);
-      allow read: if resourceHasOrg() && studentLinkedToRequester(resource.data.studentId, resource.data.organizationId);
-      allow create: if canCreateTenantDoc();
-      allow create: if canCreateOwnStudentProject();
-      allow update: if canUpdateTenantDoc();
-      allow update: if canUpdateOwnStudentProject();
-      allow update: if canMigrateOwnLegacyStudentProject();
+      allow read: if canReadTenantDoc() ||
+        canReadLegacyStudentProject() ||
+        (resourceHasOrg() && (
+          learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianSubjectLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          (hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid && resource.data.organizationId == currentOrgId())
+        ));
+      allow create: if canCreateStudentProject();
+      allow update: if canUpdateStudentProject();
       allow delete: if canDeleteTenantDoc();
     }
 

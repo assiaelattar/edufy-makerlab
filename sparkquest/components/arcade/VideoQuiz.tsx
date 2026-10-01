@@ -139,12 +139,12 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
     const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
     return (
-        <div className="animate-in fade-in zoom-in-95 duration-200 h-full flex flex-col">
-            <button onClick={onClose} className="mb-4 text-slate-400 hover:text-white flex items-center gap-2 transition-colors w-fit">
-                <X size={20} /> Cancel Learning
+        <div className="sq-video-lesson animate-in fade-in zoom-in-95 duration-200 h-full flex flex-col">
+            <button onClick={onClose} className="sq-video-close">
+                <X size={20} /> Back to the Play Lab
             </button>
 
-            <div className="bg-slate-800 rounded-3xl overflow-hidden border border-slate-700 shadow-2xl relative flex-1 flex flex-col">
+            <div className="sq-video-card relative flex-1 flex flex-col">
                 <AnimatePresence mode="wait">
                     {step === 'VIDEO' ? (
                         <motion.div
@@ -258,7 +258,7 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
                             </div>
 
                             {/* Controls / Info */}
-                            <div className="p-8 bg-slate-800 border-t border-slate-700">
+                            <div className="sq-video-info p-8 bg-slate-800 border-t border-slate-700">
                                 <div className="flex items-center justify-between gap-8">
                                     <div className="flex-1">
                                         <h3 className="text-2xl font-black text-white line-clamp-1">{video.title}</h3>
@@ -285,7 +285,7 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
                                                 setStep('QUIZ');
                                             }
                                         }}
-                                        className={`px-8 py-4 rounded-2xl font-black flex items-center gap-3 transition-all shadow-lg ${isVideoCompleted
+                                        className={`sq-video-primary px-8 py-4 rounded-2xl font-black flex items-center gap-3 transition-all shadow-lg ${isVideoCompleted
                                             ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 text-white cursor-pointer shadow-blue-500/20'
                                             : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                                             }`}
@@ -308,7 +308,7 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
                             key="quiz-step"
                             initial={{ opacity: 0, x: 50 }}
                             animate={{ opacity: 1, x: 0 }}
-                            className="flex-1 flex flex-col h-full bg-slate-800"
+                            className="sq-video-quiz flex-1 flex flex-col h-full bg-slate-800"
                         >
                             {!showResult && questions.length > 0 ? (
                                 <div className="flex-1 flex flex-col p-12 max-w-4xl mx-auto w-full">
@@ -327,7 +327,7 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
                                         </div>
                                     </div>
 
-                                    <h3 className="text-3xl font-bold text-white mb-8 leading-snug">{questions[currentQ].q}</h3>
+                                    <h3 className="sq-video-question text-3xl font-bold text-white mb-8 leading-snug">{questions[currentQ].q}</h3>
 
                                     <div className="grid gap-4">
                                         {questions[currentQ].options.map((opt, idx) => {
@@ -350,7 +350,7 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
                                                     key={idx}
                                                     onClick={() => handleAnswer(idx)}
                                                     disabled={isAnswered}
-                                                    className={`w-full p-6 text-left border rounded-2xl transition-all font-bold text-lg flex justify-between items-center group ${btnClass}`}
+                                                    className={`sq-video-answer w-full p-6 text-left border rounded-2xl transition-all font-bold text-lg flex justify-between items-center group ${btnClass}`}
                                                     whileHover={!isAnswered ? { scale: 1.01, x: 5 } : {}}
                                                     whileTap={!isAnswered ? { scale: 0.99 } : {}}
                                                 >
@@ -364,7 +364,7 @@ export const VideoQuiz: React.FC<VideoQuizProps> = ({ video, onClose, onComplete
                                     </div>
                                 </div>
                             ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-b from-slate-800 to-slate-900">
+                                <div className="sq-video-result flex-1 flex flex-col items-center justify-center p-8 text-center bg-gradient-to-b from-slate-800 to-slate-900">
                                     <motion.div
                                         initial={{ scale: 0, rotate: -180 }}
                                         animate={{ scale: 1, rotate: 0 }}

@@ -1,10 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Camera, Check, ChevronDown, Clock3, Download, File, FileText, Globe, GripVertical, Image, Link as LinkIcon, ListChecks, Map, PackageCheck, Pencil, RotateCcw, Save, Send, Target, Trash2, Trophy, Upload, Video, Wrench, X as XIcon } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowUpRight, Camera, Check, ChevronDown, Clock3, Download, File, FileText, Globe, GripVertical, Image, Link as LinkIcon, ListChecks, Map, MessageSquareText, PackageCheck, Pencil, RotateCcw, Save, Send, Target, Trash2, Trophy, Upload, Video, Wrench, X as XIcon } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import { StudentProject, Workflow, ProjectStep, TaskStatus, Assignment } from '../types';
 import { generateCoverArt, analyzeSubmission } from '../services/gemini';
 import { api } from '../services/api';
+import { saveLearnerProject } from '../services/projectReview';
+import { effectiveStepReviewStatus, stepReviewFeedback, submittedProof } from '../domain/projectReview';
+import { db } from '../services/firebase';
 import { WizardNode, WizardNodeProps } from './WizardNode';
 import { WizardModal } from './WizardModal';
 import { ConnectionStatus } from './ConnectionStatus';
@@ -99,6 +102,7 @@ interface StepContentProps {
   updateProject: (updates: Partial<StudentProject>) => Promise<{ success: boolean; error?: string }>;
   closeModal: () => void;
   onShowResources?: () => void;
+  previewMode?: boolean;
 }
 
 const IdentityStepContent: React.FC<StepContentProps> = ({ project, assignment, updateProject, closeModal, onShowResources }) => {
@@ -761,6 +765,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
           ${project.studentId || 'Cadet'}`;
 
   if (!step) return <div>Error: Step not found</div>;
+  const reviewStatus = effectiveStepReviewStatus(project, step);
+  const canonicalReviewFeedback = stepReviewFeedback(project, step);
 
   const checklistTotal = step.checklist?.length || 0;
   const checklistDone = step.checklist?.filter((_, index) => Boolean(step.checklistCompleted?.[index])).length || 0;
@@ -890,13 +896,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
       const updatedSteps = project.steps.map(s => {
         if (s.id === realId) {
-          return {
-            ...s,
-            status: 'PENDING_REVIEW' as TaskStatus,
-            evidence: evidenceUrl,
-            note: note,
-            submittedAt: new Date().toISOString()
-          };
+          return submittedProof(s, evidenceUrl, note, new Date().toISOString(), file?.type);
         }
         return s;
       });
@@ -971,7 +971,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
     url.startsWith('data:image/') || /\.(png|jpe?g|gif|webp|avif|svg)(?:\?|$)/i.test(url)
   ));
 
-  if (step.status === 'done') {
+  if (reviewStatus === 'done') {
     return (
       <div className="sq-task-result is-approved text-center py-4 md:py-8">
         <div className="sq-task-progress" aria-label="Task progress">
@@ -991,7 +991,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   }
 
   // REJECTED STATE
-  if (step.status === 'REJECTED') {
+  if (reviewStatus === 'rejected' && !isEditing) {
     return (
       <div className="sq-task-result is-revision text-center py-8 space-y-6">
         <div className="sq-task-progress" aria-label="Task progress">
@@ -1007,14 +1007,14 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         </div>
         <div className="sq-task-feedback text-left">
           <span>What to change</span>
-          <p>{step.reviewNotes || 'Please review the instructions and update your proof.'}</p>
+          <p>{canonicalReviewFeedback || 'Please review the instructions and update your proof.'}</p>
         </div>
         {step.evidence && <a href={step.evidence} target="_blank" rel="noreferrer" className="sq-task-result__link"><FileText size={18} /> View my previous proof</a>}
         <button
           onClick={() => {
-            // Reset to DOING to allow retry
-            const updatedSteps = project.steps.map(s => s.id === realId ? { ...s, status: 'DOING' as TaskStatus } : s);
-            updateProject({ steps: updatedSteps });
+            setIsEditing(true);
+            setWizardStep(2);
+            playSound('click');
           }}
           className="sq-task-retry w-full py-4 rounded-3xl bg-slate-800 text-white font-black text-lg hover:bg-slate-700 transition-colors"
         >
@@ -1033,7 +1033,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         <div className="absolute top-0 right-0 w-16 h-16 bg-blue-200 rounded-bl-full opacity-50"></div>
       </div>
 
-      {step.status === 'PENDING_REVIEW' && (
+      {reviewStatus === 'pending_review' && (
         <div className="sq-task-review-state bg-amber-50 p-6 rounded-3xl border-4 border-amber-100 flex flex-col items-center text-center space-y-4 animate-in fade-in slide-in-from-top-4">
           <div className="sq-task-progress w-full" aria-label="Task progress">
             <span className="is-done"><Check size={13} /> Understand</span>
@@ -1082,7 +1082,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
 
       {/* WIZARD STEP 1: INSTRUCTIONS & RESOURCES */}
-      {(wizardStep === 1 && step.status !== 'PENDING_REVIEW') && (
+      {(wizardStep === 1 && reviewStatus !== 'pending_review') && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="sq-task-progress" aria-label="Task progress">
             <span className="is-current">1 Understand</span>
@@ -1158,7 +1158,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       )}
 
       {/* WIZARD STEP 2: EVIDENCE UPLOAD - Show when on step 2 OR editing submitted evidence */}
-      {((wizardStep === 2 && step.status !== 'PENDING_REVIEW') || (step.status === 'PENDING_REVIEW' && isEditing)) && (
+      {((wizardStep === 2 && reviewStatus !== 'pending_review') || (reviewStatus === 'pending_review' && isEditing)) && (
         <div className="sq-proof-sheet space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="sq-task-progress" aria-label="Task progress">
             <span className="is-done"><Check size={13} /> Understand</span>
@@ -1312,7 +1312,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
       )}
 
       {/* PENDING REVIEW VIEW (Read Only) */}
-      {(step.status === 'PENDING_REVIEW' && !isEditing) && (
+      {(reviewStatus === 'pending_review' && !isEditing) && (
         <button onClick={closeModal} className="sq-task-review-close w-full py-4 font-bold transition-colors">
           Back to my roadmap
         </button>
@@ -1322,8 +1322,42 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   );
 };
 
+const ProjectReviewNotice: React.FC<{ project: StudentProject; compact?: boolean }> = ({ project, compact = false }) => {
+  if (!project.feedback && !['changes_requested', 'published'].includes(project.status)) return null;
+  const approved = project.status === 'published';
+  const needsChanges = project.status === 'changes_requested';
+  return (
+    <section className={`sq-project-review-notice ${approved ? 'is-approved' : needsChanges ? 'is-revision' : 'is-note'} ${compact ? 'is-compact' : ''}`} aria-label="Instructor review">
+      <span className="sq-project-review-notice__icon"><MessageSquareText size={22} /></span>
+      <div>
+        <p>{approved ? 'Approved by your instructor' : needsChanges ? 'Your instructor left a revision note' : 'Instructor note'}</p>
+        <h3>{approved ? 'Showcase ready to share' : needsChanges ? 'One more iteration' : 'Feedback received'}</h3>
+        {project.feedback && <blockquote>{project.feedback}</blockquote>}
+        <small>{project.reviewedByName ? `From ${project.reviewedByName}` : 'From your instructor'}{approved && project.xpReward ? ` · +${project.xpReward} XP` : ''}</small>
+      </div>
+    </section>
+  );
+};
+
 const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
   const isSubmitted = project.status === 'submitted' || project.status === 'published';
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const submitMission = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const result = await updateProject({ status: 'submitted' });
+      if (!result.success) throw new Error(result.error || 'Your mission could not be sent. Try again.');
+      playSound('success');
+      closeModal();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Your mission could not be sent. Try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className={`sq-mission-submit text-center space-y-6 ${isSubmitted ? 'is-submitted' : ''}`}>
@@ -1343,18 +1377,20 @@ const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject
           <button onClick={closeModal} className="w-full py-4 rounded-xl font-black transition-colors"><ArrowLeft size={18} /> Back to my roadmap</button>
         ) : (
           <button
-            onClick={() => { playSound('success'); updateProject({ status: 'submitted' }); closeModal(); }}
+            onClick={submitMission}
+            disabled={submitting}
             className="w-full py-4 rounded-xl font-black transition-colors"
           >
-            <Send size={18} /> Send mission to my instructor
+            <Send size={18} /> {submitting ? 'Sending mission…' : 'Send mission to my instructor'}
           </button>
         )}
       </div>
+      {error && <p role="alert">{error}</p>}
     </div>
   );
 };
 
-const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
+const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal, previewMode = false }) => {
   const { user, userProfile } = useAuth();
   const [link, setLink] = useState(project.presentationUrl || '');
   const [file, setFile] = useState<File | null>(null);
@@ -1363,6 +1399,7 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(project.mediaUrls?.[0] || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const linkInputId = React.useId();
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -1410,9 +1447,9 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
         activePhase = 'uploading';
         setSubmitPhase('uploading');
         const organizationId = userProfile?.organizationId;
-        if (!organizationId || !user?.uid) throw new Error('Your student account is not fully linked.');
+        if (!previewMode && (!organizationId || !user?.uid)) throw new Error('Your student account is not fully linked.');
         const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-        finalUrl = await api.uploadFile(
+        finalUrl = previewMode ? null : await api.uploadFile(
           file,
           `student-projects/${organizationId}/${user.uid}/${project.id}/showcase-${Date.now()}-${safeFileName}`
         );
@@ -1451,8 +1488,29 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
     }
   };
 
+  if (project.status === 'submitted' || project.status === 'published') {
+    const approved = project.status === 'published';
+    return (
+      <div className="sq-showcase-review-state">
+        <span className={`sq-showcase-review-state__mark ${approved ? 'is-approved' : ''}`}>{approved ? <Trophy size={34} /> : <Clock3 size={34} />}</span>
+        <div>
+          <p>{approved ? 'Instructor review complete' : 'Showcase received'}</p>
+          <h3>{approved ? 'Your project is approved.' : 'Your showcase is waiting for review.'}</h3>
+          <span>{approved ? 'Your feedback and reward are saved in your project record.' : 'Your instructor can now open your media, leave a comment, approve it, or ask for another iteration.'}</span>
+        </div>
+        <ProjectReviewNotice project={project} compact />
+        {(project.mediaUrls?.[0] || project.presentationUrl) && <div className="sq-showcase-review-state__proof">
+          {project.mediaUrls?.[0] && <a href={project.mediaUrls[0]} target="_blank" rel="noreferrer"><Image size={18} /> Open submitted media</a>}
+          {project.presentationUrl && <a href={project.presentationUrl} target="_blank" rel="noreferrer"><ArrowUpRight size={18} /> Open project link</a>}
+        </div>}
+        <button type="button" className="sq-action sq-action--primary" onClick={closeModal}>Back to my projects</button>
+      </div>
+    );
+  }
+
   return (
     <div className="sq-showcase-sheet space-y-8 animate-in fade-in slide-in-from-right-8">
+      {project.status === 'changes_requested' && <ProjectReviewNotice project={project} compact />}
       <div className="sq-showcase-heading text-center space-y-3">
         <span><Camera size={26} /></span>
         <h3 className="text-3xl font-black text-slate-800">Build showcase</h3>
@@ -1461,7 +1519,10 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
 
       <div className="flex flex-col gap-4 md:gap-6 max-w-xl mx-auto">
         {/* File Upload */}
-        <div
+        <button
+          type="button"
+          disabled={submitting}
+          aria-label={file || preview ? 'Replace showcase media' : 'Choose showcase media'}
           onClick={() => fileInputRef.current?.click()}
           className="sq-proof-drop border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
         >
@@ -1476,13 +1537,16 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
               <span className="text-sm font-bold text-slate-500">Photo, video, audio, PDF, or text · up to 20 MB</span>
             </div>
           )}
-          <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
-        </div>
+        </button>
+        <input type="file" ref={fileInputRef} onChange={handleFile} disabled={submitting} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
 
         {/* Link Input */}
         <div>
-          <label className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-wider mb-2"><LinkIcon size={14} /> Project link</label>
+          <label htmlFor={linkInputId} className="flex items-center gap-2 text-xs font-black text-slate-500 uppercase tracking-wider mb-2"><LinkIcon size={14} /> Project link <span className="sq-optional">optional</span></label>
           <input
+            id={linkInputId}
+            disabled={submitting}
+            inputMode="url"
             value={link}
             onChange={(e) => setLink(e.target.value)}
             placeholder="https://youtube.com/..."
@@ -1507,7 +1571,7 @@ const ShowcaseUploadContent: React.FC<StepContentProps> = ({ project, updateProj
               ? 'Sending for review…'
               : 'Send showcase for review'}
         </button>
-        <p className="text-center text-xs font-bold leading-5 text-slate-400">Your instructor will review it before it appears as published work.</p>
+        <p className="sq-showcase-review-help text-center text-xs font-bold leading-5 text-slate-400">Add media or a project link to continue. Your instructor reviews your work before it is published.</p>
       </div>
     </div>
   );
@@ -1548,6 +1612,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   const { startSession, endSession, activeSession, incrementMissions } = useFocusSession();
 
   useEffect(() => {
+    if (previewMode) return;
     // Auto-start session when student opens wizard to work
     if (!activeSession) {
       startSession();
@@ -1573,7 +1638,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     setProject(initialProject);
   }, [initialProject]);
 
-  // Helper to update project with IMMEDIATE sync (optimistic update)
+  // Confirm the compare-and-save before reporting success to a step form.
   const updateProject = async (updates: Partial<StudentProject>) => {
     const mergedProject = { ...project, ...updates };
     // Older SparkQuest projects can predate tenant ownership fields. Always
@@ -1585,30 +1650,25 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       studentId: mergedProject.studentId || userProfile?.studentId || user?.uid,
     };
 
-    // 1. Optimistically update UI immediately
-    setProject(updatedProject);
-
     if (previewMode) {
+      setProject(updatedProject);
       return { success: true };
     }
 
-    // 2. Save to Firestore in background
+    // Save against the current record, preserving instructor-owned review fields.
     setIsSaving(true);
     setSaveError(null);
 
-    const result = await api.syncProject(updatedProject);
-
-    setIsSaving(false);
-
-    if (!result.success) {
-      console.error('❌ [StudentWizard] Save failed:', result.error);
-      setSaveError(result.error || 'Failed to save');
-      // Optionally: rollback to previous state
-      // setProject(project);
-    } else {
-      console.log('✅ [StudentWizard] Save successful');
-    }
-    return result;
+    try {
+      if (!db) throw new Error('Your connection is unavailable.');
+      const saved = await saveLearnerProject(db, project, updatedProject, { uid: user?.uid || '', organizationId: userProfile?.organizationId || '', studentId: userProfile?.studentId, role: userProfile?.role || '' });
+      setProject(saved);
+      return { success: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Your work could not be saved. Try again.';
+      setSaveError(message);
+      return { success: false, error: message };
+    } finally { setIsSaving(false); }
   };
 
   // SELF-HEALING: Ensure studentName is set on the project if missing
@@ -1622,7 +1682,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     const isStudent = userProfile?.role === 'student' || !userProfile?.role; // Default to allow if no profile yet? No, risky. 
     // Actually, safest is just check if we have a display name.
     // But to prevent instructor overwrite:
-    if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') return;
+    if (userProfile?.role !== 'student' || project.status === 'published') return;
 
     const updates: Partial<StudentProject> = {};
     let hasUpdates = false;
@@ -1835,24 +1895,16 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   if (project.workflowId === 'showcase' || project.templateId === 'showcase-template') {
     // Re-using the content component but wrapping it in a full-screen layout
     return (
-      <div className={`h-full flex flex-col w-full overflow-hidden relative selection:bg-blue-500 selection:text-white transition-colors duration-700 ${activeThemeDef.bgGradient} ${activeThemeDef.font || ''}`}>
-        <div className="absolute inset-0 z-0 opacity-20 pointer-events-none">
-          <svg width="100%" height="100%"><pattern id="cosmic-grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M 60 0 L 0 0 0 60" fill="none" stroke="#60a5fa" strokeWidth="1" /></pattern><rect width="100%" height="100%" fill="url(#cosmic-grid)" /></svg>
-        </div>
-
-        {/* Simple Header */}
-        <div className="relative z-20 px-8 py-6 flex justify-between items-center">
-          <button
-            onClick={onExit}
-            className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-black border border-white/20 backdrop-blur-md flex items-center gap-2 transition-all"
-          >
-            ← Back to Mission Control
-          </button>
-        </div>
-
-        <div className="flex-1 flex items-center justify-center p-8 relative z-10">
-          <div className="max-w-2xl w-full bg-white/90 backdrop-blur-xl p-8 rounded-[3rem] shadow-2xl border-4 border-white/50 animate-in zoom-in-95 duration-500">
+      <div className={`sq-showcase-workspace sq-desktop-workspace ${activeThemeDef.font || ''}`}>
+        <header className="sq-workspace-toolbar">
+          <button type="button" onClick={onExit}><ArrowLeft size={20} /> Back to workbench</button>
+          <div><small>Independent project</small><strong>{project.title || 'My showcase'}</strong></div>
+          <span className="sq-workspace-status">{project.status === 'published' ? 'Approved' : project.status === 'submitted' ? 'In review' : project.status === 'changes_requested' ? 'Your turn' : 'In progress'}</span>
+        </header>
+        <main className="sq-showcase-scroll">
+          <section className="sq-showcase-editor" aria-label="Showcase editor">
             <ShowcaseUploadContent
+              previewMode={previewMode}
               project={project}
               assignment={assignment}
               updateProject={updateProject}
@@ -1863,8 +1915,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
                 if (onExit) onExit();
               }}
             />
-          </div>
-        </div>
+          </section>
+        </main>
       </div>
     );
   }
@@ -1889,6 +1941,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       </header>
 
       <main className="sq-studio-main">
+        <ProjectReviewNotice project={project} />
         <section className="sq-studio-hero" aria-labelledby="studio-heading">
           <div className="sq-studio-hero-copy">
             <div>

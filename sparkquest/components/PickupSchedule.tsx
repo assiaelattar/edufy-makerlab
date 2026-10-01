@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Truck, Clock, QrCode, X, MapPin } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { CheckCircle2, Clock, Loader2, MapPin, QrCode, ShieldCheck, Truck } from 'lucide-react';
+import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
-import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { SparkbookDialog } from './SparkbookDialog';
 
 interface PickupScheduleProps {
     isOpen: boolean;
@@ -14,181 +15,88 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
     const [pickupTime, setPickupTime] = useState('');
     const [pickupLocation, setPickupLocation] = useState('Main Entrance');
     const [loading, setLoading] = useState(true);
-    const [realtimeStatus, setRealtimeStatus] = useState<any>(null); // Real-time status from ERP
+    const [realtimeStatus, setRealtimeStatus] = useState<any>(null);
 
     useEffect(() => {
-        if (isOpen && user) {
-            loadPickupInfo();
-        }
+        if (!isOpen || !user) return;
+        const loadPickupInfo = async () => {
+            if (!db) return;
+            setLoading(true);
+            try {
+                const enrollmentsQuery = query(collection(db, 'enrollments'), where('studentId', '==', user.uid));
+                const enrollmentsSnap = await getDocs(enrollmentsQuery);
+                const enrollments = enrollmentsSnap.docs.map(entry => entry.data());
+                const activeEnrollment = enrollments.find(entry => entry.status === 'active') || enrollments[0];
+                setPickupTime(activeEnrollment?.pickupTime || activeEnrollment?.schedule?.pickupTime || '3:00 PM');
+                setPickupLocation(activeEnrollment?.pickupLocation || 'Main Entrance');
+            } catch (error) {
+                console.error('Error loading pickup info:', error);
+                setPickupTime('3:00 PM');
+                setPickupLocation('Main Entrance');
+            } finally {
+                setLoading(false);
+            }
+        };
+        void loadPickupInfo();
     }, [isOpen, user]);
 
-    // Listen for Real-time Pickup Status
     useEffect(() => {
-        // The closed modal must not create another Firestore listener during
-        // every student login. Subscribe only while pickup is actually open.
         if (!isOpen || !user || !userProfile?.organizationId || !db) return;
-
-        // Listen to pickup_queue for this student
-        const q = query(
+        const pickupQuery = query(
             collection(db, 'pickup_queue'),
             where('studentId', '==', userProfile.studentId || user.uid),
-            where('organizationId', '==', userProfile.organizationId)
+            where('organizationId', '==', userProfile.organizationId),
         );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            if (!snapshot.empty) {
-                const data = snapshot.docs[0].data();
-                setRealtimeStatus(data);
-            } else {
-                setRealtimeStatus(null);
-            }
-        }, (error) => {
+        return onSnapshot(pickupQuery, snapshot => {
+            setRealtimeStatus(snapshot.empty ? null : snapshot.docs[0].data());
+        }, error => {
             console.warn('Pickup status is unavailable:', error.code || error.message);
             setRealtimeStatus(null);
         });
-
-        return () => unsubscribe();
     }, [isOpen, user, userProfile?.organizationId, userProfile?.studentId]);
 
-    const loadPickupInfo = async () => {
-        if (!db || !user) return;
-        setLoading(true);
-        try {
-            // Load from enrollments collection (ERP data)
-            const enrollmentsQuery = query(
-                collection(db, 'enrollments'),
-                where('studentId', '==', user.uid)
-            );
-            const enrollmentsSnap = await getDocs(enrollmentsQuery);
-
-            if (!enrollmentsSnap.empty) {
-                // Get the most recent active enrollment
-                const enrollments = enrollmentsSnap.docs.map(doc => doc.data());
-                const activeEnrollment = enrollments.find(e => e.status === 'active') || enrollments[0];
-
-                if (activeEnrollment) {
-                    // Extract pickup info from enrollment
-                    setPickupTime(activeEnrollment.pickupTime || activeEnrollment.schedule?.pickupTime || '3:00 PM');
-                    setPickupLocation(activeEnrollment.pickupLocation || 'Main Entrance');
-                }
-            } else {
-                // Fallback to default
-                setPickupTime('3:00 PM');
-                setPickupLocation('Main Entrance');
-            }
-        } catch (err) {
-            console.error('Error loading pickup info:', err);
-            // Set defaults on error
-            setPickupTime('3:00 PM');
-            setPickupLocation('Main Entrance');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!isOpen) return null;
+    const status = realtimeStatus?.status as string | undefined;
+    const statusTitle = status === 'released' ? 'You are cleared to leave' : status === 'arrived' ? 'Your pickup is here' : status === 'on_the_way' ? 'Your pickup is on the way' : 'Your pickup pass';
+    const statusCopy = status === 'released'
+        ? 'Check out with a MakerLab team member before leaving.'
+        : status === 'arrived'
+            ? `${realtimeStatus?.pickerName || 'Your parent or guardian'} is waiting at the pickup point.`
+            : status === 'on_the_way'
+                ? `${realtimeStatus?.pickerName || 'Your parent or guardian'} has started the trip.`
+                : 'Keep this pass ready when your workshop is nearly finished.';
 
     return (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className={`w-full max-w-2xl backdrop-blur-xl border shadow-[0_0_50px_rgba(0,0,0,0.3)] rounded-3xl overflow-hidden transition-all duration-500 ${realtimeStatus?.status === 'released' ? 'bg-emerald-950/90 border-emerald-500 shadow-emerald-500/20' :
-                realtimeStatus?.status === 'arrived' ? 'bg-indigo-950/90 border-indigo-500 shadow-indigo-500/20' :
-                    'bg-slate-900/95 border-amber-500/30 shadow-amber-500/20'
-                }`}>
-                {/* Header */}
-                <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-2xl border ${realtimeStatus ? 'bg-white/10 border-white/20' : 'bg-amber-950/50 border-amber-500/20'
-                            }`}>
-                            <Truck className={`w-8 h-8 ${realtimeStatus ? 'text-white' : 'text-amber-400'}`} />
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-black text-white">
-                                {realtimeStatus?.status === 'released' ? 'GO HOME! 🏠' :
-                                    realtimeStatus?.status === 'arrived' ? 'PARENT IS HERE! 🚗' :
-                                        'Pickup Schedule'}
-                            </h2>
-                            <p className="text-sm text-slate-400">
-                                {realtimeStatus ? 'Real-time update from Gatekeeper' : 'Your daily pickup information'}
-                            </p>
-                        </div>
+        <SparkbookDialog
+            isOpen={isOpen}
+            onClose={onClose}
+            eyebrow="Field kit · pickup"
+            title={statusTitle}
+            description={statusCopy}
+            icon={status === 'released' ? <CheckCircle2 /> : <Truck />}
+            tone={status === 'released' ? 'lime' : 'orange'}
+            size="md"
+            bodyClassName="sq-pickup-body"
+        >
+            {loading ? (
+                <div className="sq-dialog-state"><Loader2 className="sq-spin" /><strong>Checking today’s pickup plan…</strong></div>
+            ) : (
+                <>
+                    {status && <div className={`sq-pickup-live is-${status}`} role="status"><span><ShieldCheck size={18} /> Live update</span><strong>{statusTitle}</strong><p>{statusCopy}</p></div>}
+                    <div className="sq-pickup-facts">
+                        <article><span><Clock /></span><div><small>Scheduled time</small><strong>{pickupTime}</strong></div></article>
+                        <article><span><MapPin /></span><div><small>Meeting point</small><strong>{pickupLocation}</strong></div></article>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/50 hover:text-white"
-                    >
-                        <X size={24} />
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="p-8">
-                    {loading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <div className="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-                        </div>
-                    ) : (
-                        <div className="space-y-6">
-
-                            {/* REAL-TIME STATUS BANNER */}
-                            {realtimeStatus && (
-                                <div className={`p-8 rounded-2xl text-center border-4 border-white/20 animate-bounce ${realtimeStatus.status === 'released' ? 'bg-emerald-600' : 'bg-indigo-600'
-                                    }`}>
-                                    <div className="text-2xl font-bold text-white/80 uppercase tracking-widest mb-2">
-                                        Status Update
-                                    </div>
-                                    <div className="text-5xl font-black text-white">
-                                        {realtimeStatus.status === 'released' ? 'PICKUP APPROVED' : 'DRIVER ARRIVED'}
-                                    </div>
-                                    <div className="mt-4 text-xl font-medium text-white/90">
-                                        {realtimeStatus.pickerName ? `${realtimeStatus.pickerName} is waiting for you!` : 'Your ride is here!'}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Pickup Time */}
-                            <div className="flex items-center gap-4 p-6 bg-slate-800/50 rounded-2xl border border-slate-700">
-                                <div className="p-4 bg-amber-950/50 rounded-xl border border-amber-500/20">
-                                    <Clock className="w-8 h-8 text-amber-400" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-sm text-slate-400 uppercase tracking-wider mb-1">Scheduled Time</h3>
-                                    <p className="text-3xl font-black text-white">{pickupTime}</p>
-                                </div>
-                            </div>
-
-                            {/* Pickup Location */}
-                            <div className="flex items-center gap-4 p-6 bg-slate-800/50 rounded-2xl border border-slate-700">
-                                <div className="p-4 bg-cyan-950/50 rounded-xl border border-cyan-500/20">
-                                    <MapPin className="w-8 h-8 text-cyan-400" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-sm text-slate-400 uppercase tracking-wider mb-1">Pickup Location</h3>
-                                    <p className="text-2xl font-bold text-white">{pickupLocation}</p>
-                                </div>
-                            </div>
-
-                            {/* QR Code */}
-                            <div className="p-6 bg-slate-800/50 rounded-2xl border border-slate-700 text-center">
-                                <h3 className="text-sm text-slate-400 uppercase tracking-wider mb-4">Pickup QR Code</h3>
-                                <div className="inline-block p-6 bg-white rounded-xl">
-                                    <QrCode className="w-32 h-32 text-slate-900" />
-                                </div>
-                                <p className="text-xs text-slate-500 mt-4">Show this code to your parent/guardian</p>
-                            </div>
-
-                            {/* Instructions */}
-                            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                                <h3 className="font-bold text-blue-400 mb-2">Pickup Instructions</h3>
-                                <ul className="text-sm text-blue-300/80 space-y-1">
-                                    <li>• Wait at the designated pickup location</li>
-                                    <li>• Show the QR code to your parent/guardian</li>
-                                    <li>• Check in with staff before leaving</li>
-                                </ul>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
+                    <section className="sq-pickup-pass" aria-label="Pickup check-out pass">
+                        <div><p>MakerLab checkout</p><h3>Show this pass to your parent or guardian.</h3><span>Staff will confirm the pickup before you leave.</span></div>
+                        <div className="sq-pickup-qr" aria-label="Pickup QR placeholder"><QrCode /></div>
+                    </section>
+                    <ol className="sq-pickup-steps">
+                        <li><span>1</span>Pack your project and personal items.</li>
+                        <li><span>2</span>Wait at the meeting point shown above.</li>
+                        <li><span>3</span>Check out with a MakerLab team member.</li>
+                    </ol>
+                </>
+            )}
+        </SparkbookDialog>
     );
 };

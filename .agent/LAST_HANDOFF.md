@@ -1,22 +1,212 @@
-# Latest handoff — SparkQuest mission operations repair
+# Latest handoff — SparkQuest review security Phase 2 (local implementation)
 
-Completed and released on 2026-09-29 as `22af1e4`. A read-only production audit of all 20 mission templates proved that four old missions lack both organization and creator ownership; current tenant rules therefore denied their edit and assignment. All live missions also predate the structured brief, so the client was incorrectly blocking simple cover/content maintenance with first-publication readiness errors.
+Completed 2026-10-01. New learner projects use `reviewProtocolVersion: 1`; instructor step decisions store proof-bound canonical `stepReviews`. Queue visibility, learner feedback/status, instructor status and final publication derive from this protected state. Direct learner writes cannot alter it, changed proof becomes pending again, forged nested notes are ignored, and forged `steps.status = done` cannot unlock final publication. Legacy records stay readable without an automatic migration.
 
-The repair adds an audited MakerLab-only legacy claim on first write, allows incremental edits to already-assigned legacy missions, keeps first publication and audience-removal gates strict, preserves enrollment truth during grade/group/student assignment, and makes mission deletion preserve every learner project. SparkQuest TypeScript, 11 mission-content assertions, 10 assignment assertions, 31 Auth/Firestore/Storage assertions, the SparkQuest build and the root 4,433-module build pass. Existing Firebase import/chunk warnings remain.
+Verification: 59 review assertions; all nine domain suites (169 counted plus import/payload); isolated localhost review, 14-assertion learner-pipeline and profile-assignment emulators; scoped TypeScript; SparkQuest 2,244-module and Edufy 4,445-module builds. Write-free Chrome completes revision/resubmission/step approval/final publication with three decisions and zero desktop overflow; the dialog is visible at 412px with zero phone overflow. Existing bundle/Firebase/CDN warnings remain.
 
-Firestore rules compiled and were released to `edufy-makerlab`; the matching Vercel build is aliased at `https://sparkquest-makerlab.vercel.app/`, and GitHub `origin/main` includes the release. Authenticated read-only QA confirmed asset `index-DQF5V5KA.js`, the 20-mission library, the legacy mission editor, and the assignment wizard with live program options. No real audience or learner record was changed. Next: use a designated mission and learner account for one controlled write-path smoke covering claim/edit, cover/resource upload, grade/group/direct assignment, learner visibility and instructor review.
-
----
-
-# Previous handoff — Consolidated public release candidate
-
-Prepared on 2026-09-19 from the latest `origin/main` using a three-way merge, preserving the public cache/deployment fixes while adding the complete local Edufy application delta. The release includes the Education UI and compact navigation work, program lifecycle and StemQuest attendance/membership rules, selectable family statements, visible catalogue/discount/negotiated amounts in parent finance documents, editable Finance history, independent formation/service numbering, Admissions stable links and assisted operations, reusable and urgent one-off workshop scheduling, service catalogue invoicing, and the related tenant rules/indexes/API configuration.
-
-Validation: the production build passed with 4,425 transformed modules. Ten Admissions/domain/Firestore/workshop contract suites passed (192 total safeguards/scenarios), plus the membership lifecycle and service catalogue smoke suites. `git diff --check` passed. The release excludes `.env`, QA screenshots/runtime artifacts, marketing deck assets, build output, dependencies, credentials and production data. No enrollment, payment or other production record was mutated while preparing it.
+No production data, rules deployment, index/API change, commit, push, Hostinger/Vercel release or Electron packaging occurred. Next: designated instructor/learner acceptance for one mission and one Showcase with real tenant links/attachments, then a clean coordinated client/rules release. Do not deploy the mixed worktree wholesale. Details: docs/sparkquest/REVIEW_SECURITY_PHASE_2.md.
 
 ---
 
-# Latest handoff — Discounts in printed parent financial statements
+# Latest handoff — SparkQuest review security Phase 1 (local implementation)
+
+Completed 2026-10-01. Firestore now routes `student_projects` writes by authenticated role. Learners can still create, edit, submit proof and resubmit, but cannot seed or overwrite top-level review history, reviewer identity, feedback, XP, publication time/status, or forge a changes-requested decision. Published learner projects are rule-level read-only. Instructor/admin tenant writes retain their prior path.
+
+Verification: the isolated localhost review emulator denies direct SDK forgery of every protected field and then completes the valid proof/revision/resubmission/concurrent-decision/publication path. Profile-assignment concurrency/denial regression and the 14-assertion learner pipeline pass. All nine domain suites (155 counted assertions plus import/payload), scoped TypeScript, standalone SparkQuest build (2,244 modules), and integrated Edufy build (4,445 modules) pass. Existing bundle/Firebase/CDN warnings remain.
+
+No production data, rules deployment, index/API change, commit, push, Hostinger/Vercel release or Electron packaging occurred. The mixed worktree must not be deployed wholesale. Next: designated instructor/learner acceptance with real tenant links and attachments, then a clean coordinated client/rules release. Nested `steps` still duplicates review fields and needs a protected map/subcollection schema before the per-step audit can be called tamper-evident. Details: docs/sparkquest/REVIEW_SECURITY_PHASE_1.md.
+
+---
+
+# Latest handoff — Instructor learner workspace Phase 1 (local implementation)
+
+Completed 2026-10-01. Canonical instructor profiles show saved current/previous-year builds, next step/progress, all-year pending work, eligible missions and newest-first decisions with direct history access. The searchable one-learner assignment dialog waits for a real transaction, retains selections on failure and does not create progress. Additive `targetAudience.additionalStudents` shares learner eligibility; class dispatch/editor transactions preserve concurrent profile additions. Loading/error/retry states avoid false empty-record claims; inactive/ambiguous learners cannot be assigned and unlinked projects are flagged.
+
+Verification: scoped TypeScript, all nine domain suites (40 new desk assertions plus existing suites), isolated localhost demo Auth/Firestore concurrent assignment/role/tenant/draft/identity/preservation tests, both production builds, desktop 1,422 CSS px/phone 433 CSS px fixture, failure/retry, direct history, review-to-profile updates and keyboard focus. No dedicated agent-check is configured; existing Atlas context reader ran. Existing build/CDN warnings remain. See docs/sparkquest/INSTRUCTOR_LEARNER_WORKSPACE_PHASE_1.md.
+
+Synthetic-only localhost DEV preview: `?designPreview=learnerDesk`. Supplemental unassignment/per-recipient assignment history, older-client audience replacement, tenantless template copying and designated-account acceptance remain open. No production data/Storage mutation, rule/index/API edits, commit, push, deploy or Electron package. Stop here; preserve unrelated sharing/parent/visual work and scope the next phase separately.
+
+---
+
+# Previous handoff — Review reliability Phase 1 (local implementation)
+
+Completed 2026-10-01. Review inbox has canonical step/final selectors, newest-first ordering, searchable proof entries and load/error/retry states. The independent live review reader shows saved proof/progress/history, uses fresh-read proof-bound transactions and preserves feedback on failure. Student resubmissions retain URL/note/MIME versions; stale learner tabs and instructor editors cannot replace new decisions. Final submit waits for persistence. Canonical profile/Auth UID aliases group projects without personal-data merging.
+
+Verification: scoped TypeScript; eight domain suites (45 new review + 70 counted regression assertions, plus import/payload suites); real localhost demo Auth/Firestore review/concurrency/stale-save/permission tests; standalone SparkQuest 2,239-module and integrated Edufy 4,442-module builds; desktop 1,422px/phone 433px browser flow, errors, image loading, keyboard trap/restore and whitespace checks. Existing CDN/Firebase/bundle warnings remain. No dedicated agent-check script is configured.
+
+Local demo: `?designPreview=reviewLoop`, outside providers, synthetic-only. No production records/uploads/deletions, rules/indexes/APIs, commits, pushes, deployments or public shares changed. Review-field rules still need coordinated hardening; legacy data/file issues still need designated-account acceptance. Next separate phase: instructor student-profile/assignment workspace, then vivid visuals, celebration, guardian progress and opt-in sharing. Stop here. Details: docs/sparkquest/REVIEW_RELIABILITY_PHASE_1.md.
+
+---
+
+# Previous handoff — Learner workspace Phase 1 (local implementation)
+
+Completed on 2026-10-01. Current work is pinned outside mission filters; previous years moved to Field Log, saved previews retain frozen steps, and verified owned builds no longer disappear when targeting context changes. Navigation now has 264px width, 64px rows, 24px icons and 16px labels. Dashboard/Showcase share calm paper/lime tokens; naming uses a shared focus-stable accessible dialog with inline failure, and Showcase is a keyboard-accessible light editor with a compact toolbar.
+
+Validation: scoped TypeScript, 70 workflow/content/assignment/identity/workbench assertions, standalone SparkQuest build (2,234 modules), integrated Edufy build (4,442), whitespace check and desktop/phone/keyboard fixture QA pass. Existing bundle/Firebase/CDN warnings remain; no dedicated agent-check command is configured. No production writes/uploads/deletions, rules/index/API changes, commit, push, deployment or Electron packaging occurred.
+
+Local previews: `?designPreview=workbench`, `?designPreview=showcase`. Preserve write-free fixtures and all reviewed learner identity/upload/review contracts. Stop here. Designated-account end-to-end acceptance and remaining Pickup/Build Rhythm/nested game polish are separate next steps. Details: docs/sparkquest/LEARNER_WORKSPACE_PHASE_1.md.
+
+---
+
+# Previous handoff — Student project review loop (local implementation)
+
+Completed locally on 2026-09-30. Instructor SparkFactory now has an explicit Review Inbox for every tenant-scoped submitted project, including independent Showcases that are not attached to an assigned mission. Review opens Showcase media and links, supports project comments, changes requested, approval/publish, XP, reviewer attribution, timestamps, and durable review history. Students receive those decisions through the existing real-time project listener in both regular missions and Showcase states; Field Log cards also expose feedback, and Showcase cards no longer disappear from the learner project list.
+
+Validation: SparkQuest TypeScript and the integrated production build pass. Local-only previews at `?designPreview=review`, `?designPreview=showcaseReview&outcome=revision|approved`, and the existing Studio states visually verified instructor evidence/comment controls, learner revision feedback, learner approval, and responsive no-overflow behavior. The repository-wide TypeScript command still fails on unrelated historical Maker Pro/root errors; the scoped SparkQuest project is clean. The Edufy data connector was not callable in this environment, so no production learner records were inspected or changed. Firestore rules, indexes, APIs, production data, commit, push, and deployment were not changed.
+
+Next: run one designated instructor/learner acceptance record through submit → request changes → resubmit → approve, then release the client separately if accepted. Any review-field rule hardening or legacy project backfill remains a separately reviewed Firestore/emulator scope.
+
+---
+
+# Previous handoff — Mission Autopilot (local implementation)
+
+Completed on 2026-09-30. Instructor Mission library → Import CSV now opens the full-content guided completion wizard. It handles partial rows, reference corrections, detailed phases, requested uploads, learner preview, stable repeat keys, atomic workflow/draft creation, results/retries and separate assignment. The development/local-host preview is ?designPreview=import and uses synthetic content only.
+
+Validation: import and existing content/workflow/assignment smokes, SparkQuest TypeScript, real isolated Auth/Firestore transaction/permission tests, standalone SparkQuest and integrated Edufy builds pass. Browser fixtures verified a complete CSV and a partial CSV progressing through brief, workflow, audience, cover attachment and review; local draft/assignment results and desktop/phone overflow/console checks pass. Existing build warnings remain. No dedicated agent-check script is configured.
+
+Next: designated-account acceptance and then a separately requested release. ZIP bundles, existing-record updates, durable wizard resume and abandoned-upload retention are deferred. See docs/sparkquest/MISSION_AUTOPILOT.md. Unrelated dirty work, production data, rules, indexes, APIs and release state are preserved.
+
+---
+
+# Previous handoff — SparkQuest learner design production release
+
+Released on 2026-09-30 as Git commit `acb7755b823cad9a64d4e4715e64c2715d363a3b`. `origin/main` was promoted by fast-forward from a clean worktree; no Firebase rules, indexes, API files, credentials, or unrelated local work were included. Hostinger served the updated Edufy bundle at `https://edufy.makerlab.academy/`, and the standalone student frontend built successfully on Vercel and was aliased to `https://sparkquest-makerlab.vercel.app`.
+
+The production learner scope now includes the Sparkbook mission library/navigation, structured mission brief, Studio workflow and proof/review states, Spark Exchange, Field Log, Play Lab, Evidence Wall, Key Cabinet, and maker profile. The deploy also preserves the reviewed security fixes already on `origin/main` and adds a frozen workflow snapshot for newly started structured missions.
+
+Release validation: SparkQuest TypeScript passed; URL, identity, mission-content, and assignment smokes passed 38 assertions; the clean SparkQuest build passed with 2,223 modules; the clean Edufy build passed with 4,434 modules; Vercel's production build passed with 2,223 modules; both production URLs returned HTTP 200 with updated assets. Existing Firebase mixed-import and large-chunk warnings remain.
+
+Next: run designated-account production acceptance with one learner and one instructor. Prioritize the learner loop first: sign in, open an assigned mission, start/resume, upload proof, request/receive revision, resubmit, approve, and confirm the workflow snapshot stays unchanged. Remaining visual debt is nested arcade players/game dialogs, Pickup, and Build Rhythm.
+
+---
+
+# Previous handoff — SparkQuest learner field-kit destinations
+
+Completed locally on 2026-09-30. The Sparkbook language now covers the Play Lab, Evidence Wall, Key Cabinet, maker-profile card, desktop field-kit rail, and mobile five-destination navigation with its compact secondary kit sheet. The touched learner surfaces use the same paper/lime/orange/ink system as missions, Studio, Exchange, and Field Log while preserving arcade credit, credential, avatar, gallery, session, and routing contracts.
+
+The Evidence Wall now requires the verified learner organization and no longer falls back to `makerlab-academy`. Touched arcade and credential feedback uses inline status and an accessible delete confirmation instead of native alerts/prompts. Development-only previews are available at `?designPreview=arcade`, `gallery`, `inventory`, `profile`, and `navigation`; preview actions remain local.
+
+Validation: SparkQuest TypeScript and production build pass, as does the integrated Edufy production build (4,436 modules). URL, identity, assignment, mission-content, workflow, Firestore-payload, and Phase 2 smokes pass. Desktop and phone browser review passed for all five preview destinations with zero document overflow; navigation kit-sheet, arcade tab/search, key-form, and avatar-family interactions passed. The only console message is the existing Tailwind CDN warning. No production write, rule/index/API change, commit, push, or deployment occurred.
+
+Next: complete designated-account mission QA before release. The remaining learner visual debt is inside nested arcade players/game dialogs plus Pickup and Build Rhythm, not the destination shell itself.
+
+---
+
+# Previous handoff — SparkQuest rewards and portfolio expansion
+
+Completed locally on 2026-09-30. The Sparkbook learner language now extends beyond mission work into two daily destination surfaces. `SparkStore` is now the Spark Exchange: it leads with balance and the next build reward, uses ticket-like maker reward cards, keeps affordability and request state explicit, and organizes themes, avatars, and celebration effects as secondary collections. `StudentPortfolio` is now a field log: project status, completed stages, improvements, proof count, Sparks, and collected skills read as one evidence archive rather than a generic trophy gallery.
+
+Development-only previews are available at `?designPreview=store` and `?designPreview=portfolio`. Preview reward requests, category changes, collectible actions, and export feedback remain local. The authenticated store still uses the existing reward actions. Portfolio reads now require the verified organization attached to the learner profile and no longer fall back to `makerlab-academy`.
+
+Validation: clean-browser desktop and phone review passed without document overflow; reward request state, category navigation, and portfolio export feedback passed; SparkQuest TypeScript, workflow/content/assignment/identity/payload smokes, standalone build, and integrated Edufy build pass. Existing Firebase mixed-import and large-chunk warnings remain. No production write, rule/index/API change, commit, push, or deployment occurred.
+
+Next: complete designated-account end-to-end mission QA before release. Continue the Sparkbook migration through the arcade/gallery, inventory/profile, and learner navigation surfaces without weakening the existing data contracts.
+
+---
+
+# Previous handoff — SparkQuest structured Studio and Sparkbook system
+
+Completed locally on 2026-09-29. The structured mission work from the earlier SparkQuest prototype is now integrated into the active Edufy checkout: mission briefs, versioned workflow snapshots, workflow-derived student steps, checklist/proof requirements, mentor review/revision states, program-aware assignment, and structured instructor editing. Existing student projects keep their stored snapshot instead of changing when an instructor later edits the source workflow.
+
+The Sparkbook learner direction now covers the authenticated mission library, student mission brief, roadmap, active bench rail, task worksheet, evidence/review/revision states, and responsive phone layout. The system uses lime mission surfaces, ink outlines and offset shadows, an orange orbit accent, and quiet paper-grid instruction/proof surfaces. Local development previews are available at `?designPreview=mission` and `?designPreview=studio`; Studio fixtures support `studioState=review|revision|approved|complete|submitted`. The earlier `?preview=student-project` fixture remains available.
+
+Mission template create/update still sanitizes nested `undefined` values immediately before Firestore persistence, preserving timestamp/reference/sentinel values and closing the reported `addDoc()` failure.
+
+Validation: standalone SparkQuest TypeScript passes; workflow, mission content, assignment, identity, and Firestore payload smokes pass (48 assertions plus the payload guard); standalone production build passes (2,223 modules); the integrated Edufy production build passes (4,436 modules). Clean-runtime browser QA covered the mission brief, active task worksheet, mentor revision feedback, and mobile layout without horizontal overflow or new console errors. Existing Firebase mixed-import and large-chunk warnings remain. No production write, rules/API change, commit, push, or deployment occurred.
+
+Next: use designated instructor and learner accounts to create one real structured mission, assign it, submit evidence, request a revision, approve it, and confirm the frozen workflow snapshot end to end before release.
+
+---
+
+# Previous handoff — SparkQuest learner project-details design demo
+
+Completed locally on 2026-09-29. Added a static, local-host-only learner project-details preview at `?preview=student-project`. The demo applies the proposed Sparkbook direction to one complete student page: a lime mission hero, clear quest progress, selectable completed/current steps, visibly locked future steps, a contextual next-action card, learning outcomes, materials, responsive phone layout, keyboard focus, and reduced-motion handling.
+
+The preview is isolated from authentication, Firebase, learner records, mission writes, and the production routing contract. It does not replace `ProjectDetailsEnhanced` or `StudentWizard`; it is an approval surface for the design direction. SparkQuest TypeScript, production build (2,220 modules), desktop browser review, phone browser review, step interaction, and zero document-level horizontal overflow passed. Existing Tailwind CDN, Firebase mixed-import, and large-bundle warnings remain. No production data, rule, API, commit, push, release, or deployment changed.
+
+Next: approve or revise this page before mapping its tokens and components into the authenticated learner workflow. Do not connect the demo CTA to real project state until that implementation scope is explicitly approved.
+
+---
+
+# Previous handoff — SparkQuest instructor deep-workflow polish
+
+Completed locally on 2026-09-24. The remaining instructor workflows now use the shared mission-workshop system: Rewards/Contests/Orders, mission editing and publishing, both CSV importers, student portfolio create/edit, and submission review. The pass adds labeled 44px controls, accessible dialogs, inline async errors, explicit loading/destructive states, production-safe state styling, visible evidence actions, and lazy media. Review evidence no longer creates Blob URLs during render.
+
+The project write path is safer: instructor saves keep the current authenticated Firebase identity, missing tenant context blocks visibly, and neither portfolio editor nor importer can fall back to `makerlab-academy`. Reward and contest writes include organization and timestamps. Validation passed: assignment smoke (7), TypeScript, Auth/Firestore emulator pipeline (13), standalone SparkQuest build (2,217 modules), and Edufy root build (4,430 modules). Existing Firebase import/chunk warnings remain. No production record, rule, app bundle, commit, push, or deployment changed. Authenticated instructor desktop/phone and designated write QA remain the release gate. See `docs/sparkquest/RESCUE_PHASE_6.md`.
+
+---
+
+# Previous handoff — SparkQuest instructor workspace coherence
+
+Completed locally on 2026-09-24. Every instructor route now sits inside one compact mission-workshop system. Navigation follows Operate, Build, Configure, Classroom Access, Preview, and System. Templates reads canonical mission audiences; Class Progress follows program → grade → group → mission → submission without raw cross-tenant reads or debug output; Students is a focused portfolio/review workspace. Workflow, station, badge, Toolbox, gamification, and preview routes now share responsive page structure and accessible controls.
+
+Configuration pipeline hardening accompanies the UI: workflows, stations, badges, tool links, and assets write the active organization, while Toolbox listeners are tenant-scoped. Validation passed: assignment smoke (7), TypeScript, Auth/Firestore emulator pipeline (13), standalone SparkQuest build (2,217 modules), Edufy root build (4,429 modules), and local authenticated learner render. Existing Firebase import/chunk warnings remain. No production record, rule, app bundle, commit, push, or deployment changed. Authenticated instructor desktop/phone and designated write QA remain the next release gate. See `docs/sparkquest/RESCUE_PHASE_5.md`.
+
+---
+
+# Previous handoff — SparkQuest instructor mission dispatch
+
+Completed locally on 2026-09-24. The instructor overview, mission library, and assignment modal now form one coherent dispatch path. Whole-grade, selected-group, and specific-student assignment updates the mission audience and publishes it; the former code that created fake enrollment records was removed. Instructor and learner sides share one tested audience matcher, direct learner IDs remain authoritative, and mission writes include tenant/audit data.
+
+Validation passed: assignment smoke (7), TypeScript, SparkQuest production build (2,216 modules), Auth + Firestore emulator pipeline (7), and SparkQuest diff checks. Existing Firebase import/chunk warnings remain. No production record, rule, app bundle, commit, push, or deployment changed. Authenticated instructor desktop/phone visual QA remains the next release gate. See `docs/sparkquest/RESCUE_PHASE_4.md`.
+
+---
+
+# Previous handoff — SparkQuest production student-project permission hotfix
+
+Deployed on 2026-09-24 to the default Firestore database only. The live `student_projects` rule now permits an authenticated `student` to create and update a project when the project organization matches the user's organization and the `studentId` is either the authenticated UID or a canonical learner record linked to that UID. Staff behavior, reads, and deletes are unchanged.
+
+The release was generated from the exact live ruleset, compiled remotely with zero errors or warnings, and promoted as ruleset `80bea234-b931-4202-8de5-50d7c1c32a25`. A post-release check confirmed that `cloud.firestore` points to that ruleset and that rerunning the guarded patch is a no-op. No student project, application bundle, Storage rule, index, API, Git commit, push, or Hostinger deployment was created by this hotfix.
+
+Next: have the learner retry **New Project** in the already-open local SparkQuest client. Do not deploy the broader Phase 3 Firestore/Storage rules until the Storage authorization suite can run and the matching client release is explicitly approved.
+
+---
+
+# Previous handoff — SparkQuest rescue Phase 3
+
+Completed locally on 2026-09-24. SparkQuest no longer waits on an artificial boot timer or starts learner sessions with admin-only listeners. Large workflow surfaces are lazy-loaded; focus history and pickup state load on demand; independent dashboard reads run concurrently. A direct student mission assignment is authoritative before grade/group targeting, while the latest active enrollment is fallback targeting context only. Verified learners can create personal/showcase projects for the current academic year even without a current-year enrollment.
+
+Evidence and showcase files now upload resumably to tenant/user/project-scoped Firebase Storage paths and only their URLs enter Firestore. Permanent permission/auth failures are not retried. Local Firestore rules accept canonical learner focus sessions, and new Storage rules isolate each learner path.
+
+Validation: SparkQuest production build passes (2,215 modules); initial JavaScript is 1,106.68 kB / 291.84 kB gzip versus approximately 1,416 kB / 365 kB gzip before splitting. Auth + Firestore emulator pipeline passes seven assertions covering instructor mission creation, student visibility, project creation, step/evidence metadata, focus history, and cross-student denial. The signed-in local dashboard became usable in approximately 3.2 seconds after reload with New Project and Showcase Project enabled and no fresh Firestore permission errors. The remaining console warning is the existing Tailwind development CDN.
+
+Storage emulator execution is still pending because its rules-runtime JAR was not cached and could not be downloaded. No live project/upload was created, and no rule, API, client, release, or deployment was published. Next: complete Storage emulator proof, then explicitly approve and ship the client plus Firestore/Storage rules as one coordinated release. See `docs/sparkquest/RESCUE_PHASE_3.md`.
+
+---
+
+# Previous handoff — SparkQuest rescue Phase 2
+
+Completed locally on 2026-09-24. Edufy no longer opens SparkQuest with a naked project link. It requests a server-validated launch tied to the Firebase actor, tenant, app entitlement, role/permission, canonical learner, and optional project. The bridge issues a random 256-bit code, stores only its hash for 90 seconds, revalidates access during exchange, atomically consumes the session, and returns the custom token only in a no-store response. SparkQuest strips the code from history. Legacy URL token links now fail closed. Staff launches keep the staff UID and never impersonate a learner.
+
+Added a learning-manager-only reconciliation endpoint that reads tenant users, students, and projects and returns issue codes/document IDs without names, email, phones, or credentials. It flags missing/duplicate user links, profile-pointer disagreement, and missing/unknown/ambiguous/legacy project owners. The Edufy data connector was unavailable, so no live report was executed.
+
+Validation: 28 Phase 2 assertions pass; HTTP guards cover missing auth, invalid codes, disallowed origins, and the default-off write gate; all endpoints import; SparkQuest TypeScript/build passes (2,216 modules); Edufy build passes (4,428 modules); the signed-in local dashboard survived hot reload; invalid launch QA reached the recovery surface. Real launch-session writes remain disabled unless `EDUFY_ENABLE_APP_BRIDGE_WRITES=true`; no production data, rules, indexes, migration, release, or deployment changed.
+
+Next: isolated Auth/Firestore emulator proof, expired-session retention, and a separately approved release/read-only production audit. See `docs/sparkquest/RESCUE_PHASE_2.md`.
+
+---
+
+# Previous handoff — SparkQuest rescue Phase 1
+
+# Latest handoff — SparkQuest production student-project permission hotfix
+
+Deployed on 2026-09-24 to the default Firestore database only. The live `student_projects` rule now permits an authenticated `student` to create and update a project when the project organization matches the user's organization and the `studentId` is either the authenticated UID or a canonical learner record linked to that UID. Staff behavior, reads, and deletes are unchanged.
+
+The release was generated from the exact live ruleset, compiled remotely with zero errors or warnings, and promoted as ruleset `80bea234-b931-4202-8de5-50d7c1c32a25`. A post-release check confirmed that `cloud.firestore` points to that ruleset and that rerunning the guarded patch is a no-op. No student project, application bundle, Storage rule, index, API, Git commit, push, or Hostinger deployment was created by this hotfix.
+
+Next: have the learner retry **New Project** in the already-open local SparkQuest client. Do not deploy the broader Phase 3 Firestore/Storage rules until the Storage authorization suite can run and the matching client release is explicitly approved.
+
+---
+
+Completed locally on 2026-09-23. SparkQuest keeps its existing product capabilities, but the unstable entry boundary was rebuilt: public hosts no longer inherit localhost return links; authentication requires a real Firebase session and one verified organization-bound learner profile; requested projects must match both verified owner identity and tenant. Anonymous kiosk, demo/base64 bridges, default tenant fallbacks, personal-data profile merging, project-title dedupe, browser-side identity repair, and browser-global Firebase debug handles were removed.
+
+The login/account-recovery experience now uses a responsive MakerLab project-workshop direction. Final QA passed at desktop, 768 px, and 390 px with zero phone overflow. URL and identity smoke checks passed (6 and 11 assertions), SparkQuest TypeScript/build passed (2,215 modules), and the Edufy production build passed (4,427 modules). Existing Firebase mixed-import/large-chunk warnings remain. Authenticated read-only QA exposed existing `focus_sessions` and snapshot permission failures; no rules, indexes, APIs, production records, commit, push, or deployment were changed.
+
+Next: explicitly scope the secure server-issued Edufy launch exchange and a read-only production identity reconciliation report. Do not restore the removed client fallbacks. See `docs/sparkquest/RESCUE_PHASE_1.md`.
+
+---
+
+# Previous handoff — Discounts in printed parent financial statements
 
 Completed locally on 2026-09-19. The official family statement printout now recalculates its own totals from the selected enrollment rows and programs, then displays `Prix catalogue`, `Remise`, `Prix négocié`, `Payé` and `Solde` for every enrollment. Its summary card also shows catalogue total, total discount, negotiated total, total paid and balance due, so the discount is visible both in the table and at document level. Labels and footer are parent-facing French.
 
@@ -62,7 +252,15 @@ No data migration, deletion, production record mutation, Firestore rules/index/A
 
 ---
 
-# Latest handoff — Education UI coherence and compact navigation
+# Latest handoff — SparkQuest learner account-link repair
+
+Released on 2026-09-25 as `d5f7cfee453c2a36846352e17566a8e30928a6c2`. Student authentication had succeeded, but the client attempted a restricted `students` collection query before its canonical user-profile pointer and surfaced a generic account-repair screen. `sparkquest/services/studentIdentity.ts` now resolves the direct pointer first and retains a constrained legacy lookup. Firestore permits only a signed-in student's own `loginInfo.uid + organizationId` query.
+
+Verification passed: SparkQuest TypeScript and build, integrated Edufy build, identity 11/11, assignment 7/7, Auth/Firestore/Storage 19/19, production rules compilation/deployment, remote main, Hostinger live timestamp, and the existing authenticated local student dashboard. The standalone Vercel SparkQuest frontend remains on its older deployment until an authorized Vercel login/redeploy is available.
+
+---
+
+# Previous handoff — Education UI coherence and compact navigation
 
 Completed locally on 2026-09-17. Desktop now combines page context, the reorderable working set and utility actions into one 64px-class workbar. The sidebar was reduced from 278px to 244px (224px at medium desktop) and its navigation density tightened. Mobile no longer renders the workspace-tab row or density controls, leaving one compact header plus the existing five-item bottom navigation and on-demand drawer.
 
@@ -111,26 +309,6 @@ Previous Admissions handoff and QA runtime instructions retained below:
 ---
 
 # Last Handoff
-
-## Current override — urgent learner showcase permission repair
-
-The production error was reproduced locally with the relevant legacy data shape: a learner-owned `student_projects` record without `organizationId`. The client now routes evidence, progress and showcase saves through one synchronization boundary that restores the organization from the authenticated Edufy profile while preserving the canonical learner record id. Firestore rules now treat missing optional fields safely, keep the migration restricted to the linked learner in the same organization, and avoid the expression-budget failure caused by the broader guardian resolver.
-
-Validation is complete before deployment: the isolated Auth/Firestore/Storage suite passes 27 assertions, including screenshot upload, download URL, external link, a denied unscoped legacy update, the authorized ownership repair and `submitted` instructor-review status. SparkQuest TypeScript, both mission smoke suites, the SparkQuest production build, the root Edufy production build (4,433 modules) and `git diff --check` pass. Existing Firebase import-overlap and large-bundle warnings remain. No production data was written and this candidate has not been deployed.
-
-Next step: after explicit user confirmation, release the client and Firestore rules together, verify the public bundle, then have one designated learner submit a real showcase and confirm it enters the instructor review queue.
-
-## Current override — SparkQuest mission experience
-
-The learner mission detail screen is now a dedicated visual mission path instead of a role-tinted copy of the instructor dossier. It leads with the challenge and finished outcome, then presents concise, color-coded icon cards for the build route, required proof, resources, learning outcomes and bench readiness. Motion uses transform/opacity only and respects reduced motion. The page owns its vertical scroll container so it works inside SparkQuest's body-locked shell, and the mobile action remains fixed and visible. New missions and legacy missions resolve through the same backward-compatible `MissionBrief` adapter. The representative development preview is available at `/?designPreview=mission` and does not read or write Firebase.
-
-The learner showcase flow now prevents duplicate submits, validates full external links, reports whether upload or project save failed, and correctly explains that learner work enters instructor review before publication. The isolated Firebase suite reproduces the real operation—screenshot upload under the Auth UID path, download URL, project link/media/cover update and `submitted` status—and passes 22 assertions. The existing instructor dashboard consumes that status in its review queue.
-
-Scoped SparkQuest TypeScript, both mission smoke suites, the 22-assertion Firebase learner pipeline suite, the production SparkQuest build and the repository root build pass. Responsive visual QA found no horizontal overflow at desktop or mobile widths and proved vertical scrolling inside the app shell. The repository-wide parent TypeScript project still has many pre-existing diagnostics outside SparkQuest; use `sparkquest/tsconfig.json` for this phase. A production learner-account smoke test remains the final post-release product check. No production data migration is required.
-
-See `docs/sparkquest/MISSION_EXPERIENCE_PHASE_7.md`, `docs/sparkquest/DECISIONS.md`, `docs/sparkquest/KNOWN_ISSUES.md` and `docs/sparkquest/CHANGELOG.md`.
-
----
 
 ## Current phase
 

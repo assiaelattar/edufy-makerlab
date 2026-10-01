@@ -1,4 +1,4 @@
-import type { ProjectTemplate } from '../types';
+import type { ProjectTemplate } from '../types.ts';
 
 export type MissionAudienceMode = 'grade' | 'groups' | 'students';
 
@@ -75,6 +75,7 @@ export const missionIsVisibleToLearner = (
   if (template.status !== 'assigned' && template.status !== 'featured') return false;
 
   const audience = template.targetAudience || {};
+  if (overlaps(audience.additionalStudents, context.ownerIds)) return true;
   const hasPrograms = Boolean(audience.programs?.length);
   const hasGrades = Boolean(audience.grades?.length);
   const hasGroups = Boolean(audience.groups?.length);

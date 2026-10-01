@@ -6,6 +6,7 @@ import { collection, onSnapshot, query, where, addDoc, updateDoc, doc, serverTim
 import { WorkshopTemplate, WorkshopSlot } from '../types';
 import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { formatWorkshopDate, getWorkshopDayName, getWorkshopOgImageUrl, getWorkshopScheduleLabel } from '../utils/workshops';
+
 import { MakerLabFormHeader } from '../components/public/MakerLabFormHeader';
 import '../components/public/makerlab-forms.css';
 
@@ -205,105 +206,6 @@ export const PublicBookingView = () => {
     );
 
     return (
-        /* Previous English booking layout retained here temporarily for rollback context.
-        <div className="min-h-screen bg-[#EDF2F7] pb-8 font-sans text-[#0B1726]" style={{ backgroundImage: 'radial-gradient(circle at 12% 4%, rgba(232,119,34,0.12), transparent 20rem), linear-gradient(rgba(11,23,38,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(11,23,38,0.025) 1px, transparent 1px)', backgroundSize: 'auto, 32px 32px, 32px 32px' }}>
-            <header className="border-b border-[#D8E0EA] bg-white/95 shadow-[0_4px_18px_rgba(11,23,38,0.04)] backdrop-blur">
-                <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-                    <MakerLabWordmark />
-                    <span className="flex items-center gap-1.5 rounded-full bg-[#F3F6F9] px-2.5 py-1.5 text-[10px] font-bold text-[#526174]"><ShieldCheck size={13} className="text-[#C64F12]" /> Secure booking</span>
-                </div>
-            </header>
-
-            <main className="mx-auto max-w-3xl px-3 sm:px-5">
-                {step === 'calendar' && <section className="relative mt-3 overflow-hidden rounded-2xl bg-[#0B1726] text-white shadow-[0_16px_45px_rgba(11,23,38,0.16)]">
-                    <div className="absolute inset-x-0 top-0 z-20 h-1 bg-[#E87722]" />
-                    <div className="grid lg:grid-cols-[1fr_18rem]">
-                        <div className="p-4 sm:p-6 lg:p-8">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#FF934F]">Design · Code · Build</p>
-                            <h1 className="text-2xl font-black leading-tight tracking-[-0.04em] sm:mt-2 sm:text-3xl">{template?.title}</h1>
-                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300 sm:text-sm sm:leading-6">{template?.description}</p>
-                            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-white/10 pt-3 text-[11px] font-bold text-slate-200 sm:text-xs">
-                                <span className="flex items-center gap-1.5"><Clock size={13} className="text-[#FF934F]" /> {durationLabel}</span>
-                                <span className="flex items-center gap-1.5"><Users size={13} className="text-[#F2C766]" /> {template?.capacityPerSlot} places</span>
-                                {template && <span className="flex basis-full items-start gap-1.5 text-slate-300 sm:basis-auto"><Calendar size={13} className="mt-0.5 shrink-0 text-[#80C7EA]" /> {getWorkshopScheduleLabel(template)}</span>}
-                            </div>
-                        </div>
-                        <div className="relative hidden min-h-64 overflow-hidden border-l border-white/10 lg:block">
-                            <img src={getWorkshopOgImageUrl(template?.imageUrl)} alt={`${template?.title || 'Workshop'} preview`} className="absolute inset-0 h-full w-full object-cover" onError={event => { event.currentTarget.src = `${window.location.origin}/images/makerlab-tello-python-hero-v1.png`; }} />
-                            <div className="absolute inset-0 bg-gradient-to-r from-[#0B1726]/30 to-transparent" />
-                        </div>
-                    </div>
-                </section>}
-
-                {step === 'calendar' && (
-                    <section className="mt-3 animate-in rounded-2xl border border-[#D8E0EA] bg-white p-3 shadow-[0_12px_35px_rgba(11,23,38,0.07)] fade-in slide-in-from-bottom-3 sm:p-5">
-                            <div className="mb-3 flex items-start justify-between gap-3 px-1">
-                                <div><p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#C64F12]">Step 1 of 2</p><h2 className="mt-0.5 text-xl font-black tracking-[-0.03em]">Choose a session</h2><p className="mt-1 text-[11px] text-[#617065]">Free booking · no payment</p></div>
-                                <span className="rounded-full bg-[#F3F6F9] px-2.5 py-1 text-[10px] font-black text-[#526174]">{availableSlots.length} dates</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                                {availableSlots.length === 0 ? (
-                                    <div className="col-span-full rounded-xl border border-dashed border-[#C9D1C7] bg-[#F8FAF7] p-7 text-center text-sm text-[#667085]">No sessions available yet.</div>
-                                ) : visibleSlots.map(slot => {
-                                    const isFull = slot.bookedCount >= slot.capacity;
-                                    const spotsLeft = Math.max(0, slot.capacity - slot.bookedCount);
-                                    return (
-                                        <button key={`${slot.dateStr}-${slot.startTime}`} onClick={() => { setSelectedSlot(slot); setBookingError(''); setStep('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={isFull} className="group min-h-[104px] overflow-hidden rounded-xl border border-[#D8E0EA] bg-[#FAFBFD] p-3 text-left transition-colors hover:border-[#E87722] hover:bg-[#FFF8F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E87722]/40 disabled:cursor-not-allowed disabled:opacity-55">
-                                            <div className="flex h-full flex-col justify-between">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <span className="text-[10px] font-black uppercase tracking-[0.1em] text-[#C64F12]">{getWorkshopDayName(slot.dateStr)}</span>
-                                                    <span className={`text-[9px] font-black uppercase ${isFull ? 'text-[#BE123C]' : 'text-[#617065]'}`}>{isFull ? 'Full' : `${spotsLeft} left`}</span>
-                                                </div>
-                                                <div className="mt-2 flex items-end justify-between gap-2">
-                                                    <p className="text-xl font-black leading-none tracking-[-0.03em]">{formatWorkshopDate(slot.dateStr, { day: 'numeric' })} <span className="text-xs font-bold text-[#617065]">{formatWorkshopDate(slot.dateStr, { month: 'short' })}</span></p>
-                                                    <ArrowRight className="text-[#E87722] transition-transform group-hover:translate-x-0.5" size={15} />
-                                                </div>
-                                                <p className="mt-3 border-t border-[#E4E9EF] pt-2 text-xs font-black text-[#0B1726]">{slot.startTime}–{slot.endTime}</p>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                            {availableSlots.length > 6 && <button type="button" onClick={() => setShowAllSlots(current => !current)} className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-[#D8E0EA] text-xs font-bold text-[#526174] hover:bg-[#F3F6F9]">{showAllSlots ? 'Show fewer dates' : `Show ${availableSlots.length - 6} more dates`}<ChevronDown size={14} className={`transition-transform ${showAllSlots ? 'rotate-180' : ''}`} /></button>}
-                    </section>
-                )}
-
-                {step === 'form' && (
-                    <section className="mt-3 animate-in fade-in slide-in-from-right-3">
-                        <button onClick={() => { setBookingError(''); setStep('calendar'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="mb-2 flex min-h-9 items-center gap-1.5 rounded-lg px-1 text-xs font-bold text-[#526174] transition-colors hover:text-[#0B1726]"><ArrowLeft size={14} /> Change session</button>
-
-                        <div className="rounded-2xl border border-[#D8E0EA] bg-white p-3 shadow-[0_12px_35px_rgba(11,23,38,0.07)] sm:p-6">
-                            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-[#F3C8AA] bg-[#FFF1E8] p-3 text-[#6E2B0C]">
-                                <div><p className="text-[9px] font-black uppercase tracking-[0.12em]">Selected session</p><p className="mt-0.5 text-sm font-black">{getWorkshopDayName(selectedSlot?.dateStr || '')}, {formatWorkshopDate(selectedSlot?.dateStr || '', { day: 'numeric', month: 'short' })}</p></div>
-                                <span className="shrink-0 text-sm font-black">{selectedSlot?.startTime}–{selectedSlot?.endTime}</span>
-                            </div>
-                            <div className="mb-4 px-1"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#C64F12]">Step 2 of 2</p><h2 className="mt-0.5 text-xl font-black tracking-[-0.03em]">Your details</h2></div>
-                                <form onSubmit={handleBooking} className="space-y-3">
-                                    {(() => {
-                                        const config = getFormConfig(template?.targetAudience);
-                                        const inputClass = 'min-h-11 w-full rounded-lg border border-[#D8E0EA] bg-[#FAFBFD] px-3 py-2.5 text-sm text-[#0B1726] outline-none transition-colors focus:border-[#E87722] focus:ring-2 focus:ring-[#E87722]/15';
-                                        return (
-                                            <>
-                                                <div className="grid gap-3 sm:grid-cols-2">
-                                                    <div><label className="mb-1 block text-[11px] font-bold text-[#52606D]">{config.primary.label}</label><input required autoComplete="name" className={inputClass} value={bookingForm.parentName} onChange={e => setBookingForm({ ...bookingForm, parentName: e.target.value })} placeholder={config.primary.placeholder} /></div>
-                                                    <div><label className="mb-1 block text-[11px] font-bold text-[#52606D]">WhatsApp number</label><input required type="tel" inputMode="tel" autoComplete="tel" className={inputClass} value={bookingForm.phone} onChange={e => setBookingForm({ ...bookingForm, phone: e.target.value })} placeholder="06..." /></div>
-                                                </div>
-                                                <div className={`grid gap-3 ${config.numeric ? 'grid-cols-[minmax(0,1fr)_5.5rem]' : ''}`}>
-                                                    <div><label className="mb-1 block text-[11px] font-bold text-[#52606D]">{config.secondary.label}</label><input required={template?.targetAudience !== 'Professional'} className={inputClass} value={bookingForm.kidName} onChange={e => setBookingForm({ ...bookingForm, kidName: e.target.value })} placeholder={config.secondary.placeholder} /></div>
-                                                    {config.numeric && <div><label className="mb-1 block text-[11px] font-bold text-[#52606D]">{config.numeric.label}</label><input required type="number" min={1} max={99} inputMode="numeric" className={inputClass} value={bookingForm.kidAge} onChange={e => setBookingForm({ ...bookingForm, kidAge: e.target.value })} placeholder="8" /></div>}
-                                                </div>
-                                                <details className="group rounded-lg border border-[#D8E0EA] bg-[#FAFBFD]">
-                                                    <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-xs font-bold text-[#52606D]">Add a note <span className="flex items-center gap-1 text-[10px] font-medium text-[#7B897F]">Optional <ChevronDown size={13} className="transition-transform group-open:rotate-180" /></span></summary>
-                                                    <div className="border-t border-[#D8E0EA] p-2"><label className="sr-only">{config.notes.label}</label><textarea className={`${inputClass} h-20 resize-none`} value={bookingForm.kidInterests} onChange={e => setBookingForm({ ...bookingForm, kidInterests: e.target.value })} placeholder={config.notes.placeholder} /></div>
-                                                </details>
-                                            </>
-                                        );
-                                    })()}
-
-                                    {bookingError && <div role="alert" className="flex items-start gap-2 rounded-lg border border-[#FECDD3] bg-[#FFF1F2] p-3 text-xs leading-5 text-[#9F1239]"><AlertCircle size={16} className="mt-0.5 shrink-0" /><span>{bookingError}</span></div>}
-                                    <button disabled={isSubmitting} type="submit" className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#C64F12] px-4 text-sm font-black text-white shadow-[0_8px_20px_rgba(198,79,18,0.24)] transition-colors hover:bg-[#A83E0B] disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? <RefreshCw className="h-5 w-5 animate-spin" /> : <>Reserve this place <ArrowRight size={16} /></>}</button>
-                                    <p className="text-center text-[10px] leading-4 text-[#7B897F]">We only use your number for this booking.</p>
-        */
         <div className={`makerlab-public pb-8 ${import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'edu-public-booking-v1' : ''}`} data-testid={import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'education-public-booking-v1' : undefined}>
             <MakerLabFormHeader label="Atelier découverte" />
             <main className="mx-auto max-w-3xl px-3 sm:px-5">

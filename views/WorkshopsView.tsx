@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { CalendarCheck, Plus, Clock, Users, Calendar as CalendarIcon, MessageCircle, Star, UserCheck, Trash2, LayoutGrid, List, ChevronLeft, ChevronRight, MapPin, MoreHorizontal, Magnet, PauseCircle, ExternalLink, Copy, Check, Image as ImageIcon } from 'lucide-react';
-import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, query, where, getDocs, arrayUnion, runTransaction, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, arrayUnion, runTransaction, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';

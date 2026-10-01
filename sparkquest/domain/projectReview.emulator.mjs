@@ -1,0 +1,113 @@
+import assert from 'node:assert/strict';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword } from 'firebase/auth';
+import { collection, connectFirestoreEmulator, doc, getDoc, getDocs, getFirestore, query, setDoc, updateDoc, where } from 'firebase/firestore';
+import { saveInstructorProjectEdits, saveLearnerProject, submitInstructorReview } from '../services/projectReview.ts';
+import { effectiveStepReviewStatus, reviewFingerprint, reviewQueue, stepIsApproved, submittedProof } from './projectReview.ts';
+
+const projectId = process.env.GCLOUD_PROJECT;
+const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
+const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+assert.ok(projectId?.startsWith('demo-') && /^127\.0\.0\.1:\d+$/.test(firestoreHost || '') && /^127\.0\.0\.1:\d+$/.test(authHost || ''), 'Use explicit localhost demo Auth/Firestore emulators only.');
+const apps = [];
+const client = async (name, role, organizationId) => {
+  const app = initializeApp({ apiKey: 'fake-key', projectId, authDomain: `${projectId}.firebaseapp.com` }, name); apps.push(app);
+  const auth = getAuth(app); connectAuthEmulator(auth, `http://${authHost}`, { disableWarnings: true });
+  const credential = await createUserWithEmailAndPassword(auth, `${name}@example.test`, 'emulator-password');
+  const uid = credential.user.uid;
+  const fields = Object.fromEntries(Object.entries({ role, organizationId, status: 'active' }).map(([key, value]) => [key, { stringValue: value }]));
+  const seed = await fetch(`http://${firestoreHost}/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`, { method: 'PATCH', headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' }, body: JSON.stringify({ fields }) });
+  assert.ok(seed.ok);
+  const db = getFirestore(app); const [host, port] = firestoreHost.split(':'); connectFirestoreEmulator(db, host, Number(port));
+  return { db, actor: { uid, role, organizationId, name } };
+};
+const read = async (db, id) => { const snapshot = await getDoc(doc(db, 'student_projects', id)); return { ...snapshot.data(), id: snapshot.id }; };
+const expectRuleDenied = async (promise, label) => assert.rejects(promise, error => {
+  assert.equal(error?.code, 'permission-denied', `${label} should fail at the Firestore rule boundary.`);
+  return true;
+});
+let sequence = 0;
+const command = (project, outcome, stepId, feedback = '') => ({ id: `emulator-decision-${++sequence}`, outcome, stepId, feedback, expectedFingerprint: reviewFingerprint(project, stepId) });
+try {
+  const teacher = await client('review-teacher', 'instructor', 'org-review');
+  const teacher2 = await client('review-teacher-two', 'instructor', 'org-review');
+  const learner = await client('review-learner', 'student', 'org-review');
+  const other = await client('other-learner', 'student', 'org-review');
+  const foreign = await client('foreign-teacher', 'instructor', 'org-foreign');
+  const accountant = await client('review-accountant', 'accountant', 'org-review');
+  const id = 'review-loop-proof';
+  const frozen = { id: 'workflow', name: 'Original saved roadmap', capturedAt: '2026-10-01', phases: [{ id: 'test', name: 'Test both readings', order: 1 }] };
+  await expectRuleDenied(setDoc(doc(learner.db, 'student_projects', 'legacy-protocol-create'), { studentId: learner.actor.uid, organizationId: 'org-review', title: 'Missing protocol', status: 'planning' }), 'Learner project without protected review protocol');
+  await expectRuleDenied(setDoc(doc(learner.db, 'student_projects', 'forged-review-create'), { studentId: learner.actor.uid, organizationId: 'org-review', title: 'Forged review', status: 'published', feedback: 'Self-approved', xpReward: 999, reviewHistory: [] }), 'Learner-created review truth');
+  await setDoc(doc(learner.db, 'student_projects', id), { studentId: learner.actor.uid, organizationId: 'org-review', title: 'Emulator proof test', description: 'Synthetic only', station: 'Circuits', status: 'building', reviewProtocolVersion: 1, steps: [{ id: 'test', title: 'Test both readings', status: 'doing', required: true }], resources: [], skills: [], commits: [] });
+  let base = await read(learner.db, id);
+  const captured = await saveLearnerProject(learner.db, base, { ...base, workflowSnapshot: frozen }, learner.actor);
+  assert.deepEqual((await read(learner.db, id)).workflowSnapshot, frozen);
+  await saveLearnerProject(learner.db, captured, { ...captured, description: 'Synthetic test with saved roadmap' }, learner.actor);
+  base = await read(learner.db, id);
+  await saveLearnerProject(learner.db, base, { ...base, steps: [submittedProof(base.steps[0], 'https://files.example.test/v1.jpg?token=x', 'First test', '2026-10-01T10:00:00Z', 'image/jpeg')] }, learner.actor);
+  const inbox = await getDocs(query(collection(teacher.db, 'student_projects'), where('organizationId', '==', 'org-review')));
+  assert.equal(reviewQueue(inbox.docs.map(item => ({ ...item.data(), id: item.id })))[0].project.id, id);
+  base = await read(teacher.db, id);
+  const staleLearner = await read(learner.db, id);
+  await submitInstructorReview(teacher.db, id, command(base, 'step_changes_requested', 'test', 'Label wet and dry.'), teacher.actor);
+  let current = await read(learner.db, id);
+  assert.equal(current.steps[0].status, 'REJECTED'); assert.equal(current.steps[0].reviewNotes, 'Label wet and dry.');
+  assert.equal(current.reviewProtocolVersion, 1); assert.equal(current.stepReviews.test.outcome, 'step_changes_requested');
+  const learnerRef = doc(learner.db, 'student_projects', id);
+  await expectRuleDenied(updateDoc(learnerRef, { feedback: 'Self-approved feedback' }), 'Learner feedback overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { reviewedById: learner.actor.uid, reviewedByName: 'Learner' }), 'Learner reviewer overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { reviewHistory: [] }), 'Learner review history overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { stepReviews: {} }), 'Learner canonical step review overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { reviewProtocolVersion: 2 }), 'Learner review protocol overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { xpReward: 999 }), 'Learner XP overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { publishedAt: new Date(), status: 'published' }), 'Learner publication overwrite');
+  await expectRuleDenied(updateDoc(learnerRef, { status: 'changes_requested' }), 'Learner review-status forgery');
+  await updateDoc(doc(accountant.db, 'student_projects', id), { description: 'Ordinary tenant edit retained' });
+  await expectRuleDenied(updateDoc(doc(accountant.db, 'student_projects', id), { feedback: 'Non-review staff decision', status: 'changes_requested' }), 'Non-review staff decision');
+  await updateDoc(learnerRef, { status: 'submitted', steps: current.steps.map(step => ({ ...step, status: 'done', reviewNotes: 'Self approved nested state' })) });
+  const forgedFinal = await read(teacher.db, id);
+  assert.equal(effectiveStepReviewStatus(forgedFinal, forgedFinal.steps[0]), 'rejected'); assert.equal(stepIsApproved(forgedFinal, forgedFinal.steps[0]), false);
+  await assert.rejects(submitInstructorReview(teacher.db, id, command(forgedFinal, 'published', undefined, 'Forged final'), teacher.actor), /required step/);
+  await updateDoc(learnerRef, { title: 'Emulator proof test · learner edit' });
+  await assert.rejects(saveLearnerProject(learner.db, staleLearner, { ...staleLearner, title: 'Stale overwrite' }, learner.actor), /received an update/);
+  await assert.rejects(saveInstructorProjectEdits(teacher.db, base, { status: 'building', title: 'Stale editor' }, teacher.actor), /changed/);
+  current = await read(learner.db, id);
+  await saveLearnerProject(learner.db, current, { ...current, status: 'building', steps: [submittedProof(current.steps[0], 'https://files.example.test/v2.jpg', 'Both readings labelled', '2026-10-01T12:00:00Z', 'image/jpeg')] }, learner.actor);
+  current = await read(teacher.db, id);
+  const race = await Promise.allSettled([
+    submitInstructorReview(teacher.db, id, command(current, 'step_approved', 'test', 'Clear test.'), teacher.actor),
+    submitInstructorReview(teacher2.db, id, command(current, 'step_changes_requested', 'test', 'Repeat test.'), teacher2.actor),
+  ]);
+  assert.equal(race.filter(item => item.status === 'fulfilled').length, 1);
+  assert.equal(race.filter(item => item.status === 'rejected').length, 1);
+  current = await read(learner.db, id);
+  await saveLearnerProject(learner.db, current, { ...current, reviewHistory: [], xpReward: 999, workflowSnapshot: { ...frozen, name: 'Student overwrite' } }, learner.actor);
+  current = await read(learner.db, id);
+  assert.equal(current.reviewHistory.length >= 2, true); assert.deepEqual(current.workflowSnapshot, frozen); assert.notEqual(current.xpReward, 999);
+  assert.equal(current.reviewHistory.length, 2); assert.equal(current.reviewHistory[0].submission.note, 'First test');
+  if (current.steps[0].status === 'REJECTED') {
+    await saveLearnerProject(learner.db, current, { ...current, steps: [submittedProof(current.steps[0], 'https://files.example.test/v3.jpg', 'Repeated the test', '2026-10-01T13:00:00Z')] }, learner.actor);
+    current = await read(teacher.db, id);
+    await submitInstructorReview(teacher.db, id, command(current, 'step_approved', 'test'), teacher.actor);
+  }
+  current = await read(learner.db, id);
+  await saveLearnerProject(learner.db, current, { ...current, status: 'submitted', presentationUrl: 'https://example.test/showcase' }, learner.actor);
+  current = await read(teacher.db, id);
+  const publish = { ...command(current, 'published', undefined, 'Mission complete.'), xp: 50 };
+  await submitInstructorReview(teacher.db, id, publish, teacher.actor);
+  const published = await read(learner.db, id);
+  assert.equal(published.status, 'published'); assert.equal(published.feedback, 'Mission complete.'); assert.equal(published.xpReward, 50);
+  await assert.rejects(saveLearnerProject(learner.db, published, { ...published, status: 'building' }, learner.actor), /published/);
+  assert.deepEqual(published.workflowSnapshot, frozen);
+  await submitInstructorReview(teacher.db, id, publish, teacher.actor);
+  assert.equal((await read(teacher.db, id)).reviewHistory.length, published.reviewHistory.length);
+  await saveInstructorProjectEdits(teacher.db, published, { title: 'Edited title', reviewHistory: [], xpReward: 999, steps: [] }, teacher.actor);
+  const edited = await read(teacher.db, id);
+  assert.equal(edited.title, 'Edited title'); assert.equal(edited.reviewHistory.length, published.reviewHistory.length); assert.equal(edited.steps.length, 1); assert.equal(edited.xpReward, 50);
+  await assert.rejects(submitInstructorReview(learner.db, id, command(published, 'published'), learner.actor), /cannot review/);
+  await assert.rejects(submitInstructorReview(foreign.db, id, publish, foreign.actor));
+  await assert.rejects(saveLearnerProject(other.db, published, published, other.actor));
+  assert.equal(reviewQueue([await read(teacher.db, id)]).length, 0);
+  console.log('Review emulator passed: proof → inbox → revision → resubmission → concurrent decision → final publishing; direct learner review/publication/XP/protocol forgery and non-review staff decisions denied, nested step tampering neutralized, legitimate learner edit allowed, stale learner denial, preserved history/proof/snapshot, idempotent XP, role/tenant/owner denials. No Storage used.');
+} finally { await Promise.all(apps.map(app => deleteApp(app))); }

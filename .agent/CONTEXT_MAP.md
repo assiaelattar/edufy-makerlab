@@ -1,5 +1,15 @@
 # Context Map
 
+Protected step review: read `docs/sparkquest/REVIEW_SECURITY_PHASE_2.md`, both earlier review reports, SparkQuest context, decisions and known issues. Run the review, learner-pipeline and profile-assignment emulators only against explicit localhost demo services, all domain suites, scoped TypeScript, both builds and the write-free `?designPreview=reviewLoop` browser flow.
+
+Review security: read `docs/sparkquest/REVIEW_SECURITY_PHASE_1.md`, Review reliability, SparkQuest context, decisions and known issues. Run `domain/projectReview.emulator.mjs`, `domain/profileAssignment.emulator.mjs` and `domain/studentPipeline.emulator.mjs` only with explicit localhost demo emulators; Storage may be excluded only when recording that limitation. Then run all domain suites, scoped TypeScript and both builds.
+
+Instructor learner workspace: read `docs/sparkquest/INSTRUCTOR_LEARNER_WORKSPACE_PHASE_1.md`, SparkQuest context, decisions and known issues. Run `domain/instructorLearner.smoke.ts`, `domain/profileAssignment.emulator.mjs` only in explicit localhost demo Auth/Firestore emulators, all other domain suites, scoped TypeScript and both builds. Write-free DEV localhost preview: `?designPreview=learnerDesk`.
+
+Review reliability: read `docs/sparkquest/REVIEW_RELIABILITY_PHASE_1.md`, SparkQuest context, decisions and known issues. Run `domain/projectReview.smoke.ts`, `domain/projectReview.emulator.mjs` only in explicit localhost demo Auth/Firestore emulators, plus all existing domain suites, scoped TypeScript and both builds. Local write-free acceptance: `?designPreview=reviewLoop`.
+
+Learner workbench/desktop Phase 1: read `docs/sparkquest/LEARNER_WORKSPACE_PHASE_1.md`, `sparkquest/AGENT_CONTEXT.md`, decisions and known issues. Use `sparkquest/domain/learnerWorkbench.smoke.ts` plus existing identity/assignment/content/workflow smokes; previews are documented in the phase report.
+
 | Work | Read |
 |---|---|
 | Phase 0 evidence | `docs/admissions/PHASE_0_AUDIT.md` |
@@ -17,6 +27,7 @@
 | Offer/Finance/enrollment contract | `docs/admissions/OFFER_FINANCE_ENROLLMENT.md`, `modules/admissions/domain/admissionOffer.ts`, `utils/programPackPricing.ts` |
 | Authorization/data | `context/AuthContext.tsx`, `context/AppContext.tsx`, `firestore.rules`, `firestore.indexes.json` |
 | WhatsApp assistant | `docs/admissions/WHATSAPP_ASSISTED_OPERATIONS.md`, `modules/admissions/ui/EducationAdmissionsWhatsAppAssistant.tsx`, `views/CommunicationsView.tsx` |
+| SparkQuest rescue | `sparkquest/AGENT_CONTEXT.md`, `docs/sparkquest/RESCUE_PHASE_1.md` through `docs/sparkquest/RESCUE_PHASE_6.md`, `docs/sparkquest/DECISIONS.md`, `docs/sparkquest/KNOWN_ISSUES.md` |
 
 
 ## Finance service catalogue

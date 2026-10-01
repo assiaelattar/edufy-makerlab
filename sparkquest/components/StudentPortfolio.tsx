@@ -1,16 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, Award, Download, ExternalLink, FileCheck2, Plus, Sparkles, Star, X } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { StudentProject } from '../types';
+import { currentAcademicYear, projectAcademicYear } from '../utils/academicYear';
+import { fieldLogYears, projectLane, selectFieldLog } from '../domain/learnerWorkbench';
 
 interface StudentPortfolioProps {
     isOpen: boolean;
     onClose: () => void;
-    onSelectProject?: (projectId: string) => void;
+    onSelectProject?: (projectId: string, project?: StudentProject) => void;
     onStartShowcase?: () => void;
     previewMode?: boolean;
+    previewProjects?: StudentProject[];
+    sourceProjects?: StudentProject[];
 }
 
 const DEMO_PROJECTS: StudentProject[] = [
@@ -78,29 +82,50 @@ const projectEmoji = (station: string) => {
 const statusLabel = (status: string) => {
     if (['APPROVED', 'published', 'delivered', 'DONE', 'COMPLETED', 'completed'].includes(status)) return { label: 'Approved', className: 'is-approved' };
     if (status === 'PENDING_REVIEW' || status === 'submitted') return { label: 'Mentor review', className: 'is-review' };
+    if (status === 'changes_requested') return { label: 'Feedback received', className: 'is-revision' };
     return { label: status.replaceAll('_', ' '), className: 'is-neutral' };
 };
 
-export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject, onStartShowcase, previewMode = false }) => {
+export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onClose, onSelectProject, onStartShowcase, previewMode = false, previewProjects, sourceProjects }) => {
     const { user, userProfile } = useAuth();
     const [projects, setProjects] = useState<StudentProject[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [exportMessage, setExportMessage] = useState<string | null>(null);
+    const [archiveTab, setArchiveTab] = useState<'current' | 'previous'>('current');
+    const [archiveYear, setArchiveYear] = useState('');
+    const panelRef = useRef<HTMLElement>(null);
+    const closeAction = useRef(onClose);
+    closeAction.current = onClose;
+    const academicYear = currentAcademicYear();
+    const previousYears = useMemo(() => fieldLogYears(projects, academicYear), [projects, academicYear]);
+    const visibleProjects = useMemo(() => selectFieldLog(projects, academicYear, archiveTab, archiveYear), [projects, academicYear, archiveTab, archiveYear]);
+    useEffect(() => { if (!previousYears.includes(archiveYear)) setArchiveYear(previousYears[0] || ''); }, [previousYears, archiveYear]);
 
     useEffect(() => {
         if (!isOpen) return;
+        const previousFocus = document.activeElement as HTMLElement | null;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const timer = window.setTimeout(() => panelRef.current?.querySelector<HTMLButtonElement>('.sq-portfolio-close')?.focus(), 0);
         const closeOnEscape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
+            if (event.key === 'Escape') { event.preventDefault(); closeAction.current(); }
+            if (event.key !== 'Tab') return;
+            const elements = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], select, input') || []);
+            if (!elements.length) return;
+            const first = elements[0], last = elements[elements.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         };
         window.addEventListener('keydown', closeOnEscape);
-        return () => window.removeEventListener('keydown', closeOnEscape);
-    }, [isOpen, onClose]);
+        return () => { window.clearTimeout(timer); window.removeEventListener('keydown', closeOnEscape); document.body.style.overflow = previousOverflow; if (previousFocus?.isConnected) previousFocus.focus(); };
+    }, [isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;
+        if (sourceProjects) { setProjects(sourceProjects); setLoading(false); setError(null); return; }
         if (previewMode) {
-            setProjects(DEMO_PROJECTS);
+            setProjects(previewProjects || DEMO_PROJECTS);
             setLoading(false);
             setError(null);
             return;
@@ -111,7 +136,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
             return;
         }
         void loadPortfolioData();
-    }, [isOpen, previewMode, user, userProfile]);
+    }, [isOpen, previewMode, previewProjects, sourceProjects, user, userProfile]);
 
     const loadPortfolioData = async () => {
         if (!db || !user || !userProfile) return;
@@ -132,13 +157,12 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
             ))));
             if (results.length > 0 && results.every(result => result.status === 'rejected')) throw results[0].reason;
 
-            const visibleStatuses = new Set(['submitted', 'published', 'delivered', 'completed', 'PENDING_REVIEW', 'APPROVED', 'DONE', 'COMPLETED']);
             const projectMap = new Map<string, StudentProject>();
             results.forEach(result => {
                 if (result.status !== 'fulfilled') return;
                 result.value.docs.forEach(projectDoc => {
                     const project = { id: projectDoc.id, ...projectDoc.data() } as StudentProject;
-                    if (project.organizationId === userProfile.organizationId && visibleStatuses.has(project.status)) projectMap.set(project.id, project);
+                    if (project.organizationId === userProfile.organizationId) projectMap.set(project.id, project);
                 });
             });
             setProjects(Array.from(projectMap.values()));
@@ -150,7 +174,8 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
         }
     };
 
-    const totalXP = projects.length * 100;
+    // Archive includes unfinished historical work; never manufacture rewards for it.
+    const totalXP = projects.reduce((total, project) => total + (projectLane(project.status) === 'finished' ? Number(project.xpReward) || 0 : 0), 0);
     const level = Math.floor(totalXP / 500) + 1;
     const skills = useMemo(() => Array.from(new Set(projects.flatMap(project => project.skills || []))), [projects]);
     const proofCount = projects.reduce((total, project) => total + (project.steps || []).filter(step => Boolean(step.evidence)).length, 0);
@@ -160,7 +185,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
     return (
         <div className="sq-portfolio-overlay" role="dialog" aria-modal="true" aria-labelledby="portfolio-title">
             <button className="sq-portfolio-backdrop" type="button" onClick={onClose} aria-label="Close field log" />
-            <section className="sq-portfolio-shell">
+            <section ref={panelRef} className="sq-portfolio-shell">
                 <header className="sq-portfolio-header">
                     <div className="sq-portfolio-brand">
                         <span className="sq-portfolio-mark" aria-hidden="true"><Award size={26} /></span>
@@ -170,7 +195,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                         </div>
                     </div>
                     <div className="sq-portfolio-actions">
-                        <button type="button" className="sq-portfolio-export" onClick={() => setExportMessage('PDF export is being prepared for a future release. Your projects remain saved here.')}><Download size={18} /> <span>Export log</span></button>
+                        <button type="button" className="sq-portfolio-export" aria-label="Export log" onClick={() => setExportMessage('PDF export is being prepared for a future release. Your projects remain saved here.')}><Download size={18} /> <span>Export log</span></button>
                         <button type="button" className="sq-portfolio-close" onClick={onClose} aria-label="Close field log"><X size={24} /></button>
                     </div>
                 </header>
@@ -182,7 +207,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                         <div>
                             <p className="sq-portfolio-eyebrow">Your making story</p>
                             <h3>Every build leaves a trail of proof.</h3>
-                            <p>This is where finished projects, mentor feedback, and growing skills become a record you can share.</p>
+                            <p>Finished work, mentor feedback, and previous school years live here. Your ongoing builds stay on your workbench.</p>
                         </div>
                         <div className="sq-portfolio-stats" aria-label="Portfolio summary">
                             <div><strong>{projects.length}</strong><span>Projects</span></div>
@@ -192,12 +217,17 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                         </div>
                     </section>
 
+                    <div className="sq-field-log-controls">
+                        <div role="group" aria-label="Project years"><button type="button" aria-pressed={archiveTab === 'current'} onClick={() => setArchiveTab('current')}>This year</button><button type="button" aria-pressed={archiveTab === 'previous'} onClick={() => setArchiveTab('previous')}>Previous years</button></div>
+                        {archiveTab === 'previous' && previousYears.length > 0 && <label>School year<select value={archiveYear} onChange={event => setArchiveYear(event.target.value)}>{previousYears.map(year => <option key={year} value={year}>{year}</option>)}</select></label>}
+                        <p>{archiveTab === 'previous' ? 'Learning archive · read-only' : `${academicYear} · Submitted and finished work`}</p>
+                    </div>
                     {loading ? (
                         <div className="sq-portfolio-state"><span className="sq-portfolio-loader" /><h3>Opening your field log…</h3></div>
                     ) : error ? (
                         <div className="sq-portfolio-state is-error"><Award size={42} /><h3>Field log unavailable</h3><p>{error}</p><button type="button" onClick={() => void loadPortfolioData()}>Try again</button></div>
-                    ) : projects.length === 0 ? (
-                        <div className="sq-portfolio-state"><Award size={48} /><h3>Your first project belongs here.</h3><p>Complete and submit a mission to start your field log.</p></div>
+                    ) : visibleProjects.length === 0 ? (
+                        <div className="sq-portfolio-state"><Award size={48} /><h3>{archiveTab === 'previous' ? 'No projects saved for this year.' : 'Your first shared build belongs here.'}</h3><p>{archiveTab === 'previous' ? 'Try another school year. Your current builds remain on your workbench.' : 'Continue building from your dashboard. Submitted work and feedback will appear here.'}</p></div>
                     ) : (
                         <>
                             <section className="sq-portfolio-skills" aria-labelledby="portfolio-skills-title">
@@ -217,7 +247,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                                 </div>
 
                                 <div className="sq-portfolio-grid">
-                                    {projects.map((project, index) => {
+                                    {visibleProjects.map((project, index) => {
                                         const status = statusLabel(String(project.status));
                                         const completedSteps = project.steps?.filter(step => step.status === 'done').length || 0;
                                         return (
@@ -230,15 +260,16 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                                                     <small>Log entry {String(index + 1).padStart(2, '0')}</small>
                                                 </div>
                                                 <div className="sq-portfolio-card-copy">
-                                                    <p>{project.station || 'Maker project'}</p>
+                                                    <p>{projectAcademicYear(project)} · {project.station || 'Maker project'}</p>
                                                     <h4>{project.title}</h4>
                                                     <div className="sq-portfolio-card-description">{project.description}</div>
+                                                    {project.feedback && <blockquote className="sq-portfolio-card-feedback"><strong>Instructor note</strong><span>“{project.feedback}”</span>{project.reviewedByName && <small>— {project.reviewedByName}</small>}</blockquote>}
                                                     <div className="sq-portfolio-card-proof">
                                                         <span><FileCheck2 size={15} /> {completedSteps}/{project.steps?.length || 0} stages</span>
                                                         <span><Sparkles size={15} /> {project.commits?.length || 0} improvements</span>
                                                     </div>
                                                     <div className="sq-portfolio-card-actions">
-                                                        <button type="button" disabled={!onSelectProject} onClick={() => { onSelectProject?.(project.id); onClose(); }}>Open project <ArrowRight size={16} /></button>
+                                                        <button type="button" disabled={!onSelectProject} onClick={() => { onSelectProject?.(project.id, project); onClose(); }}>{archiveTab === 'previous' ? 'View archived project' : 'View project'} <ArrowRight size={16} /></button>
                                                         {project.presentationUrl && <a href={project.presentationUrl} target="_blank" rel="noopener noreferrer">Presentation <ExternalLink size={15} /></a>}
                                                     </div>
                                                 </div>

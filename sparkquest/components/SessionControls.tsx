@@ -1,42 +1,14 @@
 import React from 'react';
+import { Clock3, Square } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useFocusSession } from '../context/FocusSessionContext';
-import { Square, Clock } from 'lucide-react';
 
 export const SessionControls: React.FC = () => {
     const { user, userProfile } = useAuth();
-    const { activeSession, elapsedSeconds, startSession, endSession } = useFocusSession();
+    const { activeSession, elapsedSeconds, endSession } = useFocusSession();
+    if (!user || userProfile?.role === 'instructor' || userProfile?.role === 'admin' || !activeSession) return null;
 
-    // Hide for non-students or logged out
-    if (!user || userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
-        return null;
-    }
-
-    const formatTime = (seconds: number) => {
-        const hrs = Math.floor(seconds / 3600);
-        const mins = Math.floor((seconds % 3600) / 60);
-        const secs = seconds % 60;
-
-        if (hrs > 0) {
-            return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    if (!activeSession) {
-        return null; // Button removed as requested
-    }
-
-    return (
-        <div className="fixed bottom-6 right-6 z-50">
-            {/* End Button */}
-            <button
-                onClick={endSession}
-                className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white font-black rounded-2xl shadow-2xl shadow-red-500/30 hover:scale-105 transition-all group"
-            >
-                <Square className="w-6 h-6 group-hover:scale-110 transition-transform" fill="white" />
-                <span className="text-lg">End Session</span>
-            </button>
-        </div>
-    );
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+    return <div className="sq-focus-chip" role="status"><span><Clock3 /><small>Build session</small><strong>{minutes}:{seconds.toString().padStart(2, '0')}</strong></span><button type="button" onClick={endSession}><Square size={15} fill="currentColor" /> End</button></div>;
 };

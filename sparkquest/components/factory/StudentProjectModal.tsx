@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { X, Save, Upload, Trash2, Link, Image as ImageIcon } from 'lucide-react';
 import { db } from '../../services/firebase';
 import { doc, setDoc, deleteDoc, Timestamp } from 'firebase/firestore';
+import { saveInstructorProjectEdits } from '../../services/projectReview';
 import { useAuth } from '../../context/AuthContext';
 import { StudentProject, Station, StationType } from '../../types';
 import { api } from '../../services/api';
@@ -182,7 +183,11 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                 projectData.resources = [];
             }
 
-            await setDoc(doc(db, 'student_projects', projectId), projectData, { merge: true });
+            if (initialData) {
+                await saveInstructorProjectEdits(db, initialData, projectData, { uid: user?.uid || '', organizationId: authProfile?.organizationId || '', role: authProfile?.role || '' });
+            } else {
+                await setDoc(doc(db, 'student_projects', projectId), projectData, { merge: true });
+            }
 
             if (onSave) onSave();
             onClose();

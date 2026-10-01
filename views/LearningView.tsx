@@ -16,7 +16,7 @@ import { getTheme, STATION_THEMES } from '../utils/theme';
 import { STUDIO_THEME, studioClass } from '../utils/studioTheme';
 import { generateProjectThumbnail } from '../utils/thumbnailGenerator';
 import { MOCK_PROJECT_TEMPLATES } from '../utils/mockData';
-import { config } from '../utils/config';
+import { requestSparkQuestLaunch } from '../services/sparkquestLaunch';
 
 import { NotificationBell } from '../components/NotificationBell';
 import { ProjectFactoryModal } from './learning/ProjectFactoryModal';
@@ -77,7 +77,7 @@ const editDistance = (left: string, right: string) => {
 
 export const LearningView = () => {
     const { projectTemplates, studentProjects, students, enrollments, settings, programs, sendNotification, teamMembers, processTemplates, stations, badges } = useAppContext();
-    const { userProfile, currentOrganization, can } = useAuth();
+    const { user, userProfile, currentOrganization, can } = useAuth();
     const { confirm: confirmAction, alert: showAlert } = useConfirm();
     const showEducationLearningV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
@@ -358,6 +358,27 @@ export const LearningView = () => {
     const addToast = (title: string, message: string, type: 'success' | 'error' | 'info' | 'warning') => {
         const id = Date.now().toString();
         setToasts(prev => [...prev, { id, title, message, type, timestamp: Date.now() }]);
+    };
+
+    const launchSparkQuest = async (projectId?: string) => {
+        const launchWindow = window.open('about:blank', '_blank');
+        if (launchWindow) launchWindow.opener = null;
+        try {
+            if (!user) throw new Error('Sign in to Edufy before opening SparkQuest.');
+            const launch = await requestSparkQuestLaunch({ user, organizationId: tenantOrgId, projectId });
+            if (launchWindow && !launchWindow.closed) {
+                launchWindow.location.replace(launch.launchUrl);
+            } else {
+                throw new Error('Allow pop-ups for Edufy, then try opening SparkQuest again.');
+            }
+        } catch (error) {
+            if (launchWindow && !launchWindow.closed) launchWindow.close();
+            await showAlert(
+                'SparkQuest could not open',
+                error instanceof Error ? error.message : 'The secure SparkQuest launch could not be created.',
+                'danger'
+            );
+        }
     };
 
     const handleLinkLegacyProject = async (project: StudentProject) => {
@@ -1010,8 +1031,7 @@ export const LearningView = () => {
             const newProjectId = docRef.id;
 
             // 3. Launch SparkQuest
-            const url = `${config.sparkQuestUrl}?projectId=${newProjectId}`;
-            window.open(url, '_blank');
+            await launchSparkQuest(newProjectId);
 
             // 4. Update UI State (Legacy compatibility)
             setActiveProject({ ...projectData, id: newProjectId } as any);
@@ -1038,11 +1058,8 @@ export const LearningView = () => {
     };
 
     const openActiveProject = (project: StudentProject) => {
-        // Redirect to new SparkQuest App
         if (!userProfile) return;
-        if (!userProfile) return;
-        const url = `${config.sparkQuestUrl}?projectId=${project.id}`;
-        window.open(url, '_blank');
+        void launchSparkQuest(project.id);
 
         // Legacy: setActiveProject(project); setIsProjectModalOpen(true);
     };
@@ -2748,8 +2765,7 @@ export const LearningView = () => {
                             // If not found in context yet, try to open anyway (params might work if SparkQuest fetches its own data)
                             // But openActiveProject relies on generating a token.
                             if (userProfile) {
-                                const url = `${config.sparkQuestUrl}?projectId=${projectId}`;
-                                window.open(url, '_blank');
+                                void launchSparkQuest(projectId);
                             }
                         }
                     }}
@@ -3019,8 +3035,7 @@ export const LearningView = () => {
                                                                         // SparkQuest Launch Logic
                                                                         if (true) {
                                                                             // ALWAYS open in SparkQuest as requested
-                                                                            const url = `${config.sparkQuestUrl}/?projectId=${project.id}`;
-                                                                            window.open(url, '_blank');
+                                                                            void launchSparkQuest(project.id);
                                                                         }
                                                                     }}
                                                                     className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold px-6 py-2 rounded-full hover:shadow-lg hover:scale-105 transition-all shadow-blue-500/30 text-sm flex items-center gap-2"

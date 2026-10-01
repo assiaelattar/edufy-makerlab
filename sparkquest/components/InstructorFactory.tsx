@@ -11,7 +11,7 @@ import { GradeProjectFilter } from './factory/GradeProjectFilter';
 import { ProjectSelector } from './ProjectSelector';
 import { MissionGallery } from './factory/MissionGallery';
 import { GamificationManager } from './admin/GamificationManager';
-import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, Users, Hammer, Filter, Eye, Settings, BookOpen, Trophy, MonitorPlay, Upload, FolderKanban } from 'lucide-react';
+import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, Users, Hammer, Filter, Eye, Settings, BookOpen, Trophy, MonitorPlay, Upload, FolderKanban, ClipboardCheck } from 'lucide-react';
 import { config } from '../utils/config';
 
 import { useAuth } from '../context/AuthContext'; // Import useAuth for user profile
@@ -21,9 +21,10 @@ interface SidebarItemProps {
   label: string;
   active: boolean;
   onClick: () => void;
+  badge?: number;
 }
 
-const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, onClick }) => (
+const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, onClick, badge }) => (
   <button
     onClick={onClick}
     className={`group relative flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${active
@@ -33,11 +34,14 @@ const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, on
   >
     <Icon size={18} className={`relative z-10 ${active ? 'text-blue-700' : ''}`} />
     <span className="relative z-10">{label}</span>
-    {active && <div className="absolute right-3 z-10 h-1.5 w-1.5 rounded-full bg-blue-600"></div>}
+    {Boolean(badge) && <span className="relative z-10 ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-slate-950">{badge}</span>}
+    {active && !badge && <div className="absolute right-3 z-10 h-1.5 w-1.5 rounded-full bg-blue-600"></div>}
   </button>
 );
 
 import { ReviewModal } from './factory/ReviewModal';
+import { ReviewInbox } from './factory/ReviewInbox';
+import { needsReview } from '../domain/projectReview';
 
 import { StudentManager } from './factory/StudentManager';
 import { ProjectEditor } from './factory/ProjectEditor';
@@ -47,15 +51,17 @@ import { FactoryEmptyState, FactoryPage, FactoryPageHeader, factoryButton } from
 
 export const InstructorFactory: React.FC = () => {
   // Destructure projectTemplates here
-  const { projectTemplates, processTemplates } = useFactoryData();
+  const { projectTemplates, studentProjects } = useFactoryData();
   const { userProfile, signOut } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'projects' | 'gallery' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview' | 'gamification'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'reviews' | 'projects' | 'gallery' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview' | 'gamification'>('dashboard');
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
+  const [reviewInitialTab, setReviewInitialTab] = useState<'proof' | 'history'>('proof');
   const [filterTemplateId, setFilterTemplateId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const viewLabels: Record<typeof view, string> = {
     dashboard: 'Overview',
+    reviews: 'Review inbox',
     projects: 'Mission library',
     gallery: 'Template gallery',
     grades: 'Class progress',
@@ -67,6 +73,7 @@ export const InstructorFactory: React.FC = () => {
     preview: 'Student preview',
     gamification: 'Gamification',
   };
+  const pendingReviewCount = studentProjects.filter(needsReview).length;
 
   // Project Editor State
   const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false);
@@ -131,6 +138,7 @@ export const InstructorFactory: React.FC = () => {
             <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operate</p>
           </div>
           <SidebarItem icon={Briefcase} label="Missions" active={view === 'projects'} onClick={() => { setView('projects'); setIsMobileOpen(false); }} />
+          <SidebarItem icon={ClipboardCheck} label="Review Inbox" badge={pendingReviewCount} active={view === 'reviews'} onClick={() => { setView('reviews'); setFilterTemplateId(null); setIsMobileOpen(false); }} />
           <SidebarItem icon={Users} label="Students" active={view === 'makers'} onClick={() => { setView('makers'); setIsMobileOpen(false); }} />
           <SidebarItem icon={Filter} label="Class Progress" active={view === 'grades'} onClick={() => { setView('grades'); setIsMobileOpen(false); }} />
 
@@ -246,14 +254,18 @@ export const InstructorFactory: React.FC = () => {
           {view === 'gamification' && (
             <FactoryPage><GamificationManager /></FactoryPage>
           )}
+          {view === 'reviews' && (
+            <ReviewInbox
+              onReviewProject={(id) => setReviewingProjectId(id)}
+            />
+          )}
           {view === 'toolbox' && <FactoryPage><FactoryToolbox /></FactoryPage>}
-          {view === 'makers' && <StudentManager onReviewProject={(id) => setReviewingProjectId(id)} />}
+          {view === 'makers' && <StudentManager onReviewProject={(id, tab = 'proof') => { setReviewInitialTab(tab); setReviewingProjectId(id); }} />}
           {view === 'preview' && (
             <div className="h-full bg-slate-50 relative">
               {filterTemplateId ? (
                 <ProjectDetailsEnhanced
                   project={projectTemplates.find(p => p.id === filterTemplateId)!}
-                  workflow={processTemplates.find(workflow => workflow.id === projectTemplates.find(project => project.id === filterTemplateId)?.defaultWorkflowId)}
                   role="instructor"
                   onBack={() => {
                     setFilterTemplateId(null);
@@ -288,7 +300,8 @@ export const InstructorFactory: React.FC = () => {
         reviewingProjectId && (
           <ReviewModal
             projectId={reviewingProjectId}
-            onClose={() => setReviewingProjectId(null)}
+            initialTab={reviewInitialTab}
+            onClose={() => { setReviewingProjectId(null); setReviewInitialTab('proof'); }}
           />
         )
       }

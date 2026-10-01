@@ -119,7 +119,7 @@ export const getMissionReadiness = (source: Partial<ProjectTemplate>) => {
     { id: 'goal', label: 'Clear learner goal', complete: Boolean(clean(content.goal) && clean(source.description)) },
     { id: 'outcome', label: 'Final outcome or deliverable', complete: Boolean(clean(brief.finalOutcome) || brief.deliverables?.length) },
     { id: 'workflow', label: 'Build workflow', complete: Boolean(source.defaultWorkflowId || source.processTemplateId || source.defaultSteps?.length) },
-    { id: 'audience', label: 'Learner audience', complete: Boolean(audience.programs?.length || audience.grades?.length || audience.groups?.length || audience.students?.length) },
+    { id: 'audience', label: 'Learner audience', complete: Boolean(audience.programs?.length || audience.grades?.length || audience.groups?.length || audience.students?.length || audience.additionalStudents?.length) },
   ];
   return {
     checks,
@@ -135,7 +135,7 @@ const hasMissionAudience = (source?: Partial<ProjectTemplate>) => {
     audience.programs?.length ||
     audience.grades?.length ||
     audience.groups?.length ||
-    audience.students?.length
+    audience.students?.length || audience.additionalStudents?.length
   );
 };
 
@@ -167,6 +167,7 @@ export const assignmentFromMission = (
   id: ('templateId' in source ? source.templateId : undefined) || source.id,
   title: source.title,
   description: source.description,
+  thumbnailUrl: 'thumbnailUrl' in source ? source.thumbnailUrl : undefined,
   station: source.station,
   badges: [],
   recommendedWorkflow: ('workflowId' in source ? source.workflowId : undefined) || ('defaultWorkflowId' in source ? source.defaultWorkflowId : '') || 'default',

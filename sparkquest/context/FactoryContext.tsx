@@ -4,6 +4,10 @@ import { db } from '../services/firebase';
 import { useAuth } from './AuthContext';
 import { ProjectTemplate, ProcessTemplate, Station, Badge, StudentProject } from '../types';
 import { buildMissionAssignmentPatch, MissionAudienceInput } from '../domain/missionAssignment';
+import { omitUndefinedDeep } from '../domain/firestorePayload';
+import { persistImportedMission, publishImportedMission } from '../services/missionImport';
+import type { ImportCatalog, ImportDraft } from '../domain/missionImport';
+import { assignMissionToLearner, saveMissionAudience } from '../services/profileAssignment';
 
 const FactoryContext = createContext<any>(null);
 
@@ -22,6 +26,14 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [badges, setBadges] = useState<Badge[]>([]);
     const [programs, setPrograms] = useState<any[]>([]);
     const [studentProjects, setStudentProjects] = useState<StudentProject[]>([]);
+    const [studentProjectsLoading, setStudentProjectsLoading] = useState(true);
+    const [studentProjectsError, setStudentProjectsError] = useState<string | null>(null);
+    const [projectReadAttempt, setProjectReadAttempt] = useState(0);
+    const [directoryLoading, setDirectoryLoading] = useState(true);
+    const [directoryError, setDirectoryError] = useState<string | null>(null);
+    const [catalogLoading, setCatalogLoading] = useState(true);
+    const [catalogError, setCatalogError] = useState<string | null>(null);
+    const [factoryReadAttempt, setFactoryReadAttempt] = useState(0);
     // Gamification Data
     const [gadgets, setGadgets] = useState<any[]>([]);
     const [contests, setContests] = useState<any[]>([]);
@@ -34,6 +46,8 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         if (authLoading) return;
+        setStudents([]); setProjectTemplates([]); setPrograms([]);
+        setDirectoryLoading(true); setDirectoryError(null); setCatalogLoading(true); setCatalogError(null);
         if (!db || !user || !userProfile || !organizationId) {
             setProjectTemplates([]);
             setProcessTemplates([]);
@@ -46,6 +60,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setPurchaseRequests([]);
             setStudents([]);
             setLoading(false);
+            setDirectoryLoading(false); setCatalogLoading(false);
             return;
         }
         const firestore = db as Firestore;
@@ -56,6 +71,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         // catalogues. Admin-only live listeners were adding network work and
         // permission noise to every learner login.
         if (!isElevated) {
+            setDirectoryLoading(false); setCatalogLoading(false);
             setStations([]);
             setBadges([]);
             setPrograms([]);
@@ -86,11 +102,15 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         // Content: Global or Shared? For now, fetch all templates. 
         // ideally, templates should also be org-scoped or 'public'
+        let templatesReady = false;
+        let programsReady = false;
+        const updateCatalogLoading = () => setCatalogLoading(!templatesReady || !programsReady);
         const unsubProjectTemplates = onSnapshot(collection(firestore, 'project_templates'), (snapshot) => {
             setProjectTemplates(snapshot.docs
-                .map(d => ({ id: d.id, ...d.data() } as ProjectTemplate))
+                .map(d => ({ ...d.data(), id: d.id } as ProjectTemplate))
                 .filter(template => !template.organizationId || template.organizationId === organizationId));
-        }, (error) => console.error("Template Error:", error));
+            templatesReady = true; updateCatalogLoading();
+        }, () => { templatesReady = true; updateCatalogLoading(); setCatalogError('Mission catalog could not load. Retry before assigning.'); });
 
         const unsubProcessTemplates = onSnapshot(collection(firestore, 'process_templates'), (snapshot) => {
             setProcessTemplates(snapshot.docs
@@ -115,7 +135,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         const programsQuery = query(collection(firestore, 'programs'), where('organizationId', '==', organizationId));
         const unsubPrograms = onSnapshot(programsQuery, (snapshot) => {
-            const allPrograms = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const allPrograms = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
 
             // Filter out Adult/Maker-Pro Programs for SparkQuest
             const filteredPrograms = allPrograms.filter((p: any) => {
@@ -137,22 +157,9 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 return true;
             });
             setPrograms(filteredPrograms);
-        }, (error) => console.error("Programs Error:", error));
+            programsReady = true; updateCatalogLoading();
+        }, () => { programsReady = true; updateCatalogLoading(); setCatalogError('Program catalog could not load. Retry to check class assignments.'); });
 
-        // Fetch tenant projects only. Firestore list rules cannot safely evaluate
-        // an unscoped cross-organization listener.
-        let unsubStudentProjects = () => { };
-
-        if (userProfile?.role === 'admin' || userProfile?.role === 'instructor') {
-            const projectsQuery = query(
-                collection(firestore, 'student_projects'),
-                where('organizationId', '==', organizationId)
-            );
-
-            unsubStudentProjects = onSnapshot(projectsQuery, (snapshot) => {
-                setStudentProjects(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as StudentProject)));
-            }, (error) => console.error("Projects Error:", error));
-        }
 
         const unsubGadgets = onSnapshot(collection(firestore, 'gadgets'), (snap) => {
             setGadgets(snap.docs
@@ -207,18 +214,23 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         let unsubUsersList = () => { };
         let unsubStudentsList = () => { };
+        let usersReady = false;
+        let studentsReady = false;
+        const updateDirectoryLoading = () => setDirectoryLoading(!usersReady || !studentsReady);
         if (isElevated) {
             const usersQuery = query(collection(firestore, 'users'), where('organizationId', '==', organizationId));
             unsubUsersList = onSnapshot(usersQuery, (snap) => {
-                usersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                usersCache = snap.docs.map(d => ({ ...d.data(), id: d.id }));
                 updateCombinedStudents();
-            }, (error) => console.error("Users Error:", error));
+                usersReady = true; updateDirectoryLoading();
+            }, () => { usersReady = true; updateDirectoryLoading(); setDirectoryError('Learner account links could not load. Retry before opening a profile.'); });
 
             const studentsQuery = query(collection(firestore, 'students'), where('organizationId', '==', organizationId));
             unsubStudentsList = onSnapshot(studentsQuery, (snap) => {
-                studentsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                studentsCache = snap.docs.map(d => ({ ...d.data(), id: d.id }));
                 updateCombinedStudents();
-            }, (error) => console.error("Students Error:", error));
+                studentsReady = true; updateDirectoryLoading();
+            }, () => { studentsReady = true; updateDirectoryLoading(); setDirectoryError('Learner profiles could not load. Retry before opening a profile.'); });
         } else {
             setStudents([]);
         }
@@ -231,14 +243,38 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             unsubStations();
             unsubBadges();
             unsubPrograms();
-            unsubStudentProjects();
             unsubUsersList();
             unsubStudentsList();
             unsubGadgets();
             unsubContests();
             unsubRequests();
         };
-    }, [authLoading, organizationId, user?.uid, userProfile]);
+    }, [authLoading, organizationId, user?.uid, userProfile, factoryReadAttempt]);
+
+    // Keep review loading/error state independent from the catalog listeners.
+    useEffect(() => {
+        if (authLoading) return;
+        setStudentProjects([]);
+        setStudentProjectsError(null);
+        const elevated = userProfile?.role === 'admin' || userProfile?.role === 'instructor';
+        if (!db || !user?.uid || !organizationId || !elevated) {
+            setStudentProjectsLoading(false);
+            return;
+        }
+        setStudentProjectsLoading(true);
+        return onSnapshot(
+            query(collection(db, 'student_projects'), where('organizationId', '==', organizationId)),
+            snapshot => {
+                setStudentProjects(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as StudentProject)));
+                setStudentProjectsLoading(false);
+                setStudentProjectsError(null);
+            },
+            () => {
+                setStudentProjectsLoading(false);
+                setStudentProjectsError('Projects could not be loaded. Retry, or check your instructor access.');
+            }
+        );
+    }, [authLoading, organizationId, user?.uid, userProfile?.role, projectReadAttempt]);
 
     // Helper to get available grades from programs
     const availableGrades = programs.reduce((acc: any[], prog) => {
@@ -312,33 +348,30 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const addProjectTemplate = async (template: Omit<ProjectTemplate, 'id'>) => {
         if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
+        const cleanTemplate = omitUndefinedDeep(template);
         await addDoc(collection(db as Firestore, 'project_templates'), {
-            ...template,
+            ...cleanTemplate,
             organizationId,
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
     };
-
-    const legacyClaimPatch = (templateId: string) => {
-        const existing = projectTemplates.find(template => template.id === templateId);
-        if (existing?.organizationId) return {};
-        if (!user?.uid) throw new Error('Your instructor identity could not be resolved.');
-        return {
-            legacyClaimedBy: user.uid,
-            legacyClaimedAt: serverTimestamp(),
-        };
-    };
-
-    const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>) => {
+    const importMission = async (draft: ImportDraft, catalog: ImportCatalog, source: string) => {
         if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
-        await updateDoc(doc(db as Firestore, 'project_templates', id), {
-            ...data,
+        return persistImportedMission(db as Firestore, organizationId, user.uid, draft, catalog, source);
+    };
+    const assignImportedMission = async (id: string) => {
+        if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
+        return publishImportedMission(db as Firestore, organizationId, user.uid, id);
+    };
+    const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>) => {
+        if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
+        const cleanData = omitUndefinedDeep(data);
+        await saveMissionAudience(db as Firestore, id, {
+            ...cleanData,
             organizationId,
-            ...legacyClaimPatch(id),
-            updatedAt: serverTimestamp()
-        });
+        }, { uid: user?.uid || '', organizationId, role: userProfile?.role || '' });
     };
     const assignProjectTemplate = async (
         id: string,
@@ -346,29 +379,23 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ) => {
         if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
         const patch = buildMissionAssignmentPatch({ ...audience, organizationId });
-        await updateDoc(doc(db as Firestore, 'project_templates', id), {
+        await saveMissionAudience(db as Firestore, id, {
             ...patch,
-            ...legacyClaimPatch(id),
             assignedAt: serverTimestamp(),
             assignedBy: user.uid,
-            updatedAt: serverTimestamp()
-        });
+        }, { uid: user.uid, organizationId, role: userProfile?.role || '' });
     };
     const deleteProjectTemplate = async (id: string) => {
-        if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
+        if (!db) return;
         const firestore = db as Firestore;
-        const templateRef = doc(firestore, 'project_templates', id);
-        const existing = projectTemplates.find(template => template.id === id);
-        if (!existing?.organizationId) {
-            await updateDoc(templateRef, {
-                organizationId,
-                ...legacyClaimPatch(id),
-                updatedAt: serverTimestamp(),
-            });
-        }
-        // Student projects are durable learner records with their own mission
-        // snapshot. Removing a template must never erase submitted work.
-        await deleteDoc(templateRef);
+        const batch = (await import('firebase/firestore')).writeBatch(firestore);
+        batch.delete(doc(firestore, 'project_templates', id));
+        const submissionsQuery = query(collection(firestore, 'student_projects'), (await import('firebase/firestore')).where('templateId', '==', id));
+        const submissionsSnapshot = await (await import('firebase/firestore')).getDocs(submissionsQuery);
+        submissionsSnapshot.forEach(subDoc => {
+            batch.delete(subDoc.ref);
+        });
+        await batch.commit();
     };
 
     const toggleStationActivation = async (stationId: string, gradeId: string, currentStations: Station[]) => {
@@ -396,18 +423,23 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Enrollments
     const [enrollments, setEnrollments] = useState<any[]>([]);
+    const [enrollmentsLoading, setEnrollmentsLoading] = useState(true);
+    const [enrollmentsError, setEnrollmentsError] = useState<string | null>(null);
     useEffect(() => {
+        setEnrollments([]); setEnrollmentsLoading(true); setEnrollmentsError(null);
         if (!db || !user || !userProfile || !organizationId || (userProfile.role !== 'admin' && userProfile.role !== 'instructor')) {
             setEnrollments([]);
+            setEnrollmentsLoading(false);
             return;
         }
         const firestore = db as Firestore;
         const enrollmentQuery = query(collection(firestore, 'enrollments'), where('organizationId', '==', organizationId));
         const unsubEnrollments = onSnapshot(enrollmentQuery, (snapshot) => {
-            setEnrollments(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        }, (error) => console.error("Enrollments Error:", error));
+            setEnrollments(snapshot.docs.map(d => ({ ...d.data(), id: d.id })));
+            setEnrollmentsLoading(false);
+        }, () => { setEnrollmentsLoading(false); setEnrollmentsError('Class enrollments could not load. Retry to check mission availability.'); });
         return () => unsubEnrollments();
-    }, [organizationId, user?.uid, userProfile]);
+    }, [organizationId, user?.uid, userProfile, factoryReadAttempt]);
 
     const buyGadget = async (userId: string, userName: string, gadget: any) => {
         if (!db || !organizationId) return;
@@ -419,13 +451,19 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const value = {
-        projectTemplates, processTemplates, stations, badges, programs, studentProjects, students, enrollments, availableGrades, availableGroups, loading, gadgets, contests, purchaseRequests,
+        projectTemplates, processTemplates, stations, badges, programs, studentProjects, studentProjectsLoading, studentProjectsError, retryStudentProjects: () => setProjectReadAttempt(attempt => attempt + 1), students, enrollments, availableGrades, availableGroups, loading, gadgets, contests, purchaseRequests,
+        directoryLoading, directoryError, catalogLoading, catalogError, enrollmentsLoading, enrollmentsError,
+        retryLearnerWorkspace: () => { setFactoryReadAttempt(attempt => attempt + 1); setProjectReadAttempt(attempt => attempt + 1); },
         actions: {
             addBadge, updateBadge, deleteBadge,
             addWorkflow, updateWorkflow, deleteWorkflow,
             addStation, updateStation, deleteStation, toggleStationActivation,
-            addProjectTemplate, updateProjectTemplate, assignProjectTemplate, deleteProjectTemplate,
-            buyGadget
+            addProjectTemplate, updateProjectTemplate, assignProjectTemplate, deleteProjectTemplate, importMission, assignImportedMission,
+            buyGadget,
+            assignLearnerMission: async (missionId: string, studentId: string, source: 'student_profile' | 'user_auth') => {
+                if (!db || !user?.uid || !organizationId) throw new Error('Your instructor session is unavailable.');
+                return assignMissionToLearner(db as Firestore, missionId, studentId, { uid: user.uid, organizationId, role: userProfile?.role || '' }, source);
+            }
         }
     };
 

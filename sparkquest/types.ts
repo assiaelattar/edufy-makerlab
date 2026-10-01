@@ -144,6 +144,9 @@ export interface ProjectStep {
   resources?: Resource[]; // Tool links
   reviewNotes?: string; // Instructor feedback
   reviewedAt?: string;
+  submittedAt?: string;
+  evidenceMimeType?: string;
+  submissionHistory?: ProofSubmission[];
   isLocked?: boolean;
 }
 
@@ -153,6 +156,37 @@ export interface Commit {
   timestamp: Date;
   stepId?: string;
   link?: string;
+}
+
+export interface ProofSubmission {
+  id: string;
+  submittedAt?: string;
+  evidence?: string;
+  evidenceMimeType?: string;
+  note?: string;
+}
+
+export interface ProjectReview {
+  id: string;
+  outcome: 'published' | 'changes_requested' | 'step_approved' | 'step_changes_requested';
+  scope?: 'project' | 'step';
+  stepId?: string;
+  stepTitle?: string;
+  submission?: { evidence?: string; evidenceMimeType?: string; note?: string; submittedAt?: string; mediaUrls?: string[]; presentationUrl?: string };
+  feedback: string;
+  reviewedAt: string;
+  reviewedById?: string;
+  reviewedByName?: string;
+  xpAwarded?: number;
+}
+
+export interface ProjectStepReviewState {
+  outcome: 'step_approved' | 'step_changes_requested';
+  feedback: string;
+  reviewedAt: string;
+  reviewedById?: string;
+  reviewedByName?: string;
+  submissionFingerprint: string;
 }
 
 export interface StudentProject {
@@ -187,6 +221,17 @@ export interface StudentProject {
   mediaUrls?: string[];
   videoUrl?: string; // Optional: Project video
   gallery?: string[]; // Optional: Gallery images
+
+  // Instructor review
+  feedback?: string;
+  reviewedAt?: Timestamp | string;
+  reviewedById?: string;
+  reviewedByName?: string;
+  xpReward?: number;
+  reviewHistory?: ProjectReview[];
+  reviewProtocolVersion?: 1;
+  stepReviews?: Record<string, ProjectStepReviewState>;
+  submittedAt?: string;
 
   // Meta
   skills: string[];
@@ -264,6 +309,10 @@ export interface User {
 export interface ProjectTemplate {
   id: string;
   organizationId?: string;
+  importKey?: string;
+  importSource?: string;
+  importHash?: string;
+  importedAt?: Timestamp;
   title: string;
   description: string;
   hook?: string; // New: Engagement hook
@@ -280,6 +329,7 @@ export interface ProjectTemplate {
     grades?: string[];
     groups?: string[];
     students?: string[]; // Specific student UIDs
+    additionalStudents?: string[]; // Additive canonical learner IDs; preserve the primary class audience
   };
   assignedAt?: Timestamp;
   assignedBy?: string;

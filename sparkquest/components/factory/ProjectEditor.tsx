@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { getMissionReadiness, getMissionSavePolicy, normalizeMissionBrief } from '../../domain/missionContent';
+import { createWorkflowSnapshot } from '../../domain/workflowPipeline';
 
 interface ProjectEditorProps {
     templateId?: string | null;
@@ -199,7 +200,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             return;
         }
         const audience = form.targetAudience || {};
-        const hasAudience = Boolean(audience.programs?.length || audience.grades?.length || audience.groups?.length || audience.students?.length);
+        const hasAudience = Boolean(audience.programs?.length || audience.grades?.length || audience.groups?.length || audience.students?.length || audience.additionalStudents?.length);
         const savePolicy = getMissionSavePolicy(form, sourceData || undefined);
         if ((savePolicy.publishingNow && !hasAudience) || savePolicy.removedExistingAudience) {
             setActiveTab('targeting');
@@ -220,10 +221,18 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         setIsSaving(true);
         setSaveError(null);
         try {
+            const selectedWorkflow = processTemplates.find(workflow => workflow.id === form.defaultWorkflowId);
+            const workflowSnapshot = selectedWorkflow ? createWorkflowSnapshot(selectedWorkflow) : undefined;
+            const missionPayload = {
+                ...form,
+                title,
+                missionBrief: normalizedBrief,
+                ...(workflowSnapshot ? { workflowSnapshot } : {}),
+            };
             if (templateId) {
-                await actions.updateProjectTemplate(templateId, { ...form, title, missionBrief: normalizedBrief });
+                await actions.updateProjectTemplate(templateId, missionPayload);
             } else {
-                await actions.addProjectTemplate({ ...form, title, missionBrief: normalizedBrief } as any);
+                await actions.addProjectTemplate(missionPayload as any);
             }
             onClose();
         } catch (e: any) {

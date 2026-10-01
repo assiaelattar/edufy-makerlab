@@ -2,18 +2,22 @@
 import React, { useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { ProcessTemplate, ProcessPhase, Resource } from '../../types';
-import { Plus, Trash2, Edit2, GripVertical, Check, X, ArrowRight, LayoutList } from 'lucide-react';
+import { Plus, Trash2, Edit2, GripVertical, Check, X, ArrowRight, LayoutList, ArrowUp, ArrowDown, Clock3, ShieldCheck } from 'lucide-react';
 import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
+import { normalizeWorkflowPhase } from '../../domain/workflowPipeline';
 
-// Default tools available in every workflow step
-const DEFAULT_TOOLS: Resource[] = [
-    { id: 'gemini', title: 'Gemini AI Assistant', type: 'link', url: 'https://gemini.google.com' },
-    { id: 'chatgpt', title: 'ChatGPT', type: 'link', url: 'https://chat.openai.com' },
-    { id: 'tldraw', title: 'TLDraw Whiteboard', type: 'link', url: 'https://tldraw.com' }
-];
+const phaseTone: Record<string, string> = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+    blue: 'border-blue-200 bg-blue-50 text-blue-700',
+    indigo: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    purple: 'border-purple-200 bg-purple-50 text-purple-700',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    rose: 'border-rose-200 bg-rose-50 text-rose-700',
+};
 
 export const WorkflowManager: React.FC = () => {
-    const { processTemplates, actions } = useFactoryData();
+    const { processTemplates, projectTemplates, actions } = useFactoryData();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -39,13 +43,22 @@ export const WorkflowManager: React.FC = () => {
     };
 
     const handleSave = async () => {
-        if (!form.name || !form.phases) return;
+        if (!form.name?.trim() || !form.phases?.length) return;
 
         try {
+            const payload = {
+                name: form.name.trim(),
+                description: form.description?.trim() || '',
+                phases: form.phases.map((phase, index) => normalizeWorkflowPhase({ ...phase, order: index + 1 }, index)),
+                isDefault: Boolean(form.isDefault),
+                version: editingId ? Math.max(1, Number(form.version) || 1) + 1 : 1,
+                status: form.status || 'published' as const,
+                ...(form.organizationId ? { organizationId: form.organizationId } : {}),
+            };
             if (editingId) {
-                await actions.updateWorkflow(editingId, form);
+                await actions.updateWorkflow(editingId, payload);
             } else {
-                await actions.addWorkflow(form as any);
+                await actions.addWorkflow(payload as any);
             }
             setIsModalOpen(false);
         } catch (e) {
@@ -55,6 +68,11 @@ export const WorkflowManager: React.FC = () => {
     };
 
     const handleDelete = async (id: string) => {
+        const usageCount = projectTemplates.filter(template => template.defaultWorkflowId === id).length;
+        if (usageCount > 0) {
+            alert(`This workflow is used by ${usageCount} mission${usageCount === 1 ? '' : 's'}. Reassign those missions before deleting it.`);
+            return;
+        }
         if (confirm("Delete this workflow? This cannot be undone.")) {
             await actions.deleteWorkflow(id);
         }
@@ -69,7 +87,16 @@ export const WorkflowManager: React.FC = () => {
             icon: 'Circle',
             order: (form.phases?.length || 0) + 1,
             description: '',
-            resources: DEFAULT_TOOLS  // 🎯 Auto-add default tools to every phase
+            objective: '',
+            instructions: '',
+            checklist: [],
+            tools: [],
+            materials: [],
+            safetyNotes: [],
+            evidenceRequirements: [],
+            estimatedMinutes: 30,
+            required: true,
+            resources: []
         };
         setForm({ ...form, phases: [...(form.phases || []), newPhase] });
     };
@@ -86,6 +113,14 @@ export const WorkflowManager: React.FC = () => {
         setForm({ ...form, phases: newPhases });
     };
 
+    const movePhase = (idx: number, direction: -1 | 1) => {
+        const nextIndex = idx + direction;
+        const phases = [...(form.phases || [])];
+        if (nextIndex < 0 || nextIndex >= phases.length) return;
+        [phases[idx], phases[nextIndex]] = [phases[nextIndex], phases[idx]];
+        setForm({ ...form, phases: phases.map((phase, index) => ({ ...phase, order: index + 1 })) });
+    };
+
     return (
         <div className="space-y-6">
             <FactoryPageHeader
@@ -97,7 +132,9 @@ export const WorkflowManager: React.FC = () => {
             />
 
             <div className="grid grid-cols-1 gap-4">
-                {processTemplates.map(wf => (
+                {processTemplates.map(wf => {
+                    const usageCount = projectTemplates.filter(template => template.defaultWorkflowId === wf.id).length;
+                    return (
                     <div key={wf.id} className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                         <div className="flex justify-between items-start mb-6">
                             <div>
@@ -106,8 +143,10 @@ export const WorkflowManager: React.FC = () => {
                                     {wf.isDefault && (
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded-full uppercase tracking-wide">Default</span>
                                     )}
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-slate-500">v{wf.version || 1}</span>
                                 </div>
                                 <p className="text-slate-500 text-sm mt-1 max-w-xl">{wf.description}</p>
+                                <p className="mt-2 text-xs font-bold text-slate-400">{usageCount} mission{usageCount === 1 ? '' : 's'} using this workflow</p>
                             </div>
                             <div className="flex gap-1">
                                 <button onClick={() => handleEdit(wf)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-blue-50 hover:text-blue-700" aria-label={`Edit ${wf.name}`}>
@@ -121,10 +160,10 @@ export const WorkflowManager: React.FC = () => {
 
                         {/* Visualization of Steps */}
                         <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                            {wf.phases?.sort((a, b) => a.order - b.order).map((phase, idx) => (
+                            {wf.phases?.slice().sort((a, b) => a.order - b.order).map((phase, idx) => (
                                 <div key={idx} className="flex items-center shrink-0">
                                     <div className="flex flex-col items-center gap-2">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-${phase.color}-600 bg-${phase.color}-50 border border-${phase.color}-200 font-bold shadow-sm`}>
+                                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl border font-bold shadow-sm ${phaseTone[phase.color] || phaseTone.blue}`}>
                                             {idx + 1}
                                         </div>
                                         <span className="text-xs font-bold text-slate-600">{phase.name}</span>
@@ -136,7 +175,7 @@ export const WorkflowManager: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                ))}
+                )})}
                 {processTemplates.length === 0 && <FactoryEmptyState icon={LayoutList} title="No workflows yet" description="Create a reusable sequence of phases, tools, and evidence requirements for your missions." action={<button type="button" onClick={handleCreate} className={factoryButton.primary}><Plus size={18} /> Create workflow</button>} />}
             </div>
 
@@ -147,7 +186,7 @@ export const WorkflowManager: React.FC = () => {
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                             <h3 id="workflow-dialog-title" className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <LayoutList className="text-indigo-500" />
-                                {editingId ? 'Edit Workflow' : 'New Workflow'}
+                                {editingId ? 'Edit workflow' : 'New workflow'}
                             </h3>
                             <button onClick={() => setIsModalOpen(false)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close workflow editor">
                                 <X size={24} />
@@ -178,7 +217,7 @@ export const WorkflowManager: React.FC = () => {
 
                             <div>
                                 <div className="flex justify-between items-center mb-4">
-                                    <label className="block text-xs font-black text-slate-400 uppercase tracking-wider">Phases & Steps</label>
+                                    <label className="block text-xs font-black text-slate-400 uppercase tracking-wider">Phases and learner tasks</label>
                                     <button onClick={addPhase} className="text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
                                         <Plus size={14} /> Add Phase
                                     </button>
@@ -186,9 +225,9 @@ export const WorkflowManager: React.FC = () => {
 
                                 <div className="space-y-3">
                                     {form.phases?.map((phase, idx) => (
-                                        <div key={idx} className="flex flex-col gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200 group hover:border-indigo-300 transition-colors">
+                                        <div key={phase.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-indigo-300">
                                             <div className="flex items-center gap-3">
-                                                <div className="cursor-move text-slate-400 hover:text-slate-600"><GripVertical size={20} /></div>
+                                                <div className="text-slate-300"><GripVertical size={20} /></div>
                                                 <div className="w-10 h-10 shrink-0 flex items-center justify-center bg-white rounded-lg border border-slate-200 font-black text-slate-400">
                                                     {idx + 1}
                                                 </div>
@@ -214,6 +253,40 @@ export const WorkflowManager: React.FC = () => {
                                                 <button onClick={() => removePhase(idx)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                                                     <Trash2 size={16} />
                                                 </button>
+                                            </div>
+
+                                            <div className="grid gap-3 pl-12 md:grid-cols-2">
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500 md:col-span-2">What students achieve
+                                                    <input value={phase.objective || ''} onChange={e => updatePhase(idx, 'objective', e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder="Example: Define the problem in one clear sentence" />
+                                                </label>
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500 md:col-span-2">Instructions
+                                                    <textarea value={phase.instructions || ''} onChange={e => updatePhase(idx, 'instructions', e.target.value)} className="mt-1 min-h-20 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder="Short, direct instructions the learner can follow" />
+                                                </label>
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500">Checklist · one per line
+                                                    <textarea value={(phase.checklist || []).join('\n')} onChange={e => updatePhase(idx, 'checklist', e.target.value.split('\n'))} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder={'Sketch one idea\nAsk for feedback'} />
+                                                </label>
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500">Tools · one per line
+                                                    <textarea value={(phase.tools || []).join('\n')} onChange={e => updatePhase(idx, 'tools', e.target.value.split('\n'))} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder={'Laptop\nWire cutter'} />
+                                                </label>
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500">Materials · one per line
+                                                    <textarea value={(phase.materials || []).join('\n')} onChange={e => updatePhase(idx, 'materials', e.target.value.split('\n'))} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder={'Cardboard\nCopper tape'} />
+                                                </label>
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500">Safety · one per line
+                                                    <textarea value={(phase.safetyNotes || []).join('\n')} onChange={e => updatePhase(idx, 'safetyNotes', e.target.value.split('\n'))} className="mt-1 min-h-24 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-medium normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder="Ask a mentor before using powered tools" />
+                                                </label>
+                                                <label className="text-xs font-black uppercase tracking-wide text-slate-500 md:col-span-2">Proof students must add
+                                                    <input value={phase.evidenceRequirements?.[0]?.prompt || ''} onChange={e => updatePhase(idx, 'evidenceRequirements', e.target.value ? [{ id: `${phase.id}-proof`, type: phase.evidenceRequirements?.[0]?.type || 'any', prompt: e.target.value, required: true }] : [])} className="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-semibold normal-case tracking-normal text-slate-700 outline-none focus:border-indigo-500" placeholder="Example: Add a photo of the tested prototype" />
+                                                </label>
+                                                <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+                                                    <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-500"><Clock3 size={15} /> Time
+                                                        <input type="number" min="5" step="5" value={phase.estimatedMinutes || 30} onChange={e => updatePhase(idx, 'estimatedMinutes', Number(e.target.value))} className="w-20 rounded-lg border border-slate-200 bg-white p-2 text-sm text-slate-700" /> min
+                                                    </label>
+                                                    <label className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600"><ShieldCheck size={15} className="text-emerald-600" /><input type="checkbox" checked={phase.required !== false} onChange={e => updatePhase(idx, 'required', e.target.checked)} /> Required phase</label>
+                                                    <div className="ml-auto flex gap-1">
+                                                        <button type="button" onClick={() => movePhase(idx, -1)} disabled={idx === 0} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-30" aria-label={`Move ${phase.name} up`}><ArrowUp size={16} /></button>
+                                                        <button type="button" onClick={() => movePhase(idx, 1)} disabled={idx === (form.phases?.length || 0) - 1} className="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 disabled:opacity-30" aria-label={`Move ${phase.name} down`}><ArrowDown size={16} /></button>
+                                                    </div>
+                                                </div>
                                             </div>
 
                                             {/* Resources Section */}

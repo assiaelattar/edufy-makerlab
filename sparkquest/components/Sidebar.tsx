@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Gamepad2, Image as ImageIcon, KeyRound, ShoppingBag, TrendingUp, User } from 'lucide-react';
+import { Award, Gamepad2, Image as ImageIcon, KeyRound, ShoppingBag, TrendingUp, User, LayoutDashboard } from 'lucide-react';
 import { SidebarItem } from './SidebarItem';
 
 interface SidebarProps {
@@ -15,15 +15,17 @@ interface SidebarProps {
     onOpenPickup: () => void;
     onOpenWallet: () => void;
     onOpenProgress: () => void;
+    onHome?: () => void;
     onOpenSettings?: () => void;
     onOpenContests?: () => void;
     onLogout?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ studentName, avatarUrl, coins, onEditProfile, onOpenStore, onOpenArcade, onOpenPortfolio, onOpenGallery, onOpenPickup, onOpenWallet, onOpenProgress }) => (
+export const Sidebar: React.FC<SidebarProps> = ({ studentName, avatarUrl, coins, onEditProfile, onOpenStore, onOpenArcade, onOpenPortfolio, onOpenGallery, onOpenPickup, onOpenWallet, onOpenProgress, onHome }) => (
     <aside className="sq-kit-nav" aria-label="Sparkbook destinations">
         <div className="sq-kit-nav-brand"><span>SPARK</span><strong>BOOK</strong><small>Field kit · 26</small></div>
         <nav>
+            {onHome && <SidebarItem index="00" onClick={onHome} title="Workbench" subtitle="Continue your mission" active icon={LayoutDashboard} />}
             <SidebarItem index="01" onClick={onOpenPortfolio} title="Field log" subtitle="Projects & proof" tone="lime" icon={Award} />
             <SidebarItem index="02" onClick={onOpenArcade} title="Play lab" subtitle="Learn & play" tone="orange" icon={Gamepad2} />
             <SidebarItem index="03" onClick={onOpenStore} title="Exchange" subtitle="Use your Sparks" tone="sun" icon={ShoppingBag} />

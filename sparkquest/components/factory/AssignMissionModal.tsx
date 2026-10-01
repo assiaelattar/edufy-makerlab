@@ -372,7 +372,7 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
                                     <div><dt className="text-xs font-extrabold uppercase tracking-wider text-slate-400">What changes</dt><dd className="mt-1 font-bold text-slate-900">Mission becomes assigned. Enrollments are not modified.</dd></div>
                                 </dl>
                             </div>
-                            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Learners see the mission after their next dashboard refresh. Specific-student assignments use canonical learner IDs and remain authoritative when class metadata changes.</p>
+                            <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Learners see the mission after their next dashboard refresh. Specific-student assignments use canonical learner IDs. Existing supplemental assignments made from student profiles are preserved, including any added while this dialog is open.</p>
                             {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
                         </div>
                     )}
