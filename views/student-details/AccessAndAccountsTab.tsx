@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle, Eye, EyeOff } from 'lucide-react';
+import { Key, UserPlus, Loader2, RefreshCw, Printer, MessageCircle, Mail, Eye, EyeOff } from 'lucide-react';
 import { Student } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../../components/Modal';
@@ -10,7 +10,7 @@ interface AccessAndAccountsTabProps {
   handleCreateParentAccess: (email: string) => void;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
-  shareCredentialsWhatsApp: () => void;
+  shareAccount: (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => void;
   setCredentialsModal: (modal: { isOpen: boolean; data: any }) => void;
   settings: any;
   isAdult?: boolean;
@@ -25,7 +25,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   handleCreateParentAccess,
   isGeneratingAccess,
   generateAccessCardPrint,
-  shareCredentialsWhatsApp,
+  shareAccount,
   setCredentialsModal,
   settings,
   isAdult = false,
@@ -116,7 +116,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 {showPassword ? student.loginInfo.initialPassword || '********' : '••••••••'}
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 onClick={() => generateAccessCardPrint(student, settings)}
                 className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded flex items-center justify-center gap-1 transition-colors border border-slate-700"
@@ -124,12 +124,19 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 <Printer size={12} /> Print Card
               </button>
               <button
-                onClick={shareCredentialsWhatsApp}
+                onClick={() => shareAccount('student', 'email')}
+                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded flex items-center justify-center gap-1 transition-colors border border-slate-700"
+              >
+                <Mail size={12} /> Email
+              </button>
+              <button
+                onClick={() => shareAccount('student', 'whatsapp')}
                 className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded flex items-center justify-center gap-1 transition-colors"
               >
                 <MessageCircle size={12} /> WhatsApp
               </button>
             </div>
+            <p className="text-[11px] text-slate-400">Choose a channel to open a ready message. Review the recipient before sending.</p>
             <button
               disabled
               title="Secure password reset requires the server-side account administration service"
@@ -226,6 +233,11 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 )}{' '}
                 Send setup link or change email
               </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => shareAccount('parent', 'email')} className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-800 px-2 text-xs font-bold text-white hover:bg-slate-700"><Mail size={14} /> Email</button>
+                <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> WhatsApp</button>
+              </div>
+              <p className="text-[11px] text-slate-400">Shares the family portal address and sign-in email. Password setup stays in the private email from Edufy.</p>
             </div>
           ) : (
             <div className="text-center py-4">

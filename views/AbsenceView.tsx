@@ -22,6 +22,7 @@ export const AbsenceView = () => {
     const [selectedGroup, setSelectedGroup] = useState('All');
     const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
     const [isConfirmingSession, setIsConfirmingSession] = useState(false);
+    const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
 
     const dayOfWeek = useMemo(() => {
         return format(parseISO(selectedDate), 'EEEE');
@@ -136,6 +137,7 @@ export const AbsenceView = () => {
                 ...(existingRecord ? {} : { createdAt: serverTimestamp() }),
                 updatedAt: serverTimestamp()
             }, { merge: true });
+            setSelectedRecordIds(previous => previous.filter(id => id !== recordId));
         } catch (error) {
             console.error('Error marking attendance', error);
             await showAlert(
@@ -163,6 +165,7 @@ export const AbsenceView = () => {
         setSavingRecordId(recordId);
         try {
             await deleteDoc(doc(db, 'attendance', recordId));
+            setSelectedRecordIds(previous => previous.filter(id => id !== recordId));
         } catch (error) {
             console.error('Error clearing attendance', error);
             await showAlert('Attendance mark was not cleared', 'The existing mark is still in place. Please try again.', 'danger');
@@ -171,7 +174,7 @@ export const AbsenceView = () => {
         }
     };
 
-    const handleConfirmAllPresent = async (studentsInSlot: typeof scheduledStudents) => {
+    const handleConfirmAllPresent = async (studentsInSlot: typeof scheduledStudents, selectedOnly = false) => {
         if (!db || !currentOrganization?.id) {
             await showAlert('Organization required', 'Select an organization before confirming this session.', 'warning');
             return;
@@ -182,7 +185,10 @@ export const AbsenceView = () => {
             return;
         }
 
-        const unmarked = studentsInSlot.filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked');
+        const unmarked = studentsInSlot.filter(student =>
+            getStatus(student.studentId, student.displayTime) === 'unmarked'
+            && (!selectedOnly || selectedRecordIds.includes(getRecordId(student.studentId, student.displayTime)))
+        );
         if (unmarked.length === 0) {
             await showAlert('Attendance already confirmed', 'Every student in this session already has an attendance mark.', 'info');
             return;
@@ -190,7 +196,7 @@ export const AbsenceView = () => {
 
         const approved = await confirm({
             title: 'Confirm this session?',
-            message: `Mark ${unmarked.length} unmarked ${unmarked.length === 1 ? 'student' : 'students'} as present. Existing late, absent, and excused marks will stay unchanged.${searchQuery || selectedGroup !== 'All' ? ' Only students currently shown by your filters will be changed.' : ''}`,
+            message: `Mark ${unmarked.length} ${selectedOnly ? 'selected ' : 'unmarked '}${unmarked.length === 1 ? 'student' : 'students'} as present. Existing late, absent, and excused marks will stay unchanged.${searchQuery || selectedGroup !== 'All' ? ' Only students currently shown by your filters will be changed.' : ''}`,
             confirmText: 'Mark present',
             cancelText: 'Cancel',
             variant: 'info'
@@ -199,27 +205,33 @@ export const AbsenceView = () => {
 
         setIsConfirmingSession(true);
         try {
-            const batch = writeBatch(firestore);
-            unmarked.forEach(student => {
-                const recordId = getRecordId(student.studentId, student.displayTime);
-                batch.set(doc(firestore, 'attendance', recordId), {
-                    date: selectedDate,
-                    studentId: student.studentId,
-                    enrollmentId: student.id,
-                    status: 'present',
-                    slotTime: student.displayTime,
-                    organizationId: currentOrganization.id,
-                    markedBy: userProfile?.uid || '',
-                    createdAt: serverTimestamp()
+            // Firestore batches have a 500-write limit. Leave room for future
+            // audit writes and keep large rosters confirmable.
+            for (let offset = 0; offset < unmarked.length; offset += 400) {
+                const batch = writeBatch(firestore);
+                unmarked.slice(offset, offset + 400).forEach(student => {
+                    const recordId = getRecordId(student.studentId, student.displayTime);
+                    batch.set(doc(firestore, 'attendance', recordId), {
+                        date: selectedDate,
+                        studentId: student.studentId,
+                        enrollmentId: student.id,
+                        status: 'present',
+                        slotTime: student.displayTime,
+                        organizationId: currentOrganization.id,
+                        markedBy: userProfile?.uid || '',
+                        createdAt: serverTimestamp()
+                    });
                 });
-            });
-            await batch.commit();
+                await batch.commit();
+            }
+            const confirmedIds = new Set(unmarked.map(student => getRecordId(student.studentId, student.displayTime)));
+            setSelectedRecordIds(previous => previous.filter(id => !confirmedIds.has(id)));
             await showAlert('Session confirmed', `${unmarked.length} unmarked ${unmarked.length === 1 ? 'student is' : 'students are'} now marked present. Existing exceptions were preserved.`, 'success');
         } catch (error) {
             console.error('Error confirming attendance', error);
             await showAlert(
                 'Session was not confirmed',
-                `The unmarked students could not be updated. ${error instanceof Error ? error.message : String(error)}`,
+                `Some attendance marks may have been saved. Refresh the roster before retrying. ${error instanceof Error ? error.message : String(error)}`,
                 'danger'
             );
         } finally {
@@ -269,6 +281,7 @@ export const AbsenceView = () => {
 
     const moveDate = (offset: number) => {
         setSelectedDate(format(addDays(parseISO(selectedDate), offset), 'yyyy-MM-dd'));
+        setSelectedRecordIds([]);
     };
 
     return (
@@ -290,9 +303,9 @@ export const AbsenceView = () => {
                         </button>
                         <div className="min-w-0 border-x border-white/10 px-2 text-center">
                             <div className="text-[9px] font-black uppercase text-teal-300">{dayOfWeek}</div>
-                            <input type="date" value={selectedDate} onChange={(event) => event.target.value && setSelectedDate(event.target.value)} aria-label="Attendance date" className="w-[132px] bg-transparent text-center font-mono text-xs font-bold text-white outline-none" />
+                            <input type="date" value={selectedDate} onChange={(event) => { if (event.target.value) { setSelectedDate(event.target.value); setSelectedRecordIds([]); } }} aria-label="Attendance date" className="w-[132px] bg-transparent text-center font-mono text-xs font-bold text-white outline-none" />
                         </div>
-                        {!isToday && <button type="button" onClick={() => setSelectedDate(today)} className="h-9 rounded-lg px-2 text-[10px] font-black uppercase text-teal-200 hover:bg-teal-400/10">Today</button>}
+                        {!isToday && <button type="button" onClick={() => { setSelectedDate(today); setSelectedRecordIds([]); }} className="h-9 rounded-lg px-2 text-[10px] font-black uppercase text-teal-200 hover:bg-teal-400/10">Today</button>}
                         <button type="button" onClick={() => moveDate(1)} aria-label="Next day" title="Next day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
                             <ChevronRight size={18} />
                         </button>
@@ -373,6 +386,13 @@ export const AbsenceView = () => {
                         {studentsByTime.map(slot => {
                             const isLive = isCurrentBlock(slot.time);
                             const unmarkedCount = slot.students.filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked').length;
+                            const selectedCount = slot.students.filter(student =>
+                                getStatus(student.studentId, student.displayTime) === 'unmarked'
+                                && selectedRecordIds.includes(getRecordId(student.studentId, student.displayTime))
+                            ).length;
+                            const unmarkedRecordIds = slot.students
+                                .filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked')
+                                .map(student => getRecordId(student.studentId, student.displayTime));
                             return (
                                 <div key={slot.time} className={`overflow-hidden rounded-xl border bg-slate-900/75 ${isLive ? 'border-teal-300/40' : 'border-white/10'}`}>
                                     <div className={`flex flex-col gap-3 border-b px-3 py-3 sm:flex-row sm:items-center ${isLive ? 'border-teal-300/20 bg-teal-400/[0.06]' : 'border-white/10 bg-slate-950/55'}`}>
@@ -383,11 +403,28 @@ export const AbsenceView = () => {
                                                     <span className="text-sm font-black text-white">{slot.students.length} scheduled</span>
                                                     {isLive && <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-0.5 text-[9px] font-black uppercase text-teal-200">Live now</span>}
                                                 </div>
-                                                <p className="text-[11px] text-slate-500">{unmarkedCount === 0 ? 'Session complete' : `${unmarkedCount} ${unmarkedCount === 1 ? 'mark' : 'marks'} remaining`}</p>
+                                                <p className="text-[11px] text-slate-500">{unmarkedCount === 0 ? 'Session complete' : selectedCount > 0 ? `${selectedCount} selected · ${unmarkedCount} unmarked` : `${unmarkedCount} ${unmarkedCount === 1 ? 'mark' : 'marks'} remaining`}</p>
                                             </div>
                                         </div>
-                                        <AtlasActionButton icon={CheckCircle2} variant="primary" className="sm:ml-auto" disabled={unmarkedCount === 0 || isFutureDate || isConfirmingSession} onClick={() => handleConfirmAllPresent(slot.students)}>
-                                            {isConfirmingSession ? 'Confirming...' : 'Confirm unmarked'}
+                                        {unmarkedCount > 0 && !isFutureDate && (
+                                            <label className="flex items-center gap-2 text-xs font-semibold text-slate-300 sm:ml-auto">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedCount === unmarkedCount}
+                                                    disabled={isConfirmingSession}
+                                                    onChange={() => setSelectedRecordIds(previous => {
+                                                        const slotIds = new Set(unmarkedRecordIds);
+                                                        return selectedCount === unmarkedCount
+                                                            ? previous.filter(id => !slotIds.has(id))
+                                                            : [...new Set([...previous, ...unmarkedRecordIds])];
+                                                    })}
+                                                    className="h-4 w-4 accent-teal-400"
+                                                />
+                                                Select unmarked
+                                            </label>
+                                        )}
+                                        <AtlasActionButton icon={CheckCircle2} variant="primary" disabled={unmarkedCount === 0 || isFutureDate || isConfirmingSession} onClick={() => handleConfirmAllPresent(slot.students, selectedCount > 0)}>
+                                            {isConfirmingSession ? 'Confirming...' : selectedCount > 0 ? `Mark ${selectedCount} selected present` : 'Confirm unmarked'}
                                         </AtlasActionButton>
                                     </div>
 
@@ -401,6 +438,14 @@ export const AbsenceView = () => {
                                             return (
                                                 <div key={`${student.id}_${student.displayTime}_${student.displayGroup}_${studentIndex}`} className="flex flex-col gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="flex min-w-0 items-center gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`Select ${student.studentName} for attendance`}
+                                                            checked={selectedRecordIds.includes(recordId) && status === 'unmarked'}
+                                                            disabled={status !== 'unmarked' || isFutureDate || isConfirmingSession}
+                                                            onChange={() => setSelectedRecordIds(previous => previous.includes(recordId) ? previous.filter(id => id !== recordId) : [...previous, recordId])}
+                                                            className="h-4 w-4 shrink-0 accent-teal-400"
+                                                        />
                                                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-[11px] font-black text-slate-300">{initials}</div>
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-2">

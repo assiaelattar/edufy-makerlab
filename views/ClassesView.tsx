@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, CalendarCheck, ChevronRight, CircleDollarSign, ClipboardCheck, Clock, Eye, Filter, Layers3, Mail, Phone, Plus, Printer, School, Search, Users } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { Modal } from '../components/Modal';
 import { calculateAge, formatCurrency, generateRosterPrint } from '../utils/helpers';
+import { config } from '../utils/config';
+import { hasPrintableLearnerAccess, printGroupAccessCards } from '../utils/groupAccessPrint';
 import { Enrollment, Student } from '../types';
 import { getProgramOperationalState } from '../utils/programLifecycle';
 import { isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
@@ -12,11 +15,18 @@ import './school-day/education-school-day-v1.css';
 
 export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, gradeId: string, groupId: string) => void }) => {
    const { programs, enrollments, students, viewParams, navigateTo, settings } = useAppContext();
-   const { can } = useAuth();
+   const { can, currentOrganization } = useAuth();
    const { alert } = useConfirm();
    const { classId } = viewParams;
    const [activeProgramId, setActiveProgramId] = useState('all');
    const [searchQuery, setSearchQuery] = useState('');
+   const [isAccessPrintOpen, setIsAccessPrintOpen] = useState(false);
+   const [selectedAccessIds, setSelectedAccessIds] = useState<string[]>([]);
+   const groupKey = classId ? `${classId.pId}/${classId.gId}/${classId.grpId}` : '';
+   useEffect(() => {
+      setIsAccessPrintOpen(false);
+      setSelectedAccessIds([]);
+   }, [groupKey]);
    const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
    const today = new Date().toISOString().slice(0, 10);
@@ -34,7 +44,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       }
 
       const enrolledStudents = enrollments
-         .filter(enrollment => isEnrollmentEligibleForAttendance(enrollment, program, today) && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id))
+          .filter(enrollment => isEnrollmentEligibleForAttendance(enrollment, program, today) && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id))
          .map(enrollment => {
             const student = students.find(item => item.id === enrollment.studentId);
             return student ? { ...student, enrollment } : null;
@@ -43,6 +53,39 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
          .sort((first, second) => first!.name.localeCompare(second!.name)) as (Student & { enrollment: Enrollment })[];
       const emails = Array.from(new Set(enrolledStudents.map(student => student.email?.trim()).filter(Boolean))).join(',');
       const totalDue = enrolledStudents.reduce((total, student) => total + student.enrollment.balance, 0);
+      const accessCandidates = Array.from(new Map(enrolledStudents.map(student => [student.id, student])).values());
+      const readyAccessStudents = accessCandidates.filter(student => hasPrintableLearnerAccess(student, currentOrganization?.id || ''));
+      const readyAccessIds = new Set(readyAccessStudents.map(student => student.id));
+      const selectedAccessStudents = readyAccessStudents.filter(student => selectedAccessIds.includes(student.id));
+
+      const handlePrintAccess = async () => {
+         if (!can('students.edit') || !currentOrganization?.id) {
+            await alert('Access printing unavailable', 'Only staff who manage student records can print account credentials.', 'warning');
+            return;
+         }
+         if (selectedAccessStudents.length === 0) {
+            await alert('Select learners', 'Choose at least one learner with printable access.', 'warning');
+            return;
+         }
+         try {
+            const opened = printGroupAccessCards(selectedAccessStudents, {
+               organizationId: currentOrganization.id,
+               academyName: settings.academyName || currentOrganization.name || 'Edufy',
+               programName: program.name,
+               gradeName: grade.name,
+               groupName: group.name,
+               loginUrl: config.sparkQuestUrl,
+            });
+            if (!opened) {
+               await alert('Print window blocked', 'Allow pop-ups for Edufy, then try printing the access cards again.', 'warning');
+               return;
+            }
+            setIsAccessPrintOpen(false);
+            setSelectedAccessIds([]);
+         } catch (error) {
+            await alert('Access cards could not be printed', error instanceof Error ? error.message : 'Check the learner accounts and try again.', 'danger');
+         }
+      };
 
       const copyEmails = async () => {
          if (!emails) {
@@ -79,6 +122,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                      <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('classes', {})}>Classes</AtlasActionButton>
                      <AtlasActionButton icon={Mail} onClick={copyEmails}>Copy emails</AtlasActionButton>
                      <AtlasActionButton icon={Printer} disabled={enrolledStudents.length === 0} title={enrolledStudents.length === 0 ? 'Add a student before printing the roster' : 'Print class roster'} onClick={() => generateRosterPrint(program.name, grade.name, group.name, `${group.day} ${group.time}`, enrolledStudents, settings.academyName)}>Print roster</AtlasActionButton>
+                     {can('students.edit') && <AtlasActionButton icon={Printer} disabled={accessCandidates.length === 0} title="Review this group's learner accounts and print ready access cards" onClick={() => { setSelectedAccessIds([]); setIsAccessPrintOpen(true); }}>Print learner access</AtlasActionButton>}
                      <AtlasActionButton icon={ClipboardCheck} onClick={() => navigateTo('attendance')}>Take attendance</AtlasActionButton>
                      {can('students.enroll') && <AtlasActionButton icon={Plus} variant="primary" onClick={handleEnroll}>Add student</AtlasActionButton>}
                   </>
@@ -148,6 +192,34 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                   </>
                )}
             </section>
+            <Modal isOpen={isAccessPrintOpen} onClose={() => setIsAccessPrintOpen(false)} title={`Print access · ${group.name}`} size="lg">
+               <div className="space-y-4">
+                  <p className="text-sm text-slate-300">Select the learners whose portal access cards you want to hand out in class. Only this group is included.</p>
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 p-3">
+                     <label className="flex items-center gap-2 text-sm font-bold text-white">
+                        <input type="checkbox" checked={readyAccessStudents.length > 0 && selectedAccessStudents.length === readyAccessStudents.length} disabled={readyAccessStudents.length === 0} onChange={() => setSelectedAccessIds(selectedAccessStudents.length === readyAccessStudents.length ? [] : readyAccessStudents.map(student => student.id))} className="h-4 w-4 accent-teal-400" />
+                        Select all ready ({readyAccessStudents.length})
+                     </label>
+                     <span className="text-xs text-slate-400">{selectedAccessStudents.length} selected</span>
+                  </div>
+                  <div className="max-h-[50vh] divide-y divide-white/10 overflow-y-auto rounded-lg border border-white/10">
+                     {accessCandidates.map(student => {
+                        const ready = readyAccessIds.has(student.id);
+                        return (
+                           <div key={student.id} className={`flex items-center gap-3 px-3 py-3 ${ready ? 'hover:bg-white/[0.04]' : 'opacity-65'}`}>
+                              <label className={`flex min-w-0 flex-1 items-center gap-3 ${ready ? 'cursor-pointer' : ''}`}>
+                                 <input type="checkbox" checked={ready && selectedAccessIds.includes(student.id)} disabled={!ready} onChange={() => setSelectedAccessIds(previous => previous.includes(student.id) ? previous.filter(id => id !== student.id) : [...previous, student.id])} aria-label={`Select ${student.name} access card`} className="h-4 w-4 shrink-0 accent-teal-400" />
+                                 <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{student.name}</strong><span className="block truncate text-xs text-slate-400">{ready ? student.loginInfo!.email : student.organizationId !== currentOrganization?.id ? 'Account is outside this organization' : student.status === 'inactive' ? 'Learner record is inactive' : !student.loginInfo?.email ? 'Learner access not created' : !student.loginInfo?.uid ? 'Account link is incomplete' : 'Printable password unavailable'}</span></span>
+                              </label>
+                              {!ready && <button type="button" onClick={() => { setIsAccessPrintOpen(false); navigateTo('student-details', { studentId: student.id }); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs font-bold text-teal-200 hover:bg-white/[0.06]">Open profile</button>}
+                           </div>
+                        );
+                     })}
+                  </div>
+                  <p className="text-xs text-slate-400">The printout contains saved initial passwords, which may be outdated after a reset. Check access before distribution, collect unused pages, and hand each card to the correct learner or guardian.</p>
+                  <button type="button" disabled={selectedAccessStudents.length === 0} onClick={handlePrintAccess} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} />Print {selectedAccessStudents.length} access card{selectedAccessStudents.length === 1 ? '' : 's'}</button>
+               </div>
+            </Modal>
          </div>
       );
    }

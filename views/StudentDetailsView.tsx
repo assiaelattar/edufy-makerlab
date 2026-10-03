@@ -11,6 +11,8 @@ import { auth, db } from '../services/firebase';
 import { Modal } from '../components/Modal';
 import { Enrollment, Payment, StudentProject } from '../types';
 import { getTheme } from '../utils/theme';
+import { config } from '../utils/config';
+import { normalizePhoneForWhatsApp } from '../utils/whatsappPhone';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { AcademicsTab } from './student-details/AcademicsTab';
 import { FinanceTab } from './student-details/FinanceTab';
@@ -54,6 +56,8 @@ export const StudentDetailsView = ({
     const [showPassword, setShowPassword] = useState(false);
     const [showParentPassword, setShowParentPassword] = useState(false);
     const [isGeneratingAccess, setIsGeneratingAccess] = useState(false);
+    const [isSchedulePrintOpen, setIsSchedulePrintOpen] = useState(false);
+    const [selectedScheduleProgramId, setSelectedScheduleProgramId] = useState('');
     const [confirmModal, setConfirmModal] = useState<any>({ isOpen: false, title: '', message: '', type: 'danger', isLoading: false, action: async () => { } });
     const [activeTab, setActiveTab] = useState('Academics');
     const [isEditingStudent, setIsEditingStudent] = useState(false);
@@ -669,11 +673,12 @@ export const StudentDetailsView = ({
         const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
         const msg = `Hello! Here is the weekly schedule for ${student.name} at ${academyName}.\n\nStudent portal:\n${window.location.origin}\n\nLogin email: ${student.loginInfo?.email || 'Not created yet'}\nPassword: ${student.loginInfo?.initialPassword || 'Contact the academy'}\n\nSee you in class.`;
 
-        const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+        const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
         if (!shareWindow) {
             await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try sharing the schedule again.', 'warning');
             return;
         }
+        shareWindow.opener = null;
 
         try {
             await updateDoc(doc(db, 'students', student.id) as any, {
@@ -685,16 +690,39 @@ export const StudentDetailsView = ({
         }
     };
 
-    const shareCredentialsWhatsApp = async () => {
-        if (!student.loginInfo || !student.parentPhone) {
-            await showAlert('Credentials cannot be shared', 'Missing student login info or parent phone number.', 'warning');
+    const shareAccount = async (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => {
+        const account = role === 'student' ? student.loginInfo : student.parentLoginInfo;
+        if (!account?.email) {
+            await showAlert('Account unavailable', `Create ${role} access before sharing it.`, 'warning');
             return;
         }
-        const msg = `Hello! Here are the login credentials for ${student.name}'s student portal:\n\nLink: ${window.location.origin}\nEmail: ${student.loginInfo.email}\nPassword: ${student.loginInfo.initialPassword || '********'}`;
-        const shareWindow = window.open(`https://wa.me/${student.parentPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
-        if (!shareWindow) {
-            await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try sharing the credentials again.', 'warning');
+
+        const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
+        const parentPortalUrl = `${window.location.origin}/parent-portal`;
+        const subject = `${academyName} ${role === 'student' ? 'learner' : 'family'} account for ${student.name}`;
+        const message = role === 'student'
+            ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n${student.loginInfo?.initialPassword ? `Password: ${student.loginInfo.initialPassword}` : 'Please contact the academy for the account password.'}\n\nPlease keep these details private.`
+            : `Hello, here is your ${academyName} family portal access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nEmail: ${account.email}\n\nUse the private setup email from Edufy to set your password. If needed, request a password reset from the sign-in page.`;
+
+        if (channel === 'email') {
+            const recipient = role === 'parent'
+                ? account.email
+                : (student.email && student.email !== account.email ? student.email : student.parentLoginInfo?.email || '');
+            window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+            return;
         }
+
+        const phone = normalizePhoneForWhatsApp(student.parentPhone);
+        if (!phone) {
+            await showAlert('Parent phone missing', 'Add a parent phone number before sharing through WhatsApp.', 'warning');
+            return;
+        }
+        const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+        if (!shareWindow) {
+            await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try again.', 'warning');
+            return;
+        }
+        shareWindow.opener = null;
     };
 
     const copyCredential = async (label: string, value: string) => {
@@ -719,6 +747,22 @@ export const StudentDetailsView = ({
     }
 
     const activeEnrollments = studentEnrollments.filter(enrollment => enrollment.status === 'active');
+    const schedulePrograms = Array.from(new Map(activeEnrollments.map(enrollment => [enrollment.programId || enrollment.programName, {
+        id: enrollment.programId || enrollment.programName,
+        name: enrollment.programName
+    }])).values());
+    const openSchedulePrint = () => {
+        setSelectedScheduleProgramId('');
+        setIsSchedulePrintOpen(true);
+    };
+    const printSelectedSchedule = () => {
+        const selectedEnrollments = activeEnrollments.filter(enrollment =>
+            (enrollment.programId || enrollment.programName) === selectedScheduleProgramId
+        );
+        if (selectedEnrollments.length === 0) return;
+        generateStudentSchedulePrint(student, selectedEnrollments, settings);
+        setIsSchedulePrintOpen(false);
+    };
     const outstandingBalance = studentEnrollments.reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
     const attendedSessions = studentAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
     const attendanceRate = studentAttendance.length > 0 ? Math.round((attendedSessions / studentAttendance.length) * 100) : null;
@@ -748,7 +792,7 @@ export const StudentDetailsView = ({
                     </div>
                     <div className="edu-student-details-v1__actions">
                         <button type="button" onClick={() => setViewMode('student_preview')}><Eye size={17} />Student view</button>
-                        <button type="button" onClick={() => generateStudentSchedulePrint(student, studentEnrollments, settings)}><Printer size={17} />Schedule</button>
+                        <button type="button" onClick={openSchedulePrint}><Printer size={17} />Schedule</button>
                         <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>
                         <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>
                     </div>
@@ -765,7 +809,7 @@ export const StudentDetailsView = ({
                     {membershipEndStr && <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">STEM program until {membershipEndStr}</span>}
                 </>}
                 actions={<>
-                    <AtlasActionButton icon={Printer} onClick={() => generateStudentSchedulePrint(student, studentEnrollments, settings)}>Schedule</AtlasActionButton>
+                    <AtlasActionButton icon={Printer} onClick={openSchedulePrint}>Schedule</AtlasActionButton>
                     <AtlasActionButton icon={student.lastScheduleSharedAt ? CheckCircle2 : Share2} onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>
                         {student.lastScheduleSharedAt ? 'Shared' : 'Share'}
                     </AtlasActionButton>
@@ -877,7 +921,7 @@ export const StudentDetailsView = ({
                         handleCreateParentAccess={handleCreateParentAccess}
                         isGeneratingAccess={isGeneratingAccess}
                         generateAccessCardPrint={generateAccessCardPrint}
-                        shareCredentialsWhatsApp={shareCredentialsWhatsApp}
+                        shareAccount={shareAccount}
                         setCredentialsModal={setCredentialsModal}
                         settings={settings}
                         isAdult={isAdult}
@@ -885,6 +929,21 @@ export const StudentDetailsView = ({
                 </aside>
             </div>
             {renderProjectModal()}
+            <Modal isOpen={isSchedulePrintOpen} onClose={() => setIsSchedulePrintOpen(false)} title="Print learner schedule">
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-300">Choose the program to include in {student.name}'s weekly schedule.</p>
+                    {schedulePrograms.length > 0 ? (
+                        <>
+                            <label className="block text-xs font-bold uppercase tracking-wide text-slate-400" htmlFor="schedule-program">Program</label>
+                            <select id="schedule-program" value={selectedScheduleProgramId} onChange={event => setSelectedScheduleProgramId(event.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white">
+                                <option value="">Select a program</option>
+                                {schedulePrograms.map(program => <option key={program.id} value={program.id}>{program.name}</option>)}
+                            </select>
+                            <button type="button" disabled={!selectedScheduleProgramId} onClick={printSelectedSchedule} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} />Open print preview</button>
+                        </>
+                    ) : <p className="text-sm text-amber-200">This learner has no active program to print.</p>}
+                </div>
+            </Modal>
             <Modal isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
                 <form onSubmit={handleSaveEnrollment} className="space-y-4">
                     <div className="bg-slate-950 p-3 rounded border border-slate-800 mb-4">

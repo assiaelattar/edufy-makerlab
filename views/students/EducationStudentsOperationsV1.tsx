@@ -98,13 +98,13 @@ type Props = {
 };
 
 const SMART_VIEWS: Array<{ id: SmartView; label: string }> = [
+  { id: 'all', label: 'All learners' },
   { id: 'attention', label: 'Needs action' },
   { id: 'contact', label: 'Contact gaps' },
   { id: 'profile', label: 'Profile details' },
   { id: 'enrollment', label: 'Not enrolled' },
   { id: 'placement', label: 'Needs a class' },
   { id: 'duplicates', label: 'Duplicates' },
-  { id: 'all', label: 'All learners' },
 ];
 
 const hasOperationalIssue = (issues: Array<keyof typeof STUDENT_DIRECTORY_ISSUE_LABELS>) =>
@@ -168,7 +168,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   onLinkParent,
   onOpenParentStatement,
 }) => {
-  const [smartView, setSmartView] = useState<SmartView>('attention');
+  const [smartView, setSmartView] = useState<SmartView>('all');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [selectedFamilyPhone, setSelectedFamilyPhone] = useState<string>('');
@@ -182,8 +182,8 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   const headingCopy = workspaceMode === 'students'
     ? {
       eyebrow: 'School community · student operations',
-      title: 'Who needs you today?',
-      description: 'Start with learners who need a decision. Search only when you already know who you are looking for.',
+      title: 'Find every learner.',
+      description: 'All learners are shown by default. Search by learner, family, phone or school, or choose a focused worklist.',
     }
     : workspaceMode === 'parents'
       ? {
@@ -330,7 +330,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
               <div className="edu-student-ops__search-row">
                 <label className="edu-student-ops__search">
                   <Search size={18} aria-hidden="true" />
-                  <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Find a student, family, phone or program" aria-label="Search students" />
+                  <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Find a learner, family, phone or school" aria-label="Search students" />
                   {searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search"><X size={16} /></button>}
                 </label>
                 <button type="button" className="edu-student-ops__filter-trigger" aria-expanded={showAdvancedFilters} onClick={() => setShowAdvancedFilters(value => !value)}>

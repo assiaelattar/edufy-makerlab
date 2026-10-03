@@ -747,25 +747,6 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
 
         .footer { margin-top: 30px; text-align: center; font-size: 11px; color: #94a3b8; }
 
-        /* Flyer Section */
-        .flyer-section { 
-            text-align: center; 
-            page-break-after: always; 
-            margin-bottom: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 90vh;
-        }
-        .flyer-img { 
-            max-width: 95%; 
-            max-height: 90vh;
-            border-radius: 16px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1); 
-            border: 1px solid #e2e8f0; 
-            object-fit: contain;
-        }
-
         @media print {
           body { padding: 0; }
           .grid { gap: 5px; }
@@ -773,17 +754,11 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
           .class-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #bfdbfe; }
           .credential-box { border: 1px solid #94a3b8; }
           .credentials-section { border: 1px solid #94a3b8; background: white; }
-          .flyer-section { min-height: 100vh; margin: 0; }
         }
       </style>
     </head>
     <body>
-      <!-- Flyer Section (Page 1) -->
-      <div class="flyer-section">
-         <img src="${window.location.origin}/images/flyer.png" class="flyer-img" alt="Information Flyer" />
-      </div>
-
-      <!-- Schedule Section (Page 2) -->
+      <!-- Schedule Section -->
       <div class="header">
         <div class="student-info">
           <h1>${student.name}</h1>
