@@ -8,10 +8,9 @@ import { ProjectManager } from './factory/ProjectManager';
 import { FactoryDashboard } from './factory/FactoryDashboard';
 import { FactoryToolbox } from './factory/FactoryToolbox';
 import { GradeProjectFilter } from './factory/GradeProjectFilter';
-import { ProjectSelector } from './ProjectSelector';
 import { MissionGallery } from './factory/MissionGallery';
 import { GamificationManager } from './admin/GamificationManager';
-import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, Users, Hammer, Filter, Eye, Settings, BookOpen, Trophy, MonitorPlay, Upload, FolderKanban, ClipboardCheck } from 'lucide-react';
+import { Layout, Briefcase, GitMerge, Hexagon, Award, LogOut, Menu, X, Users, Hammer, Filter, Eye, Settings, Trophy, MonitorPlay, Upload, FolderKanban, ClipboardCheck, LibraryBig, ChevronDown, Zap } from 'lucide-react';
 import { config } from '../utils/config';
 
 import { useAuth } from '../context/AuthContext'; // Import useAuth for user profile
@@ -26,16 +25,14 @@ interface SidebarItemProps {
 
 const SidebarItem: React.FC<SidebarItemProps> = ({ icon: Icon, label, active, onClick, badge }) => (
   <button
+    type="button"
     onClick={onClick}
-    className={`group relative flex min-h-11 w-full items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${active
-      ? 'bg-white text-slate-950 shadow-sm'
-      : 'text-slate-400 hover:bg-white/8 hover:text-white'
-      }`}
+    aria-current={active ? 'page' : undefined}
+    className={`sq-factory-nav-item ${active ? 'is-active' : ''}`}
   >
-    <Icon size={18} className={`relative z-10 ${active ? 'text-blue-700' : ''}`} />
-    <span className="relative z-10">{label}</span>
-    {Boolean(badge) && <span className="relative z-10 ml-auto rounded-full bg-amber-400 px-2 py-0.5 text-[10px] font-black text-slate-950">{badge}</span>}
-    {active && !badge && <div className="absolute right-3 z-10 h-1.5 w-1.5 rounded-full bg-blue-600"></div>}
+    <Icon size={18} aria-hidden="true" />
+    <span>{label}</span>
+    {Boolean(badge) && <span className="sq-factory-nav-badge" aria-label={`${badge} awaiting review`}>{badge}</span>}
   </button>
 );
 
@@ -47,22 +44,30 @@ import { StudentManager } from './factory/StudentManager';
 import { ProjectEditor } from './factory/ProjectEditor';
 import { ProjectImporter } from './factory/ProjectImporter';
 import { ProjectDetailsEnhanced } from './ProjectDetailsEnhanced';
-import { FactoryEmptyState, FactoryPage, FactoryPageHeader, factoryButton } from './factory/FactoryPage';
+import { FactoryEmptyState, FactoryPage, FactoryPageHeader } from './factory/FactoryPage';
+import { ReviewSubmissionAlerts } from './factory/ReviewSubmissionAlerts';
+import { ResourceLibrary } from './ResourceLibrary';
+import './factory/factory-dispatch.css';
+import './factory/factory-modern.css';
+import './factory/factory-learning-live.css';
 
 export const InstructorFactory: React.FC = () => {
   // Destructure projectTemplates here
-  const { projectTemplates, studentProjects } = useFactoryData();
-  const { userProfile, signOut } = useAuth();
-  const [view, setView] = useState<'dashboard' | 'reviews' | 'projects' | 'gallery' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview' | 'gamification'>('dashboard');
+  const { projectTemplates, studentProjects, students, studentProjectsLoading } = useFactoryData();
+  const { user, userProfile, signOut } = useAuth();
+  const [view, setView] = useState<'dashboard' | 'reviews' | 'projects' | 'resources' | 'gallery' | 'grades' | 'workflows' | 'stations' | 'badges' | 'makers' | 'toolbox' | 'preview' | 'gamification'>('dashboard');
   const [reviewingProjectId, setReviewingProjectId] = useState<string | null>(null);
+  const [reviewingStepId, setReviewingStepId] = useState<string | undefined>();
   const [reviewInitialTab, setReviewInitialTab] = useState<'proof' | 'history'>('proof');
   const [filterTemplateId, setFilterTemplateId] = useState<string | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isSetupOpen, setIsSetupOpen] = useState(false);
 
   const viewLabels: Record<typeof view, string> = {
     dashboard: 'Overview',
     reviews: 'Review inbox',
     projects: 'Mission library',
+    resources: 'Resources & tools',
     gallery: 'Template gallery',
     grades: 'Class progress',
     workflows: 'Workflows',
@@ -74,6 +79,14 @@ export const InstructorFactory: React.FC = () => {
     gamification: 'Gamification',
   };
   const pendingReviewCount = studentProjects.filter(needsReview).length;
+  const openReviewAlert = (projectId: string, stepId?: string) => {
+    setView('reviews');
+    setReviewInitialTab('proof');
+    setReviewingProjectId(projectId);
+    setReviewingStepId(stepId);
+    setFilterTemplateId(null);
+    setIsMobileOpen(false);
+  };
 
   // Project Editor State
   const [isProjectEditorOpen, setIsProjectEditorOpen] = useState(false);
@@ -105,7 +118,7 @@ export const InstructorFactory: React.FC = () => {
   };
 
   return (
-    <div className="sparkfactory-shell flex h-screen bg-[#f4f7fb] font-sans text-slate-950">
+    <div className="sparkfactory-shell flex h-screen text-slate-950">
       {/* Mobile Overlay */}
       {isMobileOpen && (
         <div
@@ -115,68 +128,44 @@ export const InstructorFactory: React.FC = () => {
       )}
       {/* Sidebar - Fixed on Mobile, Static/Fixed on Desktop */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-[252px] bg-[#0b172a] text-white flex flex-col shrink-0 shadow-2xl transition-transform duration-300 ease-in-out
+        sq-factory-sidebar fixed inset-y-0 left-0 z-50 w-[252px] text-white flex flex-col shrink-0 transition-transform duration-300 ease-in-out
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         md:relative
       `}>
-        <div className="flex items-center justify-between px-5 pb-5 pt-6">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-white">
-              SparkFactory
-            </h1>
-            <p className="mt-1 text-[10px] font-extrabold uppercase tracking-[0.2em] text-sky-300">Instructor studio</p>
+        <div className="sq-factory-brand flex items-center justify-between px-5 pb-5 pt-6">
+          <div className="flex items-center gap-3">
+            <span className="sq-factory-brand-mark" aria-hidden="true"><Zap size={21} fill="currentColor" /></span>
+            <div><h1>SparkQuest</h1><p>Factory · instructor studio</p></div>
           </div>
           <button onClick={() => setIsMobileOpen(false)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-white/10 hover:text-white md:hidden" aria-label="Close navigation">
             <X size={24} />
           </button>
         </div>
 
-        <nav className="flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+        <nav className="sq-factory-nav flex-1 px-3 space-y-1 overflow-y-auto custom-scrollbar" aria-label="Factory navigation">
           <SidebarItem icon={Layout} label="Overview" active={view === 'dashboard'} onClick={() => { setView('dashboard'); setFilterTemplateId(null); setIsMobileOpen(false); }} />
-
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Operate</p>
-          </div>
-          <SidebarItem icon={Briefcase} label="Missions" active={view === 'projects'} onClick={() => { setView('projects'); setIsMobileOpen(false); }} />
           <SidebarItem icon={ClipboardCheck} label="Review Inbox" badge={pendingReviewCount} active={view === 'reviews'} onClick={() => { setView('reviews'); setFilterTemplateId(null); setIsMobileOpen(false); }} />
+          <SidebarItem icon={Briefcase} label="Missions" active={view === 'projects' || view === 'gallery'} onClick={() => { setView('projects'); setIsMobileOpen(false); }} />
           <SidebarItem icon={Users} label="Students" active={view === 'makers'} onClick={() => { setView('makers'); setIsMobileOpen(false); }} />
           <SidebarItem icon={Filter} label="Class Progress" active={view === 'grades'} onClick={() => { setView('grades'); setIsMobileOpen(false); }} />
-
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Build</p>
-          </div>
-          <SidebarItem icon={BookOpen} label="Templates" active={view === 'gallery'} onClick={() => { setView('gallery'); setIsMobileOpen(false); }} />
-          <SidebarItem icon={GitMerge} label="Workflows" active={view === 'workflows'} onClick={() => { setView('workflows'); setIsMobileOpen(false); }} />
-
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Configure</p>
-          </div>
-          <SidebarItem icon={Hexagon} label="Stations" active={view === 'stations'} onClick={() => { setView('stations'); setIsMobileOpen(false); }} />
-          <SidebarItem icon={Award} label="Badges" active={view === 'badges'} onClick={() => { setView('badges'); setIsMobileOpen(false); }} />
-          <SidebarItem icon={Trophy} label="Gamification" active={view === 'gamification'} onClick={() => { setView('gamification'); setIsMobileOpen(false); }} />
-          <SidebarItem icon={Hammer} label="Toolbox" active={view === 'toolbox'} onClick={() => { setView('toolbox'); setIsMobileOpen(false); }} />
-
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Classroom Access</p>
-          </div>
-          <div className="mx-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-relaxed text-amber-200">
-            <div className="mb-1 flex items-center gap-2 font-black"><MonitorPlay size={16} /> Classroom PIN mode</div>
-            Secure kiosk sign-in is being rebuilt. Students should use their Edufy learner accounts for now.
-          </div>
-
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Preview</p>
-          </div>
+          <SidebarItem icon={LibraryBig} label="Resources & tools" active={view === 'resources'} onClick={() => { setView('resources'); setIsMobileOpen(false); }} />
+          <div className="sq-factory-nav-divider" />
+          <button type="button" className="sq-factory-nav-group" aria-expanded={isSetupOpen} onClick={() => setIsSetupOpen(value => !value)}><span>Studio setup</span><ChevronDown size={17} aria-hidden="true" /></button>
+          {isSetupOpen && <div className="sq-factory-nav-subgroup">
+            <SidebarItem icon={GitMerge} label="Workflows" active={view === 'workflows'} onClick={() => { setView('workflows'); setIsMobileOpen(false); }} />
+            <SidebarItem icon={Hexagon} label="Stations" active={view === 'stations'} onClick={() => { setView('stations'); setIsMobileOpen(false); }} />
+            <SidebarItem icon={Award} label="Badges" active={view === 'badges'} onClick={() => { setView('badges'); setIsMobileOpen(false); }} />
+            <SidebarItem icon={Trophy} label="Gamification" active={view === 'gamification'} onClick={() => { setView('gamification'); setIsMobileOpen(false); }} />
+            <SidebarItem icon={Hammer} label="Toolbox" active={view === 'toolbox'} onClick={() => { setView('toolbox'); setIsMobileOpen(false); }} />
+            <p className="sq-factory-setup-note"><MonitorPlay size={15} aria-hidden="true" /> Classroom PIN mode is being rebuilt. Learners should use Edufy accounts.</p>
+          </div>}
+          <div className="sq-factory-nav-divider" />
           <SidebarItem icon={Eye} label="Student View" active={view === 'preview'} onClick={() => { setView('preview'); setIsMobileOpen(false); }} />
-
-          <div className="pt-4 pb-1">
-            <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">System</p>
-          </div>
           <button
             onClick={() => {
               window.open(config.erpUrl, '_blank', 'noopener,noreferrer');
             }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-bold transition-all text-slate-400 hover:text-white hover:bg-slate-800"
+            className="sq-factory-nav-item"
           >
             <Settings size={18} />
             System Admin
@@ -202,50 +191,44 @@ export const InstructorFactory: React.FC = () => {
       {/* Main Content Wrapper */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
 
-        {/* Top Header */}
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 text-black sm:px-7">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsMobileOpen(true)} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 md:hidden" aria-label="Open navigation">
-              <Menu size={24} />
-            </button>
-            <div className="hidden md:block">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">Instructor studio</p>
-              <h2 className="text-lg font-black text-slate-950">{viewLabels[view]}</h2>
-            </div>
-            {view === 'projects' && (
-              <button
-                onClick={() => setIsImportOpen(true)}
-                className={`${factoryButton.secondary} ml-2`}
-              >
-                <Upload size={16} /> Import CSV
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-3 pl-2">
-              <div className="text-right hidden md:block">
-                <p className="text-sm font-bold text-slate-800">{userProfile?.name || 'Instructor'}</p>
-                <p className="text-xs text-slate-500 font-medium">Command Access</p>
-              </div>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-sm">
-                {userProfile?.name?.[0] || 'I'}
-              </div>
-            </div>
+        <header className="sq-factory-topbar sq-modern-topbar">
+          <div className="sq-modern-brand"><button type="button" className="sq-modern-menu" onClick={() => setIsMobileOpen(true)} aria-label="Open navigation"><Menu size={21} /></button><span className="sq-modern-brand-symbol" aria-hidden="true"><Zap size={19} fill="currentColor" /></span><span>SparkQuest <b>Factory</b></span></div>
+          <nav className="sq-modern-topnav" aria-label="Factory sections">
+            <button type="button" aria-current={view === 'dashboard' ? 'page' : undefined} onClick={() => { setView('dashboard'); setFilterTemplateId(null); }}><Layout size={15} /> Overview</button>
+            <button type="button" aria-current={view === 'projects' || view === 'gallery' ? 'page' : undefined} onClick={() => setView('projects')}>Missions</button>
+            <button type="button" aria-current={view === 'reviews' ? 'page' : undefined} onClick={() => { setView('reviews'); setFilterTemplateId(null); }}>Review {pendingReviewCount > 0 && <span>{pendingReviewCount}</span>}</button>
+            <button type="button" aria-current={view === 'makers' ? 'page' : undefined} onClick={() => setView('makers')}>Students</button>
+            <button type="button" aria-current={view === 'grades' ? 'page' : undefined} onClick={() => setView('grades')}>Progress</button>
+          </nav>
+          <div className="sq-modern-header-actions">
+            <div className="sq-modern-setup-wrap"><button type="button" className="sq-modern-setup-trigger" aria-expanded={isSetupOpen} onClick={() => setIsSetupOpen(value => !value)}>More <ChevronDown size={15} /></button>{isSetupOpen && <div className="sq-modern-setup-menu"><button type="button" onClick={() => { setView('makers'); setIsSetupOpen(false); }}>Students</button><button type="button" onClick={() => { setView('grades'); setIsSetupOpen(false); }}>Class progress</button><button type="button" onClick={() => { setView('resources'); setIsSetupOpen(false); }}>Resources & tools</button><button type="button" onClick={() => { setView('workflows'); setIsSetupOpen(false); }}>Workflows</button><button type="button" onClick={() => { setView('stations'); setIsSetupOpen(false); }}>Stations</button><button type="button" onClick={() => { setView('badges'); setIsSetupOpen(false); }}>Badges</button><button type="button" onClick={() => { setView('gamification'); setIsSetupOpen(false); }}>Gamification</button><button type="button" onClick={() => { setView('toolbox'); setIsSetupOpen(false); }}>Toolbox</button><button type="button" onClick={() => { setView('preview'); setIsSetupOpen(false); }}>Student view</button><button type="button" onClick={() => { window.open(config.erpUrl, '_blank', 'noopener,noreferrer'); setIsSetupOpen(false); }}>System Admin</button><button type="button" onClick={async () => { if (confirm('Sign out of SparkQuest Factory?')) { await signOut(); window.location.reload(); } }}>Log out</button></div>}</div>
+            <ReviewSubmissionAlerts
+              projects={studentProjects}
+              students={students}
+              loading={studentProjectsLoading}
+              organizationId={userProfile?.organizationId}
+              instructorId={user?.uid}
+              onOpenReview={openReviewAlert}
+            />
+            <div className="sq-modern-profile"><span>{userProfile?.name || 'Instructor'}</span><div className="sq-modern-avatar">{userProfile?.name?.[0] || 'I'}</div></div>
           </div>
         </header>
+        {(view === 'projects' || view === 'gallery') && <div className="sq-modern-subbar"><span>{viewLabels[view]}</span><div className="sq-factory-mode-switch" aria-label="Mission views"><button type="button" aria-current={view === 'projects' ? 'page' : undefined} onClick={() => setView('projects')}>Library</button><button type="button" aria-current={view === 'gallery' ? 'page' : undefined} onClick={() => setView('gallery')}>Templates</button></div>{view === 'projects' && <button type="button" className="sq-modern-subbar-action" onClick={() => setIsImportOpen(true)}><Upload size={15} /> Import CSV</button>}</div>}
 
         {/* Scrollable Content */}
-        <main className="w-full flex-1 overflow-y-auto bg-[#f4f7fb]">
+        <main id="factory-main" className="sq-factory-main w-full flex-1 overflow-y-auto">
           {view === 'dashboard' && (
             <FactoryDashboard
-              onReviewProject={(id) => setReviewingProjectId(id)}
-              onNavigate={(v: any) => setView(v)}
+              onReviewProject={(id, stepId) => { setReviewInitialTab('proof'); setReviewingStepId(stepId); setReviewingProjectId(id); }}
+              onNavigate={setView}
+              onCreateMission={() => handleCreateMission()}
+              onEditMission={(id) => { const mission = projectTemplates.find(project => project.id === id); if (mission) { setEditingProject(mission); setIsProjectEditorOpen(true); } else setView('projects'); }}
               filterTemplateId={filterTemplateId}
               onClearFilter={() => setFilterTemplateId(null)}
             />
           )}
-          {view === 'projects' && <ProjectManager onViewSubmissions={handleViewSubmissions} onPreviewProject={handlePreviewProject} />}
+          {view === 'projects' && <ProjectManager onViewSubmissions={handleViewSubmissions} onPreviewProject={handlePreviewProject} onBrowseTemplates={() => setView('gallery')} />}
+          {view === 'resources' && <ResourceLibrary embedded />}
           {view === 'gallery' && <MissionGallery onSelectTemplate={(t) => handleCreateMission()} />}
           {view === 'grades' && <GradeProjectFilter onCreateMission={handleCreateMission} />}
           {view === 'workflows' && <FactoryPage><WorkflowManager /></FactoryPage>}
@@ -256,7 +239,7 @@ export const InstructorFactory: React.FC = () => {
           )}
           {view === 'reviews' && (
             <ReviewInbox
-              onReviewProject={(id) => setReviewingProjectId(id)}
+              onReviewProject={(id, stepId) => { setReviewingStepId(stepId); setReviewingProjectId(id); }}
             />
           )}
           {view === 'toolbox' && <FactoryPage><FactoryToolbox /></FactoryPage>}
@@ -300,8 +283,9 @@ export const InstructorFactory: React.FC = () => {
         reviewingProjectId && (
           <ReviewModal
             projectId={reviewingProjectId}
+            initialStepId={reviewingStepId}
             initialTab={reviewInitialTab}
-            onClose={() => { setReviewingProjectId(null); setReviewInitialTab('proof'); }}
+            onClose={() => { setReviewingProjectId(null); setReviewingStepId(undefined); setReviewInitialTab('proof'); }}
           />
         )
       }

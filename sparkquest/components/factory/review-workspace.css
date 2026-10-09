@@ -1,5 +1,7 @@
 .sq-review-workspace { background: #f4f7fc; color: #17243b; font-family: inherit; }
 .sq-review-workspace button, .sq-review-queue button { min-height: 44px; border: 1px solid #cbd5e4; border-radius: 10px; padding: 10px 15px; background: white; font-weight: 750; color: #17243b; }
+.sq-review-dialog-avatar { display: inline-grid !important; width: 42px !important; height: 42px !important; place-items: center; overflow: hidden; border: 2px solid #fff; border-radius: 14px; color: #fff; background: linear-gradient(145deg, #2f78e8, #634ec8); box-shadow: 0 3px 0 #b7cfe0; font-size: 16px; font-weight: 900; }
+.sq-review-dialog-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .sq-review-workspace button:disabled, .sq-review-queue button:disabled { cursor: not-allowed; background: #edf1f7; color: #59677e; }
 .sq-review-workspace button:focus-visible, .sq-review-queue button:focus-visible, .sq-review-workspace a:focus-visible { outline: 3px solid #2463eb; outline-offset: 3px; }
 .sq-review-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
@@ -16,6 +18,13 @@
 .sq-review-proof img, .sq-review-proof video { max-height: 380px; width: 100%; object-fit: contain; border-radius: 8px; background: #edf1f7; }
 .sq-review-proof audio { width: 100%; }
 .sq-review-proof a { display: flex; gap: 8px; align-items: center; font-weight: 750; color: #1748b4; min-height: 40px; overflow-wrap: anywhere; }
+.sq-review-versions { display: flex; flex-direction: column; gap: 10px; }
+.sq-review-versions h4 { margin: 0; }
+.sq-review-versions p { margin: 0; color: #59677e; font-size: 13px; }
+.sq-review-versions > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.sq-review-workspace .sq-review-versions button { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 135px; text-align: left; }
+.sq-review-versions button[aria-pressed=true] { border-color: #2463eb; background: #e8efff; color: #1748b4; }
+.sq-review-versions small { color: #59677e; font-size: 12px; }
 .sq-review-note, .sq-review-workspace blockquote { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.65; }
 .sq-review-workspace blockquote { border-left: 3px solid #2463eb; padding: 12px 16px; background: #eef4ff; }
 .sq-review-workspace details { border: 1px solid #d7dfeb; padding: 12px; border-radius: 10px; }

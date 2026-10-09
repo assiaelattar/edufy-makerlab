@@ -8,6 +8,7 @@ import { projectAcademicYear, currentAcademicYear } from '../../utils/academicYe
 import { SparkbookDialog } from '../SparkbookDialog';
 import { FactoryPage, FactoryPageHeader, factoryButton } from './FactoryPage';
 import './instructor-learner.css';
+import { StudentAvatar } from './StudentAvatar';
 
 export type LearnerWorkspaceData = ReturnType<typeof learnerWorkspace>;
 const date = (value: unknown) => reviewTime(value) ? new Date(reviewTime(value)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Date not recorded';
@@ -30,7 +31,7 @@ export function InstructorLearnerWorkspace({ learner, data, onBack, onReview, on
     <FactoryPageHeader icon={UserRound} eyebrow="Instructor · learner workspace" title={learner.name}
       description="One place to follow builds, open submitted proof, and plan the next mission."
       actions={<><button type="button" className={factoryButton.secondary} onClick={onBack}><ArrowLeft size={17} /> All students</button><button type="button" className={factoryButton.primary} onClick={onAssign} disabled={!learner.assignable || !missionsReady}><Plus size={17} /> Assign mission</button></>}
-      meta={<div className="sq-desk-placements">{!membershipsReady ? <span>Class information unavailable while loading or retrying.</span> : data.placements.length ? data.placements.map(item => <span key={item.id}>{item.program} · {item.grade} · {item.group}</span>) : <span>No active class enrollment. Direct mission assignment is still available.</span>}</div>} />
+      meta={<div className="sq-learner-profile-meta"><StudentAvatar student={learner} name={learner.name} large /><div className="sq-desk-placements">{!membershipsReady ? <span>Class information unavailable while loading or retrying.</span> : data.placements.length ? data.placements.map(item => <span key={item.id}>{item.program} · {item.grade} · {item.group}</span>) : <span>No active class enrollment. Direct mission assignment is still available.</span>}</div></div>} />
     {notice}
     {learner.identityIssue && <p className="sq-desk-warning" role="alert">{learner.identityIssue} Existing canonically owned work remains available.</p>}
     <div className="sq-desk-overview">
@@ -56,7 +57,7 @@ export function InstructorLearnerWorkspace({ learner, data, onBack, onReview, on
           <div className="sq-desk-progress" role="progressbar" aria-label={`${project.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress.percent}><span style={{ width: `${progress.percent}%` }} /></div>
           {project.status !== 'published' && <p className="sq-desk-next"><strong>Next saved step:</strong> {progress.next}</p>}
           {pendingProofCount(project) > 0 && <p className="sq-desk-proof-count">{pendingProofCount(project)} step proof{pendingProofCount(project) === 1 ? '' : 's'} awaiting review</p>}
-          <div className="sq-desk-tools"><button type="button" className={needsReview(project) ? factoryButton.primary : factoryButton.secondary} onClick={() => onReview(project.id)}>{needsReview(project) ? 'Review submitted proof' : 'Open work & review history'} <ArrowUpRight size={17} /></button><button type="button" className={factoryButton.quiet} onClick={() => onEdit(project)}>Edit portfolio details</button></div>
+          <div className="sq-desk-tools"><button type="button" className={needsReview(project) ? factoryButton.primary : factoryButton.secondary} onClick={() => onReview(project.id)}>{needsReview(project) ? 'Review submitted proof' : 'Open work & review history'} <ArrowUpRight size={17} /></button><button type="button" className={factoryButton.quiet} onClick={() => onEdit(project)}>Edit project & step plan</button></div>
         </article>;
       })}{!projects.length && <div className="sq-desk-empty"><h3>No projects in {selectedYear}.</h3><p>Check another school year or assign a mission. Assigned missions do not become projects until a learner starts building.</p></div>}</div>}
     </section>}

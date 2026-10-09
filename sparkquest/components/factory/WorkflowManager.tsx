@@ -5,6 +5,7 @@ import { ProcessTemplate, ProcessPhase, Resource } from '../../types';
 import { Plus, Trash2, Edit2, GripVertical, Check, X, ArrowRight, LayoutList, ArrowUp, ArrowDown, Clock3, ShieldCheck } from 'lucide-react';
 import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
 import { normalizeWorkflowPhase } from '../../domain/workflowPipeline';
+import './factory-learning-setup.css';
 
 const phaseTone: Record<string, string> = {
     slate: 'border-slate-200 bg-slate-50 text-slate-700',
@@ -122,7 +123,7 @@ export const WorkflowManager: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="sq-learning-setup sq-learning-workflows space-y-6">
             <FactoryPageHeader
                 icon={LayoutList}
                 eyebrow="Mission builder"
@@ -135,7 +136,7 @@ export const WorkflowManager: React.FC = () => {
                 {processTemplates.map(wf => {
                     const usageCount = projectTemplates.filter(template => template.defaultWorkflowId === wf.id).length;
                     return (
-                    <div key={wf.id} className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                    <div key={wf.id} className="sq-learning-panel group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                         <div className="flex justify-between items-start mb-6">
                             <div>
                                 <div className="flex items-center gap-3">
@@ -159,7 +160,7 @@ export const WorkflowManager: React.FC = () => {
                         </div>
 
                         {/* Visualization of Steps */}
-                        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        <div className="sq-learning-workflow-phases flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
                             {wf.phases?.slice().sort((a, b) => a.order - b.order).map((phase, idx) => (
                                 <div key={idx} className="flex items-center shrink-0">
                                     <div className="flex flex-col items-center gap-2">
@@ -182,7 +183,7 @@ export const WorkflowManager: React.FC = () => {
             {/* Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                    <div role="dialog" aria-modal="true" aria-labelledby="workflow-dialog-title" className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <div role="dialog" aria-modal="true" aria-labelledby="workflow-dialog-title" className="sq-learning-dialog flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                             <h3 id="workflow-dialog-title" className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <LayoutList className="text-indigo-500" />

@@ -44,7 +44,7 @@ const isWebUrl = (value: string) => {
 
 export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) => {
     const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { marketingPosts, campaigns, leads, programs, students, bookings } = useAppContext(); // Get students for unified view
+    const { marketingPosts, campaigns, leads, programs, students } = useAppContext(); // Get students for unified view
     const { currentOrganization, can } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const orgId = currentOrganization?.id || '';

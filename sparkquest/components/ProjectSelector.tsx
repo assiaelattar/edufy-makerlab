@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, Timestamp, addDoc } from 'firebase/firestore';
 import { ProcessTemplate, StudentProject, Station } from '../types';
-import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, LayoutGrid, List, Sparkles } from 'lucide-react';
+import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, List, Sparkles } from 'lucide-react';
 
 import { AvatarSelector } from './AvatarSelector';
 import { CredentialWallet } from './CredentialWallet';
@@ -29,7 +29,8 @@ import { createVerifiedStudentIdentity } from '../domain/studentIdentity';
 import { missionIsVisibleToLearner } from '../domain/missionAssignment';
 import { resolveLinkedStudentRecord } from '../services/studentIdentity';
 import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from '../domain/workflowPipeline';
-import { LearnerWorkbench, LearnerMissionBoard } from './LearnerWorkbench';
+import { LearnerWorkbench, LearnerInstructorUpdates, LearnerMissionBoard } from './LearnerWorkbench';
+import { ResourceLibrary } from './ResourceLibrary';
 import { isVerifiedOwnedProject, readWorkbenchPin, rememberWorkbenchPin, workbenchStorageKey } from '../domain/learnerWorkbench';
 
 const ProjectDetailsEnhanced = React.lazy(() => import('./ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
@@ -72,6 +73,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
     // State for available templates
     const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+    const [stationLabels, setStationLabels] = useState<Record<string, string>>({});
     const [briefingTemplate, setBriefingTemplate] = useState<any | null>(null);
     const [briefingWorkflow, setBriefingWorkflow] = useState<ProcessTemplate | undefined>();
 
@@ -99,6 +101,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     const [isArcadeOpen, setIsArcadeOpen] = useState(false);
     const [isStoreOpen, setIsStoreOpen] = useState(false);
     const [isProgressOpen, setIsProgressOpen] = useState(false);
+    const [isResourceLibraryOpen, setIsResourceLibraryOpen] = useState(false);
 
     // 🎭 INSTRUCTOR PREVIEW MODE - simulate student view for any grade
     const [previewGradeId, setPreviewGradeId] = useState<string | null>(null);
@@ -204,7 +207,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
-    const [filterType, setFilterType] = useState<'all' | 'mission' | 'custom'>('all');
 
     const activeAcademicYear = currentAcademicYear();
     const workbenchKey = workbenchStorageKey(authProfile?.organizationId, effectiveStudentId);
@@ -218,16 +220,8 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     const previewProject = (id: string, record?: StudentProject) => {
         if (onPreviewProject) onPreviewProject(id, record || projects.find(project => project.id === id));
     };
-    const matchesProjectFilters = (project: StudentProject) => {
-        const isCustom = project.templateId === 'free-build-template' || project.templateId === 'showcase-template';
-        return project.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-            (filterType === 'all' || (filterType === 'custom' ? isCustom : !isCustom));
-    };
-    const filteredProjects = projects.filter(matchesProjectFilters);
     const filteredTemplates = availableTemplates.filter(template => {
-        const isCustom = template.id === 'free-build-template' || template.id === 'showcase-template';
-        return template.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-            (filterType === 'all' || (filterType === 'custom' ? isCustom : !isCustom));
+        return template.title.toLowerCase().includes(searchQuery.toLowerCase());
     });
 
     const handleSaveAvatar = async (url: string) => {
@@ -411,6 +405,9 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     .map(d => ({ id: d.id, ...d.data() } as Station))
                     .map(s => ({ ...s, status: getStationState(s) }))
                     .filter(s => s.status !== 'hidden'); // Show Active AND Future (Locked)
+                setStationLabels(Object.fromEntries(stationsSnap.docs
+                    .map(stationDoc => [stationDoc.id, String(stationDoc.data().label || '')] as const)
+                    .filter(([, label]) => Boolean(label))));
 
                 // 3. Fetch Available Templates
                 const allTemplates = templatesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
@@ -728,7 +725,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Students can access Arcade, Gallery, Portfolio, Pickup, Inventory even without missions
 
     return (
-        <div className={`sparkquest-dashboard sq-sparkbook sq-desktop-workspace flex h-screen w-full overflow-hidden relative selection:bg-orange-300 selection:text-slate-950 transition-colors duration-700 ${activeThemeDef.font || ''}`}>
+        <div className={`sparkquest-dashboard sq-sparkbook sq-desktop-workspace sq-learning-learner flex h-screen w-full overflow-hidden relative selection:bg-orange-300 selection:text-slate-950 transition-colors duration-700 ${activeThemeDef.font || ''}`}>
 
             {/* Background Effects */}
             <div className="sq-atmosphere absolute inset-0 z-0"></div>
@@ -755,6 +752,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 onOpenPickup={() => setIsPickupOpen(true)}
                 onOpenWallet={() => setIsWalletOpen(true)}
                 onOpenProgress={() => setIsProgressOpen(true)}
+                onOpenResources={() => setIsResourceLibraryOpen(true)}
                 onHome={() => document.getElementById('sq-workbench-home')?.scrollIntoView({ block: 'start' })}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onLogout={() => setIsLogoutConfirmOpen(true)}
@@ -768,6 +766,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 onOpenGallery={() => setIsGalleryOpen(true)}
                 onOpenWallet={() => setIsWalletOpen(true)}
                 onOpenProfile={() => setIsProfileOpen(true)}
+                onOpenResources={() => setIsResourceLibraryOpen(true)}
             />
 
             {/* MAIN CONTENT AREA */}
@@ -778,13 +777,15 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     <header id="sq-workbench-home" className="sq-dashboard-greeting">
                         <div className="sq-hero__copy">
                             <span className="sq-kicker">Your workbench · {activeAcademicYear}</span>
-                            <h2>Hi, {studentName || 'Maker'}.</h2>
+                            <h2>Hi, {studentName.trim().split(/\s+/)[0] || 'Maker'}.</h2>
+                            <p className="sq-dashboard-intro">Your next idea is waiting at the workbench.</p>
                             <p className={`sq-enrollment ${assignmentContext.gradeId || assignmentContext.gradeName ? 'is-ready' : 'is-waiting'}`}>
                                 {assignmentContext.gradeId || assignmentContext.gradeName
                                     ? `${activeAcademicYear} · ${assignmentContext.gradeName || assignmentContext.gradeId}${assignmentContext.groupName ? ` · ${assignmentContext.groupName}` : ''}`
                                     : `No active enrollment found for ${activeAcademicYear}`}
                             </p>
                         </div>
+                        <span className="sq-dashboard-motto" aria-hidden="true"><Sparkles size={18} /> Imagine · Make · Improve</span>
                         {/* Preview Mode Banner */}
                         {isAdminOrInstructor && availableGrades.length > 0 && (
                             <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-yellow-500/30">
@@ -827,13 +828,15 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
 
 
-                    <LearnerWorkbench projects={projects} academicYear={activeAcademicYear} lastOpenedId={lastOpenedId}
+                    <LearnerWorkbench projects={projects} academicYear={activeAcademicYear} stationLabels={stationLabels} lastOpenedId={lastOpenedId}
                         onContinue={continueProject} onPreview={previewProject}
                         onDelete={project => { setDeleteError(''); setDeleteCandidate(project); }}
                         onFieldLog={() => setIsPortfolioOpen(true)} />
+                    <LearnerInstructorUpdates projects={projects} academicYear={activeAcademicYear}
+                        onOpenProject={continueProject} onPreview={previewProject} />
 
                     {/* CONTROL BAR: Search & Filter & START BUTTON */}
-                    <div className="sq-control-deck sq-dashboard-controls flex flex-col md:flex-row gap-4 justify-between items-center mb-10 sticky top-3 z-40 p-3 md:p-4">
+                    <div className="sq-control-deck sq-dashboard-controls flex flex-col md:flex-row gap-4 justify-between items-center mb-10 p-3 md:p-4" aria-label="Find or start a mission">
                         {/* Search */}
                         <div className="relative w-full md:w-80 group">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-400 transition-colors">
@@ -886,37 +889,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                                 <span>Showcase Project</span>
                             </button>
 
-                            {/* Filter Tabs */}
-                            <div className="sq-filter flex p-1">
-                                <button
-                                    onClick={() => setFilterType('all')}
-                                    aria-pressed={filterType === 'all'}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${filterType === 'all' ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    All
-                                </button>
-                                <button
-                                    onClick={() => setFilterType('mission')}
-                                    aria-pressed={filterType === 'mission'}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filterType === 'mission' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    <LayoutGrid size={14} /> Missions
-                                </button>
-                                <button
-                                    onClick={() => setFilterType('custom')}
-                                    aria-pressed={filterType === 'custom'}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${filterType === 'custom' ? 'bg-amber-600 text-white shadow-lg shadow-amber-600/20' : 'text-slate-500 hover:text-slate-300'}`}
-                                >
-                                    <Zap size={14} /> My Projects
-                                </button>
-                            </div>
                         </div>
                     </div>
 
-                    <LearnerMissionBoard projects={filteredProjects} templates={filteredTemplates} academicYear={activeAcademicYear}
-                        onDiscover={template => void openMissionBrief(template)} onOpenProject={continueProject}
-                        onPreview={previewProject}
-                        onFieldLog={() => setIsPortfolioOpen(true)} isFiltered={Boolean(searchQuery || filterType !== 'all')} />
+                    <LearnerMissionBoard projects={projects} templates={filteredTemplates} academicYear={activeAcademicYear} stationLabels={stationLabels}
+                        onDiscover={template => void openMissionBrief(template)}
+                        onFieldLog={() => setIsPortfolioOpen(true)} isFiltered={Boolean(searchQuery)} />
 
                     {/* Footer Quote */}
                     <div className="text-center mt-12 mb-12 opacity-20 hover:opacity-40 transition-opacity">
@@ -1001,6 +979,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             />
             {/* Productivity Dashboard */}
             <ProductivityDashboard isOpen={isProgressOpen} onClose={() => setIsProgressOpen(false)} />
+            {isResourceLibraryOpen && <ResourceLibrary onClose={() => setIsResourceLibraryOpen(false)} />}
 
             <NameMissionDialog isOpen={namingModal.isOpen} name={namingModal.name} showcase={namingModal.template?.id === 'showcase-template'} busy={creatingNamedProject} error={namingError} onChange={name => setNamingModal(previous => ({ ...previous, name }))} onClose={() => setNamingModal(previous => ({ ...previous, isOpen: false }))} onSubmit={() => void handleCreateNamedProject()} />
         </div >

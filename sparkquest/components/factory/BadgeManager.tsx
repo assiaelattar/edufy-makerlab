@@ -4,6 +4,7 @@ import { useFactoryData } from '../../hooks/useFactoryData';
 import { Badge } from '../../types';
 import { Plus, Trash2, Edit2, Check, X, Award, Zap, Star, Trophy, Target, Crown, Medal } from 'lucide-react';
 import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
+import './factory-learning-setup.css';
 
 const ICONS = { Award, Zap, Star, Trophy, Target, Crown, Medal };
 
@@ -56,7 +57,7 @@ export const BadgeManager: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="sq-learning-setup sq-learning-badges space-y-6">
             <FactoryPageHeader
                 icon={Award}
                 eyebrow="Recognition"
@@ -67,7 +68,7 @@ export const BadgeManager: React.FC = () => {
 
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {badges.map(badge => (
-                    <div key={badge.id} className="group relative flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                    <div key={badge.id} className="sq-learning-panel group relative flex flex-col items-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm transition hover:border-blue-300 hover:shadow-md">
                         <div className={`w-16 h-16 rounded-full bg-${badge.color}-50 text-${badge.color}-500 flex items-center justify-center mb-4 text-3xl shadow-sm border border-${badge.color}-100`}>
                             {/* Simple Icon Mapping */}
                             {React.createElement((ICONS as any)[badge.icon] || Award, { size: 32 })}
@@ -99,7 +100,7 @@ export const BadgeManager: React.FC = () => {
             {/* Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-                    <div role="dialog" aria-modal="true" aria-labelledby="badge-dialog-title" className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+                    <div role="dialog" aria-modal="true" aria-labelledby="badge-dialog-title" className="sq-learning-dialog w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
                         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-amber-50/50">
                             <h3 id="badge-dialog-title" className="text-xl font-black text-slate-800 flex items-center gap-2">
                                 <Award className="text-amber-500" />

@@ -7,6 +7,7 @@ import {
 import { ProcessTemplate, ProjectTemplate, Resource, StudentProject } from '../types';
 import { getMissionReadiness, resolveMissionContent } from '../domain/missionContent';
 import { StudentMissionDetails as StudentMissionDetailsV2 } from './StudentMissionDetails';
+import { MissionOnboarding } from './MissionOnboarding';
 
 interface ProjectDetailsEnhancedProps {
     project: ProjectTemplate | StudentProject;
@@ -18,6 +19,7 @@ interface ProjectDetailsEnhancedProps {
 }
 
 const resourceIcon = (resource: Resource) => {
+    if (resource.type === 'tool') return Wrench;
     if (resource.type === 'video') return Video;
     if (resource.type === 'image') return Image;
     if (resource.type === 'link') return Link2;
@@ -131,7 +133,9 @@ export const ProjectDetailsEnhanced: React.FC<ProjectDetailsEnhancedProps> = ({
     const coverImage = project.thumbnailUrl || ('coverImage' in project ? project.coverImage : '');
 
     if (isStudent) {
-        return <StudentMissionDetailsV2 project={project} workflow={workflow} onLaunch={onLaunch} onBack={onBack} />;
+        return 'steps' in project
+            ? <StudentMissionDetailsV2 project={project} workflow={workflow} onLaunch={onLaunch} onBack={onBack} />
+            : <MissionOnboarding project={project as ProjectTemplate} workflow={workflow} onLaunch={onLaunch} onBack={onBack} />;
     }
 
     return (

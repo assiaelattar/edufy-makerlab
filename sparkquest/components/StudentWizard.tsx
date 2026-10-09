@@ -1,12 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { AlertTriangle, ArrowLeft, ArrowUpRight, Camera, Check, ChevronDown, Clock3, Download, File, FileText, Globe, GripVertical, Image, Link as LinkIcon, ListChecks, Map, MessageSquareText, PackageCheck, Pencil, RotateCcw, Save, Send, Target, Trash2, Trophy, Upload, Video, Wrench, X as XIcon } from 'lucide-react';
-import { Reorder } from 'framer-motion';
+import { AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, Camera, Check, ChevronDown, Clock3, Download, File, FileText, Globe, Image, Link as LinkIcon, ListChecks, Map, MessageSquareText, PackageCheck, Pencil, RotateCcw, Save, Send, Target, Trophy, Upload, Video, Wrench } from 'lucide-react';
 import { StudentProject, Workflow, ProjectStep, TaskStatus, Assignment } from '../types';
 import { generateCoverArt, analyzeSubmission } from '../services/gemini';
 import { api } from '../services/api';
 import { saveLearnerProject } from '../services/projectReview';
-import { effectiveStepReviewStatus, stepReviewFeedback, submittedProof } from '../domain/projectReview';
+import { effectiveStepReviewStatus, requiredStepsApproved, stepReviewFeedback, submittedProof } from '../domain/projectReview';
 import { db } from '../services/firebase';
 import { WizardNode, WizardNodeProps } from './WizardNode';
 import { WizardModal } from './WizardModal';
@@ -18,14 +17,18 @@ import { TypingChallenge } from './TypingChallenge';
 import { useTheme, THEMES } from '../context/ThemeContext';
 import { useFocusSession } from '../context/FocusSessionContext';
 import { ResourceViewerModal } from './ResourceViewerModal';
+import { ProjectPlanEditor } from './ProjectPlanEditor';
+import { ResourceLearningGate } from './ResourceLearningGate';
 import { useToast } from '../context/ToastContext';
 import { resolveMissionContent } from '../domain/missionContent';
 import {
   buildProjectStepsFromWorkflow,
-  createStudentTask,
   createWorkflowSnapshot,
   refreshProjectStepsFromWorkflow,
 } from '../domain/workflowPipeline';
+import { nextResourceProgress, pendingRequiredResources, resourceIdentity, resourceMastered } from '../domain/resourceLearning';
+import './learner-learning.css';
+import './studio-build-experience.css';
 
 
 // --- Sound Utility (Synthesizer) ---
@@ -564,152 +567,49 @@ const StrategyStepContent: React.FC<StepContentProps> = ({ project, assignment, 
 };
 
 const BlueprintStepContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
-  const [newStep, setNewStep] = useState('');
-  const [editingStepId, setEditingStepId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const [draftSteps, setDraftSteps] = useState<ProjectStep[]>(project.steps || []);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const isBuilding = project.status === 'building' || project.status === 'submitted' || project.status === 'changes_requested' || project.status === 'published';
 
-  const addStep = () => {
-    if (!newStep.trim()) return;
-    playSound('click');
-    const step = createStudentTask(newStep);
-    updateProject({ steps: [...(project.steps || []), step] });
-    setNewStep('');
-  };
+  useEffect(() => setDraftSteps(project.steps || []), [project.id]);
 
-  const removeStep = (id: string) => {
-    if (!confirm('Are you sure you want to delete this step?')) return;
-    playSound('click');
-    updateProject({ steps: project.steps.filter(s => s.id !== id) });
-  };
-
-  const startEditing = (step: ProjectStep) => {
-    setEditingStepId(step.id);
-    setEditValue(step.title);
-  };
-
-  const saveEdit = () => {
-    if (!editingStepId || !editValue.trim()) return;
-    const updatedSteps = project.steps.map(s =>
-      s.id === editingStepId ? { ...s, title: editValue } : s
-    );
-    updateProject({ steps: updatedSteps });
-    setEditingStepId(null);
-    setEditValue('');
+  const savePlan = async (launch = false) => {
+    if (!draftSteps.length || draftSteps.some(step => !step.title.trim())) {
+      setError('Add a title to every step before saving.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    const result = await updateProject({ steps: draftSteps, ...(launch ? { status: 'building' as const } : {}) });
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error || 'The plan could not be saved.');
+      return;
+    }
     playSound('success');
+    closeModal();
   };
-
-  const cancelEdit = () => {
-    setEditingStepId(null);
-    setEditValue('');
-  };
-
-  const handleReorder = (newOrder: ProjectStep[]) => {
-    // Only update if order actually changed to avoid infinite loops if strict mode
-    updateProject({ steps: newOrder });
-  };
-
-  const isBuilding = project.status === 'building' || project.status === 'submitted' || project.status === 'published';
 
   return (
-    <div className="space-y-8">
-      {/* ALWAYS ACTIVE INPUT */}
-      <div className="flex gap-2">
-        <input
-          value={newStep}
-          onChange={e => setNewStep(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && addStep()}
-          className="flex-1 text-base md:text-lg font-bold p-3 md:p-4 rounded-2xl border-2 border-slate-200 focus:border-blue-400 outline-none"
-          placeholder={isBuilding ? "Add another step..." : "Add a mission step..."}
-        />
-        <button onClick={addStep} className="bg-blue-500 text-white p-3 md:p-4 rounded-2xl font-black text-lg md:text-xl border-b-4 border-blue-700 active:border-b-0 active:translate-y-1 hover:bg-blue-400 transition-colors">➕</button>
-      </div>
-
-      <div className="space-y-3">
-        {project.steps.length === 0 && <div className="text-center text-slate-400 font-bold italic py-8">No steps yet.</div>}
-
-        <Reorder.Group axis="y" values={project.steps || []} onReorder={handleReorder} className="space-y-3">
-          {project.steps.map((step, idx) => (
-            <Reorder.Item key={step.id} value={step} className="focus:outline-none">
-              <div className={`bg-slate-50 p-4 rounded-2xl border-b-4 border-slate-200 flex items-center justify-between group ${editingStepId === step.id ? 'ring-2 ring-blue-400 border-blue-200 bg-white' : ''}`}>
-
-                <div className="flex items-center gap-3 md:gap-4 flex-1">
-                  {/* Drag Handle */}
-                  <div className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 p-1">
-                    <GripVertical size={20} />
-                  </div>
-
-                  <span className="bg-slate-200 text-slate-500 font-black w-6 h-6 md:w-8 md:h-8 text-sm md:text-base flex items-center justify-center rounded-full shrink-0">
-                    {idx + 1}
-                  </span>
-
-                  <div className="flex-1">
-                    {editingStepId === step.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="flex-1 font-bold text-slate-700 text-base md:text-lg bg-slate-100 px-2 py-1 rounded outline-none focus:bg-white border focus:border-blue-300"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveEdit();
-                            if (e.key === 'Escape') cancelEdit();
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <span className="font-bold text-slate-700 text-base md:text-lg block cursor-pointer hover:text-blue-600 transition-colors" onClick={() => startEditing(step)}>
-                          {step.title}
-                        </span>
-                        {step.resources && step.resources.length > 0 && (
-                          <span className="text-[10px] md:text-xs font-bold text-indigo-500 flex items-center gap-1">
-                            <span className="text-sm md:text-lg">🧰</span> {step.resources.length} Tools Available
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2 ml-4">
-                  {editingStepId === step.id ? (
-                    <>
-                      <button onClick={saveEdit} className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200"><Check size={16} /></button>
-                      <button onClick={cancelEdit} className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200"><XIcon size={16} /></button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => startEditing(step)} className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                        <Pencil size={16} />
-                      </button>
-                      <button onClick={() => removeStep(step.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                        <Trash2 size={16} />
-                      </button>
-                    </>
-                  )}
-                </div>
-
-              </div>
-            </Reorder.Item>
-          ))}
-        </Reorder.Group>
-      </div>
-
+    <div className="space-y-5">
+      <ProjectPlanEditor steps={draftSteps} onChange={setDraftSteps} stepReviews={project.stepReviews} disabled={project.status === 'published'} audience="learner" />
+      {error && <p role="alert" className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-800">{error}</p>}
       {!isBuilding ? (
         <button
-          onClick={() => { playSound('success'); updateProject({ status: 'building' }); closeModal(); }}
-          disabled={project.steps.length === 0}
+          onClick={() => void savePlan(true)}
+          disabled={saving || draftSteps.length === 0}
           className="w-full py-4 rounded-3xl bg-green-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-green-700 active:border-b-0 active:translate-y-2 disabled:opacity-50 hover:bg-green-400 transition-colors"
         >
-          Launch Mission (Start Building) 🚀
+          {saving ? 'Saving plan…' : 'Launch Mission (Start Building) 🚀'}
         </button>
       ) : (
         <button
-          onClick={() => { playSound('success'); closeModal(); }}
+          onClick={() => void savePlan(false)}
+          disabled={saving || project.status === 'published'}
           className="w-full py-4 rounded-3xl bg-blue-500 text-white font-black text-xl uppercase tracking-wider border-b-8 border-blue-700 active:border-b-0 active:translate-y-2 hover:bg-blue-400 transition-colors"
         >
-          Save & Return to Builder 💾
+          {project.status === 'published' ? 'Published plan is locked' : saving ? 'Saving plan…' : 'Save & Return to Builder 💾'}
         </button>
       )}
     </div>
@@ -747,7 +647,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   const { activeTheme } = useTheme();
   const theme = THEMES.find(t => t.id === activeTheme) || THEMES[0];
 
-  const [viewingResource, setViewingResource] = useState<{ title: string; url: string; type: 'file' | 'image' | 'video' | 'link' } | null>(null);
+  const [viewingResource, setViewingResource] = useState<NonNullable<ProjectStep['resources']>[number] | null>(null);
 
   const EMAIL_TEMPLATE = `Subject: Mission Report - ${step?.title || 'Unknown Step'}
 
@@ -765,11 +665,14 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
           ${project.studentId || 'Cadet'}`;
 
   if (!step) return <div>Error: Step not found</div>;
+  const stepNumber = project.steps.findIndex(item => item.id === step.id) + 1;
+  const taskContext = <div className="sq-task-context"><span><Wrench size={15} /> Build step {String(stepNumber).padStart(2, '0')} of {project.steps.length}</span><strong>{project.title}</strong></div>;
   const reviewStatus = effectiveStepReviewStatus(project, step);
   const canonicalReviewFeedback = stepReviewFeedback(project, step);
 
   const checklistTotal = step.checklist?.length || 0;
   const checklistDone = step.checklist?.filter((_, index) => Boolean(step.checklistCompleted?.[index])).length || 0;
+  const pendingStepResources = pendingRequiredResources(project, step.resources || []);
   const toggleChecklistItem = (index: number) => {
     const nextChecklist = (step.checklist || []).map((_, itemIndex) => Boolean(step.checklistCompleted?.[itemIndex]));
     nextChecklist[index] = !nextChecklist[index];
@@ -816,7 +719,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   };
 
   useEffect(() => {
-    const scroller = taskSheetRef.current?.closest('.sq-work-modal__content') as HTMLElement | null;
+    const scroller = taskSheetRef.current?.closest('.sq-dialog-body, .sq-work-modal__content') as HTMLElement | null;
     scroller?.scrollTo({ top: 0, behavior: 'auto' });
   }, [wizardStep]);
 
@@ -974,6 +877,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   if (reviewStatus === 'done') {
     return (
       <div className="sq-task-result is-approved text-center py-4 md:py-8">
+        {taskContext}
         <div className="sq-task-progress" aria-label="Task progress">
           <span className="is-done"><Check size={13} /> Understand</span>
           <span className="is-done"><Check size={13} /> Proof added</span>
@@ -986,6 +890,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         {step.evidence && (evidenceLooksLikeImage(step.evidence)
           ? <img src={step.evidence} className="sq-task-result__evidence" alt="Approved proof" />
           : <a href={step.evidence} target="_blank" rel="noreferrer" className="sq-task-result__link"><FileText size={18} /> Open approved proof</a>)}
+        <button type="button" className="sq-task-done-button" onClick={closeModal}>Back to my build path <ArrowRight size={18} /></button>
       </div>
     );
   }
@@ -994,6 +899,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
   if (reviewStatus === 'rejected' && !isEditing) {
     return (
       <div className="sq-task-result is-revision text-center py-8 space-y-6">
+        {taskContext}
         <div className="sq-task-progress" aria-label="Task progress">
           <span className="is-done"><Check size={13} /> Understand</span>
           <span className="is-done"><Check size={13} /> Proof added</span>
@@ -1032,6 +938,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
         <div className="relative z-10">{step.title}</div>
         <div className="absolute top-0 right-0 w-16 h-16 bg-blue-200 rounded-bl-full opacity-50"></div>
       </div>
+      {taskContext}
 
       {reviewStatus === 'pending_review' && (
         <div className="sq-task-review-state bg-amber-50 p-6 rounded-3xl border-4 border-amber-100 flex flex-col items-center text-center space-y-4 animate-in fade-in slide-in-from-top-4">
@@ -1082,7 +989,17 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
 
       {/* WIZARD STEP 1: INSTRUCTIONS & RESOURCES */}
-      {(wizardStep === 1 && reviewStatus !== 'pending_review') && (
+      {(wizardStep === 1 && reviewStatus !== 'pending_review' && pendingStepResources.length > 0) && (
+        <ResourceLearningGate
+          project={project}
+          resources={step.resources || []}
+          updateProject={updateProject}
+          title={`Learn before you build: ${step.title}`}
+          description="Pass the required resource checks before opening this step's build instructions and proof tools."
+        />
+      )}
+
+      {(wizardStep === 1 && reviewStatus !== 'pending_review' && pendingStepResources.length === 0) && (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="sq-task-progress" aria-label="Task progress">
             <span className="is-current">1 Understand</span>
@@ -1115,7 +1032,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             {/* Resources */}
             <div className="mt-5 flex flex-wrap gap-2 md:gap-3">
               {(!step.resources || step.resources.length === 0) && (
-                <div className="text-xs italic text-slate-400 md:text-sm">No extra links or files attached to this step.</div>
+                <div className="text-xs italic text-slate-400 md:text-sm">No extra resources or tools attached to this step.</div>
               )}
               {step.resources && step.resources.map((res, idx) => (
                 <button
@@ -1152,6 +1069,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
               className="sq-task-next flex min-h-13 w-full items-center justify-center gap-3 rounded-xl bg-blue-700 px-4 py-4 text-base font-black text-white transition hover:bg-blue-800"
             >
               <span>Add my proof</span>
+              <ArrowRight size={19} />
             </button>
           </div>
         </div>
@@ -1172,9 +1090,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             <ArrowLeft size={16} /><span>Back to instructions</span>
           </button>
 
-          <div>
+          <div className="sq-proof-media">
             <div className="sq-proof-heading"><p>Add proof</p><h4>Show what you made or tested.</h4><span>A clear photo, file, recording, or project link is enough.</span></div>
-            <div
+            <button type="button"
               onClick={() => fileInputRef.current?.click()}
               className="sq-proof-drop border-4 border-dashed border-slate-300 rounded-3xl p-4 md:p-8 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50 min-h-[160px] md:min-h-[200px] group relative overflow-hidden"
             >
@@ -1191,8 +1109,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
                   <span className="text-sm font-bold text-slate-500 text-center">Photo, video, audio, PDF, or text · up to 20 MB</span>
                 </div>
               )}
-              <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" />
-            </div>
+            </button>
+            <input type="file" ref={fileInputRef} onChange={handleFile} className="hidden" accept="image/*,video/*,audio/*,application/pdf,text/plain" aria-label="Choose a proof file" />
 
             {/* UPLOAD PROGRESS BAR */}
             {uploading && (
@@ -1212,8 +1130,10 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
             {/* NEW: Evidence Link Input */}
             <div className="sq-proof-link mt-4">
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2"><LinkIcon size={14} /> Or paste a project link</label>
+              <label htmlFor="sq-proof-link" className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2"><LinkIcon size={14} /> Or paste a project link</label>
               <input
+                id="sq-proof-link"
+                type="url"
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
                 placeholder="https://docs.google.com/..."
@@ -1253,8 +1173,9 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
 
               {showCommitInput && (
                 <div className="p-4 bg-cyan-50 rounded-2xl border-2 border-cyan-100 animate-in fade-in slide-in-from-top-2">
-                  <label className="block text-xs font-black text-cyan-700 uppercase tracking-wider mb-2">Checkpoint note</label>
+                  <label htmlFor="sq-checkpoint-note" className="block text-xs font-black text-cyan-700 uppercase tracking-wider mb-2">Checkpoint note</label>
                   <input
+                    id="sq-checkpoint-note"
                     type="text"
                     value={commitMessage}
                     onChange={(e) => setCommitMessage(e.target.value)}
@@ -1272,6 +1193,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
             </div>
           </div>
 
+          <div className="sq-proof-reflection">
+            <div className="sq-proof-heading"><p>Explain it</p><h4>What did you discover?</h4><span>A few words help your mentor understand your thinking.</span></div>
           {/* Pro Mode Toggle */}
           <div className="flex justify-end mb-2 mt-4">
             <button
@@ -1293,12 +1216,16 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
               onCancel={() => setIsProMode(false)}
             />
           ) : (
+            <>
+            <label htmlFor="sq-proof-note" className="sq-proof-note-label">My maker note <span>Optional if you added a file or link</span></label>
             <textarea
+              id="sq-proof-note"
               value={note}
               onChange={e => setNote(e.target.value)}
               className="sq-proof-note w-full rounded-2xl border-2 border-slate-200 p-4 font-bold text-slate-700 min-h-[110px] outline-none transition-colors resize-none"
               placeholder="What did you try? What changed? What did you notice?"
             />
+            </>
           )}
 
           <button
@@ -1308,6 +1235,7 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
           >
             <Send size={18} /> {submitting ? 'Sending proof…' : 'Send proof for review'}
           </button>
+          </div>
         </div>
       )}
 
@@ -1317,6 +1245,8 @@ const TaskStepContent: React.FC<StepContentProps & { taskId: string }> = ({ proj
           Back to my roadmap
         </button>
       )}
+
+      {viewingResource && <ResourceViewerModal isOpen resource={viewingResource} mastered={resourceMastered(project, viewingResource)} onClose={() => setViewingResource(null)} />}
 
     </div >
   );
@@ -1341,10 +1271,15 @@ const ProjectReviewNotice: React.FC<{ project: StudentProject; compact?: boolean
 
 const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject, closeModal }) => {
   const isSubmitted = project.status === 'submitted' || project.status === 'published';
+  const allRequiredStepsApproved = requiredStepsApproved(project);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submitMission = async () => {
     if (submitting) return;
+    if (!allRequiredStepsApproved) {
+      setError('Wait for mentor approval on every required step before sending your mission.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -1378,7 +1313,7 @@ const PublishStepContent: React.FC<StepContentProps> = ({ project, updateProject
         ) : (
           <button
             onClick={submitMission}
-            disabled={submitting}
+            disabled={submitting || !allRequiredStepsApproved}
             className="w-full py-4 rounded-xl font-black transition-colors"
           >
             <Send size={18} /> {submitting ? 'Sending mission…' : 'Send mission to my instructor'}
@@ -1607,6 +1542,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     assignment,
     processTemplates.find(template => template.id === assignment.recommendedWorkflow || template.id === project.workflowId),
   );
+  const globalResources = (project.resources?.length ? project.resources : assignment.resources) || [];
+  const globalResourceGateComplete = pendingRequiredResources(project, globalResources).length === 0;
 
   // Focus Session: Auto-start when working on project
   const { startSession, endSession, activeSession, incrementMissions } = useFocusSession();
@@ -1741,6 +1678,16 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     setActiveNodeId(id);
   };
 
+  const recordGlobalResourceAttempt = async (score: number, passed: boolean) => {
+    if (!viewingResource?.quiz) return false;
+    const key = resourceIdentity(viewingResource);
+    const progress = nextResourceProgress(viewingResource, project.resourceProgress?.[key], score, passed ? new Date().toISOString() : '');
+    const result = await updateProject({ resourceProgress: { ...(project.resourceProgress || {}), [key]: progress } });
+    if (!result.success) return false;
+    if (passed) setViewingResource(null);
+    return true;
+  };
+
   // --- Derived State for Nodes ---
   const getRoadmapNodes = (): WizardNodeProps[] => {
     const nodes: WizardNodeProps[] = [];
@@ -1772,6 +1719,18 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       });
     }
 
+    if (globalResources.some(resource => resource.requiredForProgress)) {
+      nodes.push({
+        id: 'resources',
+        type: 'RESOURCE',
+        title: 'Learn the mission kit',
+        status: !project.workflowId ? 'LOCKED' : globalResourceGateComplete ? 'COMPLETED' : 'ACTIVE',
+        icon: '📚',
+        onClick: () => handleNodeClick('resources'),
+        onHover: () => playSound('hover')
+      });
+    }
+
 
 
     // 3. Blueprint OR Showcase Upload
@@ -1790,7 +1749,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
         id: 'blueprint',
         type: 'BLUEPRINT',
         title: project.workflowId === 'custom-workflow' ? 'Plan my tasks' : 'Review my tasks',
-        status: !project.workflowId ? 'LOCKED' : (project.status === 'building' || project.status === 'submitted' || project.status === 'published') ? 'COMPLETED' : 'ACTIVE',
+        status: !project.workflowId || !globalResourceGateComplete ? 'LOCKED' : (project.status === 'building' || project.status === 'submitted' || project.status === 'changes_requested' || project.status === 'published') ? 'COMPLETED' : 'ACTIVE',
         icon: project.workflowId === 'custom-workflow' ? '🔨' : '📝',
         onClick: () => handleNodeClick('blueprint'),
         onHover: () => playSound('hover')
@@ -1798,27 +1757,27 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     }
 
     // 4. Tasks (Hide for Showcase)
-    if (project.workflowId !== 'showcase' && (project.status === 'building' || project.status === 'submitted' || project.status === 'published')) {
+    if (project.workflowId !== 'showcase' && (project.status === 'building' || project.status === 'submitted' || project.status === 'changes_requested' || project.status === 'published')) {
       project.steps.forEach((step, index) => {
+        const reviewStatus = effectiveStepReviewStatus(project, step);
         let status: 'LOCKED' | 'ACTIVE' | 'COMPLETED' | 'REVIEW' = 'LOCKED';
-        if (step.status === 'done') {
+        if (reviewStatus === 'done') {
           status = 'COMPLETED';
-        } else if (step.status === 'PENDING_REVIEW') {
+        } else if (reviewStatus === 'pending_review') {
           status = 'REVIEW';
-        } else if (step.status === 'REJECTED') {
+        } else if (reviewStatus === 'rejected') {
           status = 'ACTIVE';
         } else {
           const prevStep = project.steps[index - 1];
-          if (!prevStep || prevStep.status === 'done' || prevStep.status === 'PENDING_REVIEW') {
+          const previousStatus = prevStep && effectiveStepReviewStatus(project, prevStep);
+          if (globalResourceGateComplete && (!prevStep || previousStatus === 'done' || previousStatus === 'pending_review')) {
             status = 'ACTIVE';
           }
         }
-        if (project.status === 'submitted' || project.status === 'published') status = 'COMPLETED';
-
         let icon = '🔨';
-        if (step.status === 'done') icon = '✅';
-        if (step.status === 'PENDING_REVIEW') icon = '⏳';
-        if (step.status === 'REJECTED') icon = '⚠️';
+        if (reviewStatus === 'done') icon = '✅';
+        if (reviewStatus === 'pending_review') icon = '⏳';
+        if (reviewStatus === 'rejected') icon = '⚠️';
 
         nodes.push({
           id: `step-${step.id}`,
@@ -1835,8 +1794,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     // 5. Publish
     // 5. Publish (Hide for Showcase as Upload handles it)
     if (project.workflowId !== 'showcase') {
-      const allStepsDone = project.steps.length > 0 && project.steps.every(s => s.status === 'done');
-      const canPublish = project.status === 'building' && allStepsDone;
+      const allStepsDone = requiredStepsApproved(project);
+      const canPublish = (project.status === 'building' || project.status === 'changes_requested') && allStepsDone;
 
       nodes.push({
         id: 'publish',
@@ -1872,7 +1831,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
     ? `${completedNodeCount} of ${taskNodes.length} tasks complete`
     : `${completedNodeCount} of ${progressNodes.length} steps complete`;
   const nextNode = nodes[activeNodeIndex] || nodes[nodes.length - 1];
-  const foundationNodes = nodes.filter(node => ['IDENTITY', 'STRATEGY', 'BLUEPRINT'].includes(node.type));
+  const foundationNodes = nodes.filter(node => ['IDENTITY', 'STRATEGY', 'RESOURCE', 'BLUEPRINT'].includes(node.type));
   const journeyNodes = nodes.filter(node => ['TASK', 'PUBLISH'].includes(node.type));
   const isWaitingForReview = nextNode?.status === 'REVIEW';
   const isMissionSubmitted = project.status === 'submitted' || project.status === 'published';
@@ -1883,7 +1842,11 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
       ? 'Your proof is safe and waiting for feedback. Open it any time to review what you sent.'
       : nextNode?.id === 'publish'
         ? 'Every build step is approved. Check the mission once more, then send it to your instructor.'
-        : 'Open the next action, add your proof, and keep the build moving.';
+        : nextNode?.id === 'resources'
+          ? 'Explore the mission kit and finish the quick checks. Then your build steps unlock.'
+          : nextNode?.id === 'blueprint'
+            ? 'Review your task plan so you know what to make first.'
+            : 'Open this step, follow the checklist, then show what you made or tested.';
   const benchAction = isMissionSubmitted ? 'View completed mission' : isWaitingForReview ? 'View submitted proof' : nextNode?.id === 'publish' ? 'Review and submit' : 'Open next action';
   const journeyActiveIndex = journeyNodes.findIndex(node => node.id === nextNode?.id);
   const journeyProgress = journeyNodes.length > 1
@@ -1922,8 +1885,8 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
   }
 
   return (
-    <div className={`sq-studio-shell ${activeThemeDef.font || ''}`}>
-      <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} />
+    <div className={`sq-studio-shell sq-learning-studio ${activeThemeDef.font || ''}`}>
+      {(!isConnected || isSaving || saveError) && <ConnectionStatus isConnected={isConnected} isSaving={isSaving} error={saveError} />}
 
       <header className="sq-studio-topbar">
         <div className="sq-studio-brand">
@@ -1955,6 +1918,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
             </div>
             <div className="sq-studio-hero-footer">
               <div className="sq-studio-meter"><div className="sq-studio-meter-line"><span>{progressLabel}</span><span>{progressPercent}%</span></div><div className="sq-studio-meter-track" aria-label={`${progressPercent}% complete`}><span style={{ width: `${progressPercent}%` }} /></div></div>
+              {nextNode && <button type="button" className="sq-studio-hero-action" onClick={nextNode.onClick} disabled={nextNode.status === 'LOCKED'}><span><small>{isMissionSubmitted ? 'Your mission' : isWaitingForReview ? 'Mentor checkpoint' : 'Up next'}</small><strong>{nextNode.title}</strong></span><ArrowUpRight size={21} /></button>}
             </div>
           </div>
           <div className="sq-studio-hero-media">
@@ -1972,7 +1936,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
               <div className="sq-studio-foundation-copy"><span>Mission set</span><strong>Your brief and build plan are ready.</strong></div>
               <div className="sq-studio-foundation-actions">
                 {foundationNodes.map(node => {
-                  const FoundationIcon = node.type === 'IDENTITY' ? FileText : node.type === 'STRATEGY' ? Map : ListChecks;
+                  const FoundationIcon = node.type === 'IDENTITY' ? FileText : node.type === 'STRATEGY' ? Map : node.type === 'RESOURCE' ? PackageCheck : ListChecks;
                   return <button key={node.id} type="button" disabled={node.status === 'LOCKED'} onClick={node.onClick} className={node.status === 'COMPLETED' ? 'is-ready' : node.status === 'ACTIVE' ? 'is-current' : ''}><FoundationIcon size={15} /><span>{node.title}</span>{node.status === 'COMPLETED' && <Check size={13} strokeWidth={3} />}</button>;
                 })}
               </div>
@@ -1996,6 +1960,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
                   <button key={node.id} type="button" disabled={isLocked} onClick={node.onClick} className={`sq-studio-step ${phaseClass} ${isCurrent ? 'is-current' : ''} ${isComplete ? 'is-complete' : ''} ${isReview ? 'is-review' : ''}`}>
                     <span className="sq-studio-step-marker">{marker}</span>
                     <span className="sq-studio-step-main">
+                      <span className="sq-studio-step-index">{task ? `BUILD STEP ${String(taskPosition + 1).padStart(2, '0')}` : 'MISSION FINISH'}</span>
                       <span className="sq-studio-step-title">{node.title}{task?.source === 'student' && <span className="sq-studio-tag">My task</span>}{task?.required && <span className="sq-studio-tag">Required</span>}</span>
                       {(task?.objective || task?.description) && <span className="sq-studio-step-summary">{task.objective || task.description}</span>}
                       {task && <span className="sq-studio-step-meta">{checklistTotal ? <span><ListChecks size={12} /> {checklistDone}/{checklistTotal} checks</span> : null}{task.resources?.length ? <span><PackageCheck size={12} /> {task.resources.length} resources</span> : null}{task.estimatedMinutes ? <span><Clock3 size={12} /> {task.estimatedMinutes} min</span> : null}</span>}
@@ -2031,17 +1996,19 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
         </div>
       </main>
 
-      {viewingResource && <ResourceViewerModal isOpen={!!viewingResource} onClose={() => setViewingResource(null)} resource={viewingResource} />}
+      {viewingResource && <ResourceViewerModal isOpen={!!viewingResource} onClose={() => setViewingResource(null)} resource={viewingResource} mastered={resourceMastered(project, viewingResource)} onQuizAttempt={recordGlobalResourceAttempt} />}
 
       {activeNodeId && (
         <WizardModal
           title={nodes.find(n => n.id === activeNodeId)?.title || ''}
+          subtitle={activeNodeId.startsWith('step-') ? 'Follow the task, then show your mentor what you made or tested.' : undefined}
           icon={nodes.find(n => n.id === activeNodeId)?.icon}
           onClose={() => setActiveNodeId(null)}
           color={activeNodeId.includes('step') ? 'indigo' : 'blue'}
         >
           {activeNodeId === 'identity' && <IdentityStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} onShowResources={() => setShowGlobalResources(true)} />}
           {activeNodeId === 'strategy' && <StrategyStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
+          {activeNodeId === 'resources' && <ResourceLearningGate project={project} resources={globalResources} updateProject={updateProject} title="Learn the mission kit first" description="Review the required mission resources and pass each short knowledge check. Your project plan unlocks after you are ready." onComplete={() => setActiveNodeId(null)} />}
           {activeNodeId === 'blueprint' && <BlueprintStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId === 'showcase_upload' && <ShowcaseUploadContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} />}
           {activeNodeId.startsWith('step-') && <TaskStepContent project={project} assignment={assignment} updateProject={updateProject} closeModal={() => setActiveNodeId(null)} taskId={activeNodeId} />}

@@ -1,4 +1,4 @@
-import { doc, runTransaction, serverTimestamp, type Firestore } from 'firebase/firestore';
+import { doc, runTransaction, serverTimestamp, type Firestore, type Timestamp } from 'firebase/firestore';
 import type { ProjectTemplate } from '../types.ts';
 import type { ReviewActor } from '../domain/projectReview.ts';
 import { buildProfileAssignmentPatch } from '../domain/instructorLearner.ts';
@@ -23,13 +23,17 @@ export async function assignMissionToLearner(db: Firestore, missionId: string, s
 }
 
 /** Class dispatch/editor saves must not erase concurrent profile assignments. */
-export async function saveMissionAudience(db: Firestore, missionId: string, data: Omit<Partial<ProjectTemplate>, 'assignedAt'> & { assignedAt?: unknown }, actor: ReviewActor) {
+export async function saveMissionAudience(db: Firestore, missionId: string, data: Omit<Partial<ProjectTemplate>, 'assignedAt'> & { assignedAt?: unknown }, actor: ReviewActor, expectedUpdatedAt?: Timestamp | null) {
   if (!actor.uid || !actor.organizationId || !['admin', 'instructor'].includes(actor.role)) throw new Error('A verified instructor session is required.');
   return runTransaction(db, async transaction => {
     const ref = doc(db, 'project_templates', missionId);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists() || snapshot.data().organizationId !== actor.organizationId) throw new Error('This mission is unavailable in your organization.');
     const current = snapshot.data() as ProjectTemplate;
+    if (current.status === 'archived') throw new Error('This mission has been retired. Create a new mission to assign or edit it.');
+    if (expectedUpdatedAt !== undefined && (expectedUpdatedAt
+      ? !current.updatedAt?.isEqual(expectedUpdatedAt)
+      : Boolean(current.updatedAt))) throw new Error('This mission changed while you were editing. Reopen it to review the latest version.');
     const targetAudience = data.targetAudience ? { ...data.targetAudience, additionalStudents: [...new Set([...(current.targetAudience?.additionalStudents || []), ...(data.targetAudience.additionalStudents || [])])] } : undefined;
     transaction.update(ref, omitUndefinedDeep({ ...data, ...(targetAudience ? { targetAudience } : {}), organizationId: actor.organizationId, updatedAt: serverTimestamp() }));
   });

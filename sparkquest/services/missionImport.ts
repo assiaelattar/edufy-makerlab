@@ -1,9 +1,10 @@
-import { doc, runTransaction, serverTimestamp, Timestamp, type Firestore } from 'firebase/firestore';
-import type { ProcessTemplate } from '../types';
+import { arrayUnion, doc, runTransaction, serverTimestamp, Timestamp, type Firestore } from 'firebase/firestore';
+import type { ProcessTemplate, Resource } from '../types';
 import { importDocumentId, materializeImport, type ImportCatalog, type ImportDraft } from '../domain/missionImport.ts';
 import { createWorkflowSnapshot } from '../domain/workflowPipeline.ts';
 import { omitUndefinedDeep } from '../domain/firestorePayload.ts';
 import { getMissionReadiness } from '../domain/missionContent.ts';
+import { resourceLibraryId } from './resourceLibrary.ts';
 
 /** A mission and its custom workflow are committed together, under one stable key. */
 export async function persistImportedMission(db: Firestore, organizationId: string, actorId: string, draft: ImportDraft, catalog: ImportCatalog, source: string) {
@@ -36,6 +37,9 @@ export async function persistImportedMission(db: Firestore, organizationId: stri
       status: 'draft', organizationId, createdBy: actorId, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       importKey: draft.importKey.trim(), importSource: source.slice(0, 200), importHash: fingerprint, importedAt: serverTimestamp(),
     }));
+    const resources: Resource[] = [...(mission.resources || []), ...Object.values(mission.stepResources || {}).flat(), ...(selectedWorkflow?.phases || []).flatMap(phase => phase.resources || [])];
+    const unique = new Map(resources.filter(resource => resource.title && resource.url).map(resource => [resourceLibraryId(organizationId, resource), resource]));
+    unique.forEach((resource, resourceId) => transaction.set(doc(db, 'resource_library', resourceId), omitUndefinedDeep({ ...resource, id: resourceId, libraryId: resourceId, organizationId, status: 'active', createdBy: actorId, sourceMissionIds: arrayUnion(id), updatedAt: serverTimestamp() }), { merge: true }));
     return { id, state: 'created' as const, message: 'Draft created.' };
   });
 }

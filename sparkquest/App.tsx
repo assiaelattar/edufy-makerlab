@@ -41,7 +41,11 @@ const LearnerNavigationPreview = lazy(() => import('./components/LearnerNavigati
 const MissionImportPreview = lazy(() => import('./components/factory/MissionImportPreview'));
 const LearnerWorkbenchPreview = lazy(() => import('./components/LearnerWorkbenchPreview'));
 const ReviewLoopPreview = lazy(() => import('./components/factory/ReviewLoopPreview'));
+const ReviewAlertsPreview = lazy(() => import('./components/factory/ReviewAlertsPreview'));
 const InstructorLearnerPreview = lazy(() => import('./components/factory/InstructorLearnerPreview'));
+const FactorySetupLearningPreview = lazy(() => import('./components/factory/FactorySetupLearningPreview').then(module => ({ default: module.FactorySetupLearningPreview })));
+const FactoryDispatchPreview = lazy(() => import('./components/factory/FactoryDispatchPreview'));
+const ResourceLibraryPreview = lazy(() => import('./components/ResourceLibraryPreview'));
 const ReviewModal = lazy(() => import('./components/factory/ReviewModal').then(module => ({ default: module.ReviewModal })));
 
 const missionDesignPreview: ProjectTemplate = {
@@ -76,8 +80,8 @@ const missionDesignPreview: ProjectTemplate = {
     ],
   },
   resources: [
-    { id: 'sensor-guide', title: 'Moisture sensor quick guide', type: 'file', url: '#' },
-    { id: 'wiring-demo', title: 'Watch the wiring demonstration', type: 'video', url: '#' },
+    { id: 'sensor-guide', title: 'Moisture sensor quick guide', type: 'file', url: 'https://example.com/moisture-sensor-guide.pdf', description: 'Learn which pins provide power, ground, and the sensor reading.', requiredForProgress: true, quiz: { version: 1, passingScore: 100, questions: [{ id: 'sensor-power', prompt: 'Which connection provides power to the sensor?', options: ['3V', 'GND', 'Signal'], correctOptionIndex: 0, explanation: 'The 3V pin provides power; GND completes the circuit and Signal carries the reading.' }] } },
+    { id: 'wiring-demo', title: 'Watch the wiring demonstration', type: 'video', url: 'https://example.com/wiring-demo.mp4', description: 'See the safe order for connecting the sensor and LED.', requiredForProgress: true, quiz: { version: 1, passingScore: 100, questions: [{ id: 'power-off', prompt: 'When should you change the wires?', options: ['While powered', 'After disconnecting power', 'Only after watering the plant'], correctOptionIndex: 1, explanation: 'Disconnect power before changing any wire.' }] } },
   ],
 };
 
@@ -87,7 +91,7 @@ const missionDesignWorkflow: ProcessTemplate = {
   description: 'Understand, plan, build, test, and share.',
   phases: [
     { id: 'understand', name: 'Understand the plant problem', description: 'Observe the plant and decide what the alert should communicate.', objective: 'Explain who needs the plant guardian and what it should notice.', instructions: 'Observe the plant and write one clear problem statement before choosing parts.', checklist: ['Observe wet and dry soil', 'Write the problem in one sentence'], tools: ['Notebook'], materials: ['Plant or soil sample'], evidenceRequirements: [{ id: 'understand-note', type: 'text', prompt: 'Write your problem statement.', required: true }], estimatedMinutes: 20, required: true, color: 'blue', icon: 'Brain', order: 1 },
-    { id: 'plan', name: 'Plan the circuit', description: 'Sketch the sensor, controller, and alert before connecting parts.', objective: 'Create a circuit plan another maker can understand.', instructions: 'Draw how the sensor, controller and LED connect. Ask for a quick mentor check.', checklist: ['Draw the circuit', 'Label every connection', 'Get a mentor check'], tools: ['Pencil', 'Circuit simulator'], materials: ['Planning sheet'], evidenceRequirements: [{ id: 'plan-photo', type: 'image', prompt: 'Add a photo or screenshot of your circuit plan.', required: true }], estimatedMinutes: 30, required: true, color: 'amber', icon: 'Pencil', order: 2 },
+    { id: 'plan', name: 'Plan the circuit', description: 'Sketch the sensor, controller, and alert before connecting parts.', objective: 'Create a circuit plan another maker can understand.', instructions: 'Draw how the sensor, controller and LED connect. Ask for a quick mentor check.', checklist: ['Draw the circuit', 'Label every connection', 'Get a mentor check'], tools: ['Pencil', 'Circuit simulator'], materials: ['Planning sheet'], evidenceRequirements: [{ id: 'plan-photo', type: 'image', prompt: 'Add a photo or screenshot of your circuit plan.', required: true }], resources: [{ id: 'circuit-symbols', title: 'Circuit symbols card', type: 'image', url: '/mission-plant-guardian.svg', description: 'Review the symbols used in your circuit sketch.', requiredForProgress: true, quiz: { version: 1, passingScore: 100, questions: [{ id: 'label-plan', prompt: 'What should every connection in the plan include?', options: ['A color only', 'A clear label', 'A decoration'], correctOptionIndex: 1 }] } }], estimatedMinutes: 30, required: true, color: 'amber', icon: 'Pencil', order: 2 },
     { id: 'build', name: 'Build the guardian', description: 'Wire the circuit and create a stable enclosure.', objective: 'Build a safe first prototype that can read the sensor.', instructions: 'Connect one part at a time. Keep power disconnected while changing wires.', checklist: ['Connect the sensor', 'Add the visible alert', 'Secure loose wires'], tools: ['Wire cutter', 'Computer'], materials: ['Microcontroller', 'Moisture sensor', 'LED', 'Jumper wires'], safetyNotes: ['Disconnect power before changing wires.', 'Keep water away from the powered circuit.'], evidenceRequirements: [{ id: 'build-photo', type: 'image', prompt: 'Photograph your first working prototype.', required: true }], estimatedMinutes: 60, required: true, color: 'indigo', icon: 'Wrench', order: 3 },
     { id: 'test', name: 'Test and improve', description: 'Collect proof, notice what fails, and improve the response.', objective: 'Prove the guardian responds differently to wet and dry soil.', instructions: 'Run the same test twice, record what happens, then improve one part.', checklist: ['Test dry soil', 'Test wet soil', 'Make one improvement'], tools: ['Phone camera'], materials: ['Wet and dry soil samples'], evidenceRequirements: [{ id: 'test-video', type: 'video', prompt: 'Record the wet-versus-dry test.', required: true }], estimatedMinutes: 40, required: true, color: 'emerald', icon: 'Check', order: 4 },
   ],
@@ -116,10 +120,12 @@ const missionStudioPreviewProject: StudentProject = {
   skills: missionDesignPreview.skills,
 };
 
-type StudioPreviewState = 'build' | 'review' | 'revision' | 'approved' | 'complete' | 'submitted';
+type StudioPreviewState = 'build' | 'active' | 'review' | 'revision' | 'approved' | 'complete' | 'submitted';
 
 const getMissionStudioPreviewProject = (state: StudioPreviewState): StudentProject => {
   const steps = missionStudioPreviewProject.steps.map(step => ({ ...step }));
+
+  if (state === 'active') steps[0].status = 'doing';
 
   if (state === 'review') {
     steps[0].status = 'done';
@@ -166,6 +172,10 @@ const getMissionStudioPreviewProject = (state: StudioPreviewState): StudentProje
 
   return {
     ...missionStudioPreviewProject,
+    ...(state === 'active' ? { resourceProgress: {
+      'sensor-guide': { resourceId: 'sensor-guide', quizVersion: 1, attempts: 1, score: 100, passedAt: '2026-09-29T00:00:00.000Z' },
+      'wiring-demo': { resourceId: 'wiring-demo', quizVersion: 1, attempts: 1, score: 100, passedAt: '2026-09-29T00:00:00.000Z' },
+    } } : {}),
     status: state === 'submitted' ? 'submitted' : state === 'revision' ? 'changes_requested' : state === 'approved' ? 'published' : 'building',
     ...(state === 'revision' ? {
       feedback: 'Your concept is strong. Label the power path and add one photo of the rover during testing, then send it again.',
@@ -326,12 +336,12 @@ const SparkQuestApp: React.FC = () => {
   // 2. EARLY RETURNS (Guard Clauses)
 
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'mission') {
-    return <LazyView><ProjectDetailsEnhanced project={missionDesignPreview} workflow={missionDesignWorkflow} role="student" onBack={() => { window.location.href = window.location.pathname; }} onLaunch={() => undefined} /></LazyView>;
+    return <LazyView><ProjectDetailsEnhanced project={missionDesignPreview} workflow={missionDesignWorkflow} role="student" onBack={() => { window.location.href = window.location.pathname; }} onLaunch={() => { window.location.href = `${window.location.pathname}?designPreview=studio`; }} /></LazyView>;
   }
 
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'studio') {
     const studioStateParam = new URLSearchParams(window.location.search).get('studioState');
-    const studioState: StudioPreviewState = ['review', 'revision', 'approved', 'complete', 'submitted'].includes(studioStateParam || '')
+    const studioState: StudioPreviewState = ['active', 'review', 'revision', 'approved', 'complete', 'submitted'].includes(studioStateParam || '')
       ? studioStateParam as StudioPreviewState
       : 'build';
     return <LazyView><StudentWizard assignment={missionStudioPreviewAssignment} initialProject={getMissionStudioPreviewProject(studioState)} isConnected previewMode onExit={() => { window.location.href = `${window.location.pathname}?designPreview=mission`; }} /></LazyView>;
@@ -392,6 +402,10 @@ const SparkQuestApp: React.FC = () => {
 
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('designPreview') === 'navigation') {
     return <LazyView><LearnerNavigationPreview onClose={() => { window.location.href = `${window.location.pathname}?designPreview=profile`; }} /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'resources') {
+    return <LazyView><ResourceLibraryPreview /></LazyView>;
   }
 
   // Loading
@@ -603,7 +617,10 @@ const App: React.FC = () => {
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'import') return <LazyView><MissionImportPreview /></LazyView>;
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'workbench') return <LazyView><LearnerWorkbenchPreview /></LazyView>;
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'reviewLoop') return <LazyView><ReviewLoopPreview /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'reviewAlerts') return <LazyView><ReviewAlertsPreview /></LazyView>;
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'learnerDesk') return <LazyView><InstructorLearnerPreview /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'factoryDispatch') return <LazyView><FactoryDispatchPreview /></LazyView>;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'setupLearning') return <LazyView><FactorySetupLearningPreview /></LazyView>;
 
   return (
     <ErrorBoundary>

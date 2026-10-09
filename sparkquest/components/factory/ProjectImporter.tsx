@@ -17,7 +17,7 @@ export const ProjectImporter: React.FC<ProjectImporterProps> = ({ onClose, onSuc
     programs: programs.filter(p => p.organizationId === organizationId).map(p => ({ id: p.id, label: p.name || p.title || p.id })),
     grades: programs.filter(p => p.organizationId === organizationId).flatMap(p => (p.grades || []).map(g => ({ id: g.id, label: g.name || g.id, programId: p.id }))),
     groups: programs.filter(p => p.organizationId === organizationId).flatMap(p => (p.grades || []).flatMap(g => (g.groups || []).filter(group => group.name).map(group => ({ id: group.name, label: group.name, programId: p.id, gradeId: g.id })))),
-    students: students.filter(s => s.organizationId === organizationId && s._source !== 'user_auth').map(s => ({ id: s.id, label: s.name || s.firstName || s.id, aliases: s.loginInfo?.uid ? [s.loginInfo.uid] : [] })),
+    students: students.filter(s => s.organizationId === organizationId && s._source !== 'user_auth').map(s => ({ id: s.id, label: s.name || s.firstName || s.id, aliases: s.loginInfo?.uid ? [s.loginInfo.uid] : [], avatarUrl: s.avatarUrl, photoURL: s.photoURL, photoUrl: s.photoUrl })),
   }), [stations, processTemplates, programs, students, organizationId]);
   return <MissionImportWizard catalog={catalog} onClose={onClose} onSuccess={onSuccess}
     sessionKey={`${organizationId || ''}/${user?.uid || ''}`}

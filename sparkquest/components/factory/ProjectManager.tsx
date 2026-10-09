@@ -4,23 +4,25 @@ import { useFactoryData } from '../../hooks/useFactoryData';
 import { ProjectEditor } from './ProjectEditor';
 import { AssignMissionModal } from './AssignMissionModal';
 import { MissionGallery } from './MissionGallery';
-import { Plus, Edit2, Trash2, Search, Users, Eye, Send, FilePlus, BookOpen, CircleDot } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, Users, Eye, Send, FilePlus, BookOpen, CircleDot, ArrowRight } from 'lucide-react';
 import { FactoryEmptyState } from './FactoryPage';
 
 interface ProjectManagerProps {
     onViewSubmissions?: (templateId: string) => void;
     onPreviewProject?: (templateId: string) => void;
+    onBrowseTemplates?: () => void;
 }
 
-export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmissions, onPreviewProject }) => {
-    const { projectTemplates, actions } = useFactoryData();
+export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmissions, onPreviewProject, onBrowseTemplates }) => {
+    const { projectTemplates } = useFactoryData();
     const [editingProject, setEditingProject] = useState<any | null>(null);
     const [assigningProject, setAssigningProject] = useState<any | null>(null);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
+    const [openRemoval, setOpenRemoval] = useState(false);
     const [showSourceModal, setShowSourceModal] = useState(false);
     const [showGallerySelector, setShowGallerySelector] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'assigned'>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'draft' | 'assigned' | 'archived'>('all');
     const deferredSearchTerm = useDeferredValue(searchTerm);
 
     const handleCreateClick = () => {
@@ -52,13 +54,14 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
 
     const handleEdit = (project: any) => {
         setEditingProject(project);
+        setOpenRemoval(false);
         setIsEditorOpen(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (confirm("Deleting this mission will permanently delete all student submissions and history associated with it.\n\nAre you sure you want to proceed?")) {
-            await actions.deleteProjectTemplate(id);
-        }
+    const handleRemove = (project: any) => {
+        setEditingProject(project);
+        setOpenRemoval(true);
+        setIsEditorOpen(true);
     };
 
     // Filter projects
@@ -66,8 +69,8 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
         const matchesSearch = p.title?.toLowerCase().includes(deferredSearchTerm.toLowerCase()) ||
             p.station?.toLowerCase().includes(deferredSearchTerm.toLowerCase());
         const matchesStatus = statusFilter === 'all' ||
-            (statusFilter === 'draft' ? (!p.status || p.status === 'draft') : ['assigned', 'featured'].includes(p.status || ''));
-        return matchesSearch && matchesStatus;
+            (statusFilter === 'draft' ? (!p.status || p.status === 'draft') : statusFilter === 'archived' ? p.status === 'archived' : ['assigned', 'featured'].includes(p.status || ''));
+        return matchesSearch && matchesStatus && (statusFilter !== 'all' || p.status !== 'archived');
     });
 
     const audienceSummary = (project: any) => {
@@ -79,29 +82,24 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
     };
 
     if (isEditorOpen) {
-        return <ProjectEditor templateId={editingProject?.id} initialViewProject={editingProject} onClose={() => setIsEditorOpen(false)} />;
+        return <ProjectEditor templateId={editingProject?.id} initialViewProject={editingProject} initialRemove={openRemoval} onClose={() => { setIsEditorOpen(false); setOpenRemoval(false); }} />;
     }
 
     return (
-        <div className="mx-auto max-w-[1320px] space-y-6 p-4 pb-24 sm:p-7 md:pb-8">
-            <div className="flex flex-col gap-5 rounded-[28px] bg-[#10233f] p-6 text-white shadow-xl shadow-slate-900/10 sm:flex-row sm:items-end sm:justify-between sm:p-8">
+        <div className="sq-mission-library mx-auto max-w-[1320px] space-y-6 p-4 pb-24 sm:p-7 md:pb-8">
+            <div className="sq-mission-library-header flex flex-col gap-5 p-6 sm:flex-row sm:items-end sm:justify-between sm:p-8">
                 <div>
-                    <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-sky-300">Mission library</p>
-                    <h3 className="mt-2 text-3xl font-black tracking-tight">Build, target, assign</h3>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">Create the learning brief, then assign it to a grade, selected groups, or specific learners. Assignment never changes Edufy enrollments.</p>
+                    <p className="sq-dispatch-eyebrow">Mission library</p>
+                    <h1 className="mt-2 text-3xl font-black tracking-tight">Build, target, assign.</h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6">Create the learning brief, then assign it to a grade, group, or specific learner.</p>
                 </div>
-                <button
-                    onClick={handleCreateClick}
-                    className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#ffb000] px-6 font-black text-slate-950 transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                >
-                    <Plus size={20} /> New Mission
-                </button>
+                <div className="sq-mission-header-actions">{onBrowseTemplates && <button type="button" onClick={onBrowseTemplates}><BookOpen size={18} aria-hidden="true" /> Browse templates</button>}<button type="button" onClick={handleCreateClick}><Plus size={20} aria-hidden="true" /> New mission</button></div>
             </div>
 
             {/* SOURCE SELECTION MODAL */}
             {showSourceModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setShowSourceModal(false)}>
-                    <div role="dialog" aria-modal="true" aria-labelledby="create-mission-title" className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8" onClick={e => e.stopPropagation()}>
+                    <div role="dialog" aria-modal="true" aria-labelledby="create-mission-title" className="sq-mission-source-dialog w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8" onClick={e => e.stopPropagation()}>
                         <h3 id="create-mission-title" className="mb-6 text-center text-2xl font-black text-slate-800">Create New Mission</h3>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
                             <button
@@ -135,7 +133,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                 </div>
             )}
 
-            <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="sq-mission-library-toolbar flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
                 <label className="relative block flex-1">
                     <span className="sr-only">Search missions</span>
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
@@ -151,6 +149,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                         ['all', 'All'],
                         ['draft', 'Drafts'],
                         ['assigned', 'Assigned'],
+                        ['archived', 'Retired'],
                     ].map(([id, label]) => (
                         <button key={id} onClick={() => setStatusFilter(id as typeof statusFilter)} className={`min-h-11 rounded-xl px-4 text-sm font-bold transition ${statusFilter === id ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{label}</button>
                     ))}
@@ -159,19 +158,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredProjects.map(project => (
-                    <article
-                        key={project.id}
-                        onClick={() => onPreviewProject && onPreviewProject(project.id)}
-                        onKeyDown={event => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                onPreviewProject?.(project.id);
-                            }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                        className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-300 hover:shadow-md"
-                    >
+                    <article key={project.id} className="sq-mission-card group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-300 hover:shadow-md">
 
                         {/* COVER IMAGE */}
                         <div className="h-40 relative bg-slate-100 overflow-hidden">
@@ -202,20 +189,20 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                                 >
                                     <Eye size={14} />
                                 </button>
-                                <button
+                                {project.status !== 'archived' && <button
                                     onClick={(e) => { e.stopPropagation(); handleEdit(project); }}
                                     className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white/90 text-slate-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-white hover:text-blue-700"
                                     aria-label={`Edit ${project.title}`}
                                 >
                                     <Edit2 size={14} />
-                                </button>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
+                                </button>}
+                                {project.status !== 'archived' && <button
+                                    onClick={(e) => { e.stopPropagation(); handleRemove(project); }}
                                     className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white/90 text-slate-700 shadow-sm backdrop-blur-sm transition-colors hover:bg-red-50 hover:text-red-600"
-                                    aria-label={`Delete ${project.title}`}
+                                    aria-label={`Remove ${project.title}`}
                                 >
                                     <Trash2 size={14} />
-                                </button>
+                                </button>}
                             </div>
 
                             {/* Station Badge (Bottom Left) */}
@@ -234,7 +221,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
 
                         <div className="p-5 flex-1 flex flex-col">
                             <div className="flex justify-between items-start mb-2">
-                                <h4 className="text-lg font-bold text-slate-800 line-clamp-2 leading-tight">{project.title || 'Untitled Mission'}</h4>
+                                <h2 className="text-lg font-bold text-slate-800 line-clamp-2 leading-tight"><button type="button" onClick={() => onPreviewProject?.(project.id)}>{project.title || 'Untitled Mission'}</button></h2>
                             </div>
                             <p className="text-sm text-slate-500 mb-6 line-clamp-3 flex-1">{project.description || 'No description provided.'}</p>
 
@@ -243,14 +230,15 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ onViewSubmission
                                 {audienceSummary(project)}
                             </div>
 
-                            <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setAssigningProject(project); }}
+                            <div className="sq-mission-card-actions flex items-center justify-between pt-4 border-t border-slate-100 mt-auto">
+                                {project.status !== 'archived' && <button
+                                    onClick={() => setAssigningProject(project)}
                                     className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-bold text-white shadow-lg shadow-slate-900/10 transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
                                 >
                                     <Send size={16} />
                                     Assign audience
-                                </button>
+                                </button>}
+                                {onViewSubmissions && project.status !== 'draft' && project.status !== 'archived' && <button type="button" className="sq-mission-submissions" onClick={() => onViewSubmissions(project.id)}>View learner work <ArrowRight size={16} aria-hidden="true" /></button>}
                             </div>
                         </div>
                     </article>

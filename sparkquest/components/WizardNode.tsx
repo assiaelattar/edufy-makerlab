@@ -2,7 +2,7 @@ import React from 'react';
 
 export interface WizardNodeProps {
   id: string;
-  type: 'IDENTITY' | 'STRATEGY' | 'BLUEPRINT' | 'TASK' | 'PUBLISH';
+  type: 'IDENTITY' | 'STRATEGY' | 'RESOURCE' | 'BLUEPRINT' | 'TASK' | 'PUBLISH';
   title: string;
   status: 'LOCKED' | 'ACTIVE' | 'COMPLETED' | 'REVIEW';
   icon?: string;
@@ -58,6 +58,7 @@ export const WizardNode: React.FC<WizardNodeProps> = ({ id, type, title, status,
     switch (type) {
       case 'IDENTITY': return <span className="text-4xl filter drop-shadow-md">✨</span>;
       case 'STRATEGY': return <span className="text-4xl filter drop-shadow-md">🧭</span>;
+      case 'RESOURCE': return <span className="text-4xl filter drop-shadow-md">📚</span>;
       case 'BLUEPRINT': return <span className="text-4xl filter drop-shadow-md">📝</span>;
       case 'TASK': return <span className="text-4xl filter drop-shadow-md">🔨</span>;
       case 'PUBLISH': return <span className="text-4xl filter drop-shadow-md">🚀</span>;

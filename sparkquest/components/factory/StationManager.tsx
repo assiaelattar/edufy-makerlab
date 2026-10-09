@@ -4,6 +4,7 @@ import { useFactoryData } from '../../hooks/useFactoryData';
 import { Station } from '../../types';
 import { Settings, Zap, Edit2, Check, X } from 'lucide-react';
 import { FactoryEmptyState, FactoryPageHeader, factoryButton } from './FactoryPage';
+import './factory-learning-setup.css';
 
 // MOCK_GRADES removed - now using real data from useFactoryData
 
@@ -79,7 +80,7 @@ export const StationManager: React.FC = () => {
     };
 
     const renderEditor = () => (
-        <div className="rounded-2xl border border-blue-300 bg-white p-6 shadow-lg">
+        <div className="sq-learning-panel sq-learning-station-editor rounded-2xl border border-blue-300 bg-white p-6 shadow-lg">
             <div className="flex justify-between items-start mb-6">
                 <h4 className="text-xl font-black text-slate-800">
                     {isCreating ? 'Create New Station' : 'Edit Station'}
@@ -184,7 +185,7 @@ export const StationManager: React.FC = () => {
     );
 
     return (
-        <div className="space-y-6">
+        <div className="sq-learning-setup sq-learning-stations space-y-6">
             <FactoryPageHeader
                 icon={Settings}
                 eyebrow="Studio configuration"
@@ -202,7 +203,7 @@ export const StationManager: React.FC = () => {
                     }
 
                     return (
-                        <div key={station.id} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                        <div key={station.id} className="sq-learning-panel group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                             <div className="flex items-start justify-between mb-6">
                                 <div className="flex items-center gap-4">
                                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shadow-sm border border-slate-100 bg-${station.color || 'blue'}-50`}>
@@ -245,6 +246,7 @@ export const StationManager: React.FC = () => {
                                         return (
                                             <button
                                                 key={grade.id}
+                                                aria-pressed={Boolean(isActive)}
                                                 onClick={() => toggleGrade(station, grade.id)}
                                                 className={`px-4 py-2 rounded-lg text-xs font-bold border-2 transition-all ${isActive
                                                     ? `bg-${station.color || 'blue'}-500 text-white border-${station.color || 'blue'}-500 shadow-md`

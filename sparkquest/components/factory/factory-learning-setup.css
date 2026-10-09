@@ -1,0 +1,265 @@
+/* Studio setup keeps operational forms calm while sharing the learning UI's scale and tactility. */
+.sq-learning-setup {
+  --sq-setup-accent: var(--sq-learning-blue);
+  --sq-setup-accent-soft: #e9f3ff;
+  color: var(--sq-learning-ink);
+}
+.sq-learning-workflows { --sq-setup-accent: var(--sq-learning-violet); --sq-setup-accent-soft: #f2edff; }
+.sq-learning-stations { --sq-setup-accent: var(--sq-learning-citrus-deep); --sq-setup-accent-soft: #f0fbd9; }
+.sq-learning-badges,
+.sq-learning-gamification { --sq-setup-accent: #b67810; --sq-setup-accent-soft: #fff6d5; }
+.sq-learning-toolbox { --sq-setup-accent: var(--sq-learning-blue); --sq-setup-accent-soft: #e9f3ff; }
+
+.sq-learning-setup .sq-factory-page-header {
+  border-color: var(--sq-learning-line);
+  border-radius: var(--sq-learning-radius-card);
+  background: radial-gradient(circle at 95% 3%, var(--sq-setup-accent-soft), transparent 31%), #fff;
+  box-shadow: 0 5px 0 #d8e5ef, 0 12px 26px #2d4e7510;
+}
+.sq-learning-setup .sq-factory-page-header > div:first-child {
+  height: 6px;
+  background: linear-gradient(90deg, var(--sq-learning-blue), var(--sq-setup-accent), var(--sq-learning-marigold));
+}
+.sq-learning-setup .sq-factory-page-header h1 {
+  color: var(--sq-learning-ink);
+  font-family: Nunito, 'DM Sans', sans-serif;
+  font-size: clamp(1.7rem, 2.6vw, 2.2rem);
+  line-height: 1.14;
+  letter-spacing: -.025em;
+}
+.sq-learning-setup .sq-factory-page-header p { font-size: 1rem; line-height: 1.55; }
+.sq-learning-setup .sq-factory-page-header [class*="uppercase"] { color: var(--sq-setup-accent); }
+
+.sq-learning-setup .sq-learning-panel,
+.sq-learning-setup article {
+  min-width: 0;
+  border-color: var(--sq-learning-line);
+  border-radius: var(--sq-learning-radius-card);
+  box-shadow: 0 4px 0 #dae6f0, 0 9px 22px #2d4e7510;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+.sq-learning-setup .sq-learning-panel:not(.sq-learning-station-editor):hover,
+.sq-learning-setup article:hover {
+  border-color: #b7d3f2;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 0 #d3e3f1, 0 16px 28px #2d4e7515;
+}
+.sq-learning-setup .sq-learning-panel h3,
+.sq-learning-setup .sq-learning-panel h4,
+.sq-learning-setup article h3 { color: var(--sq-learning-ink); font-family: Nunito, 'DM Sans', sans-serif; font-weight: 900; }
+.sq-learning-setup .sq-learning-panel h4 { font-size: 1.17rem; }
+.sq-learning-setup .sq-learning-panel p,
+.sq-learning-setup article p { line-height: 1.5; }
+.sq-learning-setup .sq-learning-panel { padding: clamp(1.1rem, 2vw, 1.5rem); }
+
+/* Purposeful accent: workflows show a sequence, badges a reward, stations an active learning zone. */
+.sq-learning-workflows .sq-learning-panel { background: linear-gradient(115deg, #fff 70%, #f8f4ff); }
+.sq-learning-workflows .sq-learning-panel > div:last-child > div > div:first-child > div:first-child {
+  min-width: 46px;
+  min-height: 46px;
+  border-radius: 14px;
+  font-size: 1rem;
+}
+.sq-learning-badges .sq-learning-panel { background: radial-gradient(circle at 50% -8%, #fff5d5, #fff 47%); }
+.sq-learning-badges .sq-learning-panel > div:first-child { min-width: 70px; min-height: 70px; }
+.sq-learning-stations .sq-learning-panel { background: radial-gradient(circle at 98% 0%, #f3fbdf, #fff 42%); }
+.sq-learning-stations .sq-learning-panel > div:nth-child(2).bg-slate-50 { background: #f3f9ed; border: 1px solid #ddedcb; border-radius: 16px; }
+.sq-learning-toolbox .sq-learning-panel { min-height: 215px; }
+.sq-learning-gamification article { background: radial-gradient(circle at 100% 0%, #fff9e8, #fff 49%); }
+
+.sq-learning-setup button[class*="bg-blue-600"]:not(:disabled),
+.sq-learning-setup button.sq-learning-primary:not(:disabled) {
+  min-height: var(--sq-learning-control-height);
+  border-radius: var(--sq-learning-radius-control);
+  background: var(--sq-learning-action-gradient);
+  box-shadow: 0 5px 0 var(--sq-learning-blue-deep), 0 10px 16px #3677dd24;
+  font-size: .94rem;
+  font-weight: 900;
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+.sq-learning-setup button[class*="bg-blue-600"]:hover:not(:disabled),
+.sq-learning-setup button.sq-learning-primary:hover:not(:disabled) { filter: brightness(1.05); }
+.sq-learning-setup button[class*="bg-blue-600"]:active:not(:disabled),
+.sq-learning-setup button.sq-learning-primary:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+.sq-learning-setup button[class*="border-slate-200"][class*="bg-white"] { border-radius: var(--sq-learning-radius-control); }
+.sq-learning-setup button[aria-pressed="true"]:not([class*="bg-blue-600"]) {
+  border-color: var(--sq-setup-accent);
+  background: var(--sq-setup-accent-soft);
+  color: var(--sq-learning-ink);
+  box-shadow: inset 0 -2px 0 #20314914;
+}
+.sq-learning-setup button[aria-pressed="false"] { min-height: 42px; }
+.sq-learning-setup button:focus-visible,
+.sq-learning-setup a:focus-visible { outline: 3px solid var(--sq-learning-citrus-deep); outline-offset: 3px; }
+
+.sq-learning-setup :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select),
+.sq-learning-dialog :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  min-height: 48px;
+  border-radius: 13px;
+  border-color: #ccddeb;
+  color: var(--sq-learning-ink);
+  font-size: .94rem;
+}
+.sq-learning-setup :is(input, textarea, select):focus-visible,
+.sq-learning-dialog :is(input, textarea, select):focus-visible {
+  outline: 3px solid #a9df3973;
+  outline-offset: 1px;
+  border-color: var(--sq-learning-blue);
+}
+.sq-learning-setup :is(label, legend) { color: var(--sq-learning-ink); }
+.sq-learning-setup .sq-factory-toolbar {
+  border-color: var(--sq-learning-line);
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 4px 0 #dae6f0;
+}
+.sq-learning-toolbox-tab { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 10px 16px; border-radius: 12px; font-size: .88rem; font-weight: 900; }
+.sq-learning-toolbox-tab[aria-pressed="true"] { background: #fff; box-shadow: 0 3px 0 #cbdbe9; }
+.sq-learning-filter { min-height: 42px; padding: 8px 14px; border: 1px solid var(--sq-learning-line); border-radius: 13px; background: #fff; color: #5b6b7c; font-size: .75rem; font-weight: 900; letter-spacing: .03em; }
+.sq-learning-toolbox .sq-learning-panel a[target="_blank"] {
+  min-height: 48px;
+  border-radius: 13px;
+  border-color: #bad4f1;
+  background: #eff7ff;
+  color: var(--sq-learning-blue-deep);
+  font-size: .87rem;
+  font-weight: 900;
+}
+.sq-learning-toolbox .sq-learning-panel a[target="_blank"]:hover {
+  border-color: var(--sq-learning-blue-deep);
+  background: var(--sq-learning-blue-deep);
+  color: #fff;
+}
+.sq-learning-toolbox .fixed > div {
+  border-color: var(--sq-learning-line);
+  border-radius: 23px;
+}
+.sq-learning-toolbox .fixed > div > div:first-child {
+  background: linear-gradient(115deg, #fff, #ecf6ff);
+}
+.sq-learning-toolbox .fixed h3 { color: var(--sq-learning-ink); font-family: Nunito, 'DM Sans', sans-serif; font-size: 1.3rem; font-weight: 900; }
+.sq-learning-toolbox .fixed form button[type="submit"] {
+  min-height: 52px;
+  border-radius: 15px;
+  background: var(--sq-learning-action-gradient);
+  box-shadow: 0 5px 0 var(--sq-learning-blue-deep);
+  color: #fff;
+  font-size: .94rem;
+  font-weight: 900;
+}
+.sq-learning-toolbox .fixed form button[type="submit"]:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+
+.sq-learning-dialog {
+  border: 1px solid var(--sq-learning-line);
+  border-radius: 23px;
+  box-shadow: 0 24px 70px #20314938;
+}
+.sq-learning-dialog > div:first-child {
+  background: radial-gradient(circle at 100% 0%, var(--sq-setup-accent-soft), #fff 60%);
+  border-bottom-color: var(--sq-learning-line);
+}
+.sq-learning-dialog h3 { font-family: Nunito, 'DM Sans', sans-serif; color: var(--sq-learning-ink); font-size: 1.4rem; }
+.sq-learning-dialog button:focus-visible { outline: 3px solid var(--sq-learning-citrus-deep); outline-offset: 2px; }
+.sq-learning-badges .sq-learning-dialog button[class*="bg-amber-500"] {
+  min-height: 52px;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #ffce55, #f8ad31);
+  color: #613e08;
+  box-shadow: 0 5px 0 #d4861b;
+}
+.sq-learning-badges .sq-learning-dialog button[class*="bg-amber-500"]:active { transform: translateY(4px); box-shadow: none; }
+.sq-learning-badges .sq-learning-dialog { display: flex; flex-direction: column; }
+.sq-learning-badges .sq-learning-dialog > div:nth-child(2) { overflow-y: auto; }
+.sq-learning-badges .sq-learning-dialog > div:last-child { flex-shrink: 0; }
+
+.sq-learning-gamification [role="tablist"] { border-color: var(--sq-learning-line); border-radius: 18px; background: #f4f8fb; }
+.sq-learning-gamification .sq-factory-page-header .grid.max-w-2xl p:first-child { color: #4c5f70; font-size: .7rem; opacity: 1; }
+.sq-learning-gamification [role="tab"] { display: inline-flex; align-items: center; justify-content: center; min-height: 51px; padding: 10px 17px; border-radius: 13px; font-size: .91rem; font-weight: 900; }
+.sq-learning-gamification [role="tab"][aria-selected="true"] {
+  background: linear-gradient(135deg, #314a70, #203149);
+  box-shadow: 0 4px 0 #122236;
+}
+.sq-learning-gamification [role="dialog"] > div,
+.sq-learning-gamification [role="alertdialog"] > div { border-radius: 23px; border-color: var(--sq-learning-line); }
+.sq-learning-gamification [role="dialog"] header { background: linear-gradient(110deg, #fff, #fff8e5); }
+.sq-learning-gamification [role="dialog"] h2,
+.sq-learning-gamification [role="alertdialog"] h2 { font-family: Nunito, 'DM Sans', sans-serif; color: var(--sq-learning-ink); }
+
+@media (max-width: 640px) {
+  .sq-learning-workflow-phases,
+  .sq-learning-preview-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; overflow: visible; }
+  .sq-learning-workflow-phases > div { min-width: 0; }
+  .sq-learning-workflow-phases > div > div:first-child { align-items: flex-start; min-width: 0; }
+  .sq-learning-workflow-phases > div > div:first-child span { text-align: left; overflow-wrap: anywhere; }
+  .sq-learning-workflow-phases > div > div:last-child:not(:first-child),
+  .sq-learning-preview-steps i { display: none; }
+  .sq-learning-setup .sq-factory-page-header > div:nth-child(2) { padding: 22px; }
+  .sq-learning-setup .sq-factory-page-header h1 { font-size: 1.75rem; }
+  .sq-learning-badges > .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .sq-learning-badges .sq-learning-panel { padding: 15px 10px; }
+  .sq-learning-badges .sq-learning-panel h4 { font-size: 1rem; overflow-wrap: anywhere; }
+  .sq-learning-workflows .sq-learning-dialog > div:nth-child(2) { padding: 20px; }
+  .sq-learning-dialog { max-height: calc(100dvh - 24px); }
+  .sq-learning-gamification [role="tab"] { min-width: max-content; }
+  .sq-learning-gamification .sq-factory-page-header .grid.max-w-2xl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sq-learning-gamification .sq-factory-page-header .grid.max-w-2xl > :last-child { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sq-learning-setup .sq-learning-panel,
+  .sq-learning-setup article,
+  .sq-learning-setup button[class*="bg-blue-600"] { transition: none; }
+  .sq-learning-setup .sq-learning-panel:not(.sq-learning-station-editor):hover,
+  .sq-learning-setup article:hover,
+  .sq-learning-setup button[class*="bg-blue-600"]:active { transform: none; }
+}
+
+/* Synthetic, write-free preview shell for visual acceptance. */
+.sq-learning-preview { min-height: 100vh; padding: 24px clamp(16px, 3vw, 36px) 70px; background: var(--sq-learning-canvas); color: var(--sq-learning-ink); }
+.sq-learning-preview-shell { max-width: 1250px; margin-inline: auto; }
+.sq-learning-preview-note { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 9px 14px; border-radius: 12px; background: #203149; color: #fff; font-size: .78rem; font-weight: 900; letter-spacing: .025em; }
+.sq-learning-preview-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; padding: 7px; border: 1px solid var(--sq-learning-line); border-radius: 17px; background: #fff; box-shadow: 0 4px 0 #dae6f0; }
+.sq-learning-preview-nav,
+.sq-learning-preview-steps { scrollbar-width: none; }
+.sq-learning-preview-nav::-webkit-scrollbar,
+.sq-learning-preview-steps::-webkit-scrollbar { display: none; }
+.sq-learning-preview-nav button { min-height: 46px; padding: 10px 18px; border-radius: 12px; color: #5b6b7c; font-weight: 900; }
+.sq-learning-preview-nav button[aria-current="page"] { background: #203149; color: #fff; box-shadow: 0 3px 0 #122236; }
+.sq-learning-preview-nav button:focus-visible { outline: 3px solid var(--sq-learning-citrus-deep); outline-offset: 2px; }
+.sq-learning-preview-steps { display: flex; align-items: center; gap: 12px; overflow-x: auto; margin-top: 25px; padding-bottom: 6px; }
+.sq-learning-preview-steps { min-width: 0; max-width: 100%; }
+.sq-learning-preview-steps span { display: inline-flex; align-items: center; gap: 8px; flex: none; font-size: .87rem; font-weight: 900; }
+.sq-learning-preview-steps b { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: var(--sq-learning-idea-gradient); color: #493889; box-shadow: 0 4px 0 #b4a9e9; }
+.sq-learning-preview-steps i { flex: 0 0 25px; border-top: 2px dashed #bacde1; }
+.sq-learning-preview-icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 17px; background: var(--sq-learning-progress-gradient); color: #285c24; box-shadow: 0 4px 0 #67b268; }
+.sq-learning-preview-zone { margin-top: 22px; padding: 17px; border: 1px solid #ddedcb; border-radius: 16px; background: #f3f9ed; }
+.sq-learning-preview-zone button { min-height: 43px; margin: 12px 8px 12px 0; padding: 8px 13px; border: 2px solid #d5e4c9; border-radius: 12px; background: #fff; color: #4d6470; font-size: .81rem; font-weight: 900; }
+.sq-learning-preview-badge { display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: 16px; border-radius: 50%; background: linear-gradient(145deg, #fff3ac, #ffd35f); color: #8c5b0b; box-shadow: 0 5px 0 #e6b33b; }
+.sq-learning-preview-reward { display: grid; place-items: center; flex: 0 0 72px; width: 72px; height: 72px; border-radius: 18px; background: linear-gradient(145deg, #fff3ac, #ffd35f); color: #8c5b0b; }
+.sq-learning-preview-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: #152745a8; backdrop-filter: blur(5px); }
+.sq-learning-preview-dialog { width: min(100%, 570px); max-height: calc(100dvh - 32px); overflow: auto; background: #fff; }
+.sq-learning-preview-dialog-head,
+.sq-learning-preview-dialog-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 24px; }
+.sq-learning-preview-dialog-head { border-bottom: 1px solid var(--sq-learning-line); }
+.sq-learning-preview-dialog-head button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; }
+.sq-learning-preview-dialog-body { display: grid; gap: 18px; padding: 22px 24px; }
+.sq-learning-preview-dialog-body label,
+.sq-learning-preview .sq-learning-station-editor label,
+.sq-learning-preview .sq-learning-toolbox label { display: grid; gap: 7px; font-size: .86rem; font-weight: 900; }
+.sq-learning-preview-dialog-body input,
+.sq-learning-preview-dialog-body textarea,
+.sq-learning-preview .sq-learning-station-editor input,
+.sq-learning-preview .sq-learning-station-editor select,
+.sq-learning-preview .sq-learning-toolbox input { width: 100%; min-height: 48px; padding: 11px 13px; border: 1px solid #ccddeb; border-radius: 13px; background: #fff; font: inherit; }
+.sq-learning-preview-dialog-body p { font-size: .8rem; color: #66788a; }
+.sq-learning-preview-dialog-foot { justify-content: flex-end; border-top: 1px solid var(--sq-learning-line); background: #f7fafc; }
+@media (max-width: 640px) {
+  .sq-learning-preview { padding-top: 16px; }
+  .sq-learning-preview-nav { flex-wrap: nowrap; overflow-x: auto; }
+  .sq-learning-preview-nav button { flex: 0 0 auto; }
+  .sq-learning-preview-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; overflow: visible; }
+  .sq-learning-preview-steps span { min-width: 0; }
+  .sq-learning-preview-steps i { display: none; }
+  .sq-learning-preview-dialog-head,
+  .sq-learning-preview-dialog-foot { padding: 16px; }
+  .sq-learning-preview-dialog-body { padding: 18px 16px; }
+}

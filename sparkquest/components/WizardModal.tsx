@@ -12,5 +12,5 @@ interface WizardModalProps {
 
 export const WizardModal: React.FC<WizardModalProps> = ({ title, subtitle, icon, color = 'blue', onClose, children }) => {
   const tone = color === 'orange' ? 'orange' : color === 'pink' ? 'rose' : color === 'green' ? 'lime' : 'blue';
-  return <SparkbookDialog eyebrow="Studio worksheet" title={title} description={subtitle} icon={icon} tone={tone} size="lg" onClose={onClose} bodyClassName="sq-wizard-content">{children}</SparkbookDialog>;
+  return <SparkbookDialog eyebrow={color === 'indigo' ? 'Your build step' : 'Mission tool'} title={title} description={subtitle} icon={icon} tone={tone} size="lg" onClose={onClose} panelClassName="sq-build-dialog-panel" bodyClassName="sq-wizard-content sq-build-dialog">{children}</SparkbookDialog>;
 };

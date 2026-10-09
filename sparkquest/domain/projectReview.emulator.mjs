@@ -63,6 +63,7 @@ try {
   await expectRuleDenied(updateDoc(learnerRef, { xpReward: 999 }), 'Learner XP overwrite');
   await expectRuleDenied(updateDoc(learnerRef, { publishedAt: new Date(), status: 'published' }), 'Learner publication overwrite');
   await expectRuleDenied(updateDoc(learnerRef, { status: 'changes_requested' }), 'Learner review-status forgery');
+  await assert.rejects(saveLearnerProject(learner.db, current, { ...current, status: 'submitted' }, learner.actor), /required step proofs/);
   await updateDoc(doc(accountant.db, 'student_projects', id), { description: 'Ordinary tenant edit retained' });
   await expectRuleDenied(updateDoc(doc(accountant.db, 'student_projects', id), { feedback: 'Non-review staff decision', status: 'changes_requested' }), 'Non-review staff decision');
   await updateDoc(learnerRef, { status: 'submitted', steps: current.steps.map(step => ({ ...step, status: 'done', reviewNotes: 'Self approved nested state' })) });
@@ -94,6 +95,11 @@ try {
   current = await read(learner.db, id);
   await saveLearnerProject(learner.db, current, { ...current, status: 'submitted', presentationUrl: 'https://example.test/showcase' }, learner.actor);
   current = await read(teacher.db, id);
+  await submitInstructorReview(teacher.db, id, command(current, 'changes_requested', undefined, 'Add the final reflection.'), teacher.actor);
+  current = await read(learner.db, id);
+  assert.equal(current.status, 'changes_requested');
+  await saveLearnerProject(learner.db, current, { ...current, status: 'submitted', description: 'Final reflection added.' }, learner.actor);
+  current = await read(teacher.db, id);
   const publish = { ...command(current, 'published', undefined, 'Mission complete.'), xp: 50 };
   await submitInstructorReview(teacher.db, id, publish, teacher.actor);
   const published = await read(learner.db, id);
@@ -102,12 +108,12 @@ try {
   assert.deepEqual(published.workflowSnapshot, frozen);
   await submitInstructorReview(teacher.db, id, publish, teacher.actor);
   assert.equal((await read(teacher.db, id)).reviewHistory.length, published.reviewHistory.length);
-  await saveInstructorProjectEdits(teacher.db, published, { title: 'Edited title', reviewHistory: [], xpReward: 999, steps: [] }, teacher.actor);
+  await assert.rejects(saveInstructorProjectEdits(teacher.db, published, { title: 'Edited title', reviewHistory: [], xpReward: 999, steps: [] }, teacher.actor), /published/);
   const edited = await read(teacher.db, id);
-  assert.equal(edited.title, 'Edited title'); assert.equal(edited.reviewHistory.length, published.reviewHistory.length); assert.equal(edited.steps.length, 1); assert.equal(edited.xpReward, 50);
+  assert.equal(edited.title, published.title); assert.equal(edited.reviewHistory.length, published.reviewHistory.length); assert.equal(edited.steps.length, 1); assert.equal(edited.xpReward, 50);
   await assert.rejects(submitInstructorReview(learner.db, id, command(published, 'published'), learner.actor), /cannot review/);
   await assert.rejects(submitInstructorReview(foreign.db, id, publish, foreign.actor));
   await assert.rejects(saveLearnerProject(other.db, published, published, other.actor));
   assert.equal(reviewQueue([await read(teacher.db, id)]).length, 0);
-  console.log('Review emulator passed: proof → inbox → revision → resubmission → concurrent decision → final publishing; direct learner review/publication/XP/protocol forgery and non-review staff decisions denied, nested step tampering neutralized, legitimate learner edit allowed, stale learner denial, preserved history/proof/snapshot, idempotent XP, role/tenant/owner denials. No Storage used.');
+  console.log('Review emulator passed: proof → inbox → step and project revision → resubmission → concurrent decision → final publishing; incomplete final submission and direct learner review/publication/XP/protocol forgery denied, nested step tampering neutralized, stale learner denial, preserved history/proof/snapshot, published editor freeze, idempotent XP, role/tenant/owner denials. No Storage used.');
 } finally { await Promise.all(apps.map(app => deleteApp(app))); }

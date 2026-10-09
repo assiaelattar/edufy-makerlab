@@ -1,29 +1,35 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
-import { ProjectTemplate, StationType } from '../../types';
+import { ProjectTemplate, Resource, StationType } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
-import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Save, X, ArrowRight, ArrowLeft, Layout, Database, Users, Rocket, Check, Plus, Trash2, Link, Video, FileText, Upload, Image as ImageIcon, Loader2, Wrench } from 'lucide-react';
 import { getMissionReadiness, getMissionSavePolicy, normalizeMissionBrief } from '../../domain/missionContent';
 import { createWorkflowSnapshot } from '../../domain/workflowPipeline';
+import { ResourceLibrary } from '../ResourceLibrary';
+import { syncMissionResourcesToLibrary } from '../../services/resourceLibrary';
+import { db } from '../../services/firebase';
+import type { MissionRemovalPlan } from '../../services/missionRemoval';
+import { StudentAvatar } from './StudentAvatar';
 
 interface ProjectEditorProps {
     templateId?: string | null;
     initialViewProject?: ProjectTemplate;
+    initialRemove?: boolean;
     onClose: () => void;
 }
 
 const TABS = ['details', 'resources', 'workflow', 'targeting', 'publishing'];
 const TAB_LABELS: Record<string, string> = {
     details: 'Mission brief',
-    resources: 'Resources',
+    resources: 'Resources & tools',
     workflow: 'Build map',
     targeting: 'Audience',
     publishing: 'Review & publish',
 };
 
-export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initialViewProject, onClose }) => {
+export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initialViewProject, initialRemove = false, onClose }) => {
     const { projectTemplates, stations, processTemplates, availableGrades, availableGroups, programs, enrollments, students, actions } = useFactoryData();
     const { user, userProfile } = useAuth();
 
@@ -67,11 +73,27 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [uploadError, setUploadError] = useState<string | null>(null);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(initialRemove);
+    const [removalPlan, setRemovalPlan] = useState<MissionRemovalPlan | null>(null);
+    const [removalError, setRemovalError] = useState<string | null>(null);
     const uploadScopeId = useRef(templateId || initialViewProject?.id || `draft-${Date.now()}`).current;
     const resourceInputRef = useRef<HTMLInputElement>(null);
     const [resourceUploadProgress, setResourceUploadProgress] = useState(0);
     const [isResourceUploading, setIsResourceUploading] = useState(false);
+    const [libraryTarget, setLibraryTarget] = useState<'global' | string | null>(null);
+
+    useEffect(() => {
+        if (!showDeleteConfirm || !templateId) return;
+        let active = true;
+        setRemovalPlan(null);
+        setRemovalError(null);
+        actions.inspectProjectTemplateRemoval(templateId).then((plan: MissionRemovalPlan) => {
+            if (active) setRemovalPlan(plan);
+        }).catch((error: any) => {
+            if (active) setRemovalError(error?.message || 'Could not check linked learner work.');
+        });
+        return () => { active = false; };
+    }, [showDeleteConfirm, templateId]);
 
     // Helper to map technology names to stylized objects (Simple version of Importer logic)
     const mapTechnologies = (input: string) => {
@@ -193,6 +215,10 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
     };
 
     const handleSave = async () => {
+        if (sourceData?.status === 'archived') {
+            setSaveError('This mission has been retired. Create a new mission to make changes.');
+            return;
+        }
         const title = String(form.title || '').trim();
         if (!title) {
             setActiveTab('details');
@@ -224,15 +250,40 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             const selectedWorkflow = processTemplates.find(workflow => workflow.id === form.defaultWorkflowId);
             const workflowSnapshot = selectedWorkflow ? createWorkflowSnapshot(selectedWorkflow) : undefined;
             const missionPayload = {
-                ...form,
                 title,
+                description: form.description,
+                hook: form.hook,
+                difficulty: form.difficulty,
+                skills: form.skills,
+                defaultSteps: form.defaultSteps,
+                station: form.station,
+                processTemplateId: form.processTemplateId,
+                technologies: form.technologies,
+                keyChallenges: form.keyChallenges,
+                duration: form.duration,
+                dueDate: form.dueDate,
+                resources: form.resources,
+                stepResources: form.stepResources,
+                status: form.status,
+                targetAudience: form.targetAudience,
+                defaultWorkflowId: form.defaultWorkflowId,
+                thumbnailUrl: form.thumbnailUrl,
+                realWorldApp: form.realWorldApp,
+                learningOutcomes: form.learningOutcomes,
                 missionBrief: normalizedBrief,
-                ...(workflowSnapshot ? { workflowSnapshot } : {}),
+                workflowSnapshot: workflowSnapshot || form.workflowSnapshot,
             };
-            if (templateId) {
-                await actions.updateProjectTemplate(templateId, missionPayload);
-            } else {
-                await actions.addProjectTemplate(missionPayload as any);
+            const savedMissionId = templateId
+                ? await actions.updateProjectTemplate(templateId, missionPayload, sourceData?.updatedAt ?? null)
+                : await actions.addProjectTemplate(missionPayload as any);
+            const allMissionResources: Resource[] = [
+                ...(missionPayload.resources || []),
+                ...Object.values(missionPayload.stepResources || {}).flat(),
+                ...(missionPayload.workflowSnapshot?.phases || []).flatMap(phase => phase.resources || []),
+            ];
+            if (allMissionResources.length) {
+                if (!db || !user?.uid || !userProfile?.organizationId) throw new Error('Your instructor session could not publish the resource library.');
+                await syncMissionResourcesToLibrary(db, savedMissionId, allMissionResources, { uid: user.uid, organizationId: userProfile.organizationId, role: userProfile.role || '' });
             }
             onClose();
         } catch (e: any) {
@@ -246,17 +297,16 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
         }
     };
 
-    const handleDelete = async () => {
-        if (!templateId) return;
+    const handleRemove = async (mode: 'retire' | 'delete') => {
+        if (!templateId || !removalPlan || (mode === 'delete' && !removalPlan.canDelete)) return;
         setIsSaving(true);
-        setSaveError(null);
+        setRemovalError(null);
         try {
-            await actions.deleteProjectTemplate(templateId);
+            if (mode === 'delete') await actions.deleteProjectTemplate(templateId);
+            else await actions.retireProjectTemplate(templateId);
             onClose();
         } catch (e: any) {
-            console.error("Error deleting project:", e);
-            setShowDeleteConfirm(false);
-            setSaveError(e?.message || 'The mission could not be deleted.');
+            setRemovalError(e?.message || 'The mission could not be removed.');
         } finally {
             setIsSaving(false);
         }
@@ -274,9 +324,9 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50">
+        <div className="sq-factory-editor flex flex-col h-full bg-slate-50">
             {/* Header */}
-            <div className="bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shrink-0">
+            <div className="sq-factory-editor-header bg-white border-b border-slate-200 px-8 py-5 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-4">
                     <button onClick={onClose} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700" aria-label="Close mission editor">
                         <X size={24} />
@@ -289,12 +339,13 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                     </div>
                 </div>
                 <div className="flex gap-3">
-                    {templateId && (
+                    <button type="button" onClick={() => setActiveTab('publishing')} className="sq-factory-readiness" aria-label={`Open review and publish. ${readiness.completed} of ${readiness.total} checks complete`}>{readiness.completed}/{readiness.total} ready</button>
+                    {templateId && sourceData?.status !== 'archived' && (
                         <button
                             onClick={() => setShowDeleteConfirm(true)}
                             className="flex min-h-11 items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2 font-bold text-red-700 transition hover:bg-red-50"
                         >
-                            <Trash2 size={18} /> <span className="hidden md:inline">Delete</span>
+                            <Trash2 size={18} /> <span className="hidden md:inline">Remove</span>
                         </button>
                     )}
                     <button onClick={handleSave} disabled={isSaving} className="flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-6 font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
@@ -310,11 +361,13 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
             )}
 
             {/* Tabs */}
-            <div className="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-3 sm:px-8">
+            <div className="sq-factory-editor-tabs flex shrink-0 overflow-x-auto border-b border-slate-200 bg-white px-3 sm:px-8" aria-label="Mission editor sections">
                 {TABS.map(tab => (
                     <button
+                        type="button"
                         key={tab}
                         onClick={() => setActiveTab(tab)}
+                        aria-current={activeTab === tab ? 'step' : undefined}
                         className={`px-6 py-4 text-sm font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === tab
                             ? 'border-indigo-600 text-indigo-600'
                             : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -676,20 +729,14 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                 {/* RESOURCES TAB */}
                 {activeTab === 'resources' && (
                     <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
-                        <div className="bg-indigo-50 p-6 rounded-2xl border-2 border-indigo-100 flex items-center justify-between">
-                            <div>
-                                <h3 className="font-bold text-indigo-900">Resource Library</h3>
-                                <p className="text-sm text-indigo-700">Attach videos, links, and files to help students.</p>
-                            </div>
-                            <div>
-                                <h3 className="font-bold text-indigo-900">Resource Library</h3>
-                                <p className="text-sm text-indigo-700">Attach videos, links, and files to help students.</p>
-                            </div>
+                        <div className="bg-indigo-50 p-6 rounded-2xl border-2 border-indigo-100 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div><h3 className="font-bold text-indigo-900">Mission resources &amp; tools</h3><p className="text-sm text-indigo-700">Upload something new or reuse a published guide, app, tool, or knowledge check.</p></div>
+                            <button type="button" onClick={() => setLibraryTarget('global')} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-black text-white hover:bg-indigo-700"><Database size={17} /> Choose from library</button>
                         </div>
 
                         {/* Add Resource Form */}
                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Add New Resource</h4>
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-wider">Add a new resource or tool</h4>
                             <div className="flex gap-2">
                                 <input
                                     placeholder="Resource Title (e.g. Tutorial Video)"
@@ -697,9 +744,10 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                     id="new-res-title"
                                 />
                                 <select className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold outline-none" id="new-res-type">
-                                    <option value="link">Link 🔗</option>
-                                    <option value="video">Video 🎥</option>
-                                    <option value="file">File 📄</option>
+                                    <option value="tool">Tool or app</option>
+                                    <option value="link">Link</option>
+                                    <option value="video">Video</option>
+                                    <option value="file">File</option>
                                 </select>
                             </div>
 
@@ -759,7 +807,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                     <div key={idx} className="flex items-center justify-between bg-white p-4 rounded-xl border border-slate-200 hover:border-indigo-300 transition-colors group">
                                         <div className="flex items-center gap-4">
                                             <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                                                {res.type === 'video' ? <Video size={20} /> : res.type === 'file' ? <FileText size={20} /> : <Link size={20} />}
+                                                {res.type === 'video' ? <Video size={20} /> : res.type === 'file' ? <FileText size={20} /> : res.type === 'tool' ? <Wrench size={20} /> : <Link size={20} />}
                                             </div>
                                             <div>
                                                 <h4 className="font-bold text-slate-800">{res.title}</h4>
@@ -801,7 +849,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                         <div className="bg-blue-50 p-6 rounded-2xl border-2 border-blue-100 flex items-center justify-between">
                                             <div>
                                                 <h3 className="font-bold text-blue-900">Mission Workflow: {workflow.name}</h3>
-                                                <p className="text-sm text-blue-700">Add specific documents, images, or links for each step of this mission.</p>
+                                                <p className="text-sm text-blue-700">Add specific documents, images, links, or project tools for each step of this mission.</p>
                                             </div>
                                             <div className="hidden md:block">
                                                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-500">
@@ -827,7 +875,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                                                 <div key={idx} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200 group">
                                                                     <div className="flex items-center gap-3">
                                                                         <div className="p-2 bg-white rounded border border-slate-200 text-slate-400">
-                                                                            {res.type === 'video' ? <Video size={14} /> : res.type === 'file' ? <FileText size={14} /> : res.type === 'image' ? <ImageIcon size={14} /> : <Link size={14} />}
+                                                                            {res.type === 'video' ? <Video size={14} /> : res.type === 'file' ? <FileText size={14} /> : res.type === 'image' ? <ImageIcon size={14} /> : res.type === 'tool' ? <Wrench size={14} /> : <Link size={14} />}
                                                                         </div>
                                                                         <div>
                                                                             <p className="text-xs font-bold text-slate-700">{res.title}</p>
@@ -853,11 +901,12 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                                                 </div>
                                                             ))}
                                                             {(!form.stepResources?.[phase.id] || form.stepResources[phase.id].length === 0) && (
-                                                                <p className="text-xs text-slate-400 italic">No mission-specific resources added.</p>
+                                                                <p className="text-xs text-slate-400 italic">No mission-specific resources or tools added.</p>
                                                             )}
                                                         </div>
 
                                                         {/* Add Resource Small Form */}
+                                                        <button type="button" onClick={() => setLibraryTarget(phase.id)} className="mb-3 inline-flex min-h-11 items-center gap-2 rounded-xl border-2 border-blue-200 bg-blue-50 px-4 text-xs font-black text-blue-800 hover:bg-blue-100"><Database size={16} /> Choose a resource or tool for this step</button>
                                                         <div className="flex gap-2 items-center">
                                                             <input
                                                                 id={`title-${phase.id}`}
@@ -868,6 +917,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                                                 id={`type-${phase.id}`}
                                                                 className="px-2 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none"
                                                             >
+                                                                <option value="tool">Tool or app</option>
                                                                 <option value="link">Link</option>
                                                                 <option value="image">Image</option>
                                                                 <option value="video">Video</option>
@@ -1114,10 +1164,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                                                             : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-200'
                                                             }`}
                                                     >
-                                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isSelected ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'
-                                                            }`}>
-                                                            {studentName[0]}
-                                                        </div>
+                                                        <StudentAvatar student={student} name={studentName} className="sq-student-avatar--compact" />
                                                         <span className="text-xs font-bold truncate">{studentName}</span>
                                                     </button>
                                                 );
@@ -1191,6 +1238,16 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                 )}
             </div>
 
+            {libraryTarget && <ResourceLibrary picker onClose={() => setLibraryTarget(null)} onPick={resource => {
+                if (libraryTarget === 'global') {
+                    if (!(form.resources || []).some(item => (item.libraryId || item.id) === (resource.libraryId || resource.id))) setForm(current => ({ ...current, resources: [...(current.resources || []), resource] }));
+                } else {
+                    const existing = form.stepResources?.[libraryTarget] || [];
+                    if (!existing.some(item => (item.libraryId || item.id) === (resource.libraryId || resource.id))) setForm(current => ({ ...current, stepResources: { ...(current.stepResources || {}), [libraryTarget]: [...existing, resource] } }));
+                }
+                setLibraryTarget(null);
+            }} />}
+
             {/* Footer Navigation */}
             <div className="p-6 border-t border-slate-200 bg-white flex justify-between shrink-0">
                 <button
@@ -1212,11 +1269,14 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({ templateId, initia
                 <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true" aria-labelledby="delete-mission-title">
                     <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
                         <div className="grid h-11 w-11 place-items-center rounded-xl bg-red-50 text-red-700"><Trash2 size={21} /></div>
-                        <h3 id="delete-mission-title" className="mt-4 text-xl font-black text-slate-950">Delete this mission?</h3>
-                        <p className="mt-2 text-sm leading-6 text-slate-500">The mission and all linked student submissions will be permanently deleted. This action cannot be undone.</p>
+                        <h3 id="delete-mission-title" className="mt-4 text-xl font-black text-slate-950">Remove this mission?</h3>
+                        <p className="mt-2 text-sm leading-6 text-slate-500">Retiring hides this mission from new learner assignments and keeps existing projects, submissions, and review history.</p>
+                        {removalPlan && <p className="mt-3 text-sm text-slate-600">{removalPlan.reason}</p>}
+                        {removalError && <p role="alert" className="mt-3 text-sm font-bold text-red-700">{removalError}</p>}
                         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                            <button onClick={() => setShowDeleteConfirm(false)} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700 hover:bg-slate-50">Keep mission</button>
-                            <button onClick={handleDelete} disabled={isSaving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 text-sm font-extrabold text-red-700 hover:bg-red-50 disabled:opacity-50">{isSaving ? <Loader2 size={17} className="animate-spin" /> : <Trash2 size={17} />} Delete mission</button>
+                            <button onClick={() => setShowDeleteConfirm(false)} disabled={isSaving} className="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-extrabold text-slate-700 hover:bg-slate-50">Keep mission</button>
+                            {removalPlan?.canDelete && <button onClick={() => void handleRemove('delete')} disabled={isSaving} className="min-h-11 rounded-xl border border-red-200 px-4 text-sm font-extrabold text-red-700 hover:bg-red-50 disabled:opacity-50">Delete unused draft permanently</button>}
+                            <button onClick={() => void handleRemove('retire')} disabled={isSaving || !removalPlan} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-extrabold text-white disabled:opacity-50">{isSaving ? <Loader2 size={17} className="animate-spin" /> : <Trash2 size={17} />} Retire mission</button>
                         </div>
                     </div>
                 </div>

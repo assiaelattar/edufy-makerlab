@@ -15,6 +15,7 @@ interface SparkbookDialogProps {
   size?: SparkbookDialogSize;
   closeLabel?: string;
   bodyClassName?: string;
+  panelClassName?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
 }
@@ -39,6 +40,7 @@ export const SparkbookDialog: React.FC<SparkbookDialogProps> = ({
   size = 'md',
   closeLabel = 'Close dialog',
   bodyClassName = '',
+  panelClassName = '',
   children,
   footer,
 }) => {
@@ -89,7 +91,7 @@ export const SparkbookDialog: React.FC<SparkbookDialogProps> = ({
       <button className="sq-dialog-backdrop" type="button" onClick={onClose} aria-label={closeLabel} />
       <section
         ref={panelRef}
-        className={`sq-dialog sq-dialog--${size} sq-dialog--${tone}`}
+        className={`sq-dialog sq-dialog--${size} sq-dialog--${tone} ${panelClassName}`.trim()}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

@@ -1,0 +1,306 @@
+/* SparkQuest learning concept, second palette and scale study.
+   Color is assigned by purpose: blue = act, citrus = progress, coral = review,
+   marigold = resources, violet = imagination. No borrowed brand assets. */
+:root {
+  --lf-ink: #203149;
+  --lf-blue: #2f78e8;
+  --lf-blue-deep: #1757bd;
+  --lf-citrus: #a9df39;
+  --lf-citrus-deep: #5d9e23;
+  --lf-coral: #ff8268;
+  --lf-marigold: #ffd35f;
+  --lf-violet: #9b7ae7;
+}
+
+.lf-stage {
+  background:
+    radial-gradient(circle at 12% 12%, #e5f8c9 0, transparent 26%),
+    radial-gradient(circle at 83% 80%, #d2c8f9 0, transparent 30%),
+    linear-gradient(135deg, #b7c7e3, #b5d6cc 48%, #b4bedb);
+}
+.lf-app {
+  background: #eff6fb;
+  box-shadow: 0 26px 75px #2945762d, 0 0 0 1px #ffffffb8;
+}
+.lf-demo-ribbon {
+  min-height: 31px;
+  background: linear-gradient(100deg, #263c67, #3659a1 55%, #654c9b);
+  font-size: 12px;
+}
+.lf-header { height: 90px; padding-inline: 40px; }
+.lf-brand strong { font-size: 25px; }
+.lf-spark-mark {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(145deg, #4b9af2, #245dd5 70%, #6647d3);
+  box-shadow: 0 5px 0 #214eaa;
+}
+.lf-nav { gap: 4px; padding: 6px; background: #edf3f9; }
+.lf-nav button { min-height: 44px; padding-inline: 18px; font-size: 14px; }
+.lf-nav button.is-active { background: linear-gradient(145deg, #304a70, #21344f); }
+.lf-header-icon { width: 46px; height: 46px; }
+
+.lf-main { padding: 34px 40px 20px; }
+.lf-intro { margin-bottom: 28px; }
+.lf-eyebrow, .lf-kicker { font-size: 11.5px; }
+.lf-intro h1 { font-size: clamp(36px, 3.25vw, 46px); margin-top: 10px; }
+.lf-intro p { font-size: 16px; line-height: 1.45; }
+.lf-title-star {
+  color: #ffa83f;
+  filter: drop-shadow(0 2px 0 #f4d483);
+  animation: lf-gentle-turn 5s ease-in-out infinite;
+}
+.lf-online-dot {
+  background: #59ca7d;
+  box-shadow: 0 0 0 4px #d8f6d9;
+}
+
+.lf-button {
+  min-height: 52px;
+  padding-inline: 21px;
+  border-radius: 15px;
+  font-size: 15px;
+  letter-spacing: -.01em;
+}
+.lf-button-blue {
+  background: linear-gradient(135deg, #438cf0 0%, #2f73e5 58%, #755bdc 125%);
+  box-shadow: 0 5px 0 #2058b7, 0 10px 17px #3677dd23;
+}
+.lf-button-ink {
+  background: linear-gradient(130deg, #31496b, #263750);
+  box-shadow: 0 5px 0 #172941;
+}
+.lf-button-outline {
+  border-color: #a8cbf4;
+  color: #2569cf;
+  box-shadow: 0 4px 0 #bfd7f2;
+}
+.lf-button:active { transform: translateY(4px) scale(.99) !important; }
+.lf-create-top { min-width: 202px; }
+
+.lf-overview-grid, .lf-work-grid { gap: 18px; }
+.lf-work-grid { margin-top: 18px; }
+.lf-card {
+  border-color: #dfe9f2;
+  border-radius: 23px;
+  box-shadow: 0 5px 0 #d7e3f0, 0 11px 25px #2d4e7512;
+}
+.lf-card h2 { font-size: 22px; }
+.lf-journey {
+  padding: 26px 28px 0;
+  background:
+    radial-gradient(circle at 93% 7%, #e5f5cb 0, transparent 23%),
+    radial-gradient(circle at 0% 95%, #e1e9ff 0, transparent 32%),
+    #fff;
+}
+.lf-level-badge { padding: 8px 12px; font-size: 12px; }
+.lf-level-badge.is-coral {
+  background: linear-gradient(110deg, #fff0df, #ffeadf);
+  color: #a7492d;
+}
+.lf-trail { margin: 28px 0 20px; }
+.lf-trail:before { left: 27px; border-left-color: #c9dbef; }
+.lf-trail-step { min-height: 74px; gap: 16px; }
+.lf-trail-node {
+  width: 54px;
+  height: 54px;
+  border-radius: 17px;
+}
+.lf-trail-step.is-current .lf-trail-node {
+  background: linear-gradient(145deg, #60a6ff, #2f77e5);
+  box-shadow: 0 5px 0 #1c5ab9;
+  animation: lf-current-nudge 3.7s ease-in-out infinite;
+}
+.lf-trail-step:nth-child(2) .lf-trail-node {
+  background: linear-gradient(145deg, #fff4a8, #ffd45f);
+  color: #946011;
+  box-shadow: 0 4px 0 #e5b641;
+}
+.lf-trail-step:nth-child(3) .lf-trail-node {
+  background: linear-gradient(145deg, #d5fbb3, #7bdb8c);
+  color: #287a43;
+  box-shadow: 0 4px 0 #63bf74;
+}
+.lf-trail-copy strong { font-size: 16px; }
+.lf-trail-copy small { font-size: 13px; }
+.lf-journey-footer { min-height: 60px; margin-inline: -28px; padding-inline: 28px; }
+.lf-journey-footer p { font-size: 12px; }
+.lf-star-burst { color: #ffbb38; animation: lf-star-wave 4s ease-in-out infinite; }
+
+.lf-proof-metric {
+  padding: 25px 23px;
+  background:
+    radial-gradient(circle at 92% 90%, #ffe1c4 0, transparent 31%),
+    linear-gradient(155deg, #fff6ee 0%, #ffece6 100%);
+}
+.lf-coral {
+  background: linear-gradient(150deg, #ffae73, #ff746c 78%);
+  box-shadow: 0 4px 0 #d85d5b;
+}
+.lf-small-pill { padding: 8px 11px; font-size: 11px; }
+.lf-metric-number { margin-top: 21px; font-size: 72px; }
+.lf-proof-metric p { max-width: 250px; font-size: 14px; line-height: 1.5; }
+.lf-proof-metric .lf-button { margin-top: 25px; }
+.lf-metric-decoration { border-color: #ffd4c3; }
+
+.lf-class-metric {
+  padding: 25px 23px;
+  background:
+    radial-gradient(circle at 100% 0%, #e0f8b4 0, transparent 35%),
+    linear-gradient(160deg, #ffffff, #f4fff0);
+}
+.lf-blue { background: linear-gradient(150deg, #e4efff, #c9dbff); }
+.lf-select-label { font-size: 11px; }
+.lf-select-wrap select { height: 44px; font-size: 13px; }
+.lf-class-center strong { font-size: 42px; }
+.lf-class-center small { font-size: 12px; }
+.lf-progress-art { width: 120px; height: 120px; }
+.lf-progress-track { stroke: #dff0de; }
+.lf-progress-fill { stroke: #68c44e; }
+.lf-class-legend span { font-size: 12px; }
+.lf-class-legend .is-blue { background: #5fbd53; }
+.lf-class-legend .is-yellow { background: #ffc24f; }
+.lf-text-action { font-size: 13px; }
+
+.lf-reviews { padding: 25px 26px 0; }
+.lf-review-tools { margin: 18px 0 15px; }
+.lf-review-tools p { font-size: 13px; }
+.lf-search { width: 230px; height: 43px; }
+.lf-search input { font-size: 12px; }
+.lf-proof-list { gap: 9px; }
+.lf-proof-row { min-height: 73px; padding: 10px 13px; border-radius: 15px; }
+.lf-proof-row:hover {
+  border-color: #9ccaf0;
+  background: #f7fcff;
+  box-shadow: 0 4px 0 #cce8f7;
+}
+.lf-avatar { width: 42px; height: 42px; border-radius: 13px; font-size: 13px; }
+.lf-proof-main strong { font-size: 14px; }
+.lf-proof-main small, .lf-proof-time { font-size: 12px; }
+.lf-row-arrow { width: 32px; height: 32px; }
+.lf-card-bottom { margin-inline: -26px; padding-inline: 26px; }
+.lf-card-bottom > span { font-size: 12px; }
+
+.lf-side-stack { gap: 18px; }
+.lf-missions { padding: 24px 23px; background: linear-gradient(145deg, #fff 62%, #f3f0ff); }
+.lf-missions > p { font-size: 13px; }
+.lf-round-action {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(140deg, #58a2f4, #3970e5 70%, #8b69e4);
+  box-shadow: 0 4px 0 #285cbd;
+}
+.lf-draft-list { gap: 10px; }
+.lf-draft-row { min-height: 73px; border-radius: 15px; }
+.lf-draft-icon { width: 52px; height: 52px; border-radius: 14px; }
+.lf-draft-icon.is-light { background: linear-gradient(140deg, #fff7c5, #ffe08a); color: #946713; }
+.lf-draft-icon.is-shapes { background: linear-gradient(140deg, #e5e4ff, #c8bafb); color: #7053cc; }
+.lf-draft-icon.is-book { background: linear-gradient(140deg, #d9f9e5, #a7e7be); color: #21764c; }
+.lf-draft-row strong { font-size: 14px; }
+.lf-draft-row small { font-size: 12px; }
+.lf-mini-action { width: 35px; height: 35px; border-radius: 11px; }
+.lf-missions > .lf-button { min-height: 46px; font-size: 14px; }
+.lf-resource {
+  min-height: 185px;
+  padding: 22px;
+  background: linear-gradient(130deg, #fff6c9, #ffe8ae 68%, #ffdda0);
+  border-color: #f5dd9a;
+}
+.lf-resource-art { transform: scale(1.09); transform-origin: left center; }
+.lf-resource h2 { font-size: 19px; }
+.lf-resource p { font-size: 13px; line-height: 1.45; }
+.lf-footer { font-size: 11px; }
+.lf-footer button { font-size: 11px; }
+.lf-modal { width: min(100%, 500px); padding: 32px; }
+.lf-modal h2 { font-size: 28px; }
+.lf-modal-step { font-size: 14px; }
+.lf-modal-hint { font-size: 13px; }
+.lf-modal-maker > div { font-size: 14px; }
+.lf-modal-maker > div span { font-size: 12px; }
+.lf-toast { font-size: 14px; }
+
+@keyframes lf-gentle-turn {
+  0%, 100% { transform: rotate(-18deg) scale(1); }
+  50% { transform: rotate(5deg) scale(1.08); }
+}
+@keyframes lf-current-nudge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes lf-star-wave {
+  0%, 100% { transform: rotate(-15deg) scale(1); }
+  50% { transform: rotate(5deg) scale(1.07); }
+}
+
+@media (max-width: 1260px) {
+  .lf-header { padding-inline: 26px; }
+  .lf-main { padding-inline: 27px; }
+  .lf-overview-grid { grid-template-columns: minmax(0, 1.3fr) minmax(245px, .85fr); }
+  .lf-class-metric { grid-column: 1 / -1; }
+  .lf-work-grid { grid-template-columns: minmax(0, 1.3fr) minmax(315px, .85fr); }
+}
+@media (max-width: 800px) {
+  .lf-stage { padding: 0; }
+  .lf-header { height: 75px; padding-inline: 18px; }
+  .lf-main { padding: 25px 19px 100px; }
+  .lf-overview-grid { grid-template-columns: 1fr 1fr; }
+  .lf-journey { grid-column: 1 / -1; }
+  .lf-class-metric { grid-column: auto; }
+  .lf-work-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 580px) {
+  .lf-demo-ribbon { min-height: 29px; font-size: 9px; }
+  .lf-header { height: 71px; }
+  .lf-main { padding: 23px 15px 105px; }
+  .lf-intro h1 { font-size: 34px; }
+  .lf-intro p { max-width: 350px; font-size: 14px; }
+  .lf-create-top { width: 100%; margin-top: 19px; }
+  .lf-overview-grid { grid-template-columns: 1fr; gap: 14px; }
+  .lf-journey, .lf-proof-metric, .lf-class-metric { grid-column: 1 / -1; }
+  .lf-journey { padding: 21px 20px 0; }
+  .lf-journey h2 { font-size: 20px; }
+  .lf-journey .lf-level-badge { font-size: 10px; }
+  .lf-trail { margin: 21px 0 14px; }
+  .lf-trail:before { left: 24px; }
+  .lf-trail-step { min-height: 68px; gap: 12px; }
+  .lf-trail-node { width: 49px; height: 49px; }
+  .lf-trail-copy strong { font-size: 15px; }
+  .lf-trail-copy small { font-size: 12px; }
+  .lf-journey-footer { min-height: 56px; margin-inline: -20px; padding-inline: 20px; }
+  .lf-journey-footer p { font-size: 11px; }
+  .lf-proof-metric, .lf-class-metric { min-height: 260px; padding: 22px; }
+  .lf-metric-number { font-size: 67px; }
+  .lf-proof-metric h2, .lf-class-metric h2 { font-size: 21px; }
+  .lf-proof-metric p { font-size: 13px; }
+  .lf-proof-metric .lf-button { min-height: 50px; font-size: 14px; }
+  .lf-class-center strong { font-size: 40px; }
+  .lf-progress-art { width: 105px; height: 105px; }
+  .lf-class-legend span { font-size: 11px; }
+  .lf-reviews { padding: 21px 20px 0; }
+  .lf-section-head h2 { font-size: 20px; }
+  .lf-review-tools p { font-size: 12px; }
+  .lf-search { width: 100%; height: 44px; }
+  .lf-proof-row { min-height: 70px; }
+  .lf-proof-main strong { font-size: 13px; }
+  .lf-proof-main small { font-size: 11px; }
+  .lf-card-bottom { margin-inline: -20px; padding-inline: 20px; }
+  .lf-missions { padding: 21px 20px; }
+  .lf-missions > p, .lf-resource p { font-size: 12px; }
+  .lf-draft-row strong { font-size: 13px; }
+  .lf-draft-row small { font-size: 11px; }
+  .lf-resource { padding: 20px; }
+  .lf-resource h2 { font-size: 18px; }
+  .lf-modal { padding: 26px; }
+  .lf-modal-actions { flex-wrap: wrap; }
+  .lf-modal-actions .lf-button { flex: 1 1 100%; }
+}
+@media (max-width: 390px) {
+  .lf-main { padding-inline: 13px; }
+  .lf-proof-metric .lf-button { font-size: 14px; }
+  .lf-progress-art { width: 100px; height: 100px; }
+  .lf-trail-copy small { font-size: 11px; }
+  .lf-journey-footer p { font-size: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lf-title-star, .lf-star-burst, .lf-trail-step.is-current .lf-trail-node { animation: none; }
+}

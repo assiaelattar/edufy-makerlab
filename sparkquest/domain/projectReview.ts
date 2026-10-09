@@ -29,6 +29,8 @@ export function stepIsApproved(project: StudentProject, step: ProjectStep): bool
   if (review) return review.outcome === 'step_approved';
   return project.reviewProtocolVersion === 1 ? false : normalizedReviewStatus(step.status) === 'done';
 }
+export const requiredStepsApproved = (project: StudentProject): boolean =>
+  (project.steps || []).length > 0 && (project.steps || []).every(step => step.required === false || stepIsApproved(project, step));
 export const stepNeedsReview = (step: ProjectStep, project?: StudentProject) => {
   if (!project) return ['pending_review', 'submitted'].includes(normalizedReviewStatus(step.status));
   if (currentStepReview(project, step)) return false;

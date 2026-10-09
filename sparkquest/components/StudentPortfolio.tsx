@@ -6,6 +6,7 @@ import { db } from '../services/firebase';
 import { StudentProject } from '../types';
 import { currentAcademicYear, projectAcademicYear } from '../utils/academicYear';
 import { fieldLogYears, projectLane, selectFieldLog } from '../domain/learnerWorkbench';
+import { stepIsApproved } from '../domain/projectReview';
 
 interface StudentPortfolioProps {
     isOpen: boolean;
@@ -249,7 +250,7 @@ export const StudentPortfolio: React.FC<StudentPortfolioProps> = ({ isOpen, onCl
                                 <div className="sq-portfolio-grid">
                                     {visibleProjects.map((project, index) => {
                                         const status = statusLabel(String(project.status));
-                                        const completedSteps = project.steps?.filter(step => step.status === 'done').length || 0;
+                                        const completedSteps = project.steps?.filter(step => stepIsApproved(project, step)).length || 0;
                                         return (
                                             <article key={project.id} className="sq-portfolio-card">
                                                 <div className="sq-portfolio-card-media">

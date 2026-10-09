@@ -6,6 +6,7 @@ import { useFactoryData } from '../../hooks/useFactoryData';
 import { db } from '../../services/firebase';
 import type { Contest, Gadget, PurchaseRequest } from '../../types';
 import { FactoryEmptyState, FactoryPageHeader, FactoryStat, factoryButton } from '../factory/FactoryPage';
+import '../factory/factory-learning-setup.css';
 
 type Tab = 'GADGETS' | 'CONTESTS' | 'ORDERS';
 type Editor = 'gadget' | 'contest' | null;
@@ -158,7 +159,7 @@ export const GamificationManager: React.FC = () => {
     ];
 
     return (
-        <div className="space-y-6">
+        <div className="sq-learning-setup sq-learning-gamification space-y-6">
             <FactoryPageHeader
                 eyebrow="Engagement system"
                 title="Rewards & challenges"

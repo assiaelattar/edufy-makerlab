@@ -12,7 +12,7 @@ This map keeps the visual migration deliberate and reversible. Each module must 
 | `EducationSectionHeader` | Title, explanation, and one clear action | School day, finance, and workshop sections |
 | `EducationProgress` | Accessible, text-backed readiness indicators | Operations readiness |
 
-The Education UI is the authenticated production default; `?ui=atlas-legacy` remains the temporary, non-persistent rollback. Module styles use `.edu-v1` roots and the compatibility bridge is scoped by the active authenticated Education UI body class; public routes retain their own styling.
+The Education UI is the authenticated production default; `?ui=atlas-legacy` remains the temporary rollback. Module styles use `.edu-v1` roots and the compatibility bridge is scoped by the active Education UI body class.
 
 ## Module migration status
 

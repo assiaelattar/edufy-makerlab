@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildReviewPatch, currentStepReview, effectiveStepReviewStatus, learnerSaveFingerprint, needsReview, pendingProofCount, proofKind, reviewFingerprint, reviewQueue, safeProofUrl, stepIsApproved, stepReviewFeedback, submittedProof } from './projectReview.ts';
+import { buildReviewPatch, currentStepReview, effectiveStepReviewStatus, learnerSaveFingerprint, needsReview, pendingProofCount, proofKind, requiredStepsApproved, reviewFingerprint, reviewQueue, safeProofUrl, stepIsApproved, stepReviewFeedback, submittedProof } from './projectReview.ts';
 import type { StudentProject } from '../types.ts';
 
 const actor = { uid: 'teacher', role: 'instructor', organizationId: 'org-a', name: 'Mentor' };
@@ -51,8 +51,11 @@ const approved = { ...resubmitted, ...buildReviewPatch(resubmitted, command(resu
 check(() => assert.equal(approved.steps[0].status, 'done'));
 check(() => assert.equal(approved.reviewHistory?.length, 2));
 check(() => assert.equal(stepIsApproved(approved, approved.steps[0]), true));
+check(() => assert.equal(requiredStepsApproved(approved), true));
+check(() => assert.equal(requiredStepsApproved({ ...approved, steps: [] }), false));
 const changedAfterApproval = { ...approved, steps: [{ ...approved.steps[0], note: 'Changed after approval', status: 'done' as const }] };
 check(() => assert.equal(stepIsApproved(changedAfterApproval, changedAfterApproval.steps[0]), false));
+check(() => assert.equal(requiredStepsApproved(changedAfterApproval), false));
 check(() => assert.equal(effectiveStepReviewStatus(changedAfterApproval, changedAfterApproval.steps[0]), 'pending_review'));
 check(() => assert.equal(stepReviewFeedback(changedAfterApproval, changedAfterApproval.steps[0]), ''));
 check(() => assert.equal(reviewQueue([changedAfterApproval]).length, 1));

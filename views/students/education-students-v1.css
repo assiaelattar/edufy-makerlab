@@ -55,6 +55,7 @@
 .edu-students-v1__stats [class*='text-sky'],
 .edu-students-v1__stats [class*='text-teal'] { color: inherit !important; }
 .edu-students-v1__stats [class*='uppercase'] { color: #676c63 !important; font-family: 'JetBrains Mono', monospace; font-size: 9px !important; letter-spacing: .05em; }
+
 .edu-directory-command {
     display: grid;
     grid-template-columns: minmax(250px,.62fr) minmax(0,1.38fr);

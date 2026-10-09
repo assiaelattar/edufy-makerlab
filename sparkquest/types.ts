@@ -77,11 +77,50 @@ export interface ProcessTemplate {
 }
 
 // Resources
+export interface ResourceQuizQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  correctOptionIndex: number;
+  explanation?: string;
+}
+
+export interface ResourceQuiz {
+  version: number;
+  passingScore: number;
+  questions: ResourceQuizQuestion[];
+}
+
 export interface Resource {
   id: string;
   title: string;
-  type: 'video' | 'link' | 'file' | 'image';
+  type: 'video' | 'link' | 'file' | 'image' | 'tool';
   url: string;
+  libraryId?: string;
+  description?: string;
+  tags?: string[];
+  mimeType?: string;
+  thumbnailUrl?: string;
+  toolAccess?: 'web' | 'download' | 'plugin';
+  requiredForProgress?: boolean;
+  quiz?: ResourceQuiz;
+}
+
+export interface ResourceLibraryItem extends Resource {
+  organizationId: string;
+  status?: 'active' | 'archived';
+  sourceMissionIds?: string[];
+  createdBy?: string;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+}
+
+export interface ResourceProgress {
+  resourceId: string;
+  quizVersion: number;
+  attempts: number;
+  score: number;
+  passedAt: string;
 }
 
 export type MissionEvidenceType = 'image' | 'video' | 'document' | 'link' | 'text' | 'any';
@@ -237,6 +276,7 @@ export interface StudentProject {
   skills: string[];
   resources: Resource[];
   stepResources?: Record<string, Resource[]>; // Map stepId/phaseId -> specific resources
+  resourceProgress?: Record<string, ResourceProgress>;
   dueDate?: Date;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
@@ -353,6 +393,9 @@ export interface ProjectTemplate {
 
   dueDate?: Timestamp;
   createdAt?: Timestamp;
+  updatedAt?: Timestamp;
+  retiredAt?: Timestamp;
+  retiredBy?: string;
 }
 
 // Toolkit & Assets

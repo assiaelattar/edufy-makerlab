@@ -7,6 +7,8 @@ import { saveInstructorProjectEdits } from '../../services/projectReview';
 import { useAuth } from '../../context/AuthContext';
 import { StudentProject, Station, StationType } from '../../types';
 import { api } from '../../services/api';
+import { ProjectPlanEditor } from '../ProjectPlanEditor';
+import { createPlanStep } from '../../domain/projectPlan';
 
 interface StudentProjectModalProps {
     isOpen: boolean;
@@ -46,6 +48,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
     const [status, setStatus] = useState<StudentProject['status']>('planning');
     const [thumbnailUrl, setThumbnailUrl] = useState('');
     const [presentationUrl, setPresentationUrl] = useState('');
+    const [steps, setSteps] = useState<StudentProject['steps']>([]);
 
     // Upload State
     const [isUploading, setIsUploading] = useState(false);
@@ -64,6 +67,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             setStatus(initialData.status);
             setThumbnailUrl(initialData.thumbnailUrl || initialData.coverImage || '');
             setPresentationUrl(initialData.presentationUrl || '');
+            setSteps(initialData.steps || []);
         } else {
             // Reset for new project
             setTitle(mode === 'showcase' ? 'Project Showcase' : '');
@@ -72,6 +76,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             setStatus(mode === 'showcase' ? 'published' : 'planning');
             setThumbnailUrl('');
             setPresentationUrl('');
+            setSteps([createPlanStep('Start the project')]);
         }
         setFormError(null);
         setShowDeleteConfirm(false);
@@ -143,6 +148,10 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             setFormError('Add a project title before saving.');
             return;
         }
+        if (!steps.length || steps.some(step => !step.title.trim())) {
+            setFormError('Keep at least one roadmap step and give every step a title.');
+            return;
+        }
 
         const orgId = initialData?.organizationId || authProfile?.organizationId;
         if (!orgId) {
@@ -168,16 +177,15 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                 coverImage: thumbnailUrl, // Save to both for compatibility
                 mediaUrls: thumbnailUrl ? [thumbnailUrl] : [], // Save to mediaUrls for Portfolio/Showcase compatibility
                 presentationUrl, // Save the link
+                steps,
                 updatedAt: Timestamp.now(),
             };
 
             // If creating new
             if (!initialData) {
                 projectData.createdAt = Timestamp.now();
+                projectData.reviewProtocolVersion = 1;
                 // Initialize required arrays
-                projectData.steps = [
-                    { id: '1', title: 'Start', status: 'todo' }
-                ];
                 projectData.commits = [];
                 projectData.skills = [];
                 projectData.resources = [];
@@ -226,7 +234,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
             aria-modal="true"
             aria-labelledby="student-project-modal-title"
         >
-            <div className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-slate-50">
                     <div>
@@ -302,6 +310,21 @@ Critical thinking, design...`}
                                 onChange={e => setDescription(e.target.value)}
                             />
                         </div>
+                    </div>
+
+                    {/* Project Plan */}
+                    <div>
+                        <div className="mb-2">
+                            <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Learner roadmap</p>
+                            <p className="mt-1 text-sm font-semibold leading-5 text-slate-600">Adjust the saved plan without disconnecting proof or review history from its step.</p>
+                        </div>
+                        <ProjectPlanEditor
+                            steps={steps}
+                            onChange={setSteps}
+                            stepReviews={initialData?.stepReviews}
+                            disabled={initialData?.status === 'published'}
+                            audience="instructor"
+                        />
                     </div>
 
                     {/* Image Upload */}

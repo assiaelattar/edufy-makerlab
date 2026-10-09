@@ -16,6 +16,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import type { MissionAudienceMode } from '../../domain/missionAssignment';
 import type { ProjectTemplate } from '../../types';
+import { StudentAvatar } from './StudentAvatar';
 
 interface AssignMissionModalProps {
     mission: ProjectTemplate;
@@ -340,7 +341,7 @@ export const AssignMissionModal: React.FC<AssignMissionModalProps> = ({ mission,
                                             const name = student.name || student.firstName || 'Unnamed learner';
                                             return (
                                                 <button key={studentId} onClick={() => toggleStudent(studentId)} className={`flex min-h-14 items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${selected ? 'border-blue-600 bg-blue-50' : 'border-slate-200 hover:border-slate-400'}`}>
-                                                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-black ${selected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{String(name).charAt(0).toUpperCase()}</span>
+                                                    <StudentAvatar student={student} name={name} className="sq-student-avatar--compact" />
                                                     <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">{name}</span>
                                                     <span className={`grid h-6 w-6 place-items-center rounded-md border ${selected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'}`}>{selected && <Check size={14} />}</span>
                                                 </button>

@@ -1,7 +1,8 @@
 import { doc, runTransaction, serverTimestamp, type Firestore } from 'firebase/firestore';
 import type { StudentProject } from '../types.ts';
-import { buildReviewPatch, learnerSaveFingerprint, type ReviewActor, type ReviewCommand } from '../domain/projectReview.ts';
+import { buildReviewPatch, learnerSaveFingerprint, requiredStepsApproved, type ReviewActor, type ReviewCommand } from '../domain/projectReview.ts';
 import { omitUndefinedDeep } from '../domain/firestorePayload.ts';
+import { mergeProjectPlan } from '../domain/projectPlan.ts';
 
 export async function submitInstructorReview(db: Firestore, projectId: string, command: ReviewCommand, actor: ReviewActor) {
   const ref = doc(db, 'student_projects', projectId);
@@ -28,6 +29,12 @@ export async function saveLearnerProject(db: Firestore, base: StudentProject, ne
     if ((stored.organizationId && stored.organizationId !== actor.organizationId) || ![actor.studentId, actor.uid].filter(Boolean).includes(stored.studentId)) throw new Error('Your learner account cannot save this project.');
     if (learnerSaveFingerprint(stored) !== learnerSaveFingerprint(base)) throw new Error('Your project received an update. Reopen the latest step before saving; your proof has not replaced it.');
     if (stored.status === 'published') throw new Error('This mission is published. Return to your workbench to view it.');
+    // Validate the roadmap transition before accepting the learner's broader
+    // project save. This blocks deletion or identity replacement of steps that
+    // already own progress, proof, or instructor review history.
+    if ((stored.steps || []).length || (next.steps || []).length) {
+      mergeProjectPlan(stored.steps || [], next.steps || [], stored.stepReviews || {});
+    }
     const updated: StudentProject = { ...next, id: base.id, organizationId: actor.organizationId, studentId: stored.studentId };
     // Review truth comes from the stored record, never the student's snapshot.
     for (const key of ['reviewHistory', 'reviewedAt', 'reviewedById', 'reviewedByName', 'feedback', 'xpReward', 'publishedAt', 'reviewProtocolVersion', 'stepReviews'] as const) {
@@ -36,6 +43,9 @@ export async function saveLearnerProject(db: Firestore, base: StudentProject, ne
     }
     // Allow the first legacy snapshot capture, but never replace a saved roadmap.
     if (stored.workflowSnapshot) updated.workflowSnapshot = stored.workflowSnapshot;
+    if (updated.status === 'submitted' && stored.status !== 'submitted' && updated.workflowId !== 'showcase' && !requiredStepsApproved(updated)) {
+      throw new Error('Approve all required step proofs before sending the mission.');
+    }
     if (updated.status === 'submitted' && stored.status !== 'submitted') updated.submittedAt = new Date().toISOString();
     transaction.update(ref, omitUndefinedDeep({ ...updated, updatedAt: serverTimestamp() }));
     return updated;
@@ -51,9 +61,14 @@ export async function saveInstructorProjectEdits(db: Firestore, base: StudentPro
     if (!snapshot.exists()) throw new Error('This project is unavailable.');
     const stored = { ...snapshot.data(), id: snapshot.id } as StudentProject;
     if (stored.organizationId !== actor.organizationId) throw new Error('Your instructor account cannot edit this project.');
+    if (stored.status === 'published') throw new Error('This project is published and its saved plan is frozen.');
     if (learnerSaveFingerprint(stored) !== learnerSaveFingerprint(base)) throw new Error('This project changed. Close the editor and reopen the latest progress before saving.');
+    const requestedSteps = edits.steps;
     const safeEdits = { ...edits };
     for (const key of ['id', 'studentId', 'organizationId', 'reviewHistory', 'reviewedAt', 'reviewedById', 'reviewedByName', 'feedback', 'xpReward', 'publishedAt', 'reviewProtocolVersion', 'stepReviews', 'steps', 'workflowSnapshot'] as const) delete (safeEdits as any)[key];
+    if (requestedSteps) {
+      safeEdits.steps = mergeProjectPlan(stored.steps || [], requestedSteps, stored.stepReviews || {});
+    }
     transaction.update(ref, omitUndefinedDeep({ ...safeEdits, updatedAt: serverTimestamp() }));
   });
 }

@@ -6,7 +6,9 @@ import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, onSnaps
 import { db } from '../../services/firebase';
 import { ToolLink, Asset } from '../../types';
 import { FactoryEmptyState, FactoryPageHeader, FactoryToolbar, factoryButton } from './FactoryPage';
+import { StudentAvatar } from './StudentAvatar';
 import { useAuth } from '../../context/AuthContext';
+import './factory-learning-setup.css';
 
 // Mock Data for seeding (Copied from ToolkitView)
 const MOCK_TOOLS: any[] = []; // Omitted for brevity, can import or empty
@@ -129,17 +131,17 @@ export const FactoryToolbox = () => {
     });
 
     return (
-        <div className="flex h-full flex-col space-y-6">
+        <div className="sq-learning-setup sq-learning-toolbox flex h-full flex-col space-y-6">
             <FactoryPageHeader
                 icon={Hammer}
                 eyebrow="Studio resources"
                 title="Tools and hardware inventory"
                 description="Keep approved digital resources and checkout-ready equipment in one operational view."
                 actions={<div className="flex rounded-xl border border-slate-200 bg-slate-100 p-1">
-                    <button onClick={() => { setActiveTab('digital'); setCategoryFilter('All'); }} className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === 'digital' ? 'bg-white text-[#2D2B6B] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <button aria-pressed={activeTab === 'digital'} onClick={() => { setActiveTab('digital'); setCategoryFilter('All'); }} className={`sq-learning-toolbox-tab flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === 'digital' ? 'bg-white text-[#2D2B6B] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                         <ExternalLink size={16} /> Resources
                     </button>
-                    <button onClick={() => { setActiveTab('inventory'); setCategoryFilter('All'); }} className={`flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === 'inventory' ? 'bg-white text-[#2D2B6B] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                    <button aria-pressed={activeTab === 'inventory'} onClick={() => { setActiveTab('inventory'); setCategoryFilter('All'); }} className={`sq-learning-toolbox-tab flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-bold transition-all ${activeTab === 'inventory' ? 'bg-white text-[#2D2B6B] shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
                         <Box size={16} /> Hardware
                     </button>
                 </div>}
@@ -162,8 +164,9 @@ export const FactoryToolbox = () => {
                     {(activeTab === 'digital' ? toolCategories : assetCategories).map(cat => (
                         <button
                             key={cat}
+                            aria-pressed={categoryFilter === cat}
                             onClick={() => setCategoryFilter(cat)}
-                            className={`px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap border transition-all ${categoryFilter === cat ? 'bg-[#2D2B6B] text-white border-[#2D2B6B] shadow-md shadow-indigo-900/20' : 'bg-white text-slate-500 border-slate-200 hover:border-[#2D2B6B] hover:text-[#2D2B6B]'}`}
+                            className={`sq-learning-filter px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap border transition-all ${categoryFilter === cat ? 'bg-[#2D2B6B] text-white border-[#2D2B6B] shadow-md shadow-indigo-900/20' : 'bg-white text-slate-500 border-slate-200 hover:border-[#2D2B6B] hover:text-[#2D2B6B]'}`}
                         >
                             {cat}
                         </button>
@@ -179,7 +182,7 @@ export const FactoryToolbox = () => {
             {activeTab === 'digital' && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredTools.map(tool => (
-                        <div key={tool.id} className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                        <div key={tool.id} className="sq-learning-panel group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                             <button onClick={() => handleDeleteTool(tool.id)} className="absolute right-2 top-2 grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${tool.title}`}><Trash2 size={16} /></button>
                             <div className="flex items-start gap-4 mb-4">
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${tool.category === 'robotics' ? 'bg-cyan-50 text-cyan-600 border-2 border-cyan-100' :
@@ -215,8 +218,12 @@ export const FactoryToolbox = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filteredAssets.map(asset => {
                         const isAvailable = asset.status === 'available';
+                        const assignedStudent = students.find(student =>
+                            String(student.id) === String(asset.assignedTo || '') ||
+                            String(student.loginInfo?.uid || '') === String(asset.assignedTo || '')
+                        );
                         return (
-                            <div key={asset.id} className="group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
+                            <div key={asset.id} className="sq-learning-panel group relative rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
                                 <button onClick={() => handleDeleteAsset(asset.id)} className="absolute right-2 top-2 grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-700" aria-label={`Delete ${asset.name}`}><Trash2 size={16} /></button>
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="p-3 bg-slate-50 border border-slate-100 rounded-2xl text-[#2D2B6B]"><Cpu size={24} /></div>
@@ -229,9 +236,7 @@ export const FactoryToolbox = () => {
 
                                 {asset.status === 'in_use' && (
                                     <div className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center gap-3">
-                                        <div className="w-8 h-8 bg-white border border-slate-200 rounded-full flex items-center justify-center text-xs font-bold text-[#2D2B6B] shadow-sm">
-                                            {asset.assignedToName?.charAt(0)}
-                                        </div>
+                                        <StudentAvatar student={assignedStudent} name={asset.assignedToName || 'Unknown learner'} className="sq-student-avatar--compact" />
                                         <div>
                                             <div className="text-[10px] text-slate-400 uppercase font-bold">Assigned To</div>
                                             <div className="text-xs text-[#2D2B6B] font-bold truncate max-w-[120px]">{asset.assignedToName}</div>

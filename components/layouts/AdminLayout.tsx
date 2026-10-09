@@ -115,8 +115,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const [moduleSearch, setModuleSearch] = useState('');
     const [isSidebarCompact, setIsSidebarCompact] = useState(false);
     const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
-    // Education UI is now the production default. The query flag is a
-    // non-persistent emergency rollback and does not change user preferences.
     const showEducationShellV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const theme = showEducationShellV1 ? 'light' as const : 'dark' as const;
     const [workspaceTabIds, setWorkspaceTabIds] = useState<string[]>([]);

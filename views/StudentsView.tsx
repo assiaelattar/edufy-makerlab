@@ -419,6 +419,7 @@ export const StudentsView = ({
     };
 
     const showEducationStudentsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+
     const admissionProjection = useMemo(() => projectAdmissionCases({
         tenantId: currentOrganization?.id || '',
         leads,

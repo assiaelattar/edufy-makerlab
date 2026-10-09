@@ -3,6 +3,7 @@ import { buildReviewPatch, effectiveStepReviewStatus, stepReviewFeedback, submit
 import type { StudentProject } from '../../types';
 import { ReviewWorkspace } from './ReviewModal';
 import { ReviewQueuePanel } from './ReviewInbox';
+import './factory-learning-live.css';
 
 const createFixture = (): StudentProject => ({
   id: 'local-proof-project', organizationId: 'local-review-org', studentId: 'local-learner', studentName: 'Aya Maker', title: 'Plant guardian · test proof', description: 'A sensor that helps someone care for a plant.', station: 'Circuits', status: 'building', reviewProtocolVersion: 1, skills: [], resources: [], commits: [],
@@ -16,7 +17,7 @@ export default function ReviewLoopPreview() {
   const proof = project.steps[0];
   const proofStatus = effectiveStepReviewStatus(project, proof);
   const proofFeedback = stepReviewFeedback(project, proof);
-  return <main style={{ maxWidth: 1120, margin: 'auto', padding: 24, color: '#17243b', background: '#f4f7fc', minHeight: '100vh' }}>
+  return <main className="sq-review-loop-preview" style={{ maxWidth: 1120, margin: 'auto', padding: 24, color: '#17243b', background: '#f4f7fc', minHeight: '100vh' }}>
     <p className="sq-review-kicker">Local acceptance fixture · synthetic records only</p>
     <h1 style={{ fontSize: 32, fontWeight: 850, margin: '12px 0' }}>Student proof → instructor review</h1>
     <p>No account reads, database writes, or uploads. Changes below live only in this tab.</p>

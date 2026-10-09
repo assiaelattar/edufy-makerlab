@@ -4,13 +4,14 @@ import {
     ArrowLeft, ArrowRight, BookOpen, Camera, Check, CheckCircle2, Clock3,
     ExternalLink, FileText, FlaskConical, Hammer, Image, Lightbulb, Link2,
     PackageCheck, PencilRuler, PlayCircle, Search, Share2, ShieldCheck,
-    Sparkles, Target, Video,
+    Sparkles, Target, Video, Wrench,
 } from 'lucide-react';
 import { ProcessTemplate, ProjectTemplate, Resource, StudentProject } from '../types';
 import { resolveMissionContent } from '../domain/missionContent';
 import { currentAcademicYear, projectAcademicYear } from '../utils/academicYear';
 import { workbenchStatus } from '../domain/learnerWorkbench';
 import { effectiveStepReviewStatus, stepReviewFeedback } from '../domain/projectReview';
+import './learner-learning.css';
 
 interface StudentMissionDetailsProps {
     project: ProjectTemplate | StudentProject;
@@ -41,6 +42,7 @@ const proofLooks = [
 ];
 
 const resourceIcon = (resource: Resource) => {
+    if (resource.type === 'tool') return Wrench;
     if (resource.type === 'video') return Video;
     if (resource.type === 'image') return Image;
     if (resource.type === 'link') return Link2;
@@ -96,7 +98,7 @@ export const StudentMissionDetails: React.FC<StudentMissionDetailsProps> = ({
         : { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.4, delay, ease: [0.22, 1, 0.36, 1] as const } };
 
     return (
-        <main className="sq-brief-shell h-screen overflow-y-auto scroll-smooth bg-[#f5f7fb] text-[#14213d] selection:bg-[#cedaff] selection:text-[#14213d]">
+        <main className="sq-brief-shell sq-learning-mission h-screen overflow-y-auto scroll-smooth bg-[#f5f7fb] text-[#14213d] selection:bg-[#cedaff] selection:text-[#14213d]">
             <header className="sq-brief-topbar sticky top-0 z-50 border-b border-[#dfe6f1] bg-white/95 backdrop-blur-xl">
                 <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
                     <div className="flex min-w-0 items-center gap-3">

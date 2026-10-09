@@ -4,6 +4,7 @@ import { useFactoryData } from '../../hooks/useFactoryData';
 import type { ProjectTemplate, StudentProject } from '../../types';
 import { FactoryEmptyState, FactoryPage, FactoryPageHeader, FactoryToolbar, factoryButton } from './FactoryPage';
 import { ReviewModal } from './ReviewModal';
+import { StudentAvatar } from './StudentAvatar';
 
 interface GradeProjectFilterProps {
     onCreateMission?: (gradeId?: string, programId?: string) => void;
@@ -48,7 +49,7 @@ export const GradeProjectFilter: React.FC<GradeProjectFilterProps> = ({ onCreate
             .map((project: StudentProject) => {
                 const ownerId = project.studentId || (project as any).userId;
                 const student = students.find((item: any) => item.id === ownerId || item.loginInfo?.uid === ownerId);
-                return { ...project, resolvedName: student?.name || project.studentName || 'Unknown learner', photoURL: student?.photoURL };
+                return { ...project, resolvedName: student?.name || project.studentName || 'Unknown learner', studentProfile: student };
             });
     }, [selectedMissionId, studentProjects, students]);
 
@@ -75,7 +76,7 @@ export const GradeProjectFilter: React.FC<GradeProjectFilterProps> = ({ onCreate
     if (loading) return <FactoryPage><div className="grid min-h-80 place-items-center"><Loader2 className="animate-spin text-blue-600" size={36} aria-label="Loading class progress" /></div></FactoryPage>;
 
     return (
-        <FactoryPage>
+        <FactoryPage className="sq-class-progress">
             <FactoryPageHeader
                 icon={BookOpenCheck}
                 eyebrow="Class progress"
@@ -171,7 +172,7 @@ export const GradeProjectFilter: React.FC<GradeProjectFilterProps> = ({ onCreate
                     className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:border-blue-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                     <div className="flex items-center gap-3 border-b border-slate-100 p-4">
-                        <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-slate-100 text-slate-500">{project.photoURL ? <img src={project.photoURL} alt="" className="h-full w-full object-cover" /> : <UserRound size={20} />}</div>
+                        <StudentAvatar student={project.studentProfile} name={project.resolvedName} />
                         <div className="min-w-0"><p className="truncate font-black text-slate-900">{project.resolvedName}</p><p className="truncate text-xs font-semibold text-slate-500">{project.title}</p></div>
                         <span className={`ml-auto rounded-lg px-2 py-1 text-[10px] font-black uppercase tracking-wider ${project.status === 'published' ? 'bg-emerald-50 text-emerald-700' : project.status === 'submitted' ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{project.status}</span>
                     </div>

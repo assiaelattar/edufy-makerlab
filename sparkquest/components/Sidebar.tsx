@@ -1,5 +1,5 @@
 import React from 'react';
-import { Award, Gamepad2, Image as ImageIcon, KeyRound, ShoppingBag, TrendingUp, User, LayoutDashboard } from 'lucide-react';
+import { Award, BookOpen, Gamepad2, Image as ImageIcon, KeyRound, ShoppingBag, TrendingUp, User, LayoutDashboard } from 'lucide-react';
 import { SidebarItem } from './SidebarItem';
 
 interface SidebarProps {
@@ -15,24 +15,26 @@ interface SidebarProps {
     onOpenPickup: () => void;
     onOpenWallet: () => void;
     onOpenProgress: () => void;
+    onOpenResources?: () => void;
     onHome?: () => void;
     onOpenSettings?: () => void;
     onOpenContests?: () => void;
     onLogout?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ studentName, avatarUrl, coins, onEditProfile, onOpenStore, onOpenArcade, onOpenPortfolio, onOpenGallery, onOpenPickup, onOpenWallet, onOpenProgress, onHome }) => (
+export const Sidebar: React.FC<SidebarProps> = ({ studentName, avatarUrl, coins, onEditProfile, onOpenStore, onOpenArcade, onOpenPortfolio, onOpenGallery, onOpenPickup, onOpenWallet, onOpenProgress, onOpenResources = () => undefined, onHome }) => (
     <aside className="sq-kit-nav" aria-label="Sparkbook destinations">
         <div className="sq-kit-nav-brand"><span>SPARK</span><strong>BOOK</strong><small>Field kit · 26</small></div>
         <nav>
             {onHome && <SidebarItem index="00" onClick={onHome} title="Workbench" subtitle="Continue your mission" active icon={LayoutDashboard} />}
             <SidebarItem index="01" onClick={onOpenPortfolio} title="Field log" subtitle="Projects & proof" tone="lime" icon={Award} />
             <SidebarItem index="02" onClick={onOpenArcade} title="Play lab" subtitle="Learn & play" tone="orange" icon={Gamepad2} />
-            <SidebarItem index="03" onClick={onOpenStore} title="Exchange" subtitle="Use your Sparks" tone="sun" icon={ShoppingBag} />
-            <SidebarItem index="04" onClick={onOpenGallery} title="Evidence wall" subtitle="Bench snapshots" icon={ImageIcon} />
-            <SidebarItem index="05" onClick={onOpenWallet} title="Key cabinet" subtitle="Tools & logins" icon={KeyRound} />
-            <SidebarItem index="06" onClick={onOpenProgress} title="Build rhythm" subtitle="Focus history" icon={TrendingUp} />
-            <SidebarItem index="07" onClick={onOpenPickup} title="Pickup card" subtitle="End-of-day plan" icon={User} />
+            <SidebarItem index="03" onClick={onOpenResources} title="Resources & tools" subtitle="Guides, apps & project tools" tone="lime" icon={BookOpen} />
+            <SidebarItem index="04" onClick={onOpenStore} title="Exchange" subtitle="Use your Sparks" tone="sun" icon={ShoppingBag} />
+            <SidebarItem index="05" onClick={onOpenGallery} title="Evidence wall" subtitle="Bench snapshots" icon={ImageIcon} />
+            <SidebarItem index="06" onClick={onOpenWallet} title="Key cabinet" subtitle="Tools & logins" icon={KeyRound} />
+            <SidebarItem index="07" onClick={onOpenProgress} title="Build rhythm" subtitle="Focus history" icon={TrendingUp} />
+            <SidebarItem index="08" onClick={onOpenPickup} title="Pickup card" subtitle="End-of-day plan" icon={User} />
         </nav>
         <button type="button" className="sq-kit-profile" onClick={onEditProfile}>
             <span>{avatarUrl ? <img src={avatarUrl} alt="" /> : studentName.charAt(0)}</span>

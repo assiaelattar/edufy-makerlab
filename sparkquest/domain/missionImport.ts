@@ -11,7 +11,7 @@ const key = (value: unknown) => text(value).toLocaleLowerCase();
 const object = (v: unknown): v is Record<string, any> => Boolean(v && typeof v === 'object' && !Array.isArray(v));
 export const safeUrl = (value: string) => { try { return ['https:', 'http:'].includes(new URL(value).protocol); } catch { return false; } };
 
-export interface ImportReference { id: string; label: string; aliases?: string[]; programId?: string; gradeId?: string }
+export interface ImportReference { id: string; label: string; aliases?: string[]; programId?: string; gradeId?: string; avatarUrl?: string; photoURL?: string; photoUrl?: string }
 export interface ImportCatalog {
   stations: ImportReference[];
   workflows: ProcessTemplate[];
@@ -64,12 +64,13 @@ export const normalizeImportRow = (rawInput: Record<string, string>, row: number
   const resource = (v: any, index: number, field: string, phaseId?: string): Resource | undefined => {
     if (!object(v) || !text(v.title)) { error(field, `Resource ${index + 1} needs a title.`); return; }
     const id = text(v.id) || `${phaseId || 'mission'}-resource-${index + 1}`;
-    const type = ['video', 'link', 'file', 'image'].includes(v.type) ? v.type : 'file';
-    if (v.type && !['video', 'link', 'file', 'image'].includes(v.type)) error(field, 'Resource type must be video, link, file, or image.');
+    const type = ['video', 'link', 'file', 'image', 'tool'].includes(v.type) ? v.type : 'file';
+    if (v.type && !['video', 'link', 'file', 'image', 'tool'].includes(v.type)) error(field, 'Resource type must be video, link, file, image, or tool.');
     const url = text(v.url);
     if (url && !safeUrl(url)) error(field, 'Resource URLs must start with http:// or https://.');
     if (!url) assets.push({ id, title: text(v.title), type, fileName: text(v.fileName) || text(v.title), phaseId });
-    return { id, title: text(v.title), type, url };
+    const toolAccess = type === 'tool' && ['web', 'download', 'plugin'].includes(v.toolAccess) ? v.toolAccess : undefined;
+    return { id, title: text(v.title), type, url, description: text(v.description), tags: list(v.tags, field), toolAccess } as Resource;
   };
   const resources = (values: any, field: string, phaseId?: string): Resource[] => {
     if (!Array.isArray(values)) { error(field, 'Expected a resource array.'); return []; }

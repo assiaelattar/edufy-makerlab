@@ -1,0 +1,35 @@
+/* SparkQuest learning UI tokens. Components opt in through scoped role styles. */
+:root {
+  --sq-learning-blue: #2f78e8;
+  --sq-learning-blue-deep: #1757bd;
+  --sq-learning-citrus: #a9df39;
+  --sq-learning-citrus-deep: #5d9e23;
+  --sq-learning-coral: #ff8268;
+  --sq-learning-marigold: #ffd35f;
+  --sq-learning-violet: #9b7ae7;
+  --sq-learning-ink: #203149;
+  --sq-learning-canvas: #eff6fb;
+  --sq-learning-line: #dfe9f2;
+  --sq-learning-action-gradient: linear-gradient(135deg, #2b70dd 0%, #2868d5 58%, #634ec8 125%);
+  --sq-learning-progress-gradient: linear-gradient(145deg, #d5fbb3, #7bdb8c);
+  --sq-learning-proof-gradient: linear-gradient(150deg, #ffae73, #ff746c 78%);
+  --sq-learning-idea-gradient: linear-gradient(140deg, #e5e4ff, #c8bafb);
+  --sq-learning-radius-card: 23px;
+  --sq-learning-radius-control: 15px;
+  --sq-learning-control-height: 52px;
+  --sq-learning-focus: 0 0 0 4px #a9df3973;
+}
+
+.sq-learning-press {
+  min-height: var(--sq-learning-control-height);
+  border-radius: var(--sq-learning-radius-control);
+  font-weight: 900;
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+.sq-learning-press:hover:not(:disabled) { filter: brightness(1.045); }
+.sq-learning-press:active:not(:disabled) { transform: translateY(4px); box-shadow: none; }
+.sq-learning-press:focus-visible { outline: none; box-shadow: var(--sq-learning-focus); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sq-learning-press { transition: none; }
+}

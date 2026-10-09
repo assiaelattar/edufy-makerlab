@@ -1,0 +1,3 @@
+question_id,question,option_a,option_b,option_c,option_d,correct_option,explanation
+q1,"What should you do before changing a wire?","Disconnect power","Add water","Run the code","","A","Disconnect power before changing the circuit."
+q2,"Which label identifies the ground connection?","3V","GND","Signal","Data","B","GND is the ground connection."

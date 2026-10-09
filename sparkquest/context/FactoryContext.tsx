@@ -8,6 +8,7 @@ import { omitUndefinedDeep } from '../domain/firestorePayload';
 import { persistImportedMission, publishImportedMission } from '../services/missionImport';
 import type { ImportCatalog, ImportDraft } from '../domain/missionImport';
 import { assignMissionToLearner, saveMissionAudience } from '../services/profileAssignment';
+import { deleteUnusedMission, inspectMissionRemoval, retireMission } from '../services/missionRemoval';
 
 const FactoryContext = createContext<any>(null);
 
@@ -349,13 +350,14 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const addProjectTemplate = async (template: Omit<ProjectTemplate, 'id'>) => {
         if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
         const cleanTemplate = omitUndefinedDeep(template);
-        await addDoc(collection(db as Firestore, 'project_templates'), {
+        const created = await addDoc(collection(db as Firestore, 'project_templates'), {
             ...cleanTemplate,
             organizationId,
             createdBy: user.uid,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
+        return created.id;
     };
     const importMission = async (draft: ImportDraft, catalog: ImportCatalog, source: string) => {
         if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
@@ -365,13 +367,14 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!db || !organizationId || !user?.uid) throw new Error('Your instructor organization could not be resolved.');
         return publishImportedMission(db as Firestore, organizationId, user.uid, id);
     };
-    const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>) => {
+    const updateProjectTemplate = async (id: string, data: Partial<ProjectTemplate>, expectedUpdatedAt?: ProjectTemplate['updatedAt'] | null) => {
         if (!db || !organizationId) throw new Error('Your instructor organization could not be resolved.');
         const cleanData = omitUndefinedDeep(data);
         await saveMissionAudience(db as Firestore, id, {
             ...cleanData,
             organizationId,
-        }, { uid: user?.uid || '', organizationId, role: userProfile?.role || '' });
+        }, { uid: user?.uid || '', organizationId, role: userProfile?.role || '' }, expectedUpdatedAt);
+        return id;
     };
     const assignProjectTemplate = async (
         id: string,
@@ -385,18 +388,13 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             assignedBy: user.uid,
         }, { uid: user.uid, organizationId, role: userProfile?.role || '' });
     };
-    const deleteProjectTemplate = async (id: string) => {
-        if (!db) return;
-        const firestore = db as Firestore;
-        const batch = (await import('firebase/firestore')).writeBatch(firestore);
-        batch.delete(doc(firestore, 'project_templates', id));
-        const submissionsQuery = query(collection(firestore, 'student_projects'), (await import('firebase/firestore')).where('templateId', '==', id));
-        const submissionsSnapshot = await (await import('firebase/firestore')).getDocs(submissionsQuery);
-        submissionsSnapshot.forEach(subDoc => {
-            batch.delete(subDoc.ref);
-        });
-        await batch.commit();
+    const missionActor = () => {
+        if (!db || !user?.uid || !organizationId) throw new Error('Your instructor session is unavailable.');
+        return { uid: user.uid, organizationId, role: userProfile?.role || '' };
     };
+    const inspectProjectTemplateRemoval = (id: string) => inspectMissionRemoval(db as Firestore, id, missionActor());
+    const retireProjectTemplate = (id: string) => retireMission(db as Firestore, id, missionActor());
+    const deleteProjectTemplate = (id: string) => deleteUnusedMission(db as Firestore, id, missionActor());
 
     const toggleStationActivation = async (stationId: string, gradeId: string, currentStations: Station[]) => {
         if (!db) return;
@@ -458,7 +456,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             addBadge, updateBadge, deleteBadge,
             addWorkflow, updateWorkflow, deleteWorkflow,
             addStation, updateStation, deleteStation, toggleStationActivation,
-            addProjectTemplate, updateProjectTemplate, assignProjectTemplate, deleteProjectTemplate, importMission, assignImportedMission,
+            addProjectTemplate, updateProjectTemplate, assignProjectTemplate, inspectProjectTemplateRemoval, retireProjectTemplate, deleteProjectTemplate, importMission, assignImportedMission,
             buyGadget,
             assignLearnerMission: async (missionId: string, studentId: string, source: 'student_profile' | 'user_auth') => {
                 if (!db || !user?.uid || !organizationId) throw new Error('Your instructor session is unavailable.');
