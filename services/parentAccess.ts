@@ -1,4 +1,5 @@
 import { auth } from './firebase';
+import { config } from '../utils/config';
 
 export type ParentAccessAction = 'issue' | 'link' | 'reset';
 
@@ -9,8 +10,7 @@ export interface ParentAccessResult {
 }
 
 const parentAccessEndpoint = (): string => {
-  const configuredOrigin = String(import.meta.env.VITE_PARENT_ACCESS_API_ORIGIN || '').trim();
-  if (!configuredOrigin) return '/api/parent-access';
+  const configuredOrigin = String(import.meta.env.VITE_PARENT_ACCESS_API_ORIGIN || config.erpUrl).trim();
   let url: URL;
   try { url = new URL(configuredOrigin); }
   catch { throw new Error('Parent access API origin is invalid.'); }
