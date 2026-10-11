@@ -465,14 +465,22 @@ export const StudentDetailsView = ({
             if (!approved) return;
         }
         if (action === 'replace') {
-            const approved = await confirm({ title: 'Replace parent login', message: 'The old parent email and password will stop opening the family journey. All learners linked to this same account will receive the new SparkQuest login. Share the new one-time password with the verified parent.', variant: 'warning', confirmText: 'Replace login' });
+            const approved = await confirm({ title: 'Replace parent login', message: 'A recorded parent account will be retired and its linked learners will move to the new SparkQuest login. If the recorded login belongs to staff, Edufy will require a separate confirmation to detach only this learner while keeping staff access active. Share the new one-time password with the verified parent.', variant: 'warning', confirmText: 'Replace login' });
             if (!approved) return;
         }
         setIsGeneratingAccess(true);
         try {
             const organizationId = currentOrganization?.id || student.organizationId;
             if (!organizationId || organizationId !== student.organizationId) throw new Error('Select the learner’s organization before managing parent access.');
-            const result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified, reuseParentUid });
+            let result;
+            try {
+                result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified, reuseParentUid });
+            } catch (error: any) {
+                if (action !== 'replace' || error?.code !== 'staff_login_mislinked') throw error;
+                const approved = await confirm({ title: 'Repair mistaken staff link', message: 'This learner’s recorded parent login belongs to an Edufy staff account. Keep the staff login active, remove only this learner’s mistaken family link, and issue a dedicated SparkQuest parent login?', variant: 'warning', confirmText: 'Repair learner link' });
+                if (!approved) return;
+                result = await manageParentAccess({ action: 'repairStaffLink', studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified });
+            }
             if (result.password) {
                 setCredentialsModal({ isOpen: true, data: { name: student.parentName || 'Parent', email: result.email, pass: result.password, role: 'Parent' } });
             } else {

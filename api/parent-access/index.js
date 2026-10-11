@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     if (typeof studentId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(studentId)) {
       return response(res, 400, { ok: false, error: 'A valid learner ID is required.' });
     }
-    if (!['issue', 'link', 'reset', 'replace'].includes(action)) return response(res, 400, { ok: false, error: 'Unknown parent access action.' });
+    if (!['issue', 'link', 'reset', 'replace', 'repairStaffLink'].includes(action)) return response(res, 400, { ok: false, error: 'Unknown parent access action.' });
     const studentRef = db.doc(`students/${studentId}`);
     const studentDoc = await studentRef.get();
     if (!studentDoc.exists || studentDoc.data().organizationId !== organizationId) {
@@ -117,6 +117,71 @@ export default async function handler(req, res) {
     if (relationshipVerified !== true) {
       return response(res, 400, { ok: false, error: 'Staff must verify the parent relationship before issuing or linking access.' });
     }
+    if (action === 'repairStaffLink') {
+      const oldUid = student.parentLoginInfo?.uid;
+      const oldEmail = student.parentLoginInfo?.email;
+      const confirmedParentName = typeof parentName === 'string' ? parentName.trim().replace(/\s+/g, ' ') : '';
+      if (!recordedParentName || confirmedParentName !== recordedParentName || !oldUid || !oldEmail) {
+        return response(res, 409, { ok: false, error: 'Refresh the learner and verify the recorded parent before repairing access.' });
+      }
+      const oldProfileRef = db.doc(`users/${oldUid}`);
+      const [oldProfile, oldAuth, linkedStudents, parentUidStudents, oldLinks] = await Promise.all([
+        oldProfileRef.get(), auth.getUser(oldUid).catch(error => error?.code === 'auth/user-not-found' ? null : Promise.reject(error)),
+        db.collection('students').where('parentLoginInfo.uid', '==', oldUid).get(),
+        db.collection('students').where('parentUids', 'array-contains', oldUid).get(),
+        db.collection('guardian_links').where('parentUid', '==', oldUid).get()
+      ]);
+      if (!oldAuth || !oldProfile.exists || !staffRoles.has(oldProfile.data().role) ||
+        oldProfile.data().status !== 'active' || oldProfile.data().organizationId !== organizationId ||
+        oldAuth.email?.toLowerCase() !== oldEmail.toLowerCase() ||
+        oldProfile.data().email?.toLowerCase() !== oldEmail.toLowerCase() ||
+        linkedStudents.size !== 1 || linkedStudents.docs[0].id !== student.id ||
+        parentUidStudents.docs.some(item => item.id !== student.id || item.data().organizationId !== organizationId) ||
+        oldLinks.docs.some(item => item.data().status === 'active')) {
+        return response(res, 409, { ok: false, error: 'The staff login has other or inconsistent family links. Review them before repairing this learner.' });
+      }
+      const issued = await createIssuedParent(auth, aliasBasis, recordedParentName);
+      try {
+        await db.runTransaction(async transaction => {
+          const [currentStudent, currentProfile, currentLinkedStudents, currentUidStudents, currentLinks] = await Promise.all([
+            transaction.get(studentRef), transaction.get(oldProfileRef),
+            transaction.get(db.collection('students').where('parentLoginInfo.uid', '==', oldUid)),
+            transaction.get(db.collection('students').where('parentUids', 'array-contains', oldUid)),
+            transaction.get(db.collection('guardian_links').where('parentUid', '==', oldUid))
+          ]);
+          if (!currentStudent.exists || currentStudent.data().organizationId !== organizationId ||
+            currentStudent.data().parentLoginInfo?.uid !== oldUid ||
+            currentStudent.data().parentLoginInfo?.email?.toLowerCase() !== oldEmail.toLowerCase() ||
+            String(currentStudent.data().parentName || '').trim().replace(/\s+/g, ' ') !== recordedParentName ||
+            !currentProfile.exists || !staffRoles.has(currentProfile.data().role) ||
+            currentProfile.data().status !== 'active' || currentProfile.data().organizationId !== organizationId ||
+            currentProfile.data().email?.toLowerCase() !== oldEmail.toLowerCase() ||
+            currentLinkedStudents.size !== 1 || currentLinkedStudents.docs[0].id !== student.id ||
+            currentUidStudents.docs.some(item => item.id !== student.id || item.data().organizationId !== organizationId) ||
+            currentLinks.docs.some(item => item.data().status === 'active')) {
+            throw Object.assign(new Error('Parent access changed. Refresh the learner record.'), { status: 409 });
+          }
+          transaction.create(db.doc(`users/${issued.uid}`), {
+            uid: issued.uid, organizationId, email: issued.email, name: recordedParentName,
+            role: 'parent', status: 'active', accessVersion: 2, createdAt: FieldValue.serverTimestamp()
+          });
+          transaction.update(studentRef, {
+            parentLoginInfo: { uid: issued.uid, email: issued.email },
+            parentUids: [...new Set([...(Array.isArray(currentStudent.data().parentUids) ? currentStudent.data().parentUids : []).filter(uid => uid !== oldUid), issued.uid])]
+          });
+          for (const subjectId of guardianSubjects({ id: student.id, ...currentStudent.data() })) {
+            transaction.create(db.doc(`guardian_links/${issued.uid}_${subjectId}`), {
+              organizationId, parentUid: issued.uid, studentId: student.id, subjectId,
+              status: 'active', permissions, updatedAt: FieldValue.serverTimestamp()
+            });
+          }
+        });
+      } catch (error) {
+        await auth.deleteUser(issued.uid).catch(() => {});
+        throw error;
+      }
+      return response(res, 200, { ok: true, action, email: issued.email, password: issued.password, linkedLearnerCount: 1 });
+    }
     if (action === 'replace') {
       const oldUid = student.parentLoginInfo?.uid;
       const oldEmail = student.parentLoginInfo?.email;
@@ -132,6 +197,9 @@ export default async function handler(req, res) {
         db.collection('students').where('parentUids', 'array-contains', oldUid).get(),
         db.collection('guardian_links').where('parentUid', '==', oldUid).get()
       ]);
+      if (oldProfile.exists && staffRoles.has(oldProfile.data().role)) {
+        return response(res, 409, { ok: false, code: 'staff_login_mislinked', error: 'The recorded parent login belongs to a staff account. Replace only this learner’s mistaken link and keep the staff login active.' });
+      }
       if (!oldAuth || !oldProfile.exists || oldProfile.data().role !== 'parent' ||
         oldProfile.data().status !== 'active' || oldProfile.data().organizationId !== organizationId ||
         oldAuth.email?.toLowerCase() !== oldEmail.toLowerCase() ||

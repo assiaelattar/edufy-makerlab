@@ -249,7 +249,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               >
                 Create new SparkQuest login ID and password
               </button>
-              <p className="text-[11px] text-slate-400">Use the new login option for an older email invitation, or when you want to replace the recorded email. The old family login will be retired.</p>
+              <p className="text-[11px] text-slate-400">Use the new login option for an older email invitation. A recorded parent login is retired; a mistaken staff link is detached without disabling staff access.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
             </div>
@@ -274,7 +274,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           <p className="text-sm text-slate-400">
             Verify the real parent first. The login alias can differ from their full name; choosing an existing parent links this learner to that exact account.
           </p>
-          {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">This replaces the recorded parent account, including its old email address. All learners linked to that same account will use the new SparkQuest login. The old account will lose family access.</p>}
+          {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">This replaces a recorded parent account for all of its linked learners. If the recorded login belongs to staff, Edufy will ask separately before detaching this learner; the staff account stays active.</p>}
           <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
             <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Recorded parent full name</span>
             <strong>{student.parentName?.trim() || 'Missing — update the learner record first'}</strong>

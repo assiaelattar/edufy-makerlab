@@ -54,6 +54,7 @@ assert.equal((await db.doc('students/child-a').get()).data().parentLoginInfo.uid
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_child-a`).get()).data().status, 'active');
 assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().role, 'parent');
 assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().name, 'Samira Ajlane');
+assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().accessVersion, 2);
 assert.equal((await issue('child-a')).statusCode, 409);
 
 const second = await issue('child-b');
@@ -117,6 +118,28 @@ assert.equal((await invoke(foreignToken, { action: 'reset', studentId: 'child-a'
 assert.equal((await invoke(staffToken, { action: 'reset', studentId: 'foreign', organizationId: 'org-a' })).statusCode, 404);
 assert.equal((await invoke(staffToken, { action: 'reset', studentId: 'child-e', organizationId: 'org-a' })).statusCode, 409);
 
+// A historical parent pointer can reference an Edufy staff account. Repair only the learner link.
+await db.doc(`users/${staff.uid}`).update({ email: staff.email });
+await db.doc('students/child-e').update({ parentLoginInfo: { uid: staff.uid, email: staff.email }, parentUids: [staff.uid] });
+const mistakenStaffRequest = { action: 'replace', studentId: 'child-e', organizationId: 'org-a', parentName: 'Samira Ajlane', aliasBasis: 'Staff Link', relationshipVerified: true };
+const mistakenStaffResponse = await invoke(staffToken, mistakenStaffRequest);
+assert.equal(mistakenStaffResponse.statusCode, 409);
+assert.equal(mistakenStaffResponse.body.code, 'staff_login_mislinked');
+assert.equal((await invoke(staffToken, { ...mistakenStaffRequest, action: 'repairStaffLink', relationshipVerified: false })).statusCode, 400);
+await db.doc('students/child-h').set({ organizationId: 'org-a', name: 'Unrelated child', parentName: 'Another Parent', parentLoginInfo: { uid: staff.uid, email: staff.email }, parentUids: [staff.uid] });
+assert.equal((await invoke(staffToken, { ...mistakenStaffRequest, action: 'repairStaffLink' })).statusCode, 409);
+await db.doc('students/child-h').delete();
+const repairedStaffLink = await invoke(staffToken, { ...mistakenStaffRequest, action: 'repairStaffLink' });
+assert.equal(repairedStaffLink.statusCode, 200, JSON.stringify(repairedStaffLink.body?.error));
+const repairedParent = await adminAuth.getUserByEmail(repairedStaffLink.body.email);
+assert.equal((await db.doc(`users/${repairedParent.uid}`).get()).data().accessVersion, 2);
+assert.equal((await db.doc('students/child-e').get()).data().parentLoginInfo.uid, repairedParent.uid);
+assert.equal((await db.doc('students/child-e').get()).data().parentUids.includes(staff.uid), false);
+assert.equal((await db.doc(`guardian_links/${repairedParent.uid}_child-e`).get()).data().status, 'active');
+assert.equal((await db.doc(`users/${staff.uid}`).get()).data().role, 'owner');
+assert.equal((await adminAuth.getUser(staff.uid)).disabled, false);
+assert.equal((await invoke(staffToken, { ...mistakenStaffRequest, action: 'repairStaffLink' })).statusCode, 409);
+
 const reset = await invoke(staffToken, { action: 'reset', studentId: 'child-a', organizationId: 'org-a' });
 assert.equal(reset.statusCode, 200, JSON.stringify(reset.body?.error));
 assert.notEqual(reset.body.password, first.body.password);
@@ -161,6 +184,6 @@ await assert.rejects(() => signInWithEmailAndPassword(clientAuth, legacy.email, 
 await signInWithEmailAndPassword(clientAuth, replaced.body.email, replaced.body.password);
 const replacementReset = await invoke(staffToken, { action: 'reset', studentId: 'child-f', organizationId: 'org-a' });
 assert.equal(replacementReset.statusCode, 200);
-console.log('Parent access emulator: issue, family reads, sibling link, legacy replacement, old-account revocation, reset, denials and plaintext checks passed.');
+console.log('Parent access emulator: issue, family reads, sibling link, staff-link repair, legacy replacement, old-account revocation, reset, denials and plaintext checks passed.');
 await Promise.all([deleteClientApp(app), deleteClientApp(familyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());

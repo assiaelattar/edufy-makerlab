@@ -1,7 +1,7 @@
 import { auth } from './firebase';
 import { config } from '../utils/config';
 
-export type ParentAccessAction = 'issue' | 'link' | 'reset' | 'replace';
+export type ParentAccessAction = 'issue' | 'link' | 'reset' | 'replace' | 'repairStaffLink';
 
 export interface ParentAccessResult {
   action: ParentAccessAction;
@@ -44,6 +44,10 @@ export const manageParentAccess = async (request: {
     throw new Error('The secure parent account service is not available at the configured API address.');
   }
   const payload = await result.json().catch(() => ({}));
-  if (!result.ok || !payload.ok) throw new Error(payload.error || 'Parent access could not be updated.');
+  if (!result.ok || !payload.ok) {
+    const error = new Error(payload.error || 'Parent access could not be updated.') as Error & { code?: string };
+    error.code = payload.code;
+    throw error;
+  }
   return payload as ParentAccessResult;
 };
