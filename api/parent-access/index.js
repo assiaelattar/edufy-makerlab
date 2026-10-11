@@ -54,6 +54,22 @@ const linkedParent = async (db, uid, organizationId) => {
     link.id === `${uid}_${link.data().subjectId}`);
 };
 
+const createIssuedParent = async (auth, aliasBasis, parentName) => {
+  const alias = parentAliasBase(aliasBasis);
+  const password = newParentPassword();
+  for (let suffix = 1; suffix <= 100; suffix += 1) {
+    const email = `${alias}${suffix === 1 ? '' : `-${suffix}`}@makerlab.academy`;
+    if (await authUserByEmail(auth, email)) continue;
+    try {
+      const user = await auth.createUser({ email, password, displayName: parentName });
+      return { uid: user.uid, email, password };
+    } catch (error) {
+      if (error?.code !== 'auth/email-already-exists') throw error;
+    }
+  }
+  throw Object.assign(new Error('No available parent login could be issued.'), { status: 409 });
+};
+
 export default async function handler(req, res) {
   if (!applyOriginPolicy(req, res)) return response(res, 403, { ok: false, error: 'Origin is not allowed.' });
   if (req.method === 'OPTIONS') return response(res, 200, { ok: true });
@@ -74,7 +90,7 @@ export default async function handler(req, res) {
     if (typeof studentId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(studentId)) {
       return response(res, 400, { ok: false, error: 'A valid learner ID is required.' });
     }
-    if (!['issue', 'link', 'reset'].includes(action)) return response(res, 400, { ok: false, error: 'Unknown parent access action.' });
+    if (!['issue', 'link', 'reset', 'replace'].includes(action)) return response(res, 400, { ok: false, error: 'Unknown parent access action.' });
     const studentRef = db.doc(`students/${studentId}`);
     const studentDoc = await studentRef.get();
     if (!studentDoc.exists || studentDoc.data().organizationId !== organizationId) {
@@ -85,11 +101,12 @@ export default async function handler(req, res) {
 
     if (action === 'reset') {
       const uid = student.parentLoginInfo?.uid;
+      if (!uid) return response(res, 409, { ok: false, error: 'No parent login is recorded for this learner.' });
       const guardian = uid ? await db.doc(`guardian_links/${uid}_${student.id}`).get() : null;
-      if (!uid || !(await linkedParent(db, uid, organizationId)) || !guardian?.exists ||
+      if (!(await linkedParent(db, uid, organizationId)) || !guardian?.exists ||
         guardian.data().parentUid !== uid || guardian.data().studentId !== student.id ||
         guardian.data().organizationId !== organizationId || guardian.data().status !== 'active') {
-        return response(res, 403, { ok: false, error: 'A verified parent link is required before reset.' });
+        return response(res, 409, { ok: false, error: 'This older parent account cannot use password reset yet. Choose Create new SparkQuest login ID and password to replace it.' });
       }
       const password = newParentPassword();
       await auth.revokeRefreshTokens(uid);
@@ -99,6 +116,88 @@ export default async function handler(req, res) {
 
     if (relationshipVerified !== true) {
       return response(res, 400, { ok: false, error: 'Staff must verify the parent relationship before issuing or linking access.' });
+    }
+    if (action === 'replace') {
+      const oldUid = student.parentLoginInfo?.uid;
+      const oldEmail = student.parentLoginInfo?.email;
+      const confirmedParentName = typeof parentName === 'string' ? parentName.trim().replace(/\s+/g, ' ') : '';
+      if (!recordedParentName || confirmedParentName !== recordedParentName) {
+        return response(res, 400, { ok: false, error: 'Verify the recorded parent name before replacing a login.' });
+      }
+      if (!oldUid || !oldEmail) return response(res, 409, { ok: false, error: 'No existing parent login is recorded. Refresh the learner record.' });
+      const oldProfileRef = db.doc(`users/${oldUid}`);
+      const [oldProfile, oldAuth, linkedStudents, parentUidStudents, oldLinks] = await Promise.all([
+        oldProfileRef.get(), auth.getUser(oldUid).catch(error => error?.code === 'auth/user-not-found' ? null : Promise.reject(error)),
+        db.collection('students').where('parentLoginInfo.uid', '==', oldUid).get(),
+        db.collection('students').where('parentUids', 'array-contains', oldUid).get(),
+        db.collection('guardian_links').where('parentUid', '==', oldUid).get()
+      ]);
+      if (!oldAuth || !oldProfile.exists || oldProfile.data().role !== 'parent' ||
+        oldProfile.data().status !== 'active' || oldProfile.data().organizationId !== organizationId ||
+        oldAuth.email?.toLowerCase() !== oldEmail.toLowerCase() ||
+        oldProfile.data().email?.toLowerCase() !== oldEmail.toLowerCase() ||
+        String(oldProfile.data().name || '').trim().replace(/\s+/g, ' ') !== recordedParentName) {
+        return response(res, 409, { ok: false, error: 'The existing parent account needs an administrator identity check before replacement.' });
+      }
+      const family = linkedStudents.docs;
+      const familyIds = new Set(family.map(item => item.id));
+      if (!familyIds.has(student.id) || family.some(item => item.data().organizationId !== organizationId ||
+        String(item.data().parentName || '').trim().replace(/\s+/g, ' ') !== recordedParentName) ||
+        parentUidStudents.docs.some(item => !familyIds.has(item.id) || item.data().organizationId !== organizationId) ||
+        oldLinks.docs.some(item => item.data().status === 'active' &&
+          (!familyIds.has(item.data().studentId) || item.data().organizationId !== organizationId))) {
+        return response(res, 409, { ok: false, error: 'This parent has other or inconsistent learner links. Review the family links before replacement.' });
+      }
+      const issued = await createIssuedParent(auth, aliasBasis, recordedParentName);
+      try {
+        await db.runTransaction(async transaction => {
+          const [currentProfile, currentLinkedStudents, currentUidStudents, currentOldLinks] = await Promise.all([
+            transaction.get(oldProfileRef),
+            transaction.get(db.collection('students').where('parentLoginInfo.uid', '==', oldUid)),
+            transaction.get(db.collection('students').where('parentUids', 'array-contains', oldUid)),
+            transaction.get(db.collection('guardian_links').where('parentUid', '==', oldUid))
+          ]);
+          const currentFamily = currentLinkedStudents.docs;
+          const currentFamilyIds = new Set(currentFamily.map(item => item.id));
+          if (!currentProfile.exists || currentProfile.data().role !== 'parent' ||
+            currentProfile.data().status !== 'active' || currentProfile.data().organizationId !== organizationId ||
+            String(currentProfile.data().name || '').trim().replace(/\s+/g, ' ') !== recordedParentName ||
+            currentFamilyIds.size !== familyIds.size || [...familyIds].some(id => !currentFamilyIds.has(id)) ||
+            currentFamily.some(item => !item.exists || item.data().organizationId !== organizationId ||
+              item.data().parentLoginInfo?.uid !== oldUid ||
+              String(item.data().parentName || '').trim().replace(/\s+/g, ' ') !== recordedParentName) ||
+            currentUidStudents.docs.some(item => !currentFamilyIds.has(item.id) || item.data().organizationId !== organizationId) ||
+            currentOldLinks.docs.some(item => item.data().status === 'active' &&
+              (!currentFamilyIds.has(item.data().studentId) || item.data().organizationId !== organizationId))) {
+            throw Object.assign(new Error('Parent access changed. Refresh the learner record.'), { status: 409 });
+          }
+          transaction.create(db.doc(`users/${issued.uid}`), {
+            uid: issued.uid, organizationId, email: issued.email, name: recordedParentName,
+            role: 'parent', status: 'active', createdAt: FieldValue.serverTimestamp()
+          });
+          transaction.update(oldProfileRef, { status: 'inactive', updatedAt: FieldValue.serverTimestamp() });
+          for (const item of currentFamily) {
+            const data = item.data();
+            const parentUids = [...new Set([...(Array.isArray(data.parentUids) ? data.parentUids : []).filter(uid => uid !== oldUid), issued.uid])];
+            transaction.update(item.ref, { parentLoginInfo: { uid: issued.uid, email: issued.email }, parentUids });
+            for (const subjectId of guardianSubjects({ id: item.id, ...data })) {
+              transaction.set(db.doc(`guardian_links/${issued.uid}_${subjectId}`), {
+                organizationId, parentUid: issued.uid, studentId: item.id, subjectId,
+                status: 'active', permissions, updatedAt: FieldValue.serverTimestamp()
+              }, { merge: true });
+            }
+          }
+          for (const link of currentOldLinks.docs) {
+            if (link.data().status === 'active') transaction.update(link.ref, { status: 'inactive', updatedAt: FieldValue.serverTimestamp() });
+          }
+        });
+      } catch (error) {
+        await auth.deleteUser(issued.uid).catch(() => {});
+        throw error;
+      }
+      await auth.revokeRefreshTokens(oldUid).catch(error => console.error('[parent-access] old token revocation failed', { code: error?.code || 'unknown' }));
+      await auth.updateUser(oldUid, { disabled: true }).catch(error => console.error('[parent-access] old account disable failed', { code: error?.code || 'unknown' }));
+      return response(res, 200, { ok: true, action, email: issued.email, password: issued.password, linkedLearnerCount: family.length });
     }
     if (student.parentLoginInfo?.uid) return response(res, 409, { ok: false, error: 'This learner already has parent access. Use reset for that account.' });
     let uid;
@@ -119,23 +218,9 @@ export default async function handler(req, res) {
       if (!recordedParentName || confirmedParentName !== recordedParentName) {
         return response(res, 400, { ok: false, error: 'Verify the recorded parent name before issuing a login.' });
       }
-      const alias = parentAliasBase(aliasBasis);
-      password = newParentPassword();
-      for (let suffix = 1; suffix <= 100; suffix += 1) {
-        const candidate = `${alias}${suffix === 1 ? '' : `-${suffix}`}@makerlab.academy`;
-        if (await authUserByEmail(auth, candidate)) continue;
-        try {
-          const user = await auth.createUser({ email: candidate, password, displayName: recordedParentName });
-          uid = user.uid;
-          email = candidate;
-          created = true;
-          break;
-        } catch (error) {
-          if (error?.code === 'auth/email-already-exists') continue;
-          throw error;
-        }
-      }
-      if (!uid) return response(res, 409, { ok: false, error: 'No available parent login could be issued.' });
+      const issued = await createIssuedParent(auth, aliasBasis, recordedParentName);
+      ({ uid, email, password } = issued);
+      created = true;
     }
 
     try {

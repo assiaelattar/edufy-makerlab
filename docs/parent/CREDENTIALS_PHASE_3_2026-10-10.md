@@ -1,5 +1,11 @@
 # Parent credentials Phase 3 — staff issuance and reset
 
+## 2026-10-11 local follow-up — replace an old email invitation
+
+Existing `parentLoginInfo.uid` from the former email setup-link flow blocked `issue`, while `reset` could fail when its guardian link was missing. Student Details now offers **Create new SparkQuest login ID and password** for a recorded account. Staff verify the recorded parent name and relationship again; the trusted endpoint checks the old Auth user, active same-tenant parent profile, exact saved email, all linked students, parent UID references and guardian links. It creates a fresh password account, moves every learner tied to that exact UID in one Firestore transaction, retires the old profile and links, and disables the old Auth user. A failed transaction deletes the newly created Auth user. Ambiguous or foreign links fail closed for manual review. The one-time password is returned only to the staff card. The existing reset remains for a verified account when the login ID should stay the same.
+
+The local `demo-parent-replace-check` Auth/Firestore emulator passed a two-child legacy case with one missing guardian link, old-account denial and new-account sign-in/reset. Root production build and origin smoke passed. No real Ajlane record was inspected or changed. The hosted parent API is still a release gate, so the real-data localhost UI cannot perform this write until a trusted Admin API is deployed and configured.
+
 Status: **implemented locally, NOT RELEASE READY.** No production account, record, rule, index, commit, push, or deployment changed.
 
 ## Contract

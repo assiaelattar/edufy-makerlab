@@ -1,12 +1,13 @@
 import { auth } from './firebase';
 import { config } from '../utils/config';
 
-export type ParentAccessAction = 'issue' | 'link' | 'reset';
+export type ParentAccessAction = 'issue' | 'link' | 'reset' | 'replace';
 
 export interface ParentAccessResult {
   action: ParentAccessAction;
   email: string;
   password?: string;
+  linkedLearnerCount?: number;
 }
 
 const parentAccessEndpoint = (): string => {
@@ -38,7 +39,10 @@ export const manageParentAccess = async (request: {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(request),
     cache: 'no-store'
-  });
+  }).catch(() => { throw new Error('The secure parent account service is unavailable. Check its API connection before retrying.'); });
+  if (!result.headers.get('content-type')?.includes('application/json')) {
+    throw new Error('The secure parent account service is not available at the configured API address.');
+  }
   const payload = await result.json().catch(() => ({}));
   if (!result.ok || !payload.ok) throw new Error(payload.error || 'Parent access could not be updated.');
   return payload as ParentAccessResult;

@@ -1,4 +1,22 @@
-# Latest handoff — Interactive local parent acceptance
+# Latest handoff — Deployment access blocker
+
+The user authorized a deployment if it resolves the unavailable secure parent service. Vercel project `edufy-makerlab` has the origin allowlist but no Firebase Admin credential variable. The local release workspace has no Admin credential. The user's exact Firebase Console project URL was opened in Chrome and returned project missing/permission denied; its Google account menu shows `platform.makerlab@gmail.com`, despite the MakerLab browser profile name. Deployment was withheld because the Function cannot issue accounts without its Admin identity. The signed-in localhost Edufy UI showed Ajlane Nada's recorded legacy parent address and replacement dialog, but no mutation was submitted and the old Auth/profile consistency remains unverified. Next: use a Firebase project Owner session to configure the Admin credential securely, then deploy and probe the Function before designated nonproduction acceptance. No secret should enter chat or Git.
+
+---
+
+# Previous handoff — Local real-data parent API blocker
+
+The user tried parent replacement from `http://127.0.0.1:5183` and saw the secure service unavailable error. Live GET of `https://edufy-makerlab.vercel.app/api/parent-access` returns SPA HTML (200); allowlisted local preflight has no CORS header; `/api/agent/health` still executes as a Function. The parent Function is absent from that deployment, and no Firebase Admin credential is available locally. The signed-in local Edufy page was restored after a Vite hot-reload error. No Ajlane account or family data was changed. Next: provision the trusted Admin identity and exact test origin on a preview Function, deploy the reviewed API, verify GET/OPTIONS route behavior, then use a designated test parent before real-family replacement. See `docs/releases/PARENT_ACCESS_HOSTING_AUDIT_2026-10-11.md`.
+
+---
+
+# Previous handoff — Legacy parent login replacement
+
+The local candidate now handles a parent account created by the former email setup-link approach. Staff can replace its recorded email with a fresh SparkQuest login ID/password after explicit relationship verification. The trusted endpoint checks the old account and exact-UID family set, transactionally moves all linked learners, retires old Firestore access and disables old Auth. Inconsistent or cross-tenant links fail closed. The isolated `demo-parent-replace-check` emulator passed a legacy two-child replacement with a missing guardian link, new sign-in, old-account denial and reset; origin smoke and root production build passed. The Edufy data connector was not available in this session, and no real Ajlane data was inspected or changed. The hosted Admin API and coordinated release remain required. See `docs/parent/CREDENTIALS_PHASE_3_2026-10-10.md`.
+
+---
+
+# Previous handoff — Interactive local parent acceptance
 
 Edufy and SparkQuest were run against the same localhost `demo-parent-journey` Firebase emulators. Through the actual Edufy Student Details UI, staff issued the one-time Samira demo parent password for Maya, then linked Adam to the exact same account. The issued credential signed into the actual SparkQuest parent route, which loaded project proof/resources/feedback, gallery, payment history, attendance, and read-only Pickup. Two-child switching and phone layout passed. Noor Explorer is seeded with a separate unissued parent identity and sample journey so the user can personally try Create Parent Account. Local-only Firebase routing, Vite CSP relaxation, API route, and idempotent seed are documented in `docs/sparkquest/PARENT_LOCAL_ACCEPTANCE_2026-10-11.md`. Both builds, SparkQuest TypeScript, origin smoke and combined issuance-to-read emulator assertions pass. No push, deployment or real family write occurred.
 

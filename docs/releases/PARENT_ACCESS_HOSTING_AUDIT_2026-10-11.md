@@ -2,6 +2,24 @@
 
 **Verdict: NOT RELEASE READY.** This audit and local configuration change did not deploy code, rules, indexes, credentials, or accounts.
 
+## 11 October deployment authorization and access check
+
+The user authorized deployment if it would resolve the account-service error. The linked `edufy-makerlab` Vercel project currently lists `EDUFY_PARENT_ACCESS_ALLOWED_ORIGINS` but no Firebase Admin credential variable. The existing Admin helper can use `FIREBASE_SERVICE_ACCOUNT_BASE64` or the `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` set; no such credential is available in the local release workspace. Publishing the Function without one would not make parent issuance operational.
+
+The exact user-provided Firebase Console URL for project `edufy-makerlab` was opened in the available Chrome session. Firebase reported that the project does not exist or the signed-in Google account cannot list its apps. The visible account menu identified `platform.makerlab@gmail.com`. The Chrome profile may be named MakerLab, but that does not change the Google account used by Firebase Console. A project Owner session or equivalent access is needed to configure the credential securely; no key should be pasted into chat or committed. No deployment was attempted.
+
+The signed-in localhost Edufy UI rendered Ajlane Nada's learner profile and recorded legacy parent address. The replacement dialog showed a recorded parent name, but the browser UI does not prove the old Firebase Auth user and parent profile satisfy the server's exact identity checks. The dialog was closed without submitting; no parent record was changed. The Edufy data connector was not callable in this session.
+
+## 11 October project-owner follow-up
+
+The user signed the in-app browser into Firebase as `dc.makerlab@gmail.com`. The account opens project `edufy-makerlab`, and Firebase lists it as **Owner**. Email/Password Auth is enabled. The Service accounts page exposes the existing Firebase Admin SDK service account and a **Generate new private key** action. A new key would grant privileged Auth/Firestore access to the Vercel function; explicit action-time confirmation was requested before generating it. No key has been generated, downloaded, shown, or installed yet.
+
+The live default Firestore database lists five enabled composite indexes, none of the five new family indexes in this candidate. The Console Rules tab twice reported **Error loading rules versions**, so the live rules could not yet be compared. The Vercel Preview environment now has an exact localhost origin allowlist for `http://127.0.0.1:5183`; Production was not changed. A Vercel dry run confirmed the candidate includes `api/parent-access/index.js` and excludes `.env`. `.vercelignore` was tightened to exclude `.env*` and service-account/credential JSON before any preview upload. API syntax, exact-origin smoke and `git diff --check` pass. No code deployment, Firebase release or parent account write occurred.
+
+## 11 October local real-data retry
+
+The signed-in Edufy client at `http://127.0.0.1:5183` attempted the parent replacement action and reported that the secure service was unavailable. A fresh live probe confirmed `GET https://edufy-makerlab.vercel.app/api/parent-access` returns `200 text/html` (the SPA), while `/api/agent/health` still executes as a Function and returns `500`. The parent-route CORS preflight returned `204` without `Access-Control-Allow-Origin`, so the browser blocks the POST before the handler runs. The failure is deployment/routing, not Ajlane's saved email or a rejected admin password. No real parent mutation reached Firebase. The local backend cannot be pointed at production because this workspace has no Firebase Admin credential. The reviewed replacement code remains emulator-tested locally; configure the trusted function and Admin credential, then verify GET returns `405` JSON and allowlisted OPTIONS returns CORS headers before another real-family attempt.
+
 ## Hosting evidence
 
 - The intended public layout has two separate frontends: Edufy at `https://edufy.makerlab.academy/` on Hostinger and SparkQuest at `https://sparkquest-makerlab.vercel.app/` on its own Vercel project. `https://sparkquest.makerlab.academy/` is a future custom domain after acceptance, not a current release dependency. The Edufy Vercel deployment uses the Edufy GitHub codebase as its source and is the intended host for the trusted parent-access API.

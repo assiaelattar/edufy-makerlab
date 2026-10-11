@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-11 — Local legacy parent login replacement
+
+- Added a staff-verified replacement action for previously invited parents; it issues a new SparkQuest ID/password and retires the old email-based account across exact-UID linked learners.
+- Student Details exposes the replacement beside same-ID password reset and gives an actionable error if the secure API is unavailable.
+- Isolated Auth/Firestore legacy-family emulator, origin smoke and Edufy production build pass. No real family write or release.
+
 ## 2026-10-11 — Interactive local parent acceptance
 
 - Connected local Edufy, its trusted parent API, and local SparkQuest to one isolated Firebase demo project. Seeded Noor as an unissued learner for the user's own account creation test.

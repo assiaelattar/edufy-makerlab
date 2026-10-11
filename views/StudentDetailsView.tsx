@@ -464,6 +464,10 @@ export const StudentDetailsView = ({
             const approved = await confirm({ title: 'Issue a new parent password', message: 'The current password will stop working. Share the new password from the one-time card after this action.', variant: 'warning', confirmText: 'Issue new password' });
             if (!approved) return;
         }
+        if (action === 'replace') {
+            const approved = await confirm({ title: 'Replace parent login', message: 'The old parent email and password will stop opening the family journey. All learners linked to this same account will receive the new SparkQuest login. Share the new one-time password with the verified parent.', variant: 'warning', confirmText: 'Replace login' });
+            if (!approved) return;
+        }
         setIsGeneratingAccess(true);
         try {
             const organizationId = currentOrganization?.id || student.organizationId;

@@ -7,7 +7,7 @@ import { useConfirm } from '../../context/ConfirmContext';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: (action: 'issue' | 'link' | 'reset', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => void;
+  handleCreateParentAccess: (action: 'issue' | 'link' | 'reset' | 'replace', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => void;
   parentAccounts: Array<{ uid: string; email: string; parentName: string; childName: string; childId: string }>;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
@@ -212,7 +212,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             </h3>
             {student.parentLoginInfo ? (
               <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-500/50 font-bold">
-                ACTIVE
+                RECORDED
               </span>
             ) : (
               <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded border border-slate-700 font-bold">
@@ -228,7 +228,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 <div className="break-all font-mono text-sm text-white select-all">{student.parentLoginInfo.email}</div>
               </div>
               <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                This login ID is not an email inbox. The password appears once when staff issue or reset it; no setup email is sent. It opens the read-only family journey in SparkQuest.
+                An older recorded address may come from the email invitation flow. Replacing it creates a SparkQuest login ID that needs no inbox. Staff see the new password once and share it directly with the verified parent.
               </div>
               <button
                 onClick={() => handleCreateParentAccess('reset')}
@@ -240,8 +240,16 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 ) : (
                   <RefreshCw size={12} />
                 )}{' '}
-                Issue new password
+                Issue new password for this login ID
               </button>
+              <button
+                onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
+                disabled={isGeneratingAccess || !canManageParentAccess}
+                className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
+              >
+                Create new SparkQuest login ID and password
+              </button>
+              <p className="text-[11px] text-slate-400">Use the new login option for an older email invitation, or when you want to replace the recorded email. The old family login will be retired.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
             </div>
@@ -266,6 +274,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           <p className="text-sm text-slate-400">
             Verify the real parent first. The login alias can differ from their full name; choosing an existing parent links this learner to that exact account.
           </p>
+          {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">This replaces the recorded parent account, including its old email address. All learners linked to that same account will use the new SparkQuest login. The old account will lose family access.</p>}
           <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
             <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Recorded parent full name</span>
             <strong>{student.parentName?.trim() || 'Missing — update the learner record first'}</strong>
@@ -278,15 +287,15 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           <button 
             onClick={() => {
               setIsParentChoiceModalOpen(false);
-              handleCreateParentAccess('issue', undefined, aliasBasis, relationshipVerified);
+              handleCreateParentAccess(student.parentLoginInfo?.uid ? 'replace' : 'issue', undefined, aliasBasis, relationshipVerified);
             }}
             disabled={!student.parentName?.trim() || !aliasPreview || !relationshipVerified || isGeneratingAccess || !canManageParentAccess}
             className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
           >
-            Issue new parent login
+            {student.parentLoginInfo?.uid ? 'Replace parent login' : 'Issue new parent login'}
           </button>
           {!student.parentName?.trim() && <p className="text-xs text-amber-300">Add the parent name to this learner record first.</p>}
-          {parentAccounts.length > 0 && <div className="border-t border-white/10 pt-4">
+          {!student.parentLoginInfo?.uid && parentAccounts.length > 0 && <div className="border-t border-white/10 pt-4">
             <label className="mb-2 block text-xs font-bold uppercase text-slate-400">Link an existing parent login</label>
             <select value={reuseParentUid} onChange={event => setReuseParentUid(event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
               <option value="">Choose the exact account</option>

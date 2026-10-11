@@ -5,6 +5,10 @@ node_modules
 dist
 .git
 .vercel
+.env*
+**/.env*
+**/*service-account*.json
+**/*credentials*.json
 
 # SparkQuest Desktop Artifacts (Not needed for Web)
 sparkquest/node_modules

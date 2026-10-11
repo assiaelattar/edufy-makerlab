@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-11 — Replace legacy parent invitations by exact UID
+
+An old email invitation is a recorded account, not proof of a usable SparkQuest credential. Replacement requires staff verification, an active same-tenant parent Auth/profile, and a consistent exact-UID family set. Issue a fresh login and password, move all learners tied to that UID together, retire the old Firestore access, then disable its Auth user. Keep password reset for retaining a verified login ID. Never merge by surname, contact email or phone.
+
 ## 2026-10-11 — Use a shared isolated demo for two-app acceptance
 
 Run Edufy, the trusted parent API and SparkQuest against one explicit `demo-parent-journey` localhost Firebase emulator project. Seed learner and operational records, then issue the parent password through Edufy itself. Keep the local connection switch and CSP exception in development only; a synthetic family preview alone is not acceptance of the issue-to-sign-in flow.

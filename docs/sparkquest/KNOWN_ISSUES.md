@@ -1,5 +1,9 @@
 # SparkQuest Known Issues
 
+## Legacy parent replacement release gate
+
+- The replacement flow is local candidate code. The real-data localhost Edufy app still cannot issue or replace a parent account until the trusted parent-access API is deployed with its Firebase Admin identity. Verify Ajlane's exact parent UID, Auth email, tenant and linked learner set before using it on real records; inconsistent links produce a review error instead of a partial migration.
+
 ## Interactive local parent acceptance limit
 
 - The two-app issue, sibling link and parent sign-in flow passes with seeded emulator records. Emulator accounts disappear when the emulator stops unless exported. This does not establish that the hosted Admin API, Firebase rules/indexes or real family media URLs are ready; those release gates remain.
