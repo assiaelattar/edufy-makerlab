@@ -4,6 +4,7 @@ import { translations } from './translations';
 import { STATION_THEMES } from './theme';
 import { normalizeWorkshopDays, parseLocalDateKey, toLocalDateKey } from './workshops';
 import { getEnrollmentFinancialSummary } from './enrollmentFinancials';
+import { config } from './config';
 
 export const formatCurrency = (amount: number) => {
   return new Intl.NumberFormat('en-MA', { style: 'currency', currency: 'MAD' }).format(amount);
@@ -641,8 +642,8 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
 
   const logoHtml = `<img src="${window.location.origin}/images/logo.png" alt="MakerLab Academy" style="height: 60px; object-fit: contain;" />`;
 
-  // Construct Parent Portal URL for QR Code
-  const parentPortalUrl = `${window.location.origin}/parent-login`;
+  // Parents sign in through the dedicated SparkQuest family experience.
+  const parentPortalUrl = config.sparkQuestUrl;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(parentPortalUrl)}`;
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -805,12 +806,12 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
             <div class="creds-col">
                 <!-- Parent Portal Card -->
                 <div class="credential-box" style="border-color: #2563eb;">
-                    <span class="box-label">Parent Portal Access</span>
+                    <span class="box-label">Parent SparkQuest Access</span>
                     ${student.parentLoginInfo ? `
                         <div class="cred-row"><span class="label">Email</span> <span class="value">${student.parentLoginInfo.email}</span></div>
-                        <div class="cred-row"><span class="label">Password</span> <span class="value">${student.parentLoginInfo.initialPassword || '********'}</span></div>
+                        <div class="cred-row"><span class="label">Password</span> <span class="value">Use the one-time access card or issue a secure reset</span></div>
                         <div style="margin-top:10px; font-size:11px; color:#2563eb; display:flex; align-items:center; gap:5px;">
-                            <strong>URL:</strong> ${window.location.host}/parent-login
+                            <strong>URL:</strong> ${parentPortalUrl}
                         </div>
                     ` : `
                         <div style="text-align:center; padding:10px; color:#94a3b8; font-size:12px;">No active parent account</div>
@@ -828,7 +829,7 @@ export const generateStudentSchedulePrint = (student: Student, enrollments: Enro
             <!-- QR Code Section -->
             <div class="qr-col">
                 <img src="${qrCodeUrl}" class="qr-img" alt="Scan QR" />
-                <div class="qr-text">Scan to Access<br/>Parent Portal</div>
+                <div class="qr-text">Scan to Access<br/>SparkQuest Family</div>
                 <div class="qr-sub">Track progress & payments</div>
             </div>
         </div>
@@ -942,19 +943,22 @@ export const generateAccessCardPrint = (student: Student, settings: AppSettings)
 };
 
 
-export const generateCredentialsPrint = (name: string, email: string, pass: string, role: string, settings: AppSettings) => {
+export const generateCredentialsPrint = (name: string, email: string, pass: string, role: string, settings: AppSettings, signInUrl = window.location.origin) => {
   const win = window.open('', '_blank');
   if (!win) return;
 
+  const escapeHtml = (value: string) => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] || character));
+  const safeUrl = escapeHtml(signInUrl);
+
   const logoHtml = settings.logoUrl
-    ? `<img src="${settings.logoUrl}" alt="Logo" style="height: 60px; object-fit: contain;" />`
-    : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${settings.academyName}</div>`;
+    ? `<img src="${escapeHtml(settings.logoUrl)}" alt="Logo" style="height: 60px; object-fit: contain;" />`
+    : `<div style="font-size: 24px; font-weight: bold; color: #2563eb;">${escapeHtml(settings.academyName)}</div>`;
 
   const html = `
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Access Card - ${name}</title>
+            <title>Access Card - ${escapeHtml(name)}</title>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
             <style>
                 @media print {
@@ -990,24 +994,24 @@ export const generateCredentialsPrint = (name: string, email: string, pass: stri
                     <div class="title">Access Pass</div>
                 </div>
                 <div class="welcome">Welcome,</div>
-                <h1 class="name">${name}</h1>
+                <h1 class="name">${escapeHtml(name)}</h1>
                 <div class="credentials">
                     <div class="field">
                         <span class="label">Email / Login</span>
-                        <div class="value">${email}</div>
+                        <div class="value">${escapeHtml(email)}</div>
                     </div>
                     <div class="field">
                         <span class="label">Password</span>
-                        <div class="value">${pass}</div>
+                        <div class="value">${escapeHtml(pass)}</div>
                     </div>
                      <div class="field">
                         <span class="label">Role</span>
-                        <div class="value">${role}</div>
+                        <div class="value">${escapeHtml(role)}</div>
                     </div>
                 </div>
                 <div class="footer">
                     Login at <br/>
-                    <a href="${window.location.origin}" class="url">${window.location.host}</a>
+                    <a href="${safeUrl}" class="url">${safeUrl}</a>
                 </div>
             </div>
             <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }</script>

@@ -1,3 +1,15 @@
+# Latest handoff — Parent Access clean release candidate
+
+Prepared on 2026-10-11 from `origin/main` `f1b5810`. Edufy now has staff-only parent issue/link/reset through a trusted Admin SDK endpoint and one-time SparkQuest credentials. SparkQuest has parent-first routing, exact guardian-linked multi-learner reads, visual project cards, finance, attendance, and read-only Pickup status. Selective guardian permissions and five family query indexes are included; Pickup commands, Pickup write-policy replacement, the Edufy parent dashboard, and real Ajlane records are excluded.
+
+Verification: root production build; SparkQuest TypeScript and production build; endpoint syntax and exact-origin smoke; family link, operations, image, and read-only Pickup lifecycle smokes; isolated `demo-parent-family` and `demo-parent-access` Auth/Firestore suites. The local Vercel build reaches builder installation but Windows blocks its compatibility symlink with `EPERM`; use Vercel's remote builder for release proof.
+
+Release remains blocked at the environment boundary. The correct `platformmakerlab-5357s-projects` Vercel projects are accessible and linked, but `edufy-makerlab` has no project/shared environment variables. Configure the exact origin allowlist and one Firebase Admin credential option, deploy and probe `/api/parent-access`, provision the reviewed rules/indexes, then release Edufy Hostinger and the separate SparkQuest Vercel client. Use designated nonproduction accounts for acceptance. Do not create or link the real Ajlane family until exact records and parent identity are verified.
+
+Details: `docs/releases/PARENT_ACCESS_HOSTING_AUDIT_2026-10-11.md`.
+
+---
+
 # Latest handoff — SparkQuest review security Phase 2 (local implementation)
 
 Completed 2026-10-01. New learner projects use `reviewProtocolVersion: 1`; instructor step decisions store proof-bound canonical `stepReviews`. Queue visibility, learner feedback/status, instructor status and final publication derive from this protected state. Direct learner writes cannot alter it, changed proof becomes pending again, forged nested notes are ignored, and forged `steps.status = done` cannot unlock final publication. Legacy records stay readable without an automatic migration.

@@ -419,18 +419,8 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/students/$(studentId)) &&
         get(/databases/$(database)/documents/students/$(studentId)).data.organizationId == orgId &&
         (
-          (
-            get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['loginInfo']) &&
-            get(/databases/$(database)/documents/students/$(studentId)).data.loginInfo.uid == request.auth.uid
-          ) ||
-          (
-            get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['parentLoginInfo']) &&
-            get(/databases/$(database)/documents/students/$(studentId)).data.parentLoginInfo.uid == request.auth.uid
-          ) ||
-          (
-            get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['parentUids']) &&
-            get(/databases/$(database)/documents/students/$(studentId)).data.parentUids.hasAny([request.auth.uid])
-          )
+          get(/databases/$(database)/documents/students/$(studentId)).data.keys().hasAny(['loginInfo']) &&
+          get(/databases/$(database)/documents/students/$(studentId)).data.loginInfo.uid == request.auth.uid
         ) || guardianSubjectLinkedToRequester(studentId, orgId);
     }
 
@@ -463,19 +453,25 @@ service cloud.firestore {
 
     function guardianSubjectLinkedToRequester(subjectId, orgId) {
       return isSignedIn() &&
+        hasUserProfile() && currentRole() == 'parent' && currentOrgId() == orgId &&
         exists(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)) &&
         get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.parentUid == request.auth.uid &&
         get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.organizationId == orgId &&
         get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.status == 'active';
     }
 
+    function guardianHasPermission(subjectId, orgId, permission) {
+      return guardianSubjectLinkedToRequester(subjectId, orgId) &&
+        get(/databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + subjectId)).data.get('permissions', []).hasAny([permission]);
+    }
+
     function enrollmentLinkedToRequester(enrollmentId, orgId) {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/enrollments/$(enrollmentId)) &&
         get(/databases/$(database)/documents/enrollments/$(enrollmentId)).data.organizationId == orgId &&
-        studentLinkedToRequester(
-          get(/databases/$(database)/documents/enrollments/$(enrollmentId)).data.studentId,
-          orgId
+        (
+          learnerLinkedToRequester(get(/databases/$(database)/documents/enrollments/$(enrollmentId)).data.studentId, orgId) ||
+          guardianHasPermission(get(/databases/$(database)/documents/enrollments/$(enrollmentId)).data.studentId, orgId, 'payments')
         );
     }
 
@@ -553,7 +549,7 @@ service cloud.firestore {
       return hasUserProfile() && !resourceHasOrg() && resource.data.studentId is string &&
         (
           learnerLinkedToRequester(resource.data.studentId, currentOrgId()) ||
-          guardianSubjectLinkedToRequester(resource.data.studentId, currentOrgId())
+          guardianHasPermission(resource.data.studentId, currentOrgId(), 'portfolio')
         );
     }
 
@@ -818,6 +814,8 @@ service cloud.firestore {
     match /students/{studentId} {
       allow read: if canReadTenantDoc() ||
         studentLinkedToRequester(studentId, resource.data.organizationId) ||
+        (resourceHasOrg() && resource.data.get('loginInfo', {}).get('uid', '') is string &&
+          guardianSubjectLinkedToRequester(resource.data.get('loginInfo', {}).get('uid', ''), resource.data.organizationId)) ||
         studentRecordOwnedByRequester(resource.data);
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
@@ -833,7 +831,10 @@ service cloud.firestore {
 
     match /enrollments/{enrollmentId} {
       allow read: if canReadTenantDoc() ||
-        (resourceHasOrg() && studentLinkedToRequester(resource.data.studentId, resource.data.organizationId));
+        (resourceHasOrg() && (
+          learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianHasPermission(resource.data.studentId, resource.data.organizationId, 'enrollments')
+        ));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -862,7 +863,10 @@ service cloud.firestore {
     }
 
     match /attendance/{recordId} {
-      allow read: if canReadTenantDoc();
+      // Attendance belongs to enrollment visibility for an active linked guardian.
+      allow read: if canReadTenantDoc() ||
+        (resourceHasOrg() && resource.data.studentId is string &&
+          guardianHasPermission(resource.data.studentId, resource.data.organizationId, 'enrollments'));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
@@ -888,7 +892,7 @@ service cloud.firestore {
         canReadLegacyStudentProject() ||
         (resourceHasOrg() && (
           learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
-          guardianSubjectLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianHasPermission(resource.data.studentId, resource.data.organizationId, 'portfolio') ||
           (hasUserProfile() && currentRole() == 'student' && resource.data.studentId == request.auth.uid && resource.data.organizationId == currentOrgId())
         ));
       allow create: if canCreateStudentProject();
@@ -1034,8 +1038,8 @@ service cloud.firestore {
     match /gallery_items/{itemId} {
       allow read: if canReadTenantDoc() ||
         (resourceHasOrg() && resource.data.studentId is string && (
-          studentLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
-          guardianSubjectLinkedToRequester(resource.data.studentId, resource.data.organizationId)
+          learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianHasPermission(resource.data.studentId, resource.data.organizationId, 'gallery')
         ));
       allow create: if canCreateTenantDoc();
       allow update: if canUpdateTenantDoc();
@@ -1051,7 +1055,10 @@ service cloud.firestore {
 
     match /pickup_queue/{entryId} {
       allow read: if canReadTenantDoc() ||
-        (resourceHasOrg() && studentLinkedToRequester(resource.data.studentId, resource.data.organizationId));
+        (resourceHasOrg() && (
+          learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
+          guardianHasPermission(resource.data.studentId, resource.data.organizationId, 'pickup')
+        ));
       allow create: if canCreateTenantDoc() || validLinkedPickupCreate();
       allow update: if canUpdateTenantDoc() || validLinkedPickupUpdate();
       allow delete: if canDeleteTenantDoc();

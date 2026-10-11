@@ -10,6 +10,7 @@ export const LoginView: React.FC = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const isParentEntry = new URLSearchParams(window.location.search).get('role') === 'parent';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -35,14 +36,14 @@ export const LoginView: React.FC = () => {
             <section className="sq-login-story" aria-labelledby="sparkquest-title">
                 <div className="sq-login-brand"><span>MakerLab</span> / SparkQuest</div>
                 <div className="sq-login-story-copy">
-                    <p className="sq-entry-eyebrow">Your project workshop</p>
-                    <h1 id="sparkquest-title">Turn today’s idea into something real.</h1>
-                    <p>Open your mission, keep building, and show the evidence of what you made.</p>
+                    <p className="sq-entry-eyebrow">{isParentEntry ? 'Your family workspace' : 'Your project workshop'}</p>
+                    <h1 id="sparkquest-title">{isParentEntry ? 'Stay close to every learning journey.' : 'Turn today’s idea into something real.'}</h1>
+                    <p>{isParentEntry ? 'See linked learners, project feedback, payments, attendance, and Pickup in one place.' : 'Open your mission, keep building, and show the evidence of what you made.'}</p>
                 </div>
-                <ol className="sq-bench-path" aria-label="SparkQuest project path">
-                    <li className="is-active"><span>1</span><div><strong>Enter</strong><small>Your secure workshop pass</small></div></li>
-                    <li><span>2</span><div><strong>Build</strong><small>Your current mission and tools</small></div></li>
-                    <li><span>3</span><div><strong>Show</strong><small>Evidence, feedback and portfolio</small></div></li>
+                <ol className="sq-bench-path" aria-label={isParentEntry ? 'SparkQuest family path' : 'SparkQuest project path'}>
+                    <li className="is-active"><span>1</span><div><strong>{isParentEntry ? 'Sign in' : 'Enter'}</strong><small>{isParentEntry ? 'Your academy-issued access' : 'Your secure workshop pass'}</small></div></li>
+                    <li><span>2</span><div><strong>{isParentEntry ? 'Follow' : 'Build'}</strong><small>{isParentEntry ? 'Every linked learner' : 'Your current mission and tools'}</small></div></li>
+                    <li><span>3</span><div><strong>{isParentEntry ? 'Support' : 'Show'}</strong><small>{isParentEntry ? 'Learning and daily essentials' : 'Evidence, feedback and portfolio'}</small></div></li>
                 </ol>
             </section>
 
@@ -50,8 +51,8 @@ export const LoginView: React.FC = () => {
                 <div className="sq-login-form-wrap">
                     <div className="sq-entry-mark" aria-hidden="true"><Hammer /></div>
                     <p className="sq-entry-eyebrow">Welcome back</p>
-                    <h2 id="sign-in-title">Open your project bench</h2>
-                    <p className="sq-entry-copy">Use the learner account created in Edufy.</p>
+                    <h2 id="sign-in-title">{isParentEntry ? 'Open your family workspace' : 'Open your project bench'}</h2>
+                    <p className="sq-entry-copy">{isParentEntry ? 'Use the MakerLab email and password shared directly by the academy. No activation link is needed.' : 'Use your learner or parent account connected in Edufy.'}</p>
 
                     {error && (
                         <div className="sq-login-error" role="alert">
@@ -67,7 +68,7 @@ export const LoginView: React.FC = () => {
                                 type="email"
                                 value={email}
                                 onChange={(event) => setEmail(event.target.value)}
-                                placeholder="student@makerlab.academy"
+                                placeholder={isParentEntry ? 'p.name@makerlab.academy' : 'you@example.com'}
                                 required
                                 autoComplete="email"
                             />
@@ -96,12 +97,14 @@ export const LoginView: React.FC = () => {
                         </label>
 
                         <button type="submit" disabled={loading} className="sq-entry-primary sq-login-submit">
-                            {loading ? <span className="sq-login-spinner" aria-label="Signing in" /> : <><span>Continue to my projects</span><ArrowRight size={19} /></>}
+                            {loading ? <span className="sq-login-spinner" aria-label="Signing in" /> : <><span>Continue to SparkQuest</span><ArrowRight size={19} /></>}
                         </button>
                     </form>
 
-                    <div className="sq-login-trust"><CheckCircle2 size={17} /><span>Projects stay linked to your verified Edufy learner profile.</span></div>
-                    <a className="sq-entry-text-action sq-login-back" href={config.erpUrl}><ArrowLeft size={16} /> Back to Edufy</a>
+                    <div className="sq-login-trust"><CheckCircle2 size={17} /><span>{isParentEntry ? 'Your access opens only the learners and records linked to your verified family account.' : 'Learning stays linked to verified Edufy accounts and family connections.'}</span></div>
+                    {isParentEntry
+                        ? <p className="sq-entry-text-action sq-login-back">Need a password reset? Ask the MakerLab team to issue one securely.</p>
+                        : <a className="sq-entry-text-action sq-login-back" href={config.erpUrl}><ArrowLeft size={16} /> Back to Edufy</a>}
                 </div>
             </section>
         </main>

@@ -1,0 +1,35 @@
+# Staff-issued parent access to SparkQuest — 10 October 2026
+
+Status: Edufy issued-access, SparkQuest family, and Pickup shared-guardian command phases are implemented and locally tested. **No new flow is released.**
+
+## Intended parent journey
+
+1. Staff opens a learner in Edufy and chooses **Create parent access** or **Link existing parent**. A new account receives a unique login such as `p.first.last@makerlab.academy`; a collision receives a numeric suffix. Names alone never merge accounts.
+2. A trusted, staff-authorized service creates the Firebase Auth account and guardian links. It generates a strong password and returns it once to the staff page. A new parent signs into SparkQuest immediately without email activation. The password is not stored in student or user documents.
+3. The staff page offers copy, print, and explicit share actions with the SparkQuest sign-in link. A parent with a lost password receives a staff-authorized reset; a generated login alias may have no inbox for email reset.
+4. SparkQuest opens a parent-only family workspace with every explicitly linked child, projects and instructor feedback, payments, attendance, and Pickup. Learner save and instructor/admin actions are unavailable to the parent role.
+5. Edufy remains the staff source for learners, enrollment, finance, attendance, guardian permissions, and the Pickup desk. After the SparkQuest flow passes acceptance and is released, old Edufy parent links should lead to SparkQuest rather than presenting a second parent panel.
+
+## Initial code and gaps before the local phases
+
+- `views/StudentDetailsView.tsx` creates parent accounts in a secondary browser Firebase app from an entered real email and sends a password-reset email. Its eight-character `Math.random()` password is not an appropriate staff-issued credential. Reusing an email found in `users` can overwrite an existing nonparent profile's role. The same file already contains a one-time credentials modal that can be adapted.
+- `App.tsx` also creates a parent account during enrollment from the submitted email. Both creation paths need the same trusted account and sibling-link policy.
+- `sparkquest/App.tsx` locally routes the parent role to `ParentFamilyWorkspace`, which currently covers projects only. `sparkquest/components/LoginView.tsx` already accepts parent email/password. This parent route is not released.
+- `docs/parent/PHASE_2_2026-10-10.md` records local guardian-scoped project, finance, attendance, gallery, and Pickup read rules with emulator proof. The SparkQuest family workspace still needs those source adapters and phone acceptance.
+- Pickup Phase 2 is local. Parent actions currently live in Edufy `ParentPickupPanel`, while SparkQuest has learner status. SparkQuest parent actions must reuse the dated Pickup lifecycle and must account for a second authorized guardian. Legacy/duplicate pickups, indexes, and cross-session handoff remain release gates.
+- Pickup policy confirmed by the user: either currently active, same-organization parent with the child's `pickup` permission may advance the same request. Preserve the initiating parent on the record and record the actual actor on every later transition and event. The Pickup build chat owns the corresponding rules and emulator proof.
+
+## Release sequence and proof
+
+Local progress: the staff-authorized Admin SDK endpoint now issues collision-safe aliases and one-time cryptographic passwords, links an existing parent explicitly to siblings, and resets a linked parent's password. The enrollment generator now sends staff to the learner record for this same access flow. The isolated Auth/Firestore test passes issuance, collisions, sibling linking, nonparent collision denial, staff/tenant denial, reset sign-in, and no plaintext credential in Firestore. The Edufy production build passes. SparkQuest Phase 2 now has per-child projects, finance, attendance, and read-only Pickup status; its domain checks, SparkQuest type check, both production builds, and synthetic desktop/phone QA pass. See `docs/sparkquest/PARENT_FAMILY_PHASE_2_2026-10-10.md`.
+
+SparkQuest Phase 3 now presents each project as a visual card using its stored thumbnail/cover/gallery/evidence image or exact same-tenant template cover, with a branded fallback. Expanded cards retain progress, evidence, presentation, steps, skills, and instructor feedback. Focused media tests, both builds, and desktop/phone visual QA pass. See `docs/sparkquest/PARENT_FAMILY_PHASE_3_2026-10-11.md`. The user clarified that Kenza, Nada, and Ali Ajlane are real students with real parents, not test accounts, and should use one parent account for all three. Their exact Edufy records, intended parent account identity, and guardian links remain unverified because the Edufy data connector is unavailable in this workspace. Do not link them to the earlier test account, infer record IDs by surname, or use their records as demo data.
+
+The user confirmed `p.ajlane@makerlab.academy` as the preferred login for that family. The local Edufy staff flow now separates the editable alias basis from the verified parent display/full name, requires staff relationship confirmation, and handles collisions with a suffix. The isolated Auth/Firestore suite and Edufy build pass. This naming preference does not authorize account creation or guardian-link writes until exact records and the real parent identity are verified. See `docs/parent/CREDENTIALS_PHASE_3_2026-10-10.md`.
+
+Pickup Phase 3 now locally supports either linked parent updating the same canonical request while retaining the initiator and recording the actual actor. The Firebase 10 Edufy command and Firebase 12 SparkQuest command passed isolated emulator suites and both builds. The SparkQuest command is intentionally not connected to live parent action controls. Firestore's rule-expression budget still affects some intentionally invalid batch cases; the historical overlap gate, target index, and authenticated four-role acceptance remain open. See `docs/pickup/PHASE_3_2026-10-10.md`.
+
+1. Prove issued-account creation, uniqueness, explicit sibling linking, nonparent collision denial, one-time secret handling, and staff reset against isolated Auth/Firestore services. Do not create production accounts for QA.
+2. Prove SparkQuest parent views and Pickup actions with synthetic family data, then authenticate a designated parent linked to at least two learners with real test records on phone and desktop. The supplied parent account has only one child and no readable projects.
+3. Reconcile missing guardian links, tenantless projects, and active legacy Pickup records. Provision declared indexes and validate exact parent queries and physical handoff across parent, staff, and learner sessions.
+4. Isolate and release Edufy account service plus rules/indexes and staff page first. Release the SparkQuest family client after its dependencies pass. Redirect old Edufy parent entry points only after SparkQuest acceptance. Do not deploy the mixed checkout.

@@ -7,7 +7,8 @@ import { useConfirm } from '../../context/ConfirmContext';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: (email: string) => void;
+  handleCreateParentAccess: (action: 'issue' | 'link' | 'reset', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => void;
+  parentAccounts: Array<{ uid: string; email: string; parentName: string; childName: string; childId: string }>;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
   shareAccount: (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => void;
@@ -23,6 +24,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   student,
   handleGenerateAccess,
   handleCreateParentAccess,
+  parentAccounts,
   isGeneratingAccess,
   generateAccessCardPrint,
   shareAccount,
@@ -30,22 +32,29 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   settings,
   isAdult = false,
 }) => {
-  const { currentOrganization } = useAuth();
+  const { currentOrganization, userProfile } = useAuth();
+  const canManageParentAccess = ['super_admin', 'owner', 'admin'].includes(userProfile?.role || '');
   const { confirm, alert: showAlert } = useConfirm();
   const [showPassword, setShowPassword] = useState(false);
 
   // New PIN State
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
   const [showPin, setShowPin] = useState(false);
-  const [isParentEmailModalOpen, setIsParentEmailModalOpen] = useState(false);
-  const [parentEmailInput, setParentEmailInput] = useState(student.parentLoginInfo?.email || '');
-  const isParentEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmailInput.trim());
+  const [isParentChoiceModalOpen, setIsParentChoiceModalOpen] = useState(false);
+  const [reuseParentUid, setReuseParentUid] = useState('');
+  const [aliasBasis, setAliasBasis] = useState(student.parentName || '');
+  const [relationshipVerified, setRelationshipVerified] = useState(false);
+  const selectedParentAccount = parentAccounts.find(account => account.uid === reuseParentUid);
+  const aliasPreview = aliasBasis.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 48).replace(/\.+$/, '');
 
   useEffect(() => {
-    setParentEmailInput(student.parentLoginInfo?.email || '');
+    setReuseParentUid('');
+    setAliasBasis(student.parentName || '');
+    setRelationshipVerified(false);
     setShowPassword(false);
     setShowPin(false);
-  }, [student.id, student.parentLoginInfo?.email]);
+  }, [student.id, student.parentName]);
 
   const handleGeneratePin = async () => {
     if (student.organizationId && currentOrganization?.id && student.organizationId !== currentOrganization.id) {
@@ -219,11 +228,11 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 <div className="break-all font-mono text-sm text-white select-all">{student.parentLoginInfo.email}</div>
               </div>
               <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                Passwords are never displayed or stored here. Edufy sends a private setup link to the parent email.
+                The password is shown only when issued or reset. Ask an authorized staff member to reset a lost password.
               </div>
               <button
-                onClick={() => setIsParentEmailModalOpen(true)}
-                disabled={isGeneratingAccess}
+                onClick={() => handleCreateParentAccess('reset')}
+                disabled={isGeneratingAccess || !canManageParentAccess}
                 className="mt-2 flex min-h-10 w-full items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
               >
                 {isGeneratingAccess ? (
@@ -231,20 +240,20 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 ) : (
                   <RefreshCw size={12} />
                 )}{' '}
-                Send setup link or change email
+                Issue new password
               </button>
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={() => shareAccount('parent', 'email')} className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-800 px-2 text-xs font-bold text-white hover:bg-slate-700"><Mail size={14} /> Email</button>
                 <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> WhatsApp</button>
               </div>
-              <p className="text-[11px] text-slate-400">Shares the family portal address and sign-in email. Password setup stays in the private email from Edufy.</p>
+              <p className="text-[11px] text-slate-400">Shares the SparkQuest sign-in address and login name. Share a new password from the one-time credentials card.</p>
             </div>
           ) : (
             <div className="text-center py-4">
               <p className="text-slate-500 text-xs italic mb-3">Create a separate login for the parent.</p>
               <button
-                onClick={() => setIsParentEmailModalOpen(true)}
-                disabled={isGeneratingAccess}
+                onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
+                disabled={isGeneratingAccess || !canManageParentAccess}
                 className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-teal-400"
               >
                 {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Create Parent
@@ -255,34 +264,44 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
 
         </div>
       )}
-      {/* PARENT EMAIL MODAL */}
-      <Modal isOpen={isParentEmailModalOpen} onClose={() => setIsParentEmailModalOpen(false)} title="Parent Account Email">
+      <Modal isOpen={isParentChoiceModalOpen} onClose={() => setIsParentChoiceModalOpen(false)} title="Parent access">
         <div className="space-y-4">
           <p className="text-sm text-slate-400">
-            Please enter the parent's email address. If they already have an account, they will be linked automatically.
+            Verify the real parent first. The login alias can differ from their full name; choosing an existing parent links this learner to that exact account.
           </p>
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email Address</label>
-            <input 
-              type="email" 
-              value={parentEmailInput} 
-              onChange={(e) => setParentEmailInput(e.target.value)}
-              aria-invalid={parentEmailInput.length > 0 && !isParentEmailValid}
-              className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
-              placeholder="parent@example.com"
-            />
-            {parentEmailInput.length > 0 && !isParentEmailValid && <p className="mt-1 text-xs text-amber-300">Enter a complete email address.</p>}
+          <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
+            <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Recorded parent full name</span>
+            <strong>{student.parentName?.trim() || 'Missing — update the learner record first'}</strong>
           </div>
+          <label className="block text-xs font-bold uppercase text-slate-400" htmlFor="parent-alias-basis">Login alias basis</label>
+          <input id="parent-alias-basis" value={aliasBasis} onChange={event => setAliasBasis(event.target.value)} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
+          <p className="text-xs text-slate-300">Preview: <strong className="break-all text-teal-300">{aliasPreview ? `p.${aliasPreview}@makerlab.academy` : 'Enter an alias basis'}</strong>. An existing login gets a numeric suffix.</p>
+          <label className="flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={relationshipVerified} onChange={event => setRelationshipVerified(event.target.checked)} className="mt-1" />I verified the real parent identity and this learner’s relationship. I am not relying on a shared surname.</label>
           <button 
             onClick={() => {
-              setIsParentEmailModalOpen(false);
-              handleCreateParentAccess(parentEmailInput.trim());
+              setIsParentChoiceModalOpen(false);
+              handleCreateParentAccess('issue', undefined, aliasBasis, relationshipVerified);
             }}
-            disabled={!isParentEmailValid || isGeneratingAccess}
+            disabled={!student.parentName?.trim() || !aliasPreview || !relationshipVerified || isGeneratingAccess || !canManageParentAccess}
             className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
           >
-            Confirm & Proceed
+            Issue new parent login
           </button>
+          {!student.parentName?.trim() && <p className="text-xs text-amber-300">Add the parent name to this learner record first.</p>}
+          {parentAccounts.length > 0 && <div className="border-t border-white/10 pt-4">
+            <label className="mb-2 block text-xs font-bold uppercase text-slate-400">Link an existing parent login</label>
+            <select value={reuseParentUid} onChange={event => setReuseParentUid(event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
+              <option value="">Choose the exact account</option>
+              {parentAccounts.map(account => <option key={account.uid} value={account.uid}>{account.email} · {account.parentName || 'Parent name missing'} · {account.childName}</option>)}
+            </select>
+            {selectedParentAccount && <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
+              <p><strong className="text-white">Recorded parent:</strong> {selectedParentAccount.parentName || 'Missing on source learner'}</p>
+              <p><strong className="text-white">Source learner:</strong> {selectedParentAccount.childName} ({selectedParentAccount.childId})</p>
+              <p className="break-all"><strong className="text-white">Exact parent UID:</strong> {selectedParentAccount.uid}</p>
+              <p className="mt-2 text-amber-200">Confirm this is the same real parent of {student.name}. The login recorded on another learner is a candidate; the service checks its active parent profile and guardian link.</p>
+            </div>}
+            <button type="button" disabled={!reuseParentUid || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess('link', reuseParentUid, undefined, relationshipVerified); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">Link selected parent</button>
+          </div>}
         </div>
       </Modal>
 

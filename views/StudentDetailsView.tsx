@@ -6,8 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday } from '../utils/helpers';
 import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db } from '../services/firebase';
+import { db } from '../services/firebase';
+import { manageParentAccess, type ParentAccessAction } from '../services/parentAccess';
 import { Modal } from '../components/Modal';
 import { Enrollment, Payment, StudentProject } from '../types';
 import { getTheme } from '../utils/theme';
@@ -50,6 +50,15 @@ export const StudentDetailsView = ({
         }
         return students.find(s => s.id === studentId);
     }, [students, studentId, userProfile, isStudentRole]);
+    const parentAccounts = useMemo(() => [...new Map(students
+        .filter(item => item.organizationId === student?.organizationId && item.id !== student?.id && item.parentLoginInfo?.uid)
+        .map(item => [item.parentLoginInfo!.uid, {
+            uid: item.parentLoginInfo!.uid,
+            email: item.parentLoginInfo!.email,
+            parentName: item.parentName?.trim() || '',
+            childName: item.name,
+            childId: item.id
+        }])).values()], [students, student]);
 
     const [editEnrollment, setEditEnrollment] = useState<Partial<Enrollment> | null>(null);
     const [editPayment, setEditPayment] = useState<Partial<Payment> | null>(null);
@@ -447,120 +456,24 @@ export const StudentDetailsView = ({
         } finally { setIsGeneratingAccess(false); }
     };
 
-    // NEW: Create Parent Access (Accepts real email)
-    const handleCreateParentAccess = async (parentEmail: string) => {
-        if (!db || !student) return;
-        const firestore = db;
-        if (!parentEmail || !parentEmail.includes('@')) {
-            await showAlert('Invalid email', 'Enter a valid parent email address.', 'warning');
-            return;
+    const handleCreateParentAccess = async (action: ParentAccessAction, reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => {
+        if (!student) return;
+        if (action === 'reset') {
+            const approved = await confirm({ title: 'Issue a new parent password', message: 'The current password will stop working. Share the new password from the one-time card after this action.', variant: 'warning', confirmText: 'Issue new password' });
+            if (!approved) return;
         }
-
-        // Check if regenerating
-        if (student.parentLoginInfo) {
-            const isConfirmed = await confirm({
-                title: 'Regenerate parent access',
-                message: 'Edufy will link the email entered next. Existing passwords cannot be viewed or reset from this screen.',
-                variant: 'warning',
-                confirmText: 'Continue'
-            });
-            if (!isConfirmed) return;
-        }
-
         setIsGeneratingAccess(true);
         try {
-            if (currentOrganization?.id && student.organizationId && currentOrganization.id !== student.organizationId) {
-                await showAlert('Record is outside this organization', 'Refresh the student directory before creating parent access.', 'danger');
-                return;
-            }
             const organizationId = currentOrganization?.id || student.organizationId;
-            if (!organizationId) {
-                await showAlert('Organization required', 'Select an organization before creating parent access.', 'warning');
-                return;
+            if (!organizationId || organizationId !== student.organizationId) throw new Error('Select the learner’s organization before managing parent access.');
+            const result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified, reuseParentUid });
+            if (result.password) {
+                setCredentialsModal({ isOpen: true, data: { name: student.parentName || 'Parent', email: result.email, pass: result.password, role: 'Parent' } });
+            } else {
+                await showAlert('Parent linked', `${result.email} can now open this learner in SparkQuest. The existing password was not changed.`, 'success');
             }
-            const normalizedParentEmail = parentEmail.trim().toLowerCase();
-            const parentName = student.parentName || "Parent";
-            const password = Math.random().toString(36).slice(-8);
-
-            let uid = student.parentLoginInfo?.uid;
-            let isExistingUser = false;
-
-            // 1. Try to create the user
-            try {
-                uid = await createSecondaryUser(normalizedParentEmail, password);
-                // If successful, it's a new user
-            } catch (e: any) {
-                if (e.message?.includes('already exists') || e.code === 'auth/email-already-in-use') {
-                    // User exists. Find their UID from Firestore 'users' collection
-                    const q = query(
-                        collection(db, 'users'),
-                        where('email', '==', normalizedParentEmail),
-                        where('organizationId', '==', organizationId)
-                    );
-                    const querySnap = await getDocs(q);
-
-                    if (!querySnap.empty) {
-                        uid = querySnap.docs[0].id;
-                        isExistingUser = true;
-                    } else {
-                        await showAlert('Account cannot be linked', `An account already uses ${normalizedParentEmail}, but it is not available in this organization. Contact an administrator to resolve the account ownership.`, 'warning');
-                        setIsGeneratingAccess(false);
-                        return;
-                    }
-                } else {
-                    throw e; // Rethrow other errors
-                }
-            }
-
-            if (!uid) {
-                await showAlert('Could not create access', 'Could not obtain a user ID for this parent account.', 'danger');
-                setIsGeneratingAccess(false);
-                return;
-            }
-
-            // 2. Update Student Record
-            const newParentLoginInfo = { email: normalizedParentEmail, uid };
-
-            await updateDoc(doc(db, 'students', student.id), {
-                parentLoginInfo: newParentLoginInfo,
-                parentUids: arrayUnion(uid)
-            });
-
-            // 3. Ensure User Profile Exists/Is Updated
-            await setDoc(doc(db, 'users', uid), {
-                uid,
-                organizationId,
-                email: normalizedParentEmail,
-                name: parentName,
-                role: 'parent',
-                status: 'active',
-                // Don't overwrite createdAt if existing
-                ...(isExistingUser ? {} : { createdAt: serverTimestamp() })
-            }, { merge: true });
-
-            const guardianSubjects = Array.from(new Set([student.id, student.loginInfo?.uid].filter(Boolean) as string[]));
-            await Promise.all(guardianSubjects.map(subjectId => setDoc(doc(firestore, 'guardian_links', `${uid}_${subjectId}`), {
-                organizationId,
-                parentUid: uid,
-                studentId: student.id,
-                subjectId,
-                status: 'active',
-                permissions: ['portfolio', 'enrollments', 'payments', 'gallery', 'pickup'],
-                updatedAt: serverTimestamp(),
-                ...(!isExistingUser ? { createdAt: serverTimestamp() } : {})
-            }, { merge: true })));
-
-            if (!auth) throw new Error('Authentication is unavailable.');
-            await sendPasswordResetEmail(auth, normalizedParentEmail);
-            await showAlert(
-                isExistingUser ? 'Parent account linked' : 'Parent invitation sent',
-                `${normalizedParentEmail} can use the secure email link to set or reset the password and open the family portal.`,
-                'success'
-            );
-
         } catch (err: any) {
-            console.error(err);
-            await showAlert('Could not create parent access', err.message, 'danger');
+            await showAlert('Could not update parent access', err?.message || 'Please retry or contact an administrator.', 'danger');
         } finally {
             setIsGeneratingAccess(false);
         }
@@ -698,15 +611,15 @@ export const StudentDetailsView = ({
         }
 
         const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
-        const parentPortalUrl = `${window.location.origin}/parent-portal`;
+        const parentPortalUrl = config.sparkQuestUrl;
         const subject = `${academyName} ${role === 'student' ? 'learner' : 'family'} account for ${student.name}`;
         const message = role === 'student'
             ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n${student.loginInfo?.initialPassword ? `Password: ${student.loginInfo.initialPassword}` : 'Please contact the academy for the account password.'}\n\nPlease keep these details private.`
-            : `Hello, here is your ${academyName} family portal access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nEmail: ${account.email}\n\nUse the private setup email from Edufy to set your password. If needed, request a password reset from the sign-in page.`;
+            : `Hello, here is your ${academyName} SparkQuest family access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nEmail: ${account.email}\n\nFor a lost password, contact the academy for a new one-time card.`;
 
         if (channel === 'email') {
             const recipient = role === 'parent'
-                ? account.email
+                ? (student.email && student.email !== account.email ? student.email : '')
                 : (student.email && student.email !== account.email ? student.email : student.parentLoginInfo?.email || '');
             window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
             return;
@@ -919,6 +832,7 @@ export const StudentDetailsView = ({
                         student={student}
                         handleGenerateAccess={handleGenerateAccess}
                         handleCreateParentAccess={handleCreateParentAccess}
+                        parentAccounts={parentAccounts}
                         isGeneratingAccess={isGeneratingAccess}
                         generateAccessCardPrint={generateAccessCardPrint}
                         shareAccount={shareAccount}
@@ -1132,6 +1046,7 @@ export const StudentDetailsView = ({
                             </div>
                             <h3 className="text-xl font-bold text-white mb-1">Account Ready</h3>
                             <p className="text-slate-400 text-sm">Share these details with the {credentialsModal.data.role.toLowerCase()}.</p>
+                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 text-xs text-amber-200">This password is shown once. It is not saved in the learner record.</p>}
                         </div>
 
                         <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 relative overflow-hidden">
@@ -1157,7 +1072,7 @@ export const StudentDetailsView = ({
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => {
-                                    const msg = `Hello! Login for ${settings.academyName}:\nLink: ${window.location.origin}\nEmail: ${credentialsModal.data!.email}\nPassword: ${credentialsModal.data!.pass}`;
+                                    const msg = `Hello! Login for ${settings.academyName}:\nLink: ${credentialsModal.data!.role === 'Parent' ? config.sparkQuestUrl : window.location.origin}\nEmail: ${credentialsModal.data!.email}\nPassword: ${credentialsModal.data!.pass}`;
                                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                                 }}
                                 className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"
@@ -1165,7 +1080,7 @@ export const StudentDetailsView = ({
                                 <Share2 size={16} /> WhatsApp
                             </button>
                             <button
-                                onClick={() => generateCredentialsPrint(credentialsModal.data!.name, credentialsModal.data!.email, credentialsModal.data!.pass, credentialsModal.data!.role, settings)}
+                                onClick={() => generateCredentialsPrint(credentialsModal.data!.name, credentialsModal.data!.email, credentialsModal.data!.pass, credentialsModal.data!.role, settings, credentialsModal.data!.role === 'Parent' ? config.sparkQuestUrl : undefined)}
                                 className="py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-colors border border-slate-700"
                             >
                                 <Printer size={16} /> Print Card

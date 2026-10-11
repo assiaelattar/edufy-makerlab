@@ -1,0 +1,45 @@
+import { auth } from './firebase';
+
+export type ParentAccessAction = 'issue' | 'link' | 'reset';
+
+export interface ParentAccessResult {
+  action: ParentAccessAction;
+  email: string;
+  password?: string;
+}
+
+const parentAccessEndpoint = (): string => {
+  const configuredOrigin = String(import.meta.env.VITE_PARENT_ACCESS_API_ORIGIN || '').trim();
+  if (!configuredOrigin) return '/api/parent-access';
+  let url: URL;
+  try { url = new URL(configuredOrigin); }
+  catch { throw new Error('Parent access API origin is invalid.'); }
+  const local = ['localhost', '127.0.0.1'].includes(url.hostname);
+  if ((url.protocol !== 'https:' && !(import.meta.env.DEV && local && url.protocol === 'http:')) ||
+      url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('Parent access API origin must be an HTTPS origin.');
+  }
+  return `${url.origin}/api/parent-access`;
+};
+
+export const manageParentAccess = async (request: {
+  action: ParentAccessAction;
+  studentId: string;
+  organizationId: string;
+  parentName?: string;
+  aliasBasis?: string;
+  relationshipVerified?: boolean;
+  reuseParentUid?: string;
+}): Promise<ParentAccessResult> => {
+  const token = await auth?.currentUser?.getIdToken();
+  if (!token) throw new Error('Sign in to Edufy before managing parent access.');
+  const result = await fetch(parentAccessEndpoint(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(request),
+    cache: 'no-store'
+  });
+  const payload = await result.json().catch(() => ({}));
+  if (!result.ok || !payload.ok) throw new Error(payload.error || 'Parent access could not be updated.');
+  return payload as ParentAccessResult;
+};

@@ -55,9 +55,8 @@ import { NotificationDropdown } from './components/NotificationDropdown';
 import { EnrollmentWizard, type EnrollmentLearnerMode } from './components/enrollment/EnrollmentWizard';
 import { AtlasBootScreen } from './components/AtlasBootScreen';
 
-import { addDoc, arrayUnion, collection, getDocs, query, serverTimestamp, updateDoc, doc, setDoc, where, writeBatch } from 'firebase/firestore';
-import { sendPasswordResetEmail } from 'firebase/auth';
-import { auth, db } from './services/firebase';
+import { addDoc, arrayUnion, collection, serverTimestamp, updateDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { db } from './services/firebase';
 import { formatCurrency, compressImage, normalizePhone } from './utils/helpers';
 import { resolveEnrollmentServicePeriod } from './utils/programLifecycle';
 import { getProgramReadiness } from './utils/program-readiness';
@@ -774,8 +773,6 @@ const AppContent = () => {
             await showAlert('Organization required', 'Select an organization before creating an enrollment.', 'warning');
             return;
         }
-        const firestore = db;
-
         const enrollmentGroup = selectedGrade?.groups.find(group => group.id === enrollProgramForm.groupId);
         if (!selectedProgram || !selectedPack || !selectedGrade || !enrollmentGroup) {
             await showAlert('Enrollment details incomplete', 'Choose a program, pricing pack, grade, and group before finishing enrollment.', 'warning');
@@ -897,9 +894,7 @@ const AppContent = () => {
             let studentName = enrollStudentForm.name;
             const existingStudentRecord = quickEnrollStudentId ? students.find(student => student.id === quickEnrollStudentId) : undefined;
             let studentAccessCreated = Boolean(existingStudentRecord?.loginInfo?.uid);
-            let parentAccessCreated = Boolean(existingStudentRecord?.parentLoginInfo?.uid);
-            let parentAccessFailed = false;
-            let studentAuthUid = existingStudentRecord?.loginInfo?.uid;
+            const parentAccessCreated = Boolean(existingStudentRecord?.parentLoginInfo?.uid);
             let createdStudentForEnrollment = false;
 
             // 1. Create Student if New
@@ -955,8 +950,6 @@ const AppContent = () => {
                     const email = `${username}@${domain}`;
                     const password = Math.random().toString(36).slice(-6);
                     const uid = await createSecondaryUser(email, password);
-                    studentAuthUid = uid;
-
                     await setDoc(doc(db, 'users', uid), {
                         uid,
                         email,
@@ -976,57 +969,8 @@ const AppContent = () => {
                 }
             }
 
-            // 1.6 Generate Parent Account independently so an existing student login cannot block it.
-            if (enrollStudentForm.email && !parentAccessCreated) {
-                try {
-                    const parentEmail = enrollStudentForm.email.trim().toLowerCase();
-                    const existingParentSnapshot = await getDocs(query(
-                        collection(db, 'users'),
-                        where('email', '==', parentEmail),
-                        where('organizationId', '==', currentOrganization.id)
-                    ));
-                    const existingParent = existingParentSnapshot.docs.find(profile => profile.data().role === 'parent');
-                    let parentUid = existingParent?.id;
-
-                    if (!parentUid) {
-                        const passwordBytes = crypto.getRandomValues(new Uint8Array(18));
-                        const parentPassword = Array.from(passwordBytes, value => value.toString(36)).join('').slice(0, 20);
-                        parentUid = await createSecondaryUser(parentEmail, parentPassword);
-                        await setDoc(doc(db, 'users', parentUid), {
-                            uid: parentUid,
-                            email: parentEmail,
-                            name: enrollStudentForm.parentName || 'Parent',
-                            role: 'parent',
-                            status: 'active',
-                            organizationId: currentOrganization.id,
-                            createdAt: serverTimestamp()
-                        });
-                    }
-
-                    await updateDoc(doc(db, 'students', finalStudentId), {
-                        parentLoginInfo: { email: parentEmail, uid: parentUid },
-                        parentUids: arrayUnion(parentUid)
-                    });
-
-                    const guardianSubjects = Array.from(new Set([finalStudentId, studentAuthUid].filter(Boolean) as string[]));
-                    await Promise.all(guardianSubjects.map(subjectId => setDoc(doc(firestore, 'guardian_links', `${parentUid}_${subjectId}`), {
-                        organizationId: currentOrganization.id,
-                        parentUid,
-                        studentId: finalStudentId,
-                        subjectId,
-                        status: 'active',
-                        permissions: ['portfolio', 'enrollments', 'payments', 'gallery', 'pickup'],
-                        updatedAt: serverTimestamp(),
-                        ...(!existingParent ? { createdAt: serverTimestamp() } : {})
-                    }, { merge: true })));
-
-                    if (auth) await sendPasswordResetEmail(auth, parentEmail);
-                    parentAccessCreated = true;
-                } catch (error) {
-                    console.error('Failed to generate parent account:', error);
-                    parentAccessFailed = true;
-                }
-            }
+            // Parent access is issued from Student Details through the staff-authorized
+            // Admin SDK endpoint. Contact email alone never establishes a guardian link.
 
             // 2. Create Enrollment
             const selectedGroup = enrollmentGroup;
@@ -1157,12 +1101,11 @@ const AppContent = () => {
             setEnrollmentAdmissionOrigin(null);
             const accessSummary = studentAccessCreated
                 ? parentAccessCreated
-                    ? 'Student access was created and a secure parent setup email was sent.'
-                    : parentAccessFailed
-                        ? 'Student access was created. Parent access still needs attention in the student record.'
-                        : 'Student access was created.'
+                    ? 'Student and existing parent access are ready.'
+                    : 'Student access was created. Issue the parent login from this learner record.'
                 : 'Enrollment was saved. Student access still needs to be created from the student record.';
             await showAlert('Enrollment created', accessSummary, 'success');
+            if (!parentAccessCreated && finalStudentId) navigateTo('student-details', { studentId: finalStudentId });
         } catch (err) {
             console.error(err);
             await showAlert('Enrollment not completed', 'The enrollment could not be processed. No success was recorded; review the details and try again.', 'danger');

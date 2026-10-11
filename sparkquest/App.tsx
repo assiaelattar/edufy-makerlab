@@ -30,6 +30,7 @@ const StudentWizard = lazy(() => import('./components/StudentWizard').then(modul
 const InstructorFactory = lazy(() => import('./components/InstructorFactory').then(module => ({ default: module.InstructorFactory })));
 const ProjectDetailsEnhanced = lazy(() => import('./components/ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 const ParentShowcase = lazy(() => import('./components/ParentShowcase'));
+const ParentFamilyWorkspace = lazy(() => import('./components/ParentFamilyWorkspace').then(module => ({ default: module.ParentFamilyWorkspace })));
 const StudentProjectDetailsDemo = lazy(() => import('./components/StudentProjectDetailsDemo'));
 const SparkStore = lazy(() => import('./components/SparkStore').then(module => ({ default: module.SparkStore })));
 const StudentPortfolio = lazy(() => import('./components/StudentPortfolio').then(module => ({ default: module.StudentPortfolio })));
@@ -221,7 +222,7 @@ const SparkQuestApp: React.FC = () => {
   const { fetchMission, clearMission, assignment, project, error, isConnected } = useMissionData();
   const { projectTemplates, studentProjects, processTemplates } = useFactoryData();
 
-  const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY' | 'SHOWCASE'>('HOME');
+  const [view, setView] = useState<'HOME' | 'WIZARD' | 'FACTORY' | 'SHOWCASE' | 'PARENT'>('HOME');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [previewProjectId, setPreviewProjectId] = useState<string | null>(null);
   const [previewProjectData, setPreviewProjectData] = useState<StudentProject | null>(null);
@@ -288,6 +289,11 @@ const SparkQuestApp: React.FC = () => {
     if (!user || authLoading) return;
     console.log("🚦 Routing Check. User:", user.email, "Role:", userProfile?.role, "Current View:", view);
 
+    if (userProfile?.role === 'parent') {
+      setView('PARENT');
+      return;
+    }
+
     // If active mission, stay
     if (assignment && project) {
       setView('WIZARD');
@@ -311,7 +317,7 @@ const SparkQuestApp: React.FC = () => {
   // Data Fetching
   useEffect(() => {
     if (user && (selectedProjectId || initialProjectId)) {
-      if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') return;
+      if (!userProfile || userProfile.role !== 'student') return;
       const pId = selectedProjectId || initialProjectId;
       console.log("🚀 [SparkQuest] Loading Mission:", pId);
       // 🔥 CRITICAL FIX: Use studentId from Profile (Firestore) if available, otherwise fallback to Auth UID (Legacy/Demo)
@@ -322,10 +328,10 @@ const SparkQuestApp: React.FC = () => {
 
   // Deep Link Handling for Preview
   useEffect(() => {
-    if (initialViewMode === 'details' && initialProjectId && !previewProjectId) {
+    if (userProfile?.role === 'student' && initialViewMode === 'details' && initialProjectId && !previewProjectId) {
       setPreviewProjectId(initialProjectId);
     }
-  }, [initialViewMode, initialProjectId]);
+  }, [initialViewMode, initialProjectId, userProfile?.role]);
 
   const handleLogout = async () => {
     await signOut();
@@ -435,6 +441,10 @@ const SparkQuestApp: React.FC = () => {
   }
 
   // 3. MAIN RENDER LOGIC
+
+  if (userProfile.role === 'parent') {
+    return <LazyView><ParentFamilyWorkspace parentUid={user.uid} organizationId={userProfile.organizationId!} parentName={userProfile.name} onSignOut={handleLogout} /></LazyView>;
+  }
 
   if (view === 'FACTORY') {
     return <LazyView><InstructorFactory /></LazyView>;
