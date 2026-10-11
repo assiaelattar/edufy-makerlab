@@ -1,5 +1,12 @@
 # SparkQuest Known Issues
 
+## Parent family mobile journey release gate
+
+- The live Edufy screenshot still shows the earlier setup-link card. The one-time staff-issued credential and SparkQuest family journey are local candidate code until the API, rules/indexes and both frontend releases are coordinated.
+- Actual parent media access depends on stored download URLs or approved Storage permissions. Check a designated family's recent and legacy project/gallery assets before release; do not widen Storage access based on a broken image alone.
+- Parent Pickup is view-only. The new rule removes the former direct parent write exception; coordinate this with any separate Pickup action release.
+- Large family histories currently load all authorized enrollment, payment, attendance and gallery records; pagination and bounded history reads are a follow-up for high-volume families.
+
 ## Review security Phase 2 release gate
 
 - Protected proof-bound per-step review state is implemented and emulator/browser-proven locally, not deployed. Client creation and Firestore rules must be promoted as one coordinated release because new learner creates require protocol v1.

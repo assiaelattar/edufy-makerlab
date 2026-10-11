@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { isSafeProjectImage, projectEvidenceImages, resolveParentProjectImage } from './parentProjectVisual.ts';
+import { isSafeFamilyHref, isSafeProjectImage, projectEvidenceImages, resolveParentProjectImage } from './parentProjectVisual.ts';
 
 assert.equal(resolveParentProjectImage({
   thumbnailUrl: 'https://cdn.example.test/thumbnail.webp',
@@ -17,5 +17,8 @@ assert.deepEqual(projectEvidenceImages({ gallery: ['/one.png'], mediaUrls: ['/on
   '/one.png', 'https://cdn.example.test/two.jpg'
 ]);
 assert.equal(isSafeProjectImage('javascript:alert(1)'), false);
+assert.equal(isSafeFamilyHref('javascript:alert(1)'), false);
+assert.equal(isSafeFamilyHref('//untrusted.example.test/path'), false);
+assert.equal(isSafeFamilyHref('https://cdn.example.test/guide.pdf'), true);
 
-console.log('parent project visual resolver: 5 checks passed');
+console.log('parent project visual resolver: 8 checks passed');

@@ -28,13 +28,18 @@ export const childHasCanonicalPermission = (
   link.studentId === childId && (link.subjectId || link.studentId) === childId && link.status === 'active' &&
   link.permissions?.includes(permission));
 
-export const projectSubjectsForChild = (
+export const permittedSubjectsForChild = (
   links: GuardianFamilyLink[], childId: string, learnerUid: string | undefined,
-  parentUid: string, organizationId: string
+  parentUid: string, organizationId: string, permission: 'portfolio' | 'gallery'
 ): string[] => {
   const allowed = new Set(links
     .filter(link => link.parentUid === parentUid && link.organizationId === organizationId &&
-      link.studentId === childId && link.status === 'active' && link.permissions?.includes('portfolio'))
+      link.studentId === childId && link.status === 'active' && link.permissions?.includes(permission))
     .map(link => link.subjectId || link.id.slice(link.parentUid.length + 1)));
   return [...new Set([childId, learnerUid].filter((id): id is string => Boolean(id && allowed.has(id))))];
 };
+
+export const projectSubjectsForChild = (
+  links: GuardianFamilyLink[], childId: string, learnerUid: string | undefined,
+  parentUid: string, organizationId: string
+): string[] => permittedSubjectsForChild(links, childId, learnerUid, parentUid, organizationId, 'portfolio');

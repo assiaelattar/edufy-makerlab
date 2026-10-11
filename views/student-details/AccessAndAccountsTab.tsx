@@ -224,11 +224,11 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           {student.parentLoginInfo ? (
             <div className="space-y-3">
               <div className="bg-slate-950/50 p-3 rounded border border-slate-800/50">
-                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Parent Login Email</div>
+                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">SparkQuest parent login ID</div>
                 <div className="break-all font-mono text-sm text-white select-all">{student.parentLoginInfo.email}</div>
               </div>
               <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                The password is shown only when issued or reset. Ask an authorized staff member to reset a lost password.
+                This login ID is not an email inbox. The password appears once when staff issue or reset it; no setup email is sent. It opens the read-only family journey in SparkQuest.
               </div>
               <button
                 onClick={() => handleCreateParentAccess('reset')}
@@ -242,15 +242,12 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 )}{' '}
                 Issue new password
               </button>
-              <div className="grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => shareAccount('parent', 'email')} className="flex min-h-10 items-center justify-center gap-1 rounded-lg border border-white/10 bg-slate-800 px-2 text-xs font-bold text-white hover:bg-slate-700"><Mail size={14} /> Email</button>
-                <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-10 items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> WhatsApp</button>
-              </div>
-              <p className="text-[11px] text-slate-400">Shares the SparkQuest sign-in address and login name. Share a new password from the one-time credentials card.</p>
+              <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
+              <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-slate-500 text-xs italic mb-3">Create a separate login for the parent.</p>
+            <p className="text-slate-500 text-xs italic mb-3">Issue a SparkQuest family login and one-time password. No working email inbox is required.</p>
               <button
                 onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
@@ -276,6 +273,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           <label className="block text-xs font-bold uppercase text-slate-400" htmlFor="parent-alias-basis">Login alias basis</label>
           <input id="parent-alias-basis" value={aliasBasis} onChange={event => setAliasBasis(event.target.value)} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
           <p className="text-xs text-slate-300">Preview: <strong className="break-all text-teal-300">{aliasPreview ? `p.${aliasPreview}@makerlab.academy` : 'Enter an alias basis'}</strong>. An existing login gets a numeric suffix.</p>
+          <p className="text-xs text-slate-400">This email-shaped ID is for SparkQuest sign-in only. It does not need to receive messages.</p>
           <label className="flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={relationshipVerified} onChange={event => setRelationshipVerified(event.target.checked)} className="mt-1" />I verified the real parent identity and this learner’s relationship. I am not relying on a shared surname.</label>
           <button 
             onClick={() => {

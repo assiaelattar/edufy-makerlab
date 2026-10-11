@@ -12,6 +12,9 @@ export const isSafeProjectImage = (value: unknown): value is string => {
     url.startsWith('blob:') || url.startsWith('data:image/');
 };
 
+export const isSafeFamilyHref = (value: unknown): value is string =>
+  typeof value === 'string' && (/^https?:\/\//i.test(value.trim()) || /^\/(?!\/)/.test(value.trim()));
+
 export const projectEvidenceImages = (project: ProjectVisualInput): string[] =>
   [...new Set([...(project.gallery || []), ...(project.mediaUrls || [])].filter(isSafeProjectImage))];
 

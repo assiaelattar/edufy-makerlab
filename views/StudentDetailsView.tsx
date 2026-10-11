@@ -12,6 +12,8 @@ import { Modal } from '../components/Modal';
 import { Enrollment, Payment, StudentProject } from '../types';
 import { getTheme } from '../utils/theme';
 import { config } from '../utils/config';
+
+const parentSparkQuestUrl = () => new URL('?role=parent', config.sparkQuestUrl).toString();
 import { normalizePhoneForWhatsApp } from '../utils/whatsappPhone';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { AcademicsTab } from './student-details/AcademicsTab';
@@ -604,6 +606,10 @@ export const StudentDetailsView = ({
     };
 
     const shareAccount = async (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => {
+        if (role === 'parent' && channel === 'email') {
+            await showAlert('Use the one-time card', 'The parent login ID is not an inbox. Share the generated password directly by card or a reviewed WhatsApp message.', 'warning');
+            return;
+        }
         const account = role === 'student' ? student.loginInfo : student.parentLoginInfo;
         if (!account?.email) {
             await showAlert('Account unavailable', `Create ${role} access before sharing it.`, 'warning');
@@ -611,11 +617,11 @@ export const StudentDetailsView = ({
         }
 
         const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
-        const parentPortalUrl = config.sparkQuestUrl;
+        const parentPortalUrl = parentSparkQuestUrl();
         const subject = `${academyName} ${role === 'student' ? 'learner' : 'family'} account for ${student.name}`;
         const message = role === 'student'
             ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n${student.loginInfo?.initialPassword ? `Password: ${student.loginInfo.initialPassword}` : 'Please contact the academy for the account password.'}\n\nPlease keep these details private.`
-            : `Hello, here is your ${academyName} SparkQuest family access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nEmail: ${account.email}\n\nFor a lost password, contact the academy for a new one-time card.`;
+            : `Hello, here is your ${academyName} SparkQuest family access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nLogin ID: ${account.email}\n\nFor a lost password, contact the academy for a new one-time card.`;
 
         if (channel === 'email') {
             const recipient = role === 'parent'
@@ -1044,16 +1050,16 @@ export const StudentDetailsView = ({
                             <div className="w-16 h-16 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
                                 <CheckCircle2 size={32} />
                             </div>
-                            <h3 className="text-xl font-bold text-white mb-1">Account Ready</h3>
+                            <h3 className="text-xl font-bold text-white mb-1">{credentialsModal.data.role === 'Parent' ? 'SparkQuest family login ready' : 'Account ready'}</h3>
                             <p className="text-slate-400 text-sm">Share these details with the {credentialsModal.data.role.toLowerCase()}.</p>
-                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 text-xs text-amber-200">This password is shown once. It is not saved in the learner record.</p>}
+                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 text-xs text-amber-200">This password is shown once. The email-shaped login ID is not a mailbox, and no setup link is sent. Share the card directly with the verified parent.</p>}
                         </div>
 
                         <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 relative overflow-hidden">
                             <div className="absolute top-0 right-0 p-4 opacity-5"><Key size={80} /></div>
                             <div className="space-y-4 relative z-10">
                                 <div>
-                                    <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider mb-1 block">Login Email</label>
+                                    <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider mb-1 block">{credentialsModal.data.role === 'Parent' ? 'SparkQuest login ID' : 'Login email'}</label>
                                     <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-800">
                                         <code className="text-white font-mono text-sm">{credentialsModal.data.email}</code>
                                         <button onClick={() => copyCredential('Email', credentialsModal.data!.email)} className="rounded-lg p-1 text-slate-500 hover:bg-white/[0.05] hover:text-white" title="Copy email" aria-label="Copy email"><Copy size={14} /></button>
@@ -1072,7 +1078,7 @@ export const StudentDetailsView = ({
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 onClick={() => {
-                                    const msg = `Hello! Login for ${settings.academyName}:\nLink: ${credentialsModal.data!.role === 'Parent' ? config.sparkQuestUrl : window.location.origin}\nEmail: ${credentialsModal.data!.email}\nPassword: ${credentialsModal.data!.pass}`;
+                                    const msg = `Hello! Login for ${settings.academyName}:\nLink: ${credentialsModal.data!.role === 'Parent' ? parentSparkQuestUrl() : window.location.origin}\nLogin ID: ${credentialsModal.data!.email}\nPassword: ${credentialsModal.data!.pass}`;
                                     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                                 }}
                                 className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-colors"
@@ -1080,7 +1086,7 @@ export const StudentDetailsView = ({
                                 <Share2 size={16} /> WhatsApp
                             </button>
                             <button
-                                onClick={() => generateCredentialsPrint(credentialsModal.data!.name, credentialsModal.data!.email, credentialsModal.data!.pass, credentialsModal.data!.role, settings, credentialsModal.data!.role === 'Parent' ? config.sparkQuestUrl : undefined)}
+                                onClick={() => generateCredentialsPrint(credentialsModal.data!.name, credentialsModal.data!.email, credentialsModal.data!.pass, credentialsModal.data!.role, settings, credentialsModal.data!.role === 'Parent' ? parentSparkQuestUrl() : undefined)}
                                 className="py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold flex items-center justify-center gap-2 transition-colors border border-slate-700"
                             >
                                 <Printer size={16} /> Print Card

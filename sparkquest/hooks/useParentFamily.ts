@@ -2,10 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import type { StudentProject } from '../types';
-import { childHasCanonicalPermission, childPermissions, familyChildIds, projectSubjectsForChild, type GuardianFamilyLink } from '../domain/parentFamily';
-import { summarizeAttendance, summarizeFinance, type AttendanceSummaryInput, type EnrollmentSummaryInput, type FamilyOperations, type PaymentSummaryInput } from '../domain/parentFamilyOperations';
+import { childHasCanonicalPermission, childPermissions, familyChildIds, permittedSubjectsForChild, projectSubjectsForChild, type GuardianFamilyLink } from '../domain/parentFamily';
+import { summarizeAttendance, summarizeFinance, type AttendanceSummaryInput, type EnrollmentSummaryInput, type FamilyOperations, type FamilySource, type PaymentSummaryInput } from '../domain/parentFamilyOperations';
 import { pickupSessionDate, previousPickupDate, selectOpenPickup, type PickupStatus } from '../../modules/pickup/domain/pickupLifecycle';
-import { resolveParentProjectImage } from '../domain/parentProjectVisual';
+import { isSafeProjectImage, resolveParentProjectImage } from '../domain/parentProjectVisual';
 
 export interface FamilyProject extends StudentProject {
   familyCoverImage?: string;
@@ -18,6 +18,14 @@ export interface FamilyChild {
   issue: string | null;
   permissions: string[];
   operations: FamilyOperations;
+  media: FamilySource<FamilyMediaItem[]>;
+}
+
+export interface FamilyMediaItem {
+  id: string;
+  url: string;
+  caption: string;
+  date: string | null;
 }
 
 interface StudentRecord {
@@ -40,6 +48,7 @@ interface ProjectTemplateVisual {
 interface EnrollmentRecord extends EnrollmentSummaryInput { organizationId?: string; studentId?: string }
 interface PaymentRecord extends PaymentSummaryInput { id: string; organizationId?: string; enrollmentId?: string }
 interface AttendanceRecord extends AttendanceSummaryInput { id: string; organizationId?: string; studentId?: string }
+interface GalleryRecord { id: string; organizationId?: string; studentId?: string; url?: string; caption?: string; type?: string; createdAt?: { toDate?: () => Date }; uploadedAt?: { toDate?: () => Date } }
 interface PickupRecord {
   id: string;
   organizationId: string;
@@ -60,6 +69,12 @@ const sourceError = (source: string, cause: unknown) => {
   return `${source} could not be loaded. Retry, then ask the academy to check this learner’s records.`;
 };
 
+const galleryDate = (record: GalleryRecord): string | null => {
+  const value = record.createdAt || record.uploadedAt;
+  const date = value?.toDate?.();
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString().slice(0, 10) : null;
+};
+
 export const useParentFamily = (parentUid?: string, organizationId?: string) => {
   const [children, setChildren] = useState<FamilyChild[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,7 +90,7 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
       setChildren([]);
       if (!db || !parentUid || !organizationId) {
         if (!cancelled) {
-          setError('Your Edufy account is missing a verified organization. Ask the academy to check your access.');
+          setError('Your SparkQuest family account is missing a verified organization. Ask the academy to check your access.');
           setLoading(false);
         }
         return;
@@ -100,12 +115,33 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
             const name = childName(student, id);
             const permissions = childPermissions(links, id, parentUid, organizationId);
             const subjects = projectSubjectsForChild(links, id, student.loginInfo?.uid, parentUid, organizationId);
-            const [projectResult, finance, attendance, pickup] = await Promise.all([
+            const gallerySubjects = permittedSubjectsForChild(links, id, student.loginInfo?.uid, parentUid, organizationId, 'gallery');
+            const [projectResult, media, finance, attendance, pickup] = await Promise.all([
               Promise.allSettled(subjects.map(subjectId => getDocs(query(
                 collection(db!, 'student_projects'),
                 where('studentId', '==', subjectId),
                 where('organizationId', '==', organizationId)
               )))),
+              (async (): Promise<FamilyChild['media']> => {
+                if (!gallerySubjects.length) return { status: 'unavailable', reason: 'Media access is not enabled for this learner.' };
+                try {
+                  const results = await Promise.all(gallerySubjects.map(subjectId => getDocs(query(
+                    collection(db!, 'gallery_items'), where('studentId', '==', subjectId),
+                    where('organizationId', '==', organizationId)
+                  ))));
+                  const items = new Map<string, FamilyMediaItem>();
+                  results.forEach(snapshot => snapshot.docs.forEach(item => {
+                    const record = { id: item.id, ...item.data() } as GalleryRecord;
+                    if (record.organizationId !== organizationId || !gallerySubjects.includes(record.studentId || '') ||
+                      (record.type && record.type !== 'image') || !isSafeProjectImage(record.url)) return;
+                    items.set(record.id, { id: record.id, url: record.url, caption: record.caption || 'A moment from the workshop', date: galleryDate(record) });
+                  }));
+                  return { status: 'ready', data: [...items.values()].sort((a, b) => (b.date || '').localeCompare(a.date || '')) };
+                } catch (cause) {
+                  console.error('Unable to load family media', id, cause);
+                  return { status: 'error', reason: sourceError('Media', cause) };
+                }
+              })(),
               (async (): Promise<FamilyOperations['finance']> => {
                 const canSeeEnrollments = childHasCanonicalPermission(links, id, 'enrollments', parentUid, organizationId);
                 const canSeePayments = childHasCanonicalPermission(links, id, 'payments', parentUid, organizationId);
@@ -200,12 +236,13 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
               : missingCanonicalLink || missingLegacyLink
                 ? 'Some projects may require the academy to complete this learner’s family links.'
                 : null;
-            return { id, name, projects: visualProjects, issue, permissions, operations: { finance, attendance, pickup } };
+            return { id, name, projects: visualProjects, issue, permissions, operations: { finance, attendance, pickup }, media };
           } catch (cause) {
             console.error('Unable to load linked learner', id, cause);
             return {
               id, name: `Learner ${id.slice(0, 6)}`, projects: [], permissions: [],
               issue: 'This learner could not be loaded. Retry, then ask the academy to check the family link.',
+              media: { status: 'error', reason: 'Media is unavailable while this learner record is unavailable.' },
               operations: {
                 finance: { status: 'error', reason: 'Payments are unavailable while this learner record is unavailable.' },
                 attendance: { status: 'error', reason: 'Attendance is unavailable while this learner record is unavailable.' },

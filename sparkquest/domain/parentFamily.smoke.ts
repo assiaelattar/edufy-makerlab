@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { childHasCanonicalPermission, childPermissions, familyChildIds, projectSubjectsForChild, type GuardianFamilyLink } from './parentFamily.ts';
+import { childHasCanonicalPermission, childPermissions, familyChildIds, permittedSubjectsForChild, projectSubjectsForChild, type GuardianFamilyLink } from './parentFamily.ts';
 
 const link = (subjectId: string, changes: Partial<GuardianFamilyLink> = {}): GuardianFamilyLink => ({
   id: `parent-1_${subjectId}`, parentUid: 'parent-1', studentId: 'child-1', subjectId,
@@ -23,6 +23,10 @@ assert.deepEqual(projectSubjectsForChild([
 assert.deepEqual(projectSubjectsForChild([
   link('child-1')
 ], 'child-1', 'child-1', 'parent-1', 'org-1'), ['child-1']);
+assert.deepEqual(permittedSubjectsForChild([
+  link('child-1', { permissions: ['gallery'] }),
+  link('student-auth-1', { permissions: ['portfolio'] })
+], 'child-1', 'student-auth-1', 'parent-1', 'org-1', 'gallery'), ['child-1']);
 
 assert.deepEqual(familyChildIds([
   link('student-auth-1'),
@@ -44,4 +48,4 @@ assert.equal(childHasCanonicalPermission([
   link('child-1', { permissions: ['pickup'] })
 ], 'child-1', 'pickup', 'parent-1', 'org-1'), true);
 
-console.log('parent family subject access: 8 checks passed');
+console.log('parent family subject access: 9 checks passed');

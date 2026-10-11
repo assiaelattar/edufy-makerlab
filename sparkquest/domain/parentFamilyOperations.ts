@@ -11,6 +11,8 @@ export interface FamilyFinanceSummary {
   paymentCount: number;
   pendingPaymentCount: number;
   latestPaymentDate: string | null;
+  enrollments: Array<{ id: string; programName: string; packName: string; session: string; status: string; agreed: number; paid: number; balance: number }>;
+  payments: Array<{ id: string; enrollmentId: string; date: string; amount: number; status: string; method: string }>;
 }
 
 export interface FamilyAttendanceSummary {
@@ -21,6 +23,7 @@ export interface FamilyAttendanceSummary {
   excused: number;
   latestDate: string | null;
   latestStatus: 'present' | 'absent' | 'late' | 'excused' | null;
+  records: Array<{ date: string; status: 'present' | 'absent' | 'late' | 'excused'; enrollmentId: string }>;
 }
 
 export interface FamilyPickupSummary {
@@ -44,6 +47,9 @@ export interface FamilyOperations {
 
 export interface EnrollmentSummaryInput {
   id: string;
+  programName?: string;
+  packName?: string;
+  session?: string;
   totalAmount?: number;
   paidAmount?: number;
   balance?: number;
@@ -51,14 +57,18 @@ export interface EnrollmentSummaryInput {
 }
 
 export interface PaymentSummaryInput {
+  id?: string;
+  enrollmentId?: string;
   amount?: number;
   date?: string;
   status?: string;
+  method?: string;
 }
 
 export interface AttendanceSummaryInput {
   date?: string;
   status?: string;
+  enrollmentId?: string;
 }
 
 const money = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : 0;
@@ -76,7 +86,16 @@ export const summarizeFinance = (
     enrollmentCount: active.length,
     paymentCount: payments.length,
     pendingPaymentCount: payments.filter(payment => payment.status === 'pending_verification' || payment.status === 'check_received').length,
-    latestPaymentDate
+    latestPaymentDate,
+    enrollments: active.map(enrollment => ({
+      id: enrollment.id, programName: enrollment.programName || 'MakerLab program', packName: enrollment.packName || '',
+      session: enrollment.session || '', status: enrollment.status || 'active',
+      agreed: money(enrollment.totalAmount), paid: money(enrollment.paidAmount), balance: money(enrollment.balance)
+    })),
+    payments: [...payments].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(payment => ({
+      id: payment.id || '', enrollmentId: payment.enrollmentId || '', date: payment.date || '',
+      amount: money(payment.amount), status: payment.status || '', method: payment.method || ''
+    }))
   };
 };
 
@@ -93,7 +112,11 @@ export const summarizeAttendance = (records: AttendanceSummaryInput[]): FamilyAt
     absent: count('absent'),
     excused: count('excused'),
     latestDate: valid[0]?.date || null,
-    latestStatus: (valid[0]?.status as FamilyAttendanceSummary['latestStatus']) || null
+    latestStatus: (valid[0]?.status as FamilyAttendanceSummary['latestStatus']) || null,
+    records: valid.map(record => ({
+      date: record.date || '', status: record.status as FamilyAttendanceSummary['records'][number]['status'],
+      enrollmentId: record.enrollmentId || ''
+    }))
   };
 };
 

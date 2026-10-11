@@ -1,4 +1,10 @@
-# Current task boundary — Protected step-review release acceptance
+# Current task boundary — Parent family release acceptance
+
+Preserve the staff-issued one-time SparkQuest parent credential, exact guardian and tenant links, separate gallery permission, read-only parent project/record/Pickup surfaces and learner-only Pickup update exception. The local Phase 4 implementation is complete; see docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md. Next is Firebase Admin secret provisioning, coordinated API/rules/index/client release and designated nonproduction end-to-end acceptance. Real family identity/link work remains separately gated.
+
+---
+
+# Previous task boundary — Protected step-review release acceptance
 
 Preserve `reviewProtocolVersion: 1`, proof-bound `stepReviews`, canonical queue/status/feedback derivation, learner resubmission and required-step publication gates. Never trust protocol-v1 nested `steps.status`, `reviewNotes`, or `reviewedAt` as instructor truth. Keep legacy fallback read-compatible without silent backfill.
 

@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-11 — Family credentials and journey live in SparkQuest
+
+Treat a parent login as an academy-issued Firebase ID plus a one-time password, even when the ID is email-shaped and has no inbox. Edufy staff issue/reset and directly share the card; the parent's destination is SparkQuest. Present child-specific project, media and Edufy operational facts in a mobile-first read-only workspace. Keep gallery permission distinct from portfolio permission and narrow Pickup writes to learner role until a separately approved parent command flow exists.
+
 ## 2026-10-01 — Per-step approval is proof-bound canonical state
 
 New learner projects declare review protocol v1. Store instructor outcome, feedback, actor, time and the reviewed proof fingerprint in a protected top-level `stepReviews` map. Treat nested step review fields as presentation compatibility only. Any changed proof loses its canonical approval and re-enters the queue; protocol-v1 final publication requires a matching canonical approval for every required step. Keep legacy fallback without silently asserting that old `done` states were reviewed.

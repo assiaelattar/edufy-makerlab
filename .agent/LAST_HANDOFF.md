@@ -1,4 +1,10 @@
-# Latest handoff — Parent Access clean release candidate
+# Latest handoff — Parent family mobile journey Phase 4
+
+The local clean release worktree now clarifies staff-issued, one-time SparkQuest parent credentials and adds the read-only mobile family journey. A verified parent can switch children and view saved workshop projects/resources/proof/reviews, gallery moments, payment and attendance detail, and Pickup status. Parent Pickup writes are denied by the reviewed Firestore rule; learner Pickup updates still pass the demo emulator. SparkQuest TypeScript, both production builds, family smokes, Auth/Firestore emulator and 375px browser preview pass. No production changes or real-family data writes occurred. The previous Parent Access release gates below still apply. Details: docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md.
+
+---
+
+# Previous handoff — Parent Access clean release candidate
 
 Prepared on 2026-10-11 from `origin/main` `f1b5810`. Edufy now has staff-only parent issue/link/reset through a trusted Admin SDK endpoint and one-time SparkQuest credentials. SparkQuest has parent-first routing, exact guardian-linked multi-learner reads, visual project cards, finance, attendance, and read-only Pickup status. Selective guardian permissions and five family query indexes are included; Pickup commands, Pickup write-policy replacement, the Edufy parent dashboard, and real Ajlane records are excluded.
 

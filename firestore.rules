@@ -691,7 +691,7 @@ service cloud.firestore {
 
     function validLinkedPickupCreate() {
       return hasUserProfile() &&
-        currentRole() in ['parent', 'student'] &&
+        currentRole() == 'student' &&
         requestHasOrg() &&
         isSameOrg(request.resource.data.organizationId) &&
         request.resource.data.status == 'on_the_way' &&
@@ -713,7 +713,7 @@ service cloud.firestore {
 
     function validLinkedPickupUpdate() {
       return hasUserProfile() &&
-        currentRole() in ['parent', 'student'] &&
+        currentRole() == 'student' &&
         resourceHasOrg() &&
         requestHasOrg() &&
         request.resource.data.organizationId == resource.data.organizationId &&

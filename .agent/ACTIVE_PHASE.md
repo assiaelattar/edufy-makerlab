@@ -1,4 +1,12 @@
-# Current phase override — SparkQuest review security Phase 2
+# Current phase override — Parent family mobile journey Phase 4
+
+Completed locally on 2026-10-11 after the user clarified that parents receive academy-issued SparkQuest credentials and need a mobile, read-only view of each child's MakerLab journey. The candidate adds child switching, project briefs/resources/proof/reviews, gallery moments, payment and attendance detail, and view-only Pickup. Parent Pickup writes are denied in the reviewed rules. TypeScript, both builds, family smokes, demo Auth/Firestore emulator and 375px browser preview pass. See docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md.
+
+Stop at this boundary. No production data, deployment, rule/index release or real family link occurred. The trusted API still needs its Firebase Admin identity, route proof, coordinated release and designated nonproduction acceptance.
+
+---
+
+# Previous phase override — SparkQuest review security Phase 2
 
 Implemented locally on 2026-10-01 under explicit continuation. New learner projects require review protocol v1; instructor step decisions write protected proof-bound canonical state, queues and learner/instructor UI derive from it, and final publication requires canonical approval for every required step. Nested learner tampering cannot forge feedback, approval, or publication. Nine domain suites (169 counted assertions plus import/payload), review/learner/profile emulators, scoped TypeScript, both builds and desktop/412px browser QA pass. See docs/sparkquest/REVIEW_SECURITY_PHASE_2.md.
 

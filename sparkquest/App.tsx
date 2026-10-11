@@ -31,6 +31,9 @@ const InstructorFactory = lazy(() => import('./components/InstructorFactory').th
 const ProjectDetailsEnhanced = lazy(() => import('./components/ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 const ParentShowcase = lazy(() => import('./components/ParentShowcase'));
 const ParentFamilyWorkspace = lazy(() => import('./components/ParentFamilyWorkspace').then(module => ({ default: module.ParentFamilyWorkspace })));
+const ParentFamilyPreview = import.meta.env.DEV
+  ? lazy(() => import('./components/ParentFamilyPreview').then(module => ({ default: module.ParentFamilyPreview })))
+  : null;
 const StudentProjectDetailsDemo = lazy(() => import('./components/StudentProjectDetailsDemo'));
 const SparkStore = lazy(() => import('./components/SparkStore').then(module => ({ default: module.SparkStore })));
 const StudentPortfolio = lazy(() => import('./components/StudentPortfolio').then(module => ({ default: module.StudentPortfolio })));
@@ -412,6 +415,10 @@ const SparkQuestApp: React.FC = () => {
 
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'resources') {
     return <LazyView><ResourceLibraryPreview /></LazyView>;
+  }
+
+  if (import.meta.env.DEV && ParentFamilyPreview && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'family') {
+    return <LazyView><ParentFamilyPreview /></LazyView>;
   }
 
   // Loading

@@ -26,6 +26,7 @@ SparkQuest is a learner application connected to Edufy Core. Edufy owns learner,
 - Instructor learner desk: `domain/instructorLearner.ts`, `services/profileAssignment.ts`, `components/factory/InstructorLearnerWorkspace.tsx`, `StudentManager.tsx`; additive recipient eligibility remains in `domain/missionAssignment.ts`. Preserve transactional audience merging, source-specific canonical learner reads and write-free `?designPreview=learnerDesk`. Limits: `../docs/sparkquest/INSTRUCTOR_LEARNER_WORKSPACE_PHASE_1.md`.
 - Demand-driven student subscriptions: `context/FactoryContext.tsx`, `context/FocusSessionContext.tsx`, and `components/PickupSchedule.tsx`.
 - Login and account-recovery entry surfaces: `components/LoginView.tsx`, `App.tsx`, and `sparkquest.css`.
+- Parent family journey: `components/ParentFamilyWorkspace.tsx`, `hooks/useParentFamily.ts`, `domain/parentFamily.ts`, `domain/parentFamilyOperations.ts`, and the read-only Pickup rule boundary in `../firestore.rules`. Local synthetic preview: `?designPreview=family`; acceptance and limits: `../docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md`.
 - Secure launch policy: `../modules/sparkquest/domain/sparkquestLaunchPolicy.js`.
 - Identity reconciliation: `../modules/sparkquest/domain/identityReconciliation.js`.
 - Server endpoints: `../api/app-bridge/sparkquest/*`; browser exchange: `services/appBridge.ts`.

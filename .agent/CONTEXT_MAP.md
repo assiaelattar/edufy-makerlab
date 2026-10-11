@@ -28,6 +28,7 @@ Learner workbench/desktop Phase 1: read `docs/sparkquest/LEARNER_WORKSPACE_PHASE
 | Authorization/data | `context/AuthContext.tsx`, `context/AppContext.tsx`, `firestore.rules`, `firestore.indexes.json` |
 | WhatsApp assistant | `docs/admissions/WHATSAPP_ASSISTED_OPERATIONS.md`, `modules/admissions/ui/EducationAdmissionsWhatsAppAssistant.tsx`, `views/CommunicationsView.tsx` |
 | SparkQuest rescue | `sparkquest/AGENT_CONTEXT.md`, `docs/sparkquest/RESCUE_PHASE_1.md` through `docs/sparkquest/RESCUE_PHASE_6.md`, `docs/sparkquest/DECISIONS.md`, `docs/sparkquest/KNOWN_ISSUES.md` |
+| SparkQuest parent family | `docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md`, `docs/sparkquest/PARENT_FAMILY_PHASE_3_2026-10-11.md`, `sparkquest/components/ParentFamilyWorkspace.tsx`, `sparkquest/hooks/useParentFamily.ts`, `firestore.rules` |
 
 
 ## Finance service catalogue

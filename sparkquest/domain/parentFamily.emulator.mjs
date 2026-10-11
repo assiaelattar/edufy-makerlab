@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { initializeApp as initializeClient, deleteApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { initializeApp as initializeAdmin, deleteApp as deleteAdmin } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 
@@ -46,8 +46,10 @@ try {
   const alice = await parent('parent-alice');
   const bob = await parent('parent-bob');
   const carol = await parent('parent-carol', 'org-b');
+  const learner = await parent('learner-b');
+  await admin.doc('users/' + learner.uid).update({ role: 'student' });
   await admin.doc('students/child-a').set({ organizationId: 'org-a', name: 'Child A', loginInfo: { uid: 'learner-auth-a' }, parentLoginInfo: { uid: bob.uid }, parentUids: [bob.uid] });
-  await admin.doc('students/child-b').set({ organizationId: 'org-a', name: 'Child B' });
+  await admin.doc('students/child-b').set({ organizationId: 'org-a', name: 'Child B', loginInfo: { uid: learner.uid } });
   await admin.doc('students/child-alias-only').set({ organizationId: 'org-a', name: 'Alias Child', loginInfo: { uid: 'learner-auth-alias' } });
   await admin.doc('students/child-foreign').set({ organizationId: 'org-b', name: 'Foreign Child' });
   for (const subjectId of ['child-a', 'learner-auth-a', 'child-b']) {
@@ -95,6 +97,9 @@ try {
   assert.equal((await rowsFor(alice.db, 'attendance', 'studentId', 'child-a')).size, 1);
   assert.equal((await rowsFor(alice.db, 'gallery_items', 'studentId', 'child-a')).size, 1);
   assert.equal((await getDoc(doc(alice.db, 'pickup_queue', 'pickup-b'))).data()?.studentId, 'child-b');
+  await denied(updateDoc(doc(alice.db, 'pickup_queue', 'pickup-b'), { status: 'arrived' }), 'parent pickup update is read only');
+  await updateDoc(doc(learner.db, 'pickup_queue', 'pickup-b'), { status: 'arrived' });
+  assert.equal((await getDoc(doc(alice.db, 'pickup_queue', 'pickup-b'))).data()?.status, 'arrived');
   await denied(getDoc(doc(alice.db, 'pickup_queue', 'pickup-a')), 'missing pickup permission');
   await denied(projectsFor(alice.db, 'child-alias-only', 'org-a'), 'missing canonical project link');
   await denied(projectsFor(bob.db, 'child-a', 'org-a'), 'unlinked parent');

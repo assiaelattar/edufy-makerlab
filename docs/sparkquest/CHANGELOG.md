@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-11 — Parent family mobile journey Phase 4
+
+- Clarified that staff issue a one-time password and email-shaped SparkQuest login ID; no parent email inbox or setup link is required.
+- Added child switching and mobile Journey, Moments, Records, and view-only Pickup destinations, with saved project briefs, resources, proof/reviews, gallery, payment and attendance detail.
+- Restricted parent Pickup writes in Firestore while preserving authorized reads and learner updates.
+- TypeScript, both production builds, family smokes, isolated Auth/Firestore permissions and 375px browser preview pass. Local candidate only; see PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md.
+
 ## 2026-10-01 — Review security Phase 2
 
 - New learner projects require protocol v1 and instructor step decisions write a protected proof-bound `stepReviews` map.

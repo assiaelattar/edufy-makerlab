@@ -54,6 +54,7 @@ Mission CSV import: `sparkquest/domain/missionImport.ts` (normalization/completi
 | `SOT:SPARKQUEST_LEARNER_PORTFOLIO` | `sparkquest/components/StudentPortfolio.tsx`, `sparkquest/sparkquest.css` | tenant-bound learner project archive, proof summary, skills, and Sparkbook field-log presentation | current/local; Sparkbook learner expansion |
 | `SOT:SPARKQUEST_LEARNER_DESTINATIONS` | `sparkquest/components/arcade/ArcadeView.tsx`, `sparkquest/components/StudentGallery.tsx`, `sparkquest/components/CredentialWallet.tsx`, `sparkquest/components/AvatarSelector.tsx` | learner play, evidence, tool-key, and maker-identity destination shells | current/local; Sparkbook learner expansion |
 | `SOT:SPARKQUEST_LEARNER_NAVIGATION` | `sparkquest/components/Sidebar.tsx`, `sparkquest/components/SidebarItem.tsx`, `sparkquest/components/MobileNavigation.tsx` | desktop field-kit index and mobile primary/secondary destination navigation | current/local; Sparkbook learner expansion |
+| `SOT:SPARKQUEST_PARENT_FAMILY` | `sparkquest/components/ParentFamilyWorkspace.tsx`, `sparkquest/hooks/useParentFamily.ts`, `sparkquest/domain/parentFamily.ts`, `sparkquest/domain/parentFamilyOperations.ts` | verified guardian-linked, child-specific read-only journey, media, records and Pickup | current/local; parent mobile Phase 4 |
 
 Update this table whenever a canonical implementation is introduced or superseded. A planned path is not permission to create it outside the active phase.
 

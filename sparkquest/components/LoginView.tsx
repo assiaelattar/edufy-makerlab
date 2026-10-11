@@ -52,7 +52,7 @@ export const LoginView: React.FC = () => {
                     <div className="sq-entry-mark" aria-hidden="true"><Hammer /></div>
                     <p className="sq-entry-eyebrow">Welcome back</p>
                     <h2 id="sign-in-title">{isParentEntry ? 'Open your family workspace' : 'Open your project bench'}</h2>
-                    <p className="sq-entry-copy">{isParentEntry ? 'Use the MakerLab email and password shared directly by the academy. No activation link is needed.' : 'Use your learner or parent account connected in Edufy.'}</p>
+                    <p className="sq-entry-copy">{isParentEntry ? 'Use the login ID and password issued directly by MakerLab staff. The ID looks like an email address, but no inbox or activation link is needed.' : 'Use your learner or parent account connected in Edufy.'}</p>
 
                     {error && (
                         <div className="sq-login-error" role="alert">
@@ -63,7 +63,7 @@ export const LoginView: React.FC = () => {
 
                     <form onSubmit={handleSubmit} className="sq-login-form">
                         <label>
-                            <span>Email address</span>
+                            <span>{isParentEntry ? 'MakerLab login ID' : 'Email address'}</span>
                             <input
                                 type="email"
                                 value={email}
