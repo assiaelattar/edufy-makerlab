@@ -1,6 +1,8 @@
 # Current task boundary — Parent family release acceptance
 
-Preserve the staff-issued one-time SparkQuest parent credential, exact guardian and tenant links, separate gallery permission, read-only parent project/record/Pickup surfaces and learner-only Pickup update exception. The local Phase 4 implementation is complete; see docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md. Next is Firebase Admin secret provisioning, coordinated API/rules/index/client release and designated nonproduction end-to-end acceptance. Real family identity/link work remains separately gated.
+The designated AAJLANE parent signed in locally and now sees the three user-verified children NADA, ALI, and KENZA. The older KENZA login was disabled after a separately authorized, emulator-tested transfer. The local phone selector now shows all three children. The broader Duolingo-style, mobile-first parent UX pass is assigned to **SparkQuest UI/UX Design**. No Git push or Hostinger release has occurred; preserve the API/rules compatibility and do not treat Vercel API deployment as Edufy Hostinger or SparkQuest client release. See `docs/releases/PARENT_ACCESS_HOSTING_AUDIT_2026-10-11.md`.
+
+Preserve the staff-issued one-time SparkQuest parent credential, exact guardian and tenant links, separate gallery permission, read-only parent project/record/Pickup surfaces and learner-only Pickup update exception. The local Phase 4 implementation is complete; see docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md. Firebase Admin secret, API, rules and indexes are provisioned; the user authorized designated real-family account repair and three-child linking. Next is the broader parent mobile UX pass and coordinated GitHub/Hostinger/SparkQuest client release after local acceptance.
 
 ---
 

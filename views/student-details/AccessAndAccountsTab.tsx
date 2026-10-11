@@ -7,7 +7,7 @@ import { useConfirm } from '../../context/ConfirmContext';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: (action: 'issue' | 'link' | 'reset' | 'replace', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => void;
+  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => void;
   parentAccounts: Array<{ uid: string; email: string; parentName: string; childName: string; childId: string }>;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
@@ -295,19 +295,20 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             {student.parentLoginInfo?.uid ? 'Replace parent login' : 'Issue new parent login'}
           </button>
           {!student.parentName?.trim() && <p className="text-xs text-amber-300">Add the parent name to this learner record first.</p>}
-          {!student.parentLoginInfo?.uid && parentAccounts.length > 0 && <div className="border-t border-white/10 pt-4">
-            <label className="mb-2 block text-xs font-bold uppercase text-slate-400">Link an existing parent login</label>
+          {parentAccounts.some(account => account.uid !== student.parentLoginInfo?.uid) && <div className="border-t border-white/10 pt-4">
+            <label className="mb-2 block text-xs font-bold uppercase text-slate-400">{student.parentLoginInfo?.uid ? 'Move to an existing family login' : 'Link an existing parent login'}</label>
             <select value={reuseParentUid} onChange={event => setReuseParentUid(event.target.value)} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
               <option value="">Choose the exact account</option>
-              {parentAccounts.map(account => <option key={account.uid} value={account.uid}>{account.email} · {account.parentName || 'Parent name missing'} · {account.childName}</option>)}
+              {parentAccounts.filter(account => account.uid !== student.parentLoginInfo?.uid).map(account => <option key={account.uid} value={account.uid}>{account.email} · {account.parentName || 'Parent name missing'} · {account.childName}</option>)}
             </select>
             {selectedParentAccount && <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
               <p><strong className="text-white">Recorded parent:</strong> {selectedParentAccount.parentName || 'Missing on source learner'}</p>
               <p><strong className="text-white">Source learner:</strong> {selectedParentAccount.childName} ({selectedParentAccount.childId})</p>
               <p className="break-all"><strong className="text-white">Exact parent UID:</strong> {selectedParentAccount.uid}</p>
-              <p className="mt-2 text-amber-200">Confirm this is the same real parent of {student.name}. The login recorded on another learner is a candidate; the service checks its active parent profile and guardian link.</p>
+              <p className="mt-2 text-amber-200">Confirm this is the same real parent of {student.name}. The service checks its active parent profile and guardian link.</p>
             </div>}
-            <button type="button" disabled={!reuseParentUid || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess('link', reuseParentUid, undefined, relationshipVerified); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">Link selected parent</button>
+            {student.parentLoginInfo?.uid && <p className="mt-3 text-xs leading-5 text-amber-200">The older login will be disabled after this learner moves. This action requires that it belongs only to this learner.</p>}
+            <button type="button" disabled={!reuseParentUid || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess(student.parentLoginInfo?.uid ? 'transfer' : 'link', reuseParentUid, undefined, relationshipVerified); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{student.parentLoginInfo?.uid ? 'Move to selected family login' : 'Link selected parent'}</button>
           </div>}
         </div>
       </Modal>

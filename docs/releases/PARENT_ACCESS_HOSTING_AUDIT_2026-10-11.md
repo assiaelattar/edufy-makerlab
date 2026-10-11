@@ -1,6 +1,26 @@
 # Parent access hosting audit — 11 October 2026
 
-**Verdict: IN PROGRESS.** The trusted API is running in a protected Vercel preview. No Firestore rule/index release, public client release, or real parent account write has occurred.
+**Verdict: THREE-CHILD LOCAL PARENT ACCEPTANCE PASSED.** The trusted API, family rules, and indexes are live. The verified AAJLANE parent account was issued from local Edufy and signed into local SparkQuest. NADA, ALI, and KENZA are all linked to the same login. GitHub and Hostinger were not updated.
+
+## 11 October three-child family acceptance
+
+The user confirmed NADA, ALI, and KENZA as the three children who should share this exact parent account. Read-only inspection found an active ALI record with no parent login, an active KENZA record with a separate older parent login, and an inactive duplicate NADA record. The duplicate was left untouched. Edufy's existing `link` action connected ALI to `p.aajlane@makerlab.academy`; the parent portal then showed two learners and ALI's five projects.
+
+The user separately authorized moving KENZA to the same account and disabling her older login. A `transfer` action was added to the trusted parent API and Edufy student detail UI. It requires staff authorization and relationship verification, checks that the older login belongs only to this learner and that the destination is an already active, linked parent account with the recorded parent name, then transactionally moves the learner pointer and guardian links. It marks the older profile inactive and disables its Firebase Auth login. The `demo-edufy-parent-transfer` Auth/Firestore emulator passed the transfer, denials, and existing parent-access regression checks; root `npm run build` passed. Vercel production deployment `dpl_GQpaKuQ4AnXAgbLwg3BGE9jP4E3i` is READY and aliased to `https://edufy-makerlab.vercel.app`. No Git push occurred.
+
+The user signed in personally with the one-time password at local SparkQuest `http://127.0.0.1:5184/`. After the transfer and Refresh, the authenticated parent view displayed exactly **three linked learners** (NADA, ALI, KENZA) and **16 projects**. KENZA's project Journey, payment and attendance Records, and read-only Pickup were inspected; ALI's projects and Moments were also inspected. A read-only Admin SDK audit verified the three active learner records point to the same parent UID, each has an active guardian link, and KENZA's older parent profile is inactive with its Auth login disabled. The inactive duplicate NADA record remains unchanged.
+
+At phone width, the original horizontal child selector clipped KENZA offscreen despite the correct account link. A focused CSS change makes the selector a two-column grid below 760px; the live local screenshot showed all three child choices with no document-wide horizontal overflow. The user requested a broader mobile-first, Duolingo-style parent experience. That brief and the clipped-child finding were sent to the existing **SparkQuest UI/UX Design** thread for a separate design pass. The one-time password was not saved in Firestore, Git, or this document.
+
+## 11 October verified family repair
+
+The five family composite indexes reached READY. The compatibility ruleset `projects/edufy-makerlab/rulesets/95ef72f6-669f-4eb3-9dda-7c586ccc2e97` was released to default Firestore after the local Auth/Firestore emulator passed legacy-parent and version-2 access checks. Existing unversioned parent profiles retain their former linked-child reads; new parent profiles use `accessVersion: 2` and guardian permissions. The Vercel API deployment `dpl_CfcMo14BzixYJdgRkm4cKa2kHrzV` is READY on `edufy-makerlab.vercel.app`; localhost GET, OPTIONS, and tokenless POST returned JSON 405, 200 with CORS, and 401 respectively.
+
+The user verified AAJLANE's parent identity and authorized replacing the recorded login. A first attempt failed safely: the learner's old `parentLoginInfo.uid` actually resolved to an active Edufy admin profile, despite the field and old email being presented as parent access. Read-only inspection found that UID recorded for only this learner and no guardian links. A separate repair action was added and tested in `modules/parent-access/parentAccess.emulator.mjs`; it fails closed for other staff-family links, issues a dedicated version-2 parent account, changes only this learner's parent pointer, and leaves the staff profile and Auth user active.
+
+The user directed that the real parent receive access. Through the local Edufy UI, the staff-link repair issued the new `p.aajlane@makerlab.academy` SparkQuest login with a one-time password card. A read-only post-write check confirmed the learner points to the new active parent profile, a guardian link grants portfolio, enrollment, payment, gallery, and Pickup read permissions, the old UID is absent from the learner parent UID list, and the old admin profile/Auth account remain active. The password was not saved in Firestore, Git, or this document. The user is to enter it personally in local SparkQuest at `http://127.0.0.1:5184/` for the remaining parent view check; no Git push or Hostinger release occurred.
+
+Verification: the focused staff-link Auth/Firestore emulator passed, the parent-family rules emulator passed, endpoint syntax and `git diff --check` passed, and `npm run build` passed. The repository-wide `tsc --noEmit` check reports extensive pre-existing errors outside this slice; it was not used as this slice's release gate.
 
 ## 11 October deployment authorization and access check
 

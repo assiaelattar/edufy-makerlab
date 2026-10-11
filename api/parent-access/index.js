@@ -90,7 +90,7 @@ export default async function handler(req, res) {
     if (typeof studentId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(studentId)) {
       return response(res, 400, { ok: false, error: 'A valid learner ID is required.' });
     }
-    if (!['issue', 'link', 'reset', 'replace', 'repairStaffLink'].includes(action)) return response(res, 400, { ok: false, error: 'Unknown parent access action.' });
+    if (!['issue', 'link', 'transfer', 'reset', 'replace', 'repairStaffLink'].includes(action)) return response(res, 400, { ok: false, error: 'Unknown parent access action.' });
     const studentRef = db.doc(`students/${studentId}`);
     const studentDoc = await studentRef.get();
     if (!studentDoc.exists || studentDoc.data().organizationId !== organizationId) {
@@ -116,6 +116,83 @@ export default async function handler(req, res) {
 
     if (relationshipVerified !== true) {
       return response(res, 400, { ok: false, error: 'Staff must verify the parent relationship before issuing or linking access.' });
+    }
+    if (action === 'transfer') {
+      const oldUid = student.parentLoginInfo?.uid;
+      const oldEmail = student.parentLoginInfo?.email;
+      if (!recordedParentName || !oldUid || !oldEmail || oldUid === reuseParentUid ||
+        typeof reuseParentUid !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(reuseParentUid)) {
+        return response(res, 409, { ok: false, error: 'Select a different verified parent login for this learner.' });
+      }
+      const oldProfileRef = db.doc(`users/${oldUid}`);
+      const targetProfileRef = db.doc(`users/${reuseParentUid}`);
+      const [oldProfile, oldAuth, targetProfile, targetAuth, linkedStudents, parentUidStudents, oldLinks, targetLinks] = await Promise.all([
+        oldProfileRef.get(), auth.getUser(oldUid).catch(error => error?.code === 'auth/user-not-found' ? null : Promise.reject(error)),
+        targetProfileRef.get(), auth.getUser(reuseParentUid).catch(error => error?.code === 'auth/user-not-found' ? null : Promise.reject(error)),
+        db.collection('students').where('parentLoginInfo.uid', '==', oldUid).get(),
+        db.collection('students').where('parentUids', 'array-contains', oldUid).get(),
+        db.collection('guardian_links').where('parentUid', '==', oldUid).get(),
+        db.collection('guardian_links').where('parentUid', '==', reuseParentUid).get()
+      ]);
+      const targetIsLinked = targetLinks.docs.some(link => link.data().organizationId === organizationId && link.data().status === 'active' &&
+        link.id === `${reuseParentUid}_${link.data().subjectId}`);
+      if (!oldAuth || !oldProfile.exists || oldProfile.data().role !== 'parent' || oldProfile.data().status !== 'active' ||
+        oldProfile.data().organizationId !== organizationId || oldAuth.disabled ||
+        oldAuth.email?.toLowerCase() !== oldEmail.toLowerCase() || oldProfile.data().email?.toLowerCase() !== oldEmail.toLowerCase() ||
+        !targetAuth || targetAuth.disabled || !targetAuth.email || !targetProfile.exists ||
+        targetProfile.data().role !== 'parent' || targetProfile.data().status !== 'active' || targetProfile.data().organizationId !== organizationId ||
+        targetProfile.data().email?.toLowerCase() !== targetAuth.email.toLowerCase() ||
+        String(targetProfile.data().name || '').trim().replace(/\s+/g, ' ') !== recordedParentName || !targetIsLinked ||
+        linkedStudents.size !== 1 || linkedStudents.docs[0].id !== student.id ||
+        parentUidStudents.docs.some(item => item.id !== student.id || item.data().organizationId !== organizationId) ||
+        oldLinks.docs.some(item => item.data().status === 'active' &&
+          (item.data().studentId !== student.id || item.data().organizationId !== organizationId))) {
+        return response(res, 409, { ok: false, error: 'These parent logins have other or inconsistent family links. Review them before consolidating.' });
+      }
+      await db.runTransaction(async transaction => {
+        const [currentStudent, currentOldProfile, currentTargetProfile, currentLinkedStudents, currentUidStudents, currentOldLinks, currentTargetLinks] = await Promise.all([
+          transaction.get(studentRef), transaction.get(oldProfileRef), transaction.get(targetProfileRef),
+          transaction.get(db.collection('students').where('parentLoginInfo.uid', '==', oldUid)),
+          transaction.get(db.collection('students').where('parentUids', 'array-contains', oldUid)),
+          transaction.get(db.collection('guardian_links').where('parentUid', '==', oldUid)),
+          transaction.get(db.collection('guardian_links').where('parentUid', '==', reuseParentUid))
+        ]);
+        if (!currentStudent.exists || currentStudent.data().organizationId !== organizationId ||
+          currentStudent.data().parentLoginInfo?.uid !== oldUid ||
+          currentStudent.data().parentLoginInfo?.email?.toLowerCase() !== oldEmail.toLowerCase() ||
+          String(currentStudent.data().parentName || '').trim().replace(/\s+/g, ' ') !== recordedParentName ||
+          !currentOldProfile.exists || currentOldProfile.data().role !== 'parent' || currentOldProfile.data().status !== 'active' ||
+          currentOldProfile.data().organizationId !== organizationId || currentOldProfile.data().email?.toLowerCase() !== oldEmail.toLowerCase() ||
+          !currentTargetProfile.exists || currentTargetProfile.data().role !== 'parent' || currentTargetProfile.data().status !== 'active' ||
+          currentTargetProfile.data().organizationId !== organizationId ||
+          currentTargetProfile.data().email?.toLowerCase() !== targetAuth.email.toLowerCase() ||
+          String(currentTargetProfile.data().name || '').trim().replace(/\s+/g, ' ') !== recordedParentName ||
+          currentLinkedStudents.size !== 1 || currentLinkedStudents.docs[0].id !== student.id ||
+          currentUidStudents.docs.some(item => item.id !== student.id || item.data().organizationId !== organizationId) ||
+          currentOldLinks.docs.some(item => item.data().status === 'active' &&
+            (item.data().studentId !== student.id || item.data().organizationId !== organizationId)) ||
+          !currentTargetLinks.docs.some(link => link.data().organizationId === organizationId && link.data().status === 'active' &&
+            link.id === `${reuseParentUid}_${link.data().subjectId}`)) {
+          throw Object.assign(new Error('Parent access changed. Refresh the learner record.'), { status: 409 });
+        }
+        transaction.update(oldProfileRef, { status: 'inactive', updatedAt: FieldValue.serverTimestamp() });
+        transaction.update(studentRef, {
+          parentLoginInfo: { uid: reuseParentUid, email: targetAuth.email },
+          parentUids: [...new Set([...(Array.isArray(currentStudent.data().parentUids) ? currentStudent.data().parentUids : []).filter(uid => uid !== oldUid), reuseParentUid])]
+        });
+        for (const subjectId of guardianSubjects({ id: student.id, ...currentStudent.data() })) {
+          transaction.set(db.doc(`guardian_links/${reuseParentUid}_${subjectId}`), {
+            organizationId, parentUid: reuseParentUid, studentId: student.id, subjectId,
+            status: 'active', permissions, updatedAt: FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+        for (const link of currentOldLinks.docs) {
+          if (link.data().status === 'active') transaction.update(link.ref, { status: 'inactive', updatedAt: FieldValue.serverTimestamp() });
+        }
+      });
+      await auth.revokeRefreshTokens(oldUid).catch(error => console.error('[parent-access] old token revocation failed', { code: error?.code || 'unknown' }));
+      await auth.updateUser(oldUid, { disabled: true }).catch(error => console.error('[parent-access] old account disable failed', { code: error?.code || 'unknown' }));
+      return response(res, 200, { ok: true, action, email: targetAuth.email, linkedLearnerCount: 1 });
     }
     if (action === 'repairStaffLink') {
       const oldUid = student.parentLoginInfo?.uid;

@@ -70,6 +70,28 @@ assert.equal(sibling.body.password, undefined);
 assert.equal((await db.doc('students/child-c').get()).data().parentLoginInfo.uid, firstAuth.uid);
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_learner-alias-c`).get()).data().studentId, 'child-c');
 
+// Consolidate a single-child legacy login into an already verified family account.
+const olderKenza = await adminAuth.createUser({ email: 'p.kenza@example.test', password: 'Older-parent-password-123' });
+await Promise.all([
+  db.doc(`users/${olderKenza.uid}`).set({ uid: olderKenza.uid, organizationId: 'org-a', role: 'parent', status: 'active', name: 'Parent', email: olderKenza.email }),
+  db.doc('students/child-kenza').set({ organizationId: 'org-a', name: 'Child Kenza', parentName: 'Samira Ajlane', loginInfo: { uid: 'learner-alias-kenza' }, parentLoginInfo: { uid: olderKenza.uid, email: olderKenza.email }, parentUids: [] })
+]);
+const transferRequest = { action: 'transfer', studentId: 'child-kenza', organizationId: 'org-a', reuseParentUid: firstAuth.uid, relationshipVerified: true };
+assert.equal((await invoke(staffToken, { ...transferRequest, relationshipVerified: false })).statusCode, 400);
+assert.equal((await invoke(staffToken, { ...transferRequest, reuseParentUid: collision.uid })).statusCode, 409);
+await db.doc('students/another-child').set({ organizationId: 'org-a', name: 'Other child', parentName: 'Samira Ajlane', parentLoginInfo: { uid: olderKenza.uid, email: olderKenza.email } });
+assert.equal((await invoke(staffToken, transferRequest)).statusCode, 409);
+await db.doc('students/another-child').delete();
+const transferred = await invoke(staffToken, transferRequest);
+assert.equal(transferred.statusCode, 200, JSON.stringify(transferred.body?.error));
+assert.equal(transferred.body.email, first.body.email);
+assert.equal(transferred.body.password, undefined);
+assert.equal((await db.doc('students/child-kenza').get()).data().parentLoginInfo.uid, firstAuth.uid);
+assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_learner-alias-kenza`).get()).data().status, 'active');
+assert.equal((await db.doc(`users/${olderKenza.uid}`).get()).data().status, 'inactive');
+assert.equal((await adminAuth.getUser(olderKenza.uid)).disabled, true);
+assert.equal((await invoke(staffToken, transferRequest)).statusCode, 409);
+
 // Prove the issued password reaches the same read-only family records used by SparkQuest.
 await Promise.all([
   db.doc('student_projects/child-a-project').set({ organizationId: 'org-a', studentId: 'child-a', status: 'building' }),
@@ -88,7 +110,7 @@ const familyDb = getFirestore(familyApp);
 const [firestoreHost, firestorePort] = process.env.FIRESTORE_EMULATOR_HOST.split(':');
 connectFirestoreEmulator(familyDb, firestoreHost, Number(firestorePort));
 const familyLinks = await getDocs(query(collection(familyDb, 'guardian_links'), where('parentUid', '==', firstAuth.uid), where('organizationId', '==', 'org-a')));
-assert.deepEqual(new Set(familyLinks.docs.map(link => link.data().studentId)), new Set(['child-a', 'child-c']));
+assert.deepEqual(new Set(familyLinks.docs.map(link => link.data().studentId)), new Set(['child-a', 'child-c', 'child-kenza']));
 assert.equal((await getDoc(doc(familyDb, 'students', 'child-a'))).data().name, 'Child a');
 assert.equal((await getDoc(doc(familyDb, 'students', 'child-c'))).data().name, 'Child c');
 assert.equal((await getDocs(query(collection(familyDb, 'student_projects'), where('studentId', '==', 'child-a'), where('organizationId', '==', 'org-a')))).size, 1);
@@ -184,6 +206,6 @@ await assert.rejects(() => signInWithEmailAndPassword(clientAuth, legacy.email, 
 await signInWithEmailAndPassword(clientAuth, replaced.body.email, replaced.body.password);
 const replacementReset = await invoke(staffToken, { action: 'reset', studentId: 'child-f', organizationId: 'org-a' });
 assert.equal(replacementReset.statusCode, 200);
-console.log('Parent access emulator: issue, family reads, sibling link, staff-link repair, legacy replacement, old-account revocation, reset, denials and plaintext checks passed.');
+console.log('Parent access emulator: issue, family reads, sibling link, legacy transfer, staff-link repair, legacy replacement, old-account revocation, reset, denials and plaintext checks passed.');
 await Promise.all([deleteClientApp(app), deleteClientApp(familyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());

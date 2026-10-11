@@ -1,7 +1,7 @@
 import { auth } from './firebase';
 import { config } from '../utils/config';
 
-export type ParentAccessAction = 'issue' | 'link' | 'reset' | 'replace' | 'repairStaffLink';
+export type ParentAccessAction = 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink';
 
 export interface ParentAccessResult {
   action: ParentAccessAction;

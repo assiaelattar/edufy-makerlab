@@ -468,6 +468,10 @@ export const StudentDetailsView = ({
             const approved = await confirm({ title: 'Replace parent login', message: 'A recorded parent account will be retired and its linked learners will move to the new SparkQuest login. If the recorded login belongs to staff, Edufy will require a separate confirmation to detach only this learner while keeping staff access active. Share the new one-time password with the verified parent.', variant: 'warning', confirmText: 'Replace login' });
             if (!approved) return;
         }
+        if (action === 'transfer') {
+            const approved = await confirm({ title: 'Move learner to family login', message: 'This learner will move to the selected verified parent login. The older login will be disabled if it belongs only to this learner. The learner record, projects, and payments stay intact.', variant: 'warning', confirmText: 'Move learner' });
+            if (!approved) return;
+        }
         setIsGeneratingAccess(true);
         try {
             const organizationId = currentOrganization?.id || student.organizationId;

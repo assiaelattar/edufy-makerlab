@@ -1,4 +1,16 @@
-# Latest handoff — Parent API preview verified
+# Latest handoff — AAJLANE three-child parent acceptance
+
+On 2026-10-11 the user confirmed NADA, ALI, and KENZA as the children for the verified AAJLANE parent login. ALI was linked through Edufy's existing verified-parent flow. KENZA's separate older parent login belonged only to her; the user authorized consolidation and disabling that old login. A new trusted `transfer` API action and Edufy UI path passed the Auth/Firestore emulator and root build, then Vercel production API deployment `dpl_GQpaKuQ4AnXAgbLwg3BGE9jP4E3i` became READY. The local SparkQuest account now displays exactly three learners and 16 projects. Admin SDK checks confirmed all three guardian links and the old KENZA login disabled. The inactive duplicate NADA record was not changed. A phone-width test found KENZA clipped by a horizontal selector; a focused CSS grid fix now displays all three choices. The user requested a broader Duolingo-style, mobile-first parent redesign; this was sent to **SparkQuest UI/UX Design**. No Git push or Hostinger release. See `docs/releases/PARENT_ACCESS_HOSTING_AUDIT_2026-10-11.md`.
+
+---
+
+# Previous handoff — AAJLANE parent account issued; SparkQuest sign-in pending
+
+On 2026-10-11 the five family indexes became READY, the compatibility Firestore ruleset `95ef72f6-669f-4eb3-9dda-7c586ccc2e97` was released, and Vercel production API deployment `dpl_CfcMo14BzixYJdgRkm4cKa2kHrzV` became READY. Local GET/OPTIONS/tokenless POST probes returned JSON 405/200/401. The live learner's former parent-login UID resolved to an Edufy admin account; the original replacement was correctly rejected. A separately tested staff-link repair created `p.aajlane@makerlab.academy` as an active version-2 parent with a guardian link to AAJLANE NADA and removed the mistaken old UID only from that learner. Read-only checks confirmed the old admin profile and Auth login remain active. The one-time password is visible only in the open Edufy credentials card. The user must enter it personally at local SparkQuest `http://127.0.0.1:5184/`; inspect the real parent journey and phone layout after sign-in. No Git push or Hostinger deployment. See `docs/releases/PARENT_ACCESS_HOSTING_AUDIT_2026-10-11.md`.
+
+---
+
+# Previous handoff — Parent API preview verified
 
 The user signed into `edufy-makerlab` Firebase as an Owner and confirmed the protected Admin SDK setup. An existing September service-account key was verified and stored as a Vercel Preview and Production Secret; no key entered chat or Git. A new key created in the browser did not download and was deleted after the user authorized cleanup. The first Vercel preview failed during Function startup because `jwks-rsa` required ESM-only `jose@6`; the scoped npm override to `jose@4.15.9` fixes the Node load check. Protected preview `dpl_8imnFsskv7kP3stokcHPJisHcL9d` is READY: JSON GET 405, allowed localhost OPTIONS 200/CORS, tokenless POST 401, forbidden origin 403. Production env has the Admin Secret and exact official/Vercel/localhost origins but the candidate API is not yet deployed to production.
 
