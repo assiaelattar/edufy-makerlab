@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-11 — Use a shared isolated demo for two-app acceptance
+
+Run Edufy, the trusted parent API and SparkQuest against one explicit `demo-parent-journey` localhost Firebase emulator project. Seed learner and operational records, then issue the parent password through Edufy itself. Keep the local connection switch and CSP exception in development only; a synthetic family preview alone is not acceptance of the issue-to-sign-in flow.
+
 ## 2026-10-11 — Family credentials and journey live in SparkQuest
 
 Treat a parent login as an academy-issued Firebase ID plus a one-time password, even when the ID is email-shaped and has no inbox. Edufy staff issue/reset and directly share the card; the parent's destination is SparkQuest. Present child-specific project, media and Edufy operational facts in a mobile-first read-only workspace. Keep gallery permission distinct from portfolio permission and narrow Pickup writes to learner role until a separately approved parent command flow exists.

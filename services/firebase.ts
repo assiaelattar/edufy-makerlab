@@ -1,8 +1,8 @@
 
 import { initializeApp, FirebaseApp } from "firebase/app";
-import { getFirestore, Firestore } from "firebase/firestore";
-import { getAuth, Auth } from "firebase/auth";
-import { getStorage, FirebaseStorage } from "firebase/storage";
+import { connectFirestoreEmulator, getFirestore, Firestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, Auth } from "firebase/auth";
+import { connectStorageEmulator, getStorage, FirebaseStorage } from "firebase/storage";
 
 // Configuration type definition
 export interface FirebaseConfig {
@@ -16,6 +16,11 @@ export interface FirebaseConfig {
 }
 
 // Your web app's Firebase configuration
+const localDemoProject = import.meta.env.DEV && typeof window !== 'undefined' &&
+  ['localhost', '127.0.0.1'].includes(window.location.hostname) &&
+  /^demo-[a-z0-9-]+$/.test(import.meta.env.VITE_LOCAL_FIREBASE_PROJECT_ID || '')
+    ? import.meta.env.VITE_LOCAL_FIREBASE_PROJECT_ID as string : null;
+
 const firebaseConfig: FirebaseConfig = {
   apiKey: "AIzaSyCbSdElE-DXh83x02wszjfUcXl9z0iQj1A",
   authDomain: "edufy-makerlab.firebaseapp.com",
@@ -23,7 +28,8 @@ const firebaseConfig: FirebaseConfig = {
   storageBucket: "edufy-makerlab.firebasestorage.app",
   messagingSenderId: "273507751238",
   appId: "1:273507751238:web:c8306f6177654befa54147",
-  measurementId: "G-KZV1Q7T1H2"
+  measurementId: "G-KZV1Q7T1H2",
+  ...(localDemoProject ? { projectId: localDemoProject, authDomain: `${localDemoProject}.firebaseapp.com`, storageBucket: `${localDemoProject}.appspot.com` } : {})
 };
 
 import { getMessaging, Messaging } from "firebase/messaging";
@@ -43,13 +49,16 @@ try {
   console.log('✅ Firebase App initialized:', app.name);
 
   db = getFirestore(app);
+  if (localDemoProject) connectFirestoreEmulator(db, '127.0.0.1', 8080);
   console.log('✅ Firestore initialized:', db ? 'Connected' : 'Failed');
 
   auth = getAuth(app);
+  if (localDemoProject) connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   console.log('✅ Auth initialized:', auth ? 'Connected' : 'Failed');
 
   try {
     storage = getStorage(app);
+    if (localDemoProject) connectStorageEmulator(storage, '127.0.0.1', 9199);
     console.log('✅ Storage initialized');
   } catch (e) {
     console.warn('⚠️ Firebase Storage could not be initialized:', e);

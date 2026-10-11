@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-11 — Interactive local parent acceptance
+
+- Connected local Edufy, its trusted parent API, and local SparkQuest to one isolated Firebase demo project.
+- Issued and used a one-time parent password through the real two-app UI, then linked a sibling through Edufy and checked child-specific SparkQuest views.
+- Added a guarded local seed and development-only CSP allowance for emulator requests. Both production builds omit the demo endpoint strings.
+- See PARENT_LOCAL_ACCEPTANCE_2026-10-11.md. Nothing was pushed or deployed.
+
 ## 2026-10-11 — Parent family mobile journey Phase 4
 
 - Clarified that staff issue a one-time password and email-shaped SparkQuest login ID; no parent email inbox or setup link is required.

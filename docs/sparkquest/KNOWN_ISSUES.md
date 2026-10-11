@@ -1,5 +1,9 @@
 # SparkQuest Known Issues
 
+## Interactive local parent acceptance limit
+
+- The two-app issue, sibling link and parent sign-in flow passes with seeded emulator records. Emulator accounts disappear when the emulator stops unless exported. This does not establish that the hosted Admin API, Firebase rules/indexes or real family media URLs are ready; those release gates remain.
+
 ## Parent family mobile journey release gate
 
 - The live Edufy screenshot still shows the earlier setup-link card. The one-time staff-issued credential and SparkQuest family journey are local candidate code until the API, rules/indexes and both frontend releases are coordinated.

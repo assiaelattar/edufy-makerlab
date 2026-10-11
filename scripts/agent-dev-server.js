@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 const port = Number(process.env.PORT || 3001);
 
 function loadEnvLocal() {
+  if (process.env.EDUFY_LOCAL_DEMO === '1') return;
   const envPath = resolve(process.cwd(), ".env.local");
 
   try {
@@ -87,6 +88,10 @@ async function resolveHandler(pathname, query) {
     };
   }
 
+  if (pathname === "/api/parent-access") {
+    return { mod: await import("../api/parent-access/index.js"), query };
+  }
+
   if (pathname === "/api/agent/students/search") {
     return {
       mod: await import("../api/agent/students/search.js"),
@@ -142,6 +147,13 @@ async function resolveHandler(pathname, query) {
 }
 
 loadEnvLocal();
+if (process.env.EDUFY_LOCAL_DEMO === '1' && (
+  process.env.FIREBASE_PROJECT_ID !== 'demo-parent-journey' ||
+  !/^127\.0\.0\.1:\d+$/.test(process.env.FIREBASE_AUTH_EMULATOR_HOST || '') ||
+  !/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST || '')
+)) {
+  throw new Error('Local parent demo requires the demo-parent-journey project and localhost Auth/Firestore emulators.');
+}
 
 const server = createServer(async (nodeReq, nodeRes) => {
   const url = new URL(nodeReq.url || "/", `http://${nodeReq.headers.host || `localhost:${port}`}`);
@@ -229,6 +241,6 @@ const server = createServer(async (nodeReq, nodeRes) => {
   }
 });
 
-server.listen(port, () => {
+server.listen(port, process.env.EDUFY_LOCAL_DEMO === '1' ? '127.0.0.1' : '0.0.0.0', () => {
   console.log(`[agent-dev-server] listening on http://localhost:${port}`);
 });

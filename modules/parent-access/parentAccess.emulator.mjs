@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import { initializeApp as initializeClientApp } from 'firebase/app';
+import { deleteApp as deleteClientApp, initializeApp as initializeClientApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth as getClientAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { collection, connectFirestoreEmulator, doc, getDoc, getDocs, getFirestore, query, updateDoc, where } from 'firebase/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { deleteApp as deleteAdminApp } from 'firebase-admin/app';
 import { getDb, getFirebaseAdminApp } from '../../api/agent/_lib/firebaseAdmin.js';
 import handler, { parentAliasBase } from '../../api/parent-access/index.js';
 
@@ -67,6 +69,38 @@ assert.equal(sibling.body.password, undefined);
 assert.equal((await db.doc('students/child-c').get()).data().parentLoginInfo.uid, firstAuth.uid);
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_learner-alias-c`).get()).data().studentId, 'child-c');
 
+// Prove the issued password reaches the same read-only family records used by SparkQuest.
+await Promise.all([
+  db.doc('student_projects/child-a-project').set({ organizationId: 'org-a', studentId: 'child-a', status: 'building' }),
+  db.doc('student_projects/child-c-project').set({ organizationId: 'org-a', studentId: 'learner-alias-c', status: 'submitted' }),
+  db.doc('enrollments/child-a-enrollment').set({ organizationId: 'org-a', studentId: 'child-a', status: 'active' }),
+  db.doc('payments/child-a-payment').set({ organizationId: 'org-a', enrollmentId: 'child-a-enrollment', amount: 100 }),
+  db.doc('attendance/child-a-attendance').set({ organizationId: 'org-a', studentId: 'child-a', status: 'present' }),
+  db.doc('gallery_items/child-a-photo').set({ organizationId: 'org-a', studentId: 'child-a', url: 'https://example.test/photo.jpg' }),
+  db.doc('pickup_queue/child-a-pickup').set({ organizationId: 'org-a', studentId: 'child-a', status: 'trip_announced' })
+]);
+const familyApp = initializeClientApp({ apiKey: 'demo-key', authDomain: 'localhost', projectId: process.env.GCLOUD_PROJECT }, 'issued-family');
+const familyAuth = getClientAuth(familyApp);
+connectAuthEmulator(familyAuth, `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
+await signInWithEmailAndPassword(familyAuth, first.body.email, first.body.password);
+const familyDb = getFirestore(familyApp);
+const [firestoreHost, firestorePort] = process.env.FIRESTORE_EMULATOR_HOST.split(':');
+connectFirestoreEmulator(familyDb, firestoreHost, Number(firestorePort));
+const familyLinks = await getDocs(query(collection(familyDb, 'guardian_links'), where('parentUid', '==', firstAuth.uid), where('organizationId', '==', 'org-a')));
+assert.deepEqual(new Set(familyLinks.docs.map(link => link.data().studentId)), new Set(['child-a', 'child-c']));
+assert.equal((await getDoc(doc(familyDb, 'students', 'child-a'))).data().name, 'Child a');
+assert.equal((await getDoc(doc(familyDb, 'students', 'child-c'))).data().name, 'Child c');
+assert.equal((await getDocs(query(collection(familyDb, 'student_projects'), where('studentId', '==', 'child-a'), where('organizationId', '==', 'org-a')))).size, 1);
+assert.equal((await getDocs(query(collection(familyDb, 'student_projects'), where('studentId', '==', 'learner-alias-c'), where('organizationId', '==', 'org-a')))).size, 1);
+assert.equal((await getDoc(doc(familyDb, 'enrollments', 'child-a-enrollment'))).data().studentId, 'child-a');
+assert.equal((await getDoc(doc(familyDb, 'payments', 'child-a-payment'))).data().amount, 100);
+assert.equal((await getDoc(doc(familyDb, 'attendance', 'child-a-attendance'))).data().status, 'present');
+assert.equal((await getDoc(doc(familyDb, 'gallery_items', 'child-a-photo'))).data().studentId, 'child-a');
+assert.equal((await getDoc(doc(familyDb, 'pickup_queue', 'child-a-pickup'))).data().status, 'trip_announced');
+await assert.rejects(getDoc(doc(familyDb, 'students', 'child-b')), { code: 'permission-denied' });
+await assert.rejects(updateDoc(doc(familyDb, 'pickup_queue', 'child-a-pickup'), { status: 'arrived' }), { code: 'permission-denied' });
+await assert.rejects(updateDoc(doc(familyDb, 'student_projects', 'child-a-project'), { status: 'published' }), { code: 'permission-denied' });
+
 const distinct = await issue('child-d', 'Staff Name', 'Staff Name');
 assert.equal(distinct.statusCode, 200);
 assert.equal(distinct.body.email, 'p.staff.name-2@makerlab.academy');
@@ -90,4 +124,6 @@ await assert.rejects(() => signInWithEmailAndPassword(clientAuth, first.body.ema
 await signInWithEmailAndPassword(clientAuth, first.body.email, reset.body.password);
 const stored = JSON.stringify({ student: (await db.doc('students/child-a').get()).data(), profile: (await db.doc(`users/${firstAuth.uid}`).get()).data(), link: (await db.doc(`guardian_links/${firstAuth.uid}_child-a`).get()).data() });
 assert(!stored.includes(first.body.password) && !stored.includes(reset.body.password));
-console.log('Parent access emulator: issue, collision, sibling link, role and tenant denial, reset, and plaintext checks passed.');
+console.log('Parent access emulator: issue, issued-password family sign-in and reads, read-only boundaries, collision, sibling link, role and tenant denial, reset, and plaintext checks passed.');
+await Promise.all([deleteClientApp(app), deleteClientApp(familyApp)]);
+await deleteAdminApp(getFirebaseAdminApp());

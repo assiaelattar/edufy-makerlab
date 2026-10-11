@@ -1,4 +1,10 @@
-# Latest handoff — Parent family mobile journey Phase 4
+# Latest handoff — Interactive local parent acceptance
+
+Edufy and SparkQuest were run against the same localhost `demo-parent-journey` Firebase emulators. Through the actual Edufy Student Details UI, staff issued the one-time Samira demo parent password for Maya, then linked Adam to the exact same account. The issued credential signed into the actual SparkQuest parent route, which loaded project proof/resources/feedback, gallery, payment history, attendance, and read-only Pickup. Two-child switching and phone layout passed. Local-only Firebase routing, Vite CSP relaxation, API route, and idempotent seed are documented in `docs/sparkquest/PARENT_LOCAL_ACCEPTANCE_2026-10-11.md`. Both builds, SparkQuest TypeScript, origin smoke and combined issuance-to-read emulator assertions pass. No push, deployment or real family write occurred.
+
+---
+
+# Previous handoff — Parent family mobile journey Phase 4
 
 The local clean release worktree now clarifies staff-issued, one-time SparkQuest parent credentials and adds the read-only mobile family journey. A verified parent can switch children and view saved workshop projects/resources/proof/reviews, gallery moments, payment and attendance detail, and Pickup status. Parent Pickup writes are denied by the reviewed Firestore rule; learner Pickup updates still pass the demo emulator. SparkQuest TypeScript, both production builds, family smokes, Auth/Firestore emulator and 375px browser preview pass. No production changes or real-family data writes occurred. The previous Parent Access release gates below still apply. Details: docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md.
 
