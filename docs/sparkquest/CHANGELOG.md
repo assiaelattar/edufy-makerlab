@@ -2,7 +2,7 @@
 
 ## 2026-10-11 — Interactive local parent acceptance
 
-- Connected local Edufy, its trusted parent API, and local SparkQuest to one isolated Firebase demo project.
+- Connected local Edufy, its trusted parent API, and local SparkQuest to one isolated Firebase demo project. Seeded Noor as an unissued learner for the user's own account creation test.
 - Issued and used a one-time parent password through the real two-app UI, then linked a sibling through Edufy and checked child-specific SparkQuest views.
 - Added a guarded local seed and development-only CSP allowance for emulator requests. Both production builds omit the demo endpoint strings.
 - See PARENT_LOCAL_ACCEPTANCE_2026-10-11.md. Nothing was pushed or deployed.

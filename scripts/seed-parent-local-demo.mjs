@@ -34,9 +34,13 @@ put(`users/${staff.uid}`, {
   uid: staff.uid, organizationId, email: staffEmail, name: 'MakerLab Demo Staff',
   role: 'owner', status: 'active', createdAt: now
 });
-for (const [id, name] of [['maya-demo', 'Maya Maker'], ['adam-demo', 'Adam Maker']]) {
+for (const [id, name, parentName] of [
+  ['maya-demo', 'Maya Maker', 'Samira Maker'],
+  ['adam-demo', 'Adam Maker', 'Samira Maker'],
+  ['noor-demo', 'Noor Explorer', 'Layla Explorer']
+]) {
   put(`students/${id}`, {
-    organizationId, name, parentName: 'Samira Maker', parentPhone: '+212600000000',
+    organizationId, name, parentName, parentPhone: '+212600000000',
     birthDate: id === 'maya-demo' ? '2015-05-12' : '2018-03-08', status: 'active', createdAt: now
   });
 }
@@ -86,8 +90,47 @@ put('pickup_queue/maya-today', {
   organizationId, studentId: 'maya-demo', sessionDate: today,
   status: 'arrived', pickerName: 'Family guardian', createdAt: now
 });
+put('enrollments/noor-makerlab', {
+  organizationId, studentId: 'noor-demo', studentName: 'Noor Explorer',
+  programId: 'makerlab-demo', programName: 'MakerLab Explorers', packName: 'Young Inventors',
+  paymentPlan: 'annual', totalAmount: 3000, paidAmount: 1000, balance: 2000,
+  status: 'active', startDate: '2026-09-01', session: '2026-2027', createdAt: now
+});
+put('payments/noor-first', {
+  organizationId, enrollmentId: 'noor-makerlab', studentName: 'Noor Explorer',
+  amount: 1000, date: '2026-09-15', method: 'cash', status: 'verified', createdAt: now
+});
+put('attendance/noor-today', {
+  organizationId, studentId: 'noor-demo', enrollmentId: 'noor-makerlab',
+  date: today, status: 'present', createdAt: now
+});
+put('student_projects/noor-light-lab', {
+  organizationId, studentId: 'noor-demo', title: 'Invent a light lab',
+  description: 'Explore how switches can control a small light.',
+  station: 'Circuits', status: 'building', thumbnailUrl: '/mission-plant-guardian.svg',
+  missionBrief: {
+    goal: 'Build a safe switch that turns an LED on and off.',
+    whyItMatters: 'A small circuit can help explain how everyday devices work.',
+    finalOutcome: 'A working LED switch with a short demonstration.',
+    materials: ['LED', 'Battery pack', 'Switch']
+  },
+  resources: [{ id: 'light-guide', title: 'Circuit guide', type: 'image', url: '/mission-plant-guardian.svg' }],
+  steps: [
+    { id: 'plan', title: 'Draw the circuit', status: 'done', objective: 'Plan where the battery, switch and LED connect.', note: 'I drew the path before building.', evidence: '/mission-plant-guardian.svg', evidenceMimeType: 'image/svg+xml' },
+    { id: 'test', title: 'Test the switch', status: 'doing', objective: 'Switch the LED on and off safely.' }
+  ],
+  commits: [], skills: ['Circuits'], feedback: 'The circuit plan is clear. Try your first switch test.', createdAt: now
+});
+put('gallery_items/noor-circuit-photo', {
+  organizationId, studentId: 'noor-demo', type: 'image',
+  url: 'http://127.0.0.1:5174/mission-plant-guardian.svg',
+  caption: 'Noor planning the light circuit', createdAt: now
+});
+put('pickup_queue/noor-today', {
+  organizationId, studentId: 'noor-demo', sessionDate: today,
+  status: 'trip_announced', pickerName: 'Family guardian', createdAt: now
+});
 await batch.commit();
 console.log('Local parent journey demo seeded.');
 console.log(`Edufy staff: ${staffEmail} / ${staffPassword}`);
-console.log('Students: Maya Maker and Adam Maker. Issue a parent account from Maya in Edufy if one is not already linked.');
-console.log('Link Adam to that exact parent account from Adam’s Edufy profile if needed.');
+console.log('Maya and Adam can share one verified parent login. Noor Explorer is unissued for a new parent account walkthrough.');
