@@ -1,6 +1,6 @@
 # Parent access hosting audit — 11 October 2026
 
-**Verdict: NOT RELEASE READY.** This audit and local configuration change did not deploy code, rules, indexes, credentials, or accounts.
+**Verdict: IN PROGRESS.** The trusted API is running in a protected Vercel preview. No Firestore rule/index release, public client release, or real parent account write has occurred.
 
 ## 11 October deployment authorization and access check
 
@@ -12,9 +12,11 @@ The signed-in localhost Edufy UI rendered Ajlane Nada's learner profile and reco
 
 ## 11 October project-owner follow-up
 
-The user signed the in-app browser into Firebase as `dc.makerlab@gmail.com`. The account opens project `edufy-makerlab`, and Firebase lists it as **Owner**. Email/Password Auth is enabled. The Service accounts page exposes the existing Firebase Admin SDK service account and a **Generate new private key** action. A new key would grant privileged Auth/Firestore access to the Vercel function; explicit action-time confirmation was requested before generating it. No key has been generated, downloaded, shown, or installed yet.
+The user signed the in-app browser into Firebase as `dc.makerlab@gmail.com`. The account opens project `edufy-makerlab`, and Firebase lists it as **Owner**. Email/Password Auth is enabled. The user confirmed creating an Admin SDK key for the protected Vercel preview. The browser created the key but did not deliver the private JSON to the available download location. An existing active September Admin SDK key was verified read-only against this Firebase project and installed only in Vercel Preview and Production as `FIREBASE_SERVICE_ACCOUNT_BASE64` Secret. The unused new key was deleted in Google Cloud after the user authorized cleanup; the key list showed it absent after reload. No key value entered chat or Git.
 
-The live default Firestore database lists five enabled composite indexes, none of the five new family indexes in this candidate. The Console Rules tab twice reported **Error loading rules versions**, so the live rules could not yet be compared. The Vercel Preview environment now has an exact localhost origin allowlist for `http://127.0.0.1:5183`; Production was not changed. A Vercel dry run confirmed the candidate includes `api/parent-access/index.js` and excludes `.env`. `.vercelignore` was tightened to exclude `.env*` and service-account/credential JSON before any preview upload. API syntax, exact-origin smoke and `git diff --check` pass. No code deployment, Firebase release or parent account write occurred.
+The live default Firestore database lists five enabled composite indexes, none of the five new family indexes in this candidate. The Console Rules tab twice reported **Error loading rules versions**, but the Firebase Rules API returned the live ruleset. It matches `origin/main` except for an existing `resource_library` rule, now preserved in the candidate. The service account can list indexes and rules but received 403 when asked to create the first family index; Owner credentials are required for that step. No index or rule change occurred.
+
+The Vercel Preview environment has an exact localhost origin allowlist for `http://127.0.0.1:5183`. Production now also allows the official Edufy and Vercel origins plus that localhost origin for acceptance; it has the server-only Admin SDK Secret, but production has not been redeployed with the candidate API yet. A Vercel dry run confirmed the candidate includes `api/parent-access/index.js` and excludes `.env`. `.vercelignore` excludes `.env*` and service-account/credential JSON. The first preview failed at Function startup because `jwks-rsa@4.1.0` required ESM-only `jose@6`; a scoped npm override to `jose@4.15.9` resolved the Node compatibility check. The second protected preview (`dpl_8imnFsskv7kP3stokcHPJisHcL9d`) is READY: GET returns JSON 405, allowlisted OPTIONS 200 with exact CORS headers, tokenless POST 401, and an unlisted origin 403. No real parent account write occurred.
 
 ## 11 October local real-data retry
 

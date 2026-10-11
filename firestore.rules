@@ -907,6 +907,13 @@ service cloud.firestore {
       allow delete: if canDeleteTenantDoc();
     }
 
+    match /resource_library/{resourceId} {
+      allow read: if hasUserProfile() && resourceHasOrg() && isSameOrg(resource.data.organizationId);
+      allow create: if canCreateTenantDoc() && isProjectReviewer();
+      allow update: if canUpdateTenantDoc() && isProjectReviewer();
+      allow delete: if false;
+    }
+
     match /stations/{stationId} {
       allow read: if true;
       allow create: if canCreateTenantDoc();

@@ -47,5 +47,10 @@
     "tailwindcss": "^4.1.18",
     "typescript": "^5.2.2",
     "vite": "^7.2.4"
+  },
+  "overrides": {
+    "jwks-rsa": {
+      "jose": "4.15.9"
+    }
   }
 }
