@@ -1,17 +1,19 @@
 import { auth } from './firebase';
-import { config } from '../utils/config';
 
-export type ParentAccessAction = 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink';
+export type ParentAccessAction = 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover';
 
 export interface ParentAccessResult {
   action: ParentAccessAction;
   email: string;
   password?: string;
   linkedLearnerCount?: number;
+  uid?: string;
+  parentName?: string;
+  needsRecovery?: boolean;
 }
 
 const parentAccessEndpoint = (): string => {
-  const configuredOrigin = String(import.meta.env.VITE_PARENT_ACCESS_API_ORIGIN || config.erpUrl).trim();
+  const configuredOrigin = String(import.meta.env.VITE_PARENT_ACCESS_API_ORIGIN || 'https://edufy-makerlab.vercel.app').trim();
   let url: URL;
   try { url = new URL(configuredOrigin); }
   catch { throw new Error('Parent access API origin is invalid.'); }
@@ -31,6 +33,7 @@ export const manageParentAccess = async (request: {
   aliasBasis?: string;
   relationshipVerified?: boolean;
   reuseParentUid?: string;
+  reuseParentEmail?: string;
 }): Promise<ParentAccessResult> => {
   const token = await auth?.currentUser?.getIdToken();
   if (!token) throw new Error('Sign in to Edufy before managing parent access.');

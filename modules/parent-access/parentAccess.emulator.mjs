@@ -206,6 +206,70 @@ await assert.rejects(() => signInWithEmailAndPassword(clientAuth, legacy.email, 
 await signInWithEmailAndPassword(clientAuth, replaced.body.email, replaced.body.password);
 const replacementReset = await invoke(staffToken, { action: 'reset', studentId: 'child-f', organizationId: 'org-a' });
 assert.equal(replacementReset.statusCode, 200);
-console.log('Parent access emulator: issue, family reads, sibling link, legacy transfer, staff-link repair, legacy replacement, old-account revocation, reset, denials and plaintext checks passed.');
+
+// Recover an exact legacy p.* login with no users profile, no guardian links, and a missing name.
+const legacyExact = await adminAuth.createUser({ email: 'p.older.family@makerlab.academy', password: 'Old-family-password-123' });
+await Promise.all([
+  db.doc('students/legacy-main').set({ organizationId: 'org-a', name: 'Legacy main', parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } }),
+  db.doc('students/legacy-sibling').set({ organizationId: 'org-a', name: 'Legacy sibling', loginInfo: { uid: 'legacy-sibling-alias' }, parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } }),
+  db.doc('students/legacy-new').set({ organizationId: 'org-a', name: 'New sibling' })
+]);
+const lookupRequest = { action: 'lookup', studentId: 'legacy-main', organizationId: 'org-a', reuseParentEmail: legacyExact.email, relationshipVerified: true };
+assert.equal((await invoke(parentToken, lookupRequest)).statusCode, 403);
+assert.equal((await invoke(staffToken, { ...lookupRequest, relationshipVerified: false })).statusCode, 400);
+const lookup = await invoke(staffToken, lookupRequest);
+assert.equal(lookup.statusCode, 200, JSON.stringify(lookup.body?.error));
+assert.equal(lookup.body.needsRecovery, true);
+assert.equal(lookup.body.linkedLearnerCount, 2);
+const recoveryRequest = { action: 'recover', studentId: 'legacy-main', organizationId: 'org-a', parentName: 'Verified Parent', relationshipVerified: true };
+assert.equal((await invoke(staffToken, { ...recoveryRequest, parentName: '' })).statusCode, 400);
+await db.doc('students/foreign-legacy').set({ organizationId: 'org-b', name: 'Foreign legacy', parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } });
+assert.equal((await invoke(staffToken, recoveryRequest)).statusCode, 409);
+await db.doc('students/foreign-legacy').delete();
+const recovered = await invoke(staffToken, recoveryRequest);
+assert.equal(recovered.statusCode, 200, JSON.stringify(recovered.body?.error));
+assert.equal(recovered.body.email, legacyExact.email);
+assert(recovered.body.password?.length >= 30);
+assert.equal((await db.doc(`users/${legacyExact.uid}`).get()).data().role, 'parent');
+assert.equal((await db.doc('students/legacy-sibling').get()).data().parentName, 'Verified Parent');
+assert.equal((await db.doc(`guardian_links/${legacyExact.uid}_legacy-sibling-alias`).get()).data().status, 'active');
+await assert.rejects(() => signInWithEmailAndPassword(clientAuth, legacyExact.email, 'Old-family-password-123'));
+await signInWithEmailAndPassword(clientAuth, legacyExact.email, recovered.body.password);
+const exactLinked = await invoke(staffToken, { action: 'link', studentId: 'legacy-new', organizationId: 'org-a', reuseParentEmail: legacyExact.email, parentName: 'Verified Parent', relationshipVerified: true });
+assert.equal(exactLinked.statusCode, 200, JSON.stringify(exactLinked.body?.error));
+assert.equal((await db.doc('students/legacy-new').get()).data().parentName, 'Verified Parent');
+assert.equal((await db.doc('students/legacy-new').get()).data().parentLoginInfo.uid, legacyExact.uid);
+const recoveredStored = JSON.stringify({ profile: (await db.doc(`users/${legacyExact.uid}`).get()).data(), learner: (await db.doc('students/legacy-main').get()).data(), link: (await db.doc(`guardian_links/${legacyExact.uid}_legacy-main`).get()).data() });
+assert(!recoveredStored.includes(recovered.body.password));
+const wrongRole = await adminAuth.createUser({ email: 'p.wrong.role@makerlab.academy', password: 'Wrong-role-password-123' });
+await Promise.all([
+  db.doc(`users/${wrongRole.uid}`).set({ organizationId: 'org-a', role: 'instructor', status: 'active', email: wrongRole.email }),
+  db.doc('students/wrong-role').set({ organizationId: 'org-a', parentLoginInfo: { uid: wrongRole.uid, email: wrongRole.email } })
+]);
+assert.equal((await invoke(staffToken, { ...lookupRequest, studentId: 'wrong-role', reuseParentEmail: wrongRole.email })).statusCode, 409);
+assert.equal((await invoke(staffToken, { action: 'recover', studentId: 'wrong-role', organizationId: 'org-a', parentName: 'Wrong Role', relationshipVerified: true })).statusCode, 409);
+const crossTenant = await adminAuth.createUser({ email: 'p.cross.tenant@makerlab.academy', password: 'Cross-tenant-password-123' });
+await Promise.all([
+  db.doc(`users/${crossTenant.uid}`).set({ organizationId: 'org-b', role: 'parent', status: 'active', email: crossTenant.email }),
+  db.doc('students/cross-tenant').set({ organizationId: 'org-a', parentLoginInfo: { uid: crossTenant.uid, email: crossTenant.email } })
+]);
+assert.equal((await invoke(staffToken, { ...lookupRequest, studentId: 'cross-tenant', reuseParentEmail: crossTenant.email })).statusCode, 409);
+const oldExact = await adminAuth.createUser({ email: 'p.old.single@makerlab.academy', password: 'Old-single-password-123' });
+await db.doc('students/legacy-transfer').set({ organizationId: 'org-a', name: 'Legacy transfer', parentLoginInfo: { uid: oldExact.uid, email: oldExact.email }, parentUids: [oldExact.uid] });
+const exactTransfer = { action: 'transfer', studentId: 'legacy-transfer', organizationId: 'org-a', reuseParentUid: firstAuth.uid,
+  reuseParentEmail: first.body.email, parentName: 'Samira Ajlane', relationshipVerified: true };
+assert.equal((await invoke(staffToken, { ...exactTransfer, parentName: 'Wrong Parent' })).statusCode, 409);
+assert.equal((await invoke(staffToken, { ...exactTransfer, reuseParentEmail: 'p.wrong@makerlab.academy' })).statusCode, 409);
+await db.doc('students/foreign-transfer').set({ organizationId: 'org-b', name: 'Foreign transfer', parentLoginInfo: { uid: oldExact.uid, email: oldExact.email } });
+assert.equal((await invoke(staffToken, exactTransfer)).statusCode, 409);
+await db.doc('students/foreign-transfer').delete();
+const movedLegacy = await invoke(staffToken, exactTransfer);
+assert.equal(movedLegacy.statusCode, 200, JSON.stringify(movedLegacy.body?.error));
+assert.equal((await db.doc('students/legacy-transfer').get()).data().parentName, 'Samira Ajlane');
+assert.equal((await db.doc('students/legacy-transfer').get()).data().parentLoginInfo.uid, firstAuth.uid);
+assert.equal((await db.doc(`users/${oldExact.uid}`).get()).exists, false);
+assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_legacy-transfer`).get()).data().status, 'active');
+assert.equal((await adminAuth.getUser(oldExact.uid)).disabled, true);
+console.log('Parent access emulator: issue, family reads, exact lookup/recovery/link, missing-name legacy transfer, cross-tenant and non-parent denial, sibling transfer, staff-link repair, legacy replacement, reset and plaintext checks passed.');
 await Promise.all([deleteClientApp(app), deleteClientApp(familyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());

@@ -458,7 +458,7 @@ export const StudentDetailsView = ({
         } finally { setIsGeneratingAccess(false); }
     };
 
-    const handleCreateParentAccess = async (action: ParentAccessAction, reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean) => {
+    const handleCreateParentAccess = async (action: ParentAccessAction, reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string) => {
         if (!student) return;
         if (action === 'reset') {
             const approved = await confirm({ title: 'Issue a new parent password', message: 'The current password will stop working. Share the new password from the one-time card after this action.', variant: 'warning', confirmText: 'Issue new password' });
@@ -466,6 +466,10 @@ export const StudentDetailsView = ({
         }
         if (action === 'replace') {
             const approved = await confirm({ title: 'Replace parent login', message: 'A recorded parent account will be retired and its linked learners will move to the new SparkQuest login. If the recorded login belongs to staff, Edufy will require a separate confirmation to detach only this learner while keeping staff access active. Share the new one-time password with the verified parent.', variant: 'warning', confirmText: 'Replace login' });
+            if (!approved) return;
+        }
+        if (action === 'recover') {
+            const approved = await confirm({ title: 'Recover existing parent login', message: 'This keeps the exact SparkQuest login ID, repairs only its recorded family links, and replaces its current password. Share the new password from the one-time card with the verified parent.', variant: 'warning', confirmText: 'Recover and issue password' });
             if (!approved) return;
         }
         if (action === 'transfer') {
@@ -478,7 +482,7 @@ export const StudentDetailsView = ({
             if (!organizationId || organizationId !== student.organizationId) throw new Error('Select the learner’s organization before managing parent access.');
             let result;
             try {
-                result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified, reuseParentUid });
+                result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: verifiedParentName || student.parentName, aliasBasis, relationshipVerified, reuseParentUid, reuseParentEmail });
             } catch (error: any) {
                 if (action !== 'replace' || error?.code !== 'staff_login_mislinked') throw error;
                 const approved = await confirm({ title: 'Repair mistaken staff link', message: 'This learner’s recorded parent login belongs to an Edufy staff account. Keep the staff login active, remove only this learner’s mistaken family link, and issue a dedicated SparkQuest parent login?', variant: 'warning', confirmText: 'Repair learner link' });
@@ -486,7 +490,7 @@ export const StudentDetailsView = ({
                 result = await manageParentAccess({ action: 'repairStaffLink', studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified });
             }
             if (result.password) {
-                setCredentialsModal({ isOpen: true, data: { name: student.parentName || 'Parent', email: result.email, pass: result.password, role: 'Parent' } });
+                setCredentialsModal({ isOpen: true, data: { name: verifiedParentName || student.parentName || 'Parent', email: result.email, pass: result.password, role: 'Parent' } });
             } else {
                 await showAlert('Parent linked', `${result.email} can now open this learner in SparkQuest. The existing password was not changed.`, 'success');
             }
