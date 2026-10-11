@@ -14,13 +14,13 @@ const adminApp = initializeAdmin({ projectId }, 'parent-family-rules');
 const admin = getAdminFirestore(adminApp);
 const clientApps = [];
 
-const parent = async (name, organizationId = 'org-a') => {
+const parent = async (name, organizationId = 'org-a', accessVersion = 2) => {
   const app = initializeClient({ apiKey: 'fake-key', projectId, authDomain: `${projectId}.firebaseapp.com` }, name);
   clientApps.push(app);
   const auth = getAuth(app);
   connectAuthEmulator(auth, `http://${authHost}`, { disableWarnings: true });
   const { user } = await createUserWithEmailAndPassword(auth, `${name}@example.test`, 'emulator-password');
-  await admin.doc(`users/${user.uid}`).set({ role: 'parent', organizationId, status: 'active' });
+  await admin.doc(`users/${user.uid}`).set({ role: 'parent', organizationId, status: 'active', ...(accessVersion ? { accessVersion } : {}) });
   const db = getFirestore(app);
   const [host, port] = firestoreHost.split(':');
   connectFirestoreEmulator(db, host, Number(port));
@@ -46,9 +46,10 @@ try {
   const alice = await parent('parent-alice');
   const bob = await parent('parent-bob');
   const carol = await parent('parent-carol', 'org-b');
+  const legacy = await parent('parent-legacy', 'org-a', null);
   const learner = await parent('learner-b');
   await admin.doc('users/' + learner.uid).update({ role: 'student' });
-  await admin.doc('students/child-a').set({ organizationId: 'org-a', name: 'Child A', loginInfo: { uid: 'learner-auth-a' }, parentLoginInfo: { uid: bob.uid }, parentUids: [bob.uid] });
+  await admin.doc('students/child-a').set({ organizationId: 'org-a', name: 'Child A', loginInfo: { uid: 'learner-auth-a' }, parentLoginInfo: { uid: legacy.uid }, parentUids: [legacy.uid, bob.uid] });
   await admin.doc('students/child-b').set({ organizationId: 'org-a', name: 'Child B', loginInfo: { uid: learner.uid } });
   await admin.doc('students/child-alias-only').set({ organizationId: 'org-a', name: 'Alias Child', loginInfo: { uid: 'learner-auth-alias' } });
   await admin.doc('students/child-foreign').set({ organizationId: 'org-b', name: 'Foreign Child' });
@@ -107,6 +108,12 @@ try {
   await denied(projectsFor(alice.db, 'child-foreign', 'org-b'), 'foreign learner');
   await denied(projectsFor(carol.db, 'child-a', 'org-a'), 'guardian profile from another organization');
   await denied(getDoc(doc(bob.db, 'payments', 'payment-a')), 'unlinked parent payment');
+  assert.equal((await getDoc(doc(legacy.db, 'students', 'child-a'))).data()?.name, 'Child A');
+  assert.equal((await getDoc(doc(legacy.db, 'payments', 'payment-a'))).data()?.amount, 20);
+  assert.equal((await getDoc(doc(legacy.db, 'attendance', 'attendance-a'))).data()?.status, 'present');
+  assert.equal((await getDoc(doc(legacy.db, 'gallery_items', 'gallery-a'))).data()?.studentId, 'child-a');
+  await denied(updateDoc(doc(legacy.db, 'users', legacy.uid), { accessVersion: 2 }), 'legacy parent cannot self-upgrade');
+  await denied(updateDoc(doc(legacy.db, 'users', legacy.uid), { status: 'inactive' }), 'legacy parent cannot change status');
 
   await admin.doc(`guardian_links/${alice.uid}_child-a`).update({ permissions: [] });
   await denied(projectsFor(alice.db, 'child-a', 'org-a'), 'missing portfolio permission');

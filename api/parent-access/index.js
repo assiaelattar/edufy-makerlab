@@ -173,7 +173,7 @@ export default async function handler(req, res) {
           }
           transaction.create(db.doc(`users/${issued.uid}`), {
             uid: issued.uid, organizationId, email: issued.email, name: recordedParentName,
-            role: 'parent', status: 'active', createdAt: FieldValue.serverTimestamp()
+            role: 'parent', status: 'active', accessVersion: 2, createdAt: FieldValue.serverTimestamp()
           });
           transaction.update(oldProfileRef, { status: 'inactive', updatedAt: FieldValue.serverTimestamp() });
           for (const item of currentFamily) {
@@ -233,7 +233,7 @@ export default async function handler(req, res) {
           throw Object.assign(new Error('Recorded parent name changed. Refresh the learner record.'), { status: 409 });
         }
         if (created) transaction.create(db.doc(`users/${uid}`), {
-          uid, organizationId, email, name: recordedParentName, role: 'parent', status: 'active',
+          uid, organizationId, email, name: recordedParentName, role: 'parent', status: 'active', accessVersion: 2,
           createdAt: FieldValue.serverTimestamp()
         });
         transaction.update(studentRef, { parentLoginInfo: { uid, email }, parentUids: FieldValue.arrayUnion(uid) });
