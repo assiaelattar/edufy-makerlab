@@ -17,6 +17,7 @@
 .pf-pickup-ticket-bottom { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:2px dashed #ffffff85; padding:16px 22px 18px; background:#193cca; }
 .pf-pickup-ticket-bottom span { color:#cfdbff; font-size:10px; font-weight:900; letter-spacing:.1em; }
 .pf-pickup-ticket-bottom strong { color:#d5f777; font-family:'Manrope','Nunito',sans-serif; font-size:23px; font-weight:900; white-space:nowrap; }
+@media(max-width:520px) { .pf-pickup-ticket-bottom { align-items:flex-start; flex-direction:column; gap:5px; } .pf-pickup-ticket-bottom strong { max-width:100%; font-size:21px; white-space:normal; overflow-wrap:anywhere; } }
 .pf-pickup-ticket.is-empty { background:#284581; border-color:#264581; box-shadow:0 7px 0 #1c335e; }
 .pf-pickup-ticket-empty { max-width:490px; padding:14px 24px 36px; }
 .pf-pickup-question { display:grid; width:75px; height:75px; place-items:center; border-radius:23px; background:#d5f777; color:#24394a; font-family:'Manrope','Nunito',sans-serif; font-size:52px; font-weight:900; transform:rotate(-7deg); }
