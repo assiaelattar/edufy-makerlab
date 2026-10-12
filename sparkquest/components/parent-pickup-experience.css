@@ -1,0 +1,54 @@
+.pf-pickup > h1 { max-width:18ch; margin:8px 0 22px; font-family:'Manrope','Nunito',system-ui,sans-serif; font-size:clamp(29px,8vw,49px); font-weight:900; letter-spacing:-.07em; line-height:1.04; }
+.pf-pickup-experience { max-width:760px; }
+.pf-pickup-ticket { position:relative; overflow:hidden; border:1px solid #153bb6; border-radius:27px; background:#2448eb; color:#fff; box-shadow:0 7px 0 #1736b4; animation:pf-screen-enter .35s ease-out both; }
+.pf-pickup-ticket::before { position:absolute; right:-86px; top:75px; width:216px; height:216px; border:1px solid #ffffff33; border-radius:50%; content:''; }
+.pf-pickup-ticket-top { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:21px 22px 12px; color:#d5f777; }
+.pf-pickup-ticket-top > span { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:900; letter-spacing:.13em; }
+.pf-pickup-ticket-main { display:flex; align-items:center; gap:18px; padding:14px 22px 25px; }
+.pf-pickup-calendar { display:grid; width:112px; height:120px; flex:none; align-content:center; justify-items:center; border:2px solid #f3f7e8; border-radius:19px; background:#d5f777; box-shadow:0 5px 0 #a3c653; color:#1c3328; transform:rotate(-5deg); }
+.pf-pickup-calendar strong { font-family:'Manrope','Nunito',sans-serif; font-size:64px; font-weight:900; letter-spacing:-.11em; line-height:1; }
+.pf-pickup-calendar span { font-size:14px; font-weight:900; text-transform:uppercase; }
+.pf-pickup-ticket-message { min-width:0; }
+.pf-pickup-day { color:#d5f777; font-size:12px; font-weight:900; text-transform:capitalize; }
+.pf-pickup-ticket-message h2,.pf-pickup-ticket-empty h2 { margin:5px 0 8px; font-family:'Manrope','Nunito',sans-serif; font-size:clamp(24px,6.2vw,34px); font-weight:900; letter-spacing:-.06em; line-height:1.06; }
+.pf-pickup-ticket-message p,.pf-pickup-ticket-empty p { margin:0; color:#e7edff; font-size:13px; line-height:1.45; }
+.pf-pickup-ticket-details { display:flex; flex-wrap:wrap; gap:8px; padding:0 22px 23px; }
+.pf-pickup-ticket-details span { display:inline-flex; min-height:34px; align-items:center; gap:7px; border:1px solid #ffffff65; border-radius:999px; padding:6px 10px; background:#ffffff19; color:#fff; font-size:12px; font-weight:850; }
+.pf-pickup-ticket-bottom { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:2px dashed #ffffff85; padding:16px 22px 18px; background:#193cca; }
+.pf-pickup-ticket-bottom span { color:#cfdbff; font-size:10px; font-weight:900; letter-spacing:.1em; }
+.pf-pickup-ticket-bottom strong { color:#d5f777; font-family:'Manrope','Nunito',sans-serif; font-size:23px; font-weight:900; white-space:nowrap; }
+.pf-pickup-ticket.is-empty { background:#284581; border-color:#264581; box-shadow:0 7px 0 #1c335e; }
+.pf-pickup-ticket-empty { max-width:490px; padding:14px 24px 36px; }
+.pf-pickup-question { display:grid; width:75px; height:75px; place-items:center; border-radius:23px; background:#d5f777; color:#24394a; font-family:'Manrope','Nunito',sans-serif; font-size:52px; font-weight:900; transform:rotate(-7deg); }
+.pf-pickup-ticket-empty h2 { margin-top:19px; }
+.pf-pickup-timetable-note { display:flex; align-items:flex-start; gap:8px; margin:17px 3px 31px; color:#5e705e; font-size:12px; line-height:1.5; }
+.pf-pickup-timetable-note svg { flex:none; margin-top:1px; }
+.pf-pickup-tracking { border:1px solid #dfe6dd; border-radius:24px; padding:19px; background:#fff; box-shadow:0 5px 0 #e2e9de; }
+.pf-pickup-tracking-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.pf-pickup-tracking-date { color:#617362; font-size:11px; font-weight:800; text-align:right; text-transform:capitalize; }
+.pf-pickup-status,.pf-pickup-no-status { display:flex; align-items:flex-start; gap:12px; border-radius:17px; padding:15px; background:#e9f2ff; }
+.pf-pickup-status.is-arrived { background:#eaf4dc; }
+.pf-pickup-status.is-released,.pf-pickup-status.is-confirmed { background:#e3f5d4; }
+.pf-pickup-status.is-attention { background:#fff0df; }
+.pf-pickup-no-status { background:#f2f5ef; }
+.pf-pickup-status-icon,.pf-pickup-no-status-icon { display:grid; width:44px; height:44px; flex:none; place-items:center; border-radius:13px; background:#2448eb; color:#fff; }
+.pf-pickup-status.is-arrived .pf-pickup-status-icon,.pf-pickup-status.is-confirmed .pf-pickup-status-icon { background:#3d7a36; }
+.pf-pickup-status.is-attention .pf-pickup-status-icon { background:#ac623a; }
+.pf-pickup-no-status-icon { background:#dbe7d6; color:#3f6241; }
+.pf-pickup-status h3,.pf-pickup-no-status h3 { margin:2px 0 5px; font-family:'Manrope','Nunito',sans-serif; font-size:18px; font-weight:900; letter-spacing:-.04em; }
+.pf-pickup-status p,.pf-pickup-no-status p { margin:0; color:#496052; font-size:13px; line-height:1.45; }
+.pf-pickup-status small { display:block; margin-top:8px; color:#3e5941; font-size:11px; font-weight:800; }
+.pf-pickup-stages { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin-top:20px; }
+.pf-pickup-stages > span { display:grid; justify-items:center; gap:7px; color:#85938a; text-align:center; }
+.pf-pickup-stages > span i { display:grid; width:32px; height:32px; place-items:center; border:2px solid #dde4da; border-radius:50%; font-size:12px; font-style:normal; font-weight:900; }
+.pf-pickup-stages > span.is-current { color:#2448eb; font-weight:900; }
+.pf-pickup-stages > span.is-current i { border-color:#2448eb; background:#2448eb; color:#fff; box-shadow:0 3px 0 #1430a4; }
+.pf-pickup-stages > span.is-past { color:#3e7d3a; }
+.pf-pickup-stages > span.is-past i { border-color:#d5f777; background:#d5f777; }
+.pf-pickup-stages small { font-size:10px; font-weight:850; line-height:1.15; }
+.pf-pickup-stale { margin:17px 0 0; border-top:1px solid #e5e7df; padding-top:13px; color:#74532d; font-size:12px; line-height:1.45; }
+.pf-pickup-refresh { display:flex; width:100%; min-height:54px; align-items:center; justify-content:center; gap:9px; margin-top:26px; border:0; border-radius:15px; background:#d5f777; box-shadow:0 4px 0 #a2c353; color:#263d29; font-size:14px; font-weight:900; }
+.pf-pickup-readonly { display:flex; align-items:flex-start; gap:8px; margin:24px 4px 0; color:#62746a; font-size:12px; line-height:1.5; }
+.pf-pickup-readonly svg { flex:none; }
+@media(max-width:360px) { .pf-pickup-calendar { width:91px; height:101px; } .pf-pickup-calendar strong { font-size:54px; } .pf-pickup-ticket-main { gap:14px; padding-inline:18px; } .pf-pickup-ticket-top,.pf-pickup-ticket-details,.pf-pickup-ticket-bottom { padding-inline:18px; } }
+@media(prefers-reduced-motion:reduce) { .pf-pickup-ticket { animation:none; } }

@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Parent mobile portal and PWA
+
+- Rebuilt the parent journey around child selection, a visual weekly project path, standalone project detail, Moments, Records, and a weekly Pickup destination near the top of the experience.
+- Added color-coded project steps, visual upcoming project cards, a contextual 011Y mascot, and a persistent mobile navigation that yields while reading and returns on upward scroll or keyboard focus.
+- Added a parent install manifest and icons, and unified the boot and family loading scenes around the 011Y mascot. Its white backing now blends into the surrounding design.
+- The PWA requires a connection; authenticated family records are not cached for offline reading. No parent permissions or data contracts changed in this release.
+
 ## 2026-10-12 — Real parent issuance and family label fallback
 
 - Repaired an invitation-era parent profile through the exact recorded login, tenant and learner links; the designated operator issued a password in local Edufy and confirmed local SparkQuest parent sign-in.

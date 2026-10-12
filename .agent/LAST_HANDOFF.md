@@ -1,4 +1,10 @@
-# Latest handoff — Parent account issuance and local SparkQuest sign-in
+# Latest handoff — SparkQuest parent mobile portal release
+
+On 2026-10-12 the parent portal mobile journey, weekly Pickup/workshop surface, visual project detail and upcoming work, contextual 011Y mascot, smart persistent navigation, parent PWA shell, and unified mascot loading animation were prepared for the standalone SparkQuest client. The 011Y loader/guide no longer exposes a white square. The release is based on the current `origin/main` parent account code, with only focused SparkQuest client and shared membership helper changes. It does not modify family records, Firestore rules, indexes, or the trusted parent API. See `docs/sparkquest/CHANGELOG.md` and `docs/sparkquest/KNOWN_ISSUES.md` for behavior and remaining device/real-family checks.
+
+---
+
+# Previous handoff — Parent account issuance and local SparkQuest sign-in
 
 On 2026-10-12 the operator issued a real designated parent password in local Edufy and confirmed that the parent home opened in local SparkQuest. A read-only Admin check found the exact recorded parent account active with tenant metadata, access version 2, one recorded learner, and both canonical learner/UID guardian links. Edufy still showed the learner's 3 portfolio projects and 32 attendance records. No plaintext password was read or stored by the agent. The operator retains the one-time card for direct sharing.
 

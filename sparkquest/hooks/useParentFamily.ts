@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import type { StudentProject } from '../types';
+import type { ProjectTemplate, StudentProject } from '../types';
+import type { Enrollment, Program } from '../../types';
 import { childHasCanonicalPermission, childPermissions, familyChildIds, permittedSubjectsForChild, projectSubjectsForChild, type GuardianFamilyLink } from '../domain/parentFamily';
 import { summarizeAttendance, summarizeFinance, type AttendanceSummaryInput, type EnrollmentSummaryInput, type FamilyOperations, type FamilySource, type PaymentSummaryInput } from '../domain/parentFamilyOperations';
 import { pickupSessionDate, previousPickupDate, selectOpenPickup, type PickupStatus } from '../domain/pickupLifecycle';
 import { isSafeProjectImage, resolveParentProjectImage } from '../domain/parentProjectVisual';
+import { upcomingForChild, type FamilyUpcomingMission } from '../domain/parentUpcoming';
+import { nextWorkshopFromSchedule } from '../domain/parentNextWorkshop';
+import { currentAcademicYear, matchesAcademicYear, normalizeAcademicYear } from '../utils/academicYear';
 
 export interface FamilyProject extends StudentProject {
   familyCoverImage?: string;
@@ -19,6 +23,7 @@ export interface FamilyChild {
   permissions: string[];
   operations: FamilyOperations;
   media: FamilySource<FamilyMediaItem[]>;
+  upcoming: FamilySource<{ missions: FamilyUpcomingMission[]; contextNote: string | null }>;
 }
 
 export interface FamilyMediaItem {
@@ -45,7 +50,10 @@ interface ProjectTemplateVisual {
   coverImage?: string;
 }
 
-interface EnrollmentRecord extends EnrollmentSummaryInput { organizationId?: string; studentId?: string }
+interface EnrollmentRecord extends EnrollmentSummaryInput {
+  organizationId?: string; studentId?: string;
+  programId?: string; gradeId?: string; gradeName?: string; groupId?: string; groupName?: string;
+}
 interface PaymentRecord extends PaymentSummaryInput { id: string; organizationId?: string; enrollmentId?: string }
 interface AttendanceRecord extends AttendanceSummaryInput { id: string; organizationId?: string; studentId?: string }
 interface GalleryRecord { id: string; organizationId?: string; studentId?: string; url?: string; caption?: string; type?: string; createdAt?: { toDate?: () => Date }; uploadedAt?: { toDate?: () => Date } }
@@ -116,7 +124,11 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
             const permissions = childPermissions(links, id, parentUid, organizationId);
             const subjects = projectSubjectsForChild(links, id, student.loginInfo?.uid, parentUid, organizationId);
             const gallerySubjects = permittedSubjectsForChild(links, id, student.loginInfo?.uid, parentUid, organizationId, 'gallery');
-            const [projectResult, media, finance, attendance, pickup] = await Promise.all([
+            const canSeeEnrollments = childHasCanonicalPermission(links, id, 'enrollments', parentUid, organizationId);
+            const enrollmentSnapshotPromise = canSeeEnrollments
+              ? getDocs(query(collection(db!, 'enrollments'), where('studentId', '==', id), where('organizationId', '==', organizationId)))
+              : null;
+            const [projectResult, media, finance, attendance, pickup, workshop] = await Promise.all([
               Promise.allSettled(subjects.map(subjectId => getDocs(query(
                 collection(db!, 'student_projects'),
                 where('studentId', '==', subjectId),
@@ -143,11 +155,10 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
                 }
               })(),
               (async (): Promise<FamilyOperations['finance']> => {
-                const canSeeEnrollments = childHasCanonicalPermission(links, id, 'enrollments', parentUid, organizationId);
                 const canSeePayments = childHasCanonicalPermission(links, id, 'payments', parentUid, organizationId);
                 if (!canSeeEnrollments || !canSeePayments) return { status: 'unavailable', reason: 'Payment access is not enabled for this learner.' };
                 try {
-                  const enrollmentSnapshot = await getDocs(query(collection(db!, 'enrollments'), where('studentId', '==', id), where('organizationId', '==', organizationId)));
+                  const enrollmentSnapshot = await enrollmentSnapshotPromise!;
                   const enrollments = enrollmentSnapshot.docs.map(item => ({ id: item.id, ...item.data() } as EnrollmentRecord))
                     .filter(item => item.studentId === id && item.organizationId === organizationId);
                   const paymentResults = await Promise.allSettled(enrollments.map(enrollment => getDocs(query(
@@ -163,7 +174,7 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
                 }
               })(),
               (async (): Promise<FamilyOperations['attendance']> => {
-                if (!childHasCanonicalPermission(links, id, 'enrollments', parentUid, organizationId)) {
+                if (!canSeeEnrollments) {
                   return { status: 'unavailable', reason: 'Attendance access is not enabled for this learner.' };
                 }
                 try {
@@ -199,6 +210,24 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
                   console.error('Unable to load family pickup', id, cause);
                   return { status: 'error', reason: sourceError('Pickup', cause) };
                 }
+              })(),
+              (async (): Promise<FamilyOperations['workshop']> => {
+                if (!canSeeEnrollments) {
+                  return { status: 'unavailable', reason: 'Workshop schedule access is not enabled for this learner.' };
+                }
+                try {
+                  const snapshot = await enrollmentSnapshotPromise!;
+                  const enrollments = snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Enrollment))
+                    .filter(item => item.studentId === id && item.organizationId === organizationId && item.status === 'active');
+                  const programIds = [...new Set(enrollments.map(item => item.programId).filter(Boolean))];
+                  const programResults = await Promise.all(programIds.map(programId => getDoc(doc(db!, 'programs', programId))));
+                  const programs = programResults.filter(item => item.exists()).map(item => ({ id: item.id, ...item.data() } as Program))
+                    .filter(item => item.organizationId === organizationId);
+                  return { status: 'ready', data: { next: nextWorkshopFromSchedule(enrollments, programs) } };
+                } catch (cause) {
+                  console.error('Unable to load family workshop timetable', id, cause);
+                  return { status: 'error', reason: sourceError('Workshop schedule', cause) };
+                }
               })()
             ]);
             const results = projectResult;
@@ -211,6 +240,46 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
               });
             });
             const projectList = [...projects.values()];
+            const failed = results.some(result => result.status === 'rejected');
+            const upcoming: FamilyChild['upcoming'] = !subjects.length
+              ? { status: 'unavailable', reason: 'Project access is not enabled for this learner.' }
+              : failed
+                ? { status: 'error', reason: 'Projects did not fully load, so upcoming assignments cannot be checked safely.' }
+                : await (async (): Promise<FamilyChild['upcoming']> => {
+                    try {
+                      const templateSnapshot = await getDocs(query(collection(db!, 'project_templates'), where('organizationId', '==', organizationId)));
+                      const templates = templateSnapshot.docs.map(item => ({ id: item.id, ...item.data() } as ProjectTemplate));
+                      let enrollments: EnrollmentRecord[] = [];
+                      let contextNote: string | null = null;
+                      if (canSeeEnrollments) {
+                        try {
+                          const snapshot = await enrollmentSnapshotPromise!;
+                          const active = snapshot.docs.map(item => ({ id: item.id, ...item.data() } as EnrollmentRecord))
+                            .filter(item => item.studentId === id && item.organizationId === organizationId && item.status === 'active');
+                          const year = currentAcademicYear();
+                          const current = active.filter(item => matchesAcademicYear(item.session, year));
+                          const latest = [...active].sort((a, b) => String(normalizeAcademicYear(b.session) || '').localeCompare(String(normalizeAcademicYear(a.session) || '')))[0];
+                          enrollments = current.length ? current : active.filter(item => Boolean(latest?.session) && matchesAcademicYear(item.session, latest.session!));
+                          if (!enrollments.length) contextNote = 'No active enrollment was available to verify class assignments. Direct assignments are shown.';
+                        } catch (cause) {
+                          console.error('Unable to load family assignment context', id, cause);
+                          contextNote = 'Class assignments could not be checked. Direct assignments are shown.';
+                        }
+                      } else {
+                        contextNote = 'Class assignments require enrollment access. Direct assignments are shown.';
+                      }
+                      const missions = upcomingForChild(templates, projectList, organizationId, {
+                        ownerIds: subjects,
+                        programIds: [...new Set(enrollments.flatMap(item => [item.programId, item.programName].filter(Boolean) as string[]))],
+                        gradeIds: [...new Set(enrollments.flatMap(item => [item.gradeId, item.gradeName].filter(Boolean) as string[]))],
+                        groupIds: [...new Set(enrollments.flatMap(item => [item.groupId, item.groupName].filter(Boolean) as string[]))],
+                      });
+                      return { status: 'ready', data: { missions, contextNote } };
+                    } catch (cause) {
+                      console.error('Unable to load family assignments', id, cause);
+                      return { status: 'error', reason: sourceError('Assigned missions', cause) };
+                    }
+                  })();
             const missingTemplateIds = [...new Set(projectList
               .filter(project => project.templateId && !resolveParentProjectImage(project))
               .map(project => project.templateId as string))];
@@ -226,7 +295,6 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
               ...project,
               familyCoverImage: resolveParentProjectImage(project, project.templateId ? templateImages.get(project.templateId) || undefined : undefined) || undefined
             }));
-            const failed = results.some(result => result.status === 'rejected');
             const missingCanonicalLink = !subjects.includes(id);
             const missingLegacyLink = Boolean(student.loginInfo?.uid && student.loginInfo.uid !== id && !subjects.includes(student.loginInfo.uid));
             const issue = subjects.length === 0
@@ -236,17 +304,19 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
               : missingCanonicalLink || missingLegacyLink
                 ? 'Some projects may require the academy to complete this learner’s family links.'
                 : null;
-            return { id, name, projects: visualProjects, issue, permissions, operations: { finance, attendance, pickup }, media };
+            return { id, name, projects: visualProjects, issue, permissions, operations: { finance, attendance, pickup, workshop }, media, upcoming };
           } catch (cause) {
             console.error('Unable to load linked learner', id, cause);
             return {
               id, name: `Learner ${id.slice(0, 6)}`, projects: [], permissions: [],
               issue: 'This learner could not be loaded. Retry, then ask the academy to check the family link.',
               media: { status: 'error', reason: 'Media is unavailable while this learner record is unavailable.' },
+              upcoming: { status: 'error', reason: 'Assigned missions are unavailable while this learner record is unavailable.' },
               operations: {
                 finance: { status: 'error', reason: 'Payments are unavailable while this learner record is unavailable.' },
                 attendance: { status: 'error', reason: 'Attendance is unavailable while this learner record is unavailable.' },
-                pickup: { status: 'error', reason: 'Pickup is unavailable while this learner record is unavailable.' }
+                pickup: { status: 'error', reason: 'Pickup is unavailable while this learner record is unavailable.' },
+                workshop: { status: 'error', reason: 'Workshop schedule is unavailable while this learner record is unavailable.' }
               }
             };
           }

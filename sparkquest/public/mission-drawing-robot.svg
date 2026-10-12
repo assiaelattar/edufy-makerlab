@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" role="img" aria-label="Illustration d’un robot dessinateur">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#172b54"/><stop offset="1" stop-color="#294bab"/></linearGradient>
+    <linearGradient id="paper" x2="1" y2="1"><stop stop-color="#fffdf2"/><stop offset="1" stop-color="#e9efff"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0b1b43" flood-opacity=".35"/></filter>
+  </defs>
+  <rect width="960" height="600" fill="url(#bg)"/>
+  <circle cx="841" cy="86" r="116" fill="#7890ec" opacity=".14"/>
+  <circle cx="101" cy="540" r="165" fill="#8beaa0" opacity=".12"/>
+  <g fill="none" stroke="#9bc2ff" opacity=".15"><path d="M0 120h960M0 240h960M0 360h960M0 480h960M120 0v600M240 0v600M360 0v600M480 0v600M600 0v600M720 0v600M840 0v600"/></g>
+  <g filter="url(#shadow)"><rect x="162" y="333" width="630" height="212" rx="29" fill="url(#paper)" transform="rotate(-6 477 439)"/><path d="M256 420c50-71 103 74 155 4s101-70 147-4 92 64 145-3" fill="none" stroke="#3263e9" stroke-width="16" stroke-linecap="round" transform="rotate(-6 477 439)"/><path d="M285 485c67-40 125 52 191-9" fill="none" stroke="#f77757" stroke-width="13" stroke-linecap="round" transform="rotate(-6 477 439)"/></g>
+  <g filter="url(#shadow)"><rect x="344" y="120" width="266" height="245" rx="72" fill="#dff7ff" stroke="#9dbad2" stroke-width="15"/><rect x="365" y="145" width="224" height="165" rx="49" fill="#14264a"/><circle cx="426" cy="215" r="16" fill="#d5f777"/><circle cx="528" cy="215" r="16" fill="#d5f777"/><path d="M444 261q33 23 65 0" fill="none" stroke="#d5f777" stroke-width="10" stroke-linecap="round"/><rect x="463" y="90" width="28" height="43" rx="14" fill="#c8dbff"/><circle cx="477" cy="84" r="19" fill="#d5f777"/><path d="M352 300q-57 7-59 57l58 50" fill="none" stroke="#c8dbff" stroke-width="30" stroke-linecap="round"/><path d="M601 300q57 7 59 57l-55 49" fill="none" stroke="#c8dbff" stroke-width="30" stroke-linecap="round"/><path d="M608 402l42 82" stroke="#15356b" stroke-width="15" stroke-linecap="round"/><path d="M647 479l13 30" stroke="#f77757" stroke-width="17" stroke-linecap="round"/></g>
+  <g fill="#d5f777"><path d="M211 171l9-30 9 30 30 9-30 9-9 30-9-30-30-9z"/><path d="M725 273l7-24 7 24 24 7-24 7-7 24-7-24-24-7z"/></g>
+</svg>

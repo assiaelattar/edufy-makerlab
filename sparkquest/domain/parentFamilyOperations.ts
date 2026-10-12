@@ -1,4 +1,5 @@
-import type { PickupStatus } from './pickupLifecycle';
+import type { PickupStatus } from '../../modules/pickup/domain/pickupLifecycle';
+import type { FamilyNextWorkshop } from './parentNextWorkshop';
 
 export type FamilySourceStatus = 'ready' | 'unavailable' | 'error';
 
@@ -43,6 +44,7 @@ export interface FamilyOperations {
   finance: FamilySource<FamilyFinanceSummary>;
   attendance: FamilySource<FamilyAttendanceSummary>;
   pickup: FamilySource<FamilyPickupSummary>;
+  workshop: FamilySource<{ next: FamilyNextWorkshop | null }>;
 }
 
 export interface EnrollmentSummaryInput {
@@ -123,5 +125,6 @@ export const summarizeAttendance = (records: AttendanceSummaryInput[]): FamilyAt
 export const unavailableOperations = (): FamilyOperations => ({
   finance: { status: 'unavailable', reason: 'Payment access is not enabled for this learner.' },
   attendance: { status: 'unavailable', reason: 'Attendance access is not enabled for this learner.' },
-  pickup: { status: 'unavailable', reason: 'Pickup access is not enabled for this learner.' }
+  pickup: { status: 'unavailable', reason: 'Pickup access is not enabled for this learner.' },
+  workshop: { status: 'unavailable', reason: 'Workshop schedule access is not enabled for this learner.' }
 });

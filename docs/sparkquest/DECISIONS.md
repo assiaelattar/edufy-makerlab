@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Parent journey and installable shell
+
+Give a parent one main decision at a time: choose a learner, see this week's work, open a dedicated project page, or check the next workshop and Pickup. Keep upcoming projects visual. Project steps use distinct progress colors and reveal their detail in place without resetting scroll. Keep the child-specific mobile navigation available throughout the journey while allowing it to recede during downward reading. Use the same contextual 011Y mascot for guidance and loading. The installable parent shell does not cache authenticated family data or add a new Pickup command.
+
 ## 2026-10-12 — Family label and repeat sharing
 
 When a parent legal name is unavailable, use a learner-derived family **display label** for account issuance. Prefer an exact match with the recorded `p.*` login token before defaulting to the learner's final name token. Never treat that label or shared surname as guardian proof: staff relationship verification, exact UID, tenant and saved family links remain the access gate. Do not persist a recoverable parent password. To share access later, issue a fresh one-time password, display its card to authorized staff, and invalidate the prior credential.

@@ -1,5 +1,11 @@
 # SparkQuest Known Issues
 
+## Parent mobile portal follow-up after 2026-10-12 release
+
+- The PWA shell is installable but needs network access for sign-in and family data. The service worker does not store authenticated responses for offline use.
+- The next workshop is calculated from saved recurring enrollment days and time. It cannot infer an unsaved holiday, cancellation, or schedule change; confirm such exceptions with the academy.
+- A designated parent's real media URLs and Pickup facts, plus install behavior on a physical iOS and Android device, need end-to-end acceptance. Local preview and synthetic family smokes do not prove those records.
+
 ## Parent release status after 2026-10-12 acceptance
 
 - The trusted Edufy parent API and current Edufy client are live on Vercel; GitHub main contains the focused release. Hostinger `edufy.makerlab.academy` still serves an older client bundle and needs release verification. The older local-candidate statements below are historical.

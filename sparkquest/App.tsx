@@ -25,6 +25,7 @@ import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from './domain/
 
 
 import { LoadingScreen } from './components/LoadingScreen';
+import { ParentFamilyLoading } from './components/ParentFamilyLoading';
 
 const StudentWizard = lazy(() => import('./components/StudentWizard').then(module => ({ default: module.StudentWizard })));
 const InstructorFactory = lazy(() => import('./components/InstructorFactory').then(module => ({ default: module.InstructorFactory })));
@@ -196,8 +197,8 @@ const getMissionStudioPreviewProject = (state: StudioPreviewState): StudentProje
   };
 };
 
-const LazyView: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Suspense fallback={<LoadingScreen mode="standard" message="Opening your workshop..." />}>
+const LazyView: React.FC<{ children: React.ReactNode; fallback?: React.ReactNode }> = ({ children, fallback }) => (
+  <Suspense fallback={fallback || <LoadingScreen mode="standard" message="Opening your workshop..." />}>
     {children}
   </Suspense>
 );
@@ -418,8 +419,9 @@ const SparkQuestApp: React.FC = () => {
   }
 
   if (import.meta.env.DEV && ParentFamilyPreview && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'family') {
-    return <LazyView><ParentFamilyPreview /></LazyView>;
+    return <LazyView fallback={<ParentFamilyLoading />}><ParentFamilyPreview /></LazyView>;
   }
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'familyLoading') return <ParentFamilyLoading />;
 
   // Loading
   if (authLoading) {
@@ -450,7 +452,7 @@ const SparkQuestApp: React.FC = () => {
   // 3. MAIN RENDER LOGIC
 
   if (userProfile.role === 'parent') {
-    return <LazyView><ParentFamilyWorkspace parentUid={user.uid} organizationId={userProfile.organizationId!} parentName={userProfile.name} onSignOut={handleLogout} /></LazyView>;
+    return <LazyView fallback={<ParentFamilyLoading />}><ParentFamilyWorkspace parentUid={user.uid} organizationId={userProfile.organizationId!} parentName={userProfile.name} onSignOut={handleLogout} /></LazyView>;
   }
 
   if (view === 'FACTORY') {

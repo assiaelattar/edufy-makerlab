@@ -1,0 +1,17 @@
+{
+  "id": "/?app=family",
+  "name": "SparkQuest Famille",
+  "short_name": "SQ Famille",
+  "description": "Le parcours MakerLab de votre enfant, ses projets et son prochain atelier.",
+  "start_url": "/#login",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f6f1",
+  "theme_color": "#2448eb",
+  "lang": "fr",
+  "icons": [
+    { "src": "/parent-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/parent-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
