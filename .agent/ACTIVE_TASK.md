@@ -1,4 +1,10 @@
-# Current task boundary — Parent family release acceptance
+# Current task boundary — Parent access acceptance after real-family sign-in
+
+The designated operator verified the parent relationship, issued a one-time password in local Edufy, and confirmed the real parent home opens in local SparkQuest. The trusted Vercel API is live; GitHub main is `91038cf`. Edufy Hostinger still serves an older client bundle. Keep the exact UID/tenant/guardian evidence gates, read-only family journey and direct staff sharing. For later sharing, reissue a new password; do not persist or reveal the previous password. Next release work is to verify Hostinger's client update and separately coordinate the SparkQuest public client. See `.agent/LAST_HANDOFF.md`.
+
+---
+
+# Previous task boundary — Parent family release acceptance
 
 Released candidate 2026-10-12: one parent password action handles verified modern reset and consistent legacy repair, with a missing-name prompt and a server-verified same-organization parent directory. Auth/Firestore emulator and Edufy build pass. Do not issue or change a real parent password without staff confirmation of the exact parent and learner relationship.
 

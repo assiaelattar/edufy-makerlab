@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Real parent issuance and family label fallback
+
+- Repaired an invitation-era parent profile through the exact recorded login, tenant and learner links; the designated operator issued a password in local Edufy and confirmed local SparkQuest parent sign-in.
+- Missing legal parent names no longer block issuance: the API proposes a family display label from the learner name, using the recorded login alias when it identifies the family token. The label is not identity proof.
+- Edufy explains repeat sharing through password reissue. Every reissue shows a fresh one-time card and invalidates the old password; plaintext is not stored.
+- Parent Auth/Firestore emulator and clean Edufy build pass. Focused code reached GitHub main and Vercel production; Hostinger client update remains pending.
+
 ## 2026-10-11 — Local legacy parent login replacement
 
 - Added a staff-verified replacement action for previously invited parents; it issues a new SparkQuest ID/password and retires the old email-based account across exact-UID linked learners.

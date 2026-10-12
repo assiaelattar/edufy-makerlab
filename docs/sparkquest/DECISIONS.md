@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Family label and repeat sharing
+
+When a parent legal name is unavailable, use a learner-derived family **display label** for account issuance. Prefer an exact match with the recorded `p.*` login token before defaulting to the learner's final name token. Never treat that label or shared surname as guardian proof: staff relationship verification, exact UID, tenant and saved family links remain the access gate. Do not persist a recoverable parent password. To share access later, issue a fresh one-time password, display its card to authorized staff, and invalidate the prior credential.
+
 ## 2026-10-11 — Replace legacy parent invitations by exact UID
 
 An old email invitation is a recorded account, not proof of a usable SparkQuest credential. Replacement requires staff verification, an active same-tenant parent Auth/profile, and a consistent exact-UID family set. Issue a fresh login and password, move all learners tied to that UID together, retire the old Firestore access, then disable its Auth user. Keep password reset for retaining a verified login ID. Never merge by surname, contact email or phone.

@@ -1,4 +1,10 @@
-# Current phase override — Parent family mobile journey Phase 4
+# Current phase override — Parent access real-account acceptance (2026-10-12)
+
+The designated real parent account was issued by the operator through local Edufy and signed into local SparkQuest. Its legacy profile was repaired with exact UID, tenant and guardian-link checks; learner work remained in place. Missing parent legal names now use a family display label inferred from the learner name, with the exact recorded login alias taking precedence for surname-first names. Staff relationship verification remains required. Parent passwords are never stored for redisplay; staff can reissue a fresh password and the old one stops working. Auth/Firestore parent emulator and clean Edufy build pass. Focused commits `c2288e8` and `91038cf` reached GitHub main and Vercel production. Hostinger still serves an older Edufy bundle, so its client release is pending. Stop here; do not infer that the separate SparkQuest public client is released from the local sign-in.
+
+---
+
+# Previous phase override — Parent family mobile journey Phase 4
 
 Follow-up local repair candidate on 2026-10-11: exact-login recovery for older recorded parent accounts and direct HTTPS parent API routing are implemented with synthetic Auth/Firestore verification. No real family account was recovered or changed during this follow-up. The broader parent mobile UX redesign belongs to the SparkQuest UI/UX Design thread; this worktree only verifies KENZA visibility at phone width and repairs the account-management path. Stop before any deployment or production-data action.
 

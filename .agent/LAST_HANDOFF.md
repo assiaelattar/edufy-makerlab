@@ -1,4 +1,12 @@
-# Latest handoff — AAJLANE three-child parent acceptance
+# Latest handoff — Parent account issuance and local SparkQuest sign-in
+
+On 2026-10-12 the operator issued a real designated parent password in local Edufy and confirmed that the parent home opened in local SparkQuest. A read-only Admin check found the exact recorded parent account active with tenant metadata, access version 2, one recorded learner, and both canonical learner/UID guardian links. Edufy still showed the learner's 3 portfolio projects and 32 attendance records. No plaintext password was read or stored by the agent. The operator retains the one-time card for direct sharing.
+
+The API now derives a family display label from the learner name when no parent name is recorded, matching the existing `p.*` login token for surname-first names. The label is not legal identity evidence; staff verification and exact account/tenant/learner checks remain required. Edufy now says “Reissue password to share again” and explains that each reissue displays a fresh card and invalidates the prior password. The full parent Auth/Firestore emulator, both clean/source Vite builds, and Vercel production route checks passed. Focused commits `c2288e8` and `91038cf` are on `origin/main`; Vercel production is aliased to `edufy-makerlab.vercel.app`. Hostinger `edufy.makerlab.academy` still serves an older bundle, and the separate SparkQuest public client was not verified by this acceptance. The clean temporary release worktree was removed; the source worktree's unrelated `.gitignore` edit remains untouched.
+
+---
+
+# Previous handoff — AAJLANE three-child parent acceptance
 
 2026-10-12 focused Edufy parent-access release candidate: one staff-facing password action verifies the relationship and automatically repairs a consistent older `p.*@makerlab.academy` family account before replacing its password. Missing trusted names return `parent_name_required` and a single verified-name field. A staff-only, same-organization directory supplies active parent accounts with their exactly linked learners; the picker no longer depends on the locally loaded student subset. Exact-login lookup remains available. The Auth/Firestore emulator suite passed modern reset, legacy repair, missing-name retry, directory filtering, role/tenant denials, and no plaintext storage. Edufy build passed. No real parent account was changed during validation.
 

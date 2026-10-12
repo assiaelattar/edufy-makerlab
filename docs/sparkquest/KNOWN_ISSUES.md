@@ -1,5 +1,11 @@
 # SparkQuest Known Issues
 
+## Parent release status after 2026-10-12 acceptance
+
+- The trusted Edufy parent API and current Edufy client are live on Vercel; GitHub main contains the focused release. Hostinger `edufy.makerlab.academy` still serves an older client bundle and needs release verification. The older local-candidate statements below are historical.
+- A designated real parent signed into the **local** SparkQuest client after issuance. This does not verify the separate public SparkQuest client or every legacy media URL. Keep parent project/media/records and phone-size acceptance as distinct checks before public client release.
+- An issued parent password is displayed once and cannot be retrieved later. Staff must reissue a new password to share again; the previous credential stops working.
+
 ## Legacy parent replacement release gate
 
 - The replacement flow is local candidate code. The real-data localhost Edufy app still cannot issue or replace a parent account until the trusted parent-access API is deployed with its Firebase Admin identity. Verify Ajlane's exact parent UID, Auth email, tenant and linked learner set before using it on real records; inconsistent links produce a review error instead of a partial migration.
