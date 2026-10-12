@@ -2773,7 +2773,8 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 
 .sq-pickup-body { display: grid; gap: 22px; }
 .sq-pickup-live { display: grid; gap: 5px; border: 2px solid var(--kit-ink); border-radius: 20px 7px 20px 7px; padding: 18px 20px; background: var(--kit-orange-soft); box-shadow: 5px 5px 0 var(--kit-ink); }
-.sq-pickup-live.is-released { background: var(--kit-lime-soft); }
+.sq-pickup-live.is-released, .sq-pickup-live.is-confirmed { background: var(--kit-lime-soft); }
+.sq-pickup-live.is-exception, .sq-pickup-live.is-cancelled { background: #fff0ec; }
 .sq-pickup-live > span { display: flex; align-items: center; gap: 6px; color: #b53e16; font-size: 9px; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
 .sq-pickup-live.is-released > span { color: #257441; }
 .sq-pickup-live strong { font-size: 24px; font-weight: 1000; letter-spacing: -.035em; }
@@ -2782,9 +2783,17 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 .sq-pickup-facts article { display: flex; min-height: 96px; align-items: center; gap: 14px; border: 2px solid var(--kit-ink); border-radius: 18px 6px 18px 6px; padding: 14px; background: #fff; }
 .sq-pickup-facts article > span { display: grid; width: 48px; height: 48px; flex: 0 0 48px; place-items: center; border: 2px solid var(--kit-ink); border-radius: 15px 5px 15px 5px; background: var(--kit-sun-soft); }
 .sq-pickup-facts article:last-child > span { background: var(--kit-blue-soft); }
+.sq-pickup-facts .sq-pickup-picker { grid-column: 1 / -1; }
+.sq-pickup-facts .sq-pickup-picker > span { background: var(--kit-lime-soft); }
 .sq-pickup-facts small, .sq-pickup-facts strong { display: block; }
 .sq-pickup-facts small { color: var(--kit-muted); font-size: 9px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
 .sq-pickup-facts strong { margin-top: 3px; font-size: 20px; font-weight: 1000; }
+.sq-student-pickup-progress { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sq-student-pickup-progress li { display: grid; justify-items: center; gap: 7px; color: var(--kit-muted); text-align: center; }
+.sq-student-pickup-progress li span { display: grid; width: 36px; height: 36px; place-items: center; border: 2px solid var(--kit-ink); border-radius: 50%; background: #fff; }
+.sq-student-pickup-progress li small { font-size: 9px; font-weight: 900; }
+.sq-student-pickup-progress li.is-complete { color: var(--kit-ink); }
+.sq-student-pickup-progress li.is-complete span { background: var(--kit-lime); box-shadow: 2px 2px 0 var(--kit-ink); }
 .sq-pickup-pass { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 24px; border: 2px dashed var(--kit-ink); border-radius: 22px 7px 22px 7px; padding: 20px; background: var(--kit-sun-soft); }
 .sq-pickup-pass p, .sq-pickup-pass h3, .sq-pickup-pass span { margin: 0; }
 .sq-pickup-pass p { color: #9a6e00; font-size: 9px; font-weight: 950; letter-spacing: .12em; text-transform: uppercase; }
@@ -2795,6 +2804,12 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 .sq-pickup-steps { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .sq-pickup-steps li { display: flex; align-items: center; gap: 11px; min-height: 43px; border-bottom: 1px dashed #c9d3c3; color: #4f584e; font-size: 11px; font-weight: 800; }
 .sq-pickup-steps li span { display: grid; width: 26px; height: 26px; flex: 0 0 26px; place-items: center; border: 2px solid var(--kit-ink); border-radius: 50%; color: var(--kit-ink); background: var(--kit-lime); font-size: 9px; font-weight: 1000; }
+.sq-pickup-guidance { display: flex; align-items: flex-start; gap: 13px; border: 2px solid var(--kit-ink); border-radius: 18px 6px 18px 6px; padding: 16px; background: var(--kit-blue-soft); }
+.sq-pickup-guidance.is-attention { background: var(--kit-sun-soft); }
+.sq-pickup-guidance > svg { flex: 0 0 auto; }
+.sq-pickup-guidance strong, .sq-pickup-guidance p { display: block; margin: 0; }
+.sq-pickup-guidance strong { font-size: 14px; font-weight: 1000; }
+.sq-pickup-guidance p { margin-top: 4px; color: var(--kit-muted); font-size: 11px; font-weight: 730; line-height: 1.45; }
 
 .sq-rhythm-body { display: grid; gap: 22px; }
 .sq-rhythm-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }

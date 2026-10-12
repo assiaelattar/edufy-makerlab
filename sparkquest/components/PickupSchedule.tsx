@@ -1,6 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Clock, Loader2, MapPin, QrCode, ShieldCheck, Truck } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle2, Clock, Loader2, MapPin, ShieldCheck, Truck, UserCheck } from 'lucide-react';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
+import {
+    isCanonicalPickupEntry,
+    pickupSessionDate,
+    previousPickupDate,
+    selectOpenPickup,
+    type PickupStatus,
+} from '../domain/pickupLifecycle';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { SparkbookDialog } from './SparkbookDialog';
@@ -10,90 +17,153 @@ interface PickupScheduleProps {
     onClose: () => void;
 }
 
+interface StudentPickupEntry {
+    id: string;
+    organizationId: string;
+    studentId: string;
+    pickerName?: string;
+    sessionDate?: string;
+    sessionId?: string;
+    status: PickupStatus | 'waiting';
+}
+
+const progressSteps = [
+    { status: 'on_the_way', label: 'On the way', icon: Truck },
+    { status: 'arrived', label: 'At MakerLab', icon: MapPin },
+    { status: 'released', label: 'Staff release', icon: ShieldCheck },
+    { status: 'confirmed', label: 'Pickup complete', icon: CheckCircle2 },
+] as const;
+
+const statusPosition = (status?: string) => progressSteps.findIndex(step => step.status === status);
+
 export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose }) => {
     const { user, userProfile } = useAuth();
+    const studentId = userProfile?.studentId || user?.uid || '';
+    const organizationId = userProfile?.organizationId || '';
     const [pickupTime, setPickupTime] = useState('');
     const [pickupLocation, setPickupLocation] = useState('Main Entrance');
-    const [loading, setLoading] = useState(true);
-    const [realtimeStatus, setRealtimeStatus] = useState<any>(null);
+    const [loadingPlan, setLoadingPlan] = useState(true);
+    const [loadingStatus, setLoadingStatus] = useState(true);
+    const [readError, setReadError] = useState<string | null>(null);
+    const [pickup, setPickup] = useState<StudentPickupEntry | null>(null);
 
     useEffect(() => {
-        if (!isOpen || !user) return;
+        if (!isOpen || !studentId || !organizationId || !db) return;
+        let active = true;
         const loadPickupInfo = async () => {
-            if (!db) return;
-            setLoading(true);
+            setLoadingPlan(true);
             try {
-                const enrollmentsQuery = query(collection(db, 'enrollments'), where('studentId', '==', user.uid));
+                const enrollmentsQuery = query(
+                    collection(db, 'enrollments'),
+                    where('studentId', '==', studentId),
+                    where('organizationId', '==', organizationId),
+                );
                 const enrollmentsSnap = await getDocs(enrollmentsQuery);
                 const enrollments = enrollmentsSnap.docs.map(entry => entry.data());
                 const activeEnrollment = enrollments.find(entry => entry.status === 'active') || enrollments[0];
+                if (!active) return;
                 setPickupTime(activeEnrollment?.pickupTime || activeEnrollment?.schedule?.pickupTime || '3:00 PM');
                 setPickupLocation(activeEnrollment?.pickupLocation || 'Main Entrance');
             } catch (error) {
                 console.error('Error loading pickup info:', error);
-                setPickupTime('3:00 PM');
-                setPickupLocation('Main Entrance');
+                if (active) {
+                    setPickupTime('3:00 PM');
+                    setPickupLocation('Main Entrance');
+                }
             } finally {
-                setLoading(false);
+                if (active) setLoadingPlan(false);
             }
         };
         void loadPickupInfo();
-    }, [isOpen, user]);
+        return () => { active = false; };
+    }, [isOpen, organizationId, studentId]);
 
     useEffect(() => {
-        if (!isOpen || !user || !userProfile?.organizationId || !db) return;
+        if (!isOpen || !studentId || !organizationId || !db) return;
+        const today = pickupSessionDate();
+        setLoadingStatus(true);
+        setReadError(null);
         const pickupQuery = query(
             collection(db, 'pickup_queue'),
-            where('studentId', '==', userProfile.studentId || user.uid),
-            where('organizationId', '==', userProfile.organizationId),
+            where('organizationId', '==', organizationId),
+            where('studentId', '==', studentId),
+            where('sessionDate', 'in', [today, previousPickupDate(today)]),
         );
         return onSnapshot(pickupQuery, snapshot => {
-            setRealtimeStatus(snapshot.empty ? null : snapshot.docs[0].data());
+            const records = snapshot.docs
+                .map(entry => ({ id: entry.id, ...entry.data() } as StudentPickupEntry))
+                .filter(isCanonicalPickupEntry);
+            setPickup(selectOpenPickup(records, organizationId, studentId, today));
+            setLoadingStatus(false);
+            setReadError(null);
         }, error => {
             console.warn('Pickup status is unavailable:', error.code || error.message);
-            setRealtimeStatus(null);
+            setPickup(null);
+            setLoadingStatus(false);
+            setReadError('Live pickup status is unavailable. Stay with a MakerLab team member.');
         });
-    }, [isOpen, user, userProfile?.organizationId, userProfile?.studentId]);
+    }, [isOpen, organizationId, studentId]);
 
-    const status = realtimeStatus?.status as string | undefined;
-    const statusTitle = status === 'released' ? 'You are cleared to leave' : status === 'arrived' ? 'Your pickup is here' : status === 'on_the_way' ? 'Your pickup is on the way' : 'Your pickup pass';
-    const statusCopy = status === 'released'
-        ? 'Check out with a MakerLab team member before leaving.'
-        : status === 'arrived'
-            ? `${realtimeStatus?.pickerName || 'Your parent or guardian'} is waiting at the pickup point.`
-            : status === 'on_the_way'
-                ? `${realtimeStatus?.pickerName || 'Your parent or guardian'} has started the trip.`
-                : 'Keep this pass ready when your workshop is nearly finished.';
+    const presentation = useMemo(() => {
+        switch (pickup?.status) {
+            case 'on_the_way': return { title: 'Your pickup is on the way', copy: `${pickup.pickerName || 'Your authorized pickup person'} has started the trip.`, tone: 'orange' as const };
+            case 'arrived': return { title: 'Your pickup is at MakerLab', copy: `${pickup.pickerName || 'Your authorized pickup person'} is waiting. Stay inside until a team member completes the check.`, tone: 'orange' as const };
+            case 'released': return { title: 'Staff cleared your departure', copy: `A MakerLab team member verified ${pickup.pickerName || 'your authorized pickup person'}. Leave only with that person.`, tone: 'lime' as const };
+            case 'confirmed': return { title: 'Pickup complete', copy: 'Your authorized pickup person confirmed the handoff.', tone: 'lime' as const };
+            case 'cancelled': return { title: 'Pickup was cancelled', copy: 'Stay with the MakerLab team until a new pickup is arranged.', tone: 'orange' as const };
+            case 'exception': return { title: 'Wait for a team member', copy: 'The pickup needs an additional safety check before anyone leaves.', tone: 'orange' as const };
+            default: return { title: 'No active pickup yet', copy: 'When your family starts pickup, the live handoff will appear here.', tone: 'orange' as const };
+        }
+    }, [pickup]);
+
+    const position = statusPosition(pickup?.status);
+    const waitingForTeam = pickup?.status === 'arrived' || pickup?.status === 'exception';
 
     return (
         <SparkbookDialog
             isOpen={isOpen}
             onClose={onClose}
             eyebrow="Field kit · pickup"
-            title={statusTitle}
-            description={statusCopy}
-            icon={status === 'released' ? <CheckCircle2 /> : <Truck />}
-            tone={status === 'released' ? 'lime' : 'orange'}
+            title={presentation.title}
+            description={presentation.copy}
+            icon={pickup?.status === 'released' || pickup?.status === 'confirmed' ? <CheckCircle2 /> : <Truck />}
+            tone={presentation.tone}
             size="md"
             bodyClassName="sq-pickup-body"
         >
-            {loading ? (
+            {loadingPlan || loadingStatus ? (
                 <div className="sq-dialog-state"><Loader2 className="sq-spin" /><strong>Checking today’s pickup plan…</strong></div>
             ) : (
                 <>
-                    {status && <div className={`sq-pickup-live is-${status}`} role="status"><span><ShieldCheck size={18} /> Live update</span><strong>{statusTitle}</strong><p>{statusCopy}</p></div>}
+                    {readError && <div className="sq-pickup-live is-exception" role="alert"><span><AlertCircle size={18} /> Connection problem</span><strong>Stay with the MakerLab team</strong><p>{readError}</p></div>}
+                    {!readError && <div className={`sq-pickup-live is-${pickup?.status || 'waiting'}`} role="status">
+                        <span>{pickup ? <><ShieldCheck size={18} /> Live pickup</> : <><Clock size={18} /> Waiting for family</>}</span>
+                        <strong>{presentation.title}</strong>
+                        <p>{presentation.copy}</p>
+                    </div>}
+
                     <div className="sq-pickup-facts">
                         <article><span><Clock /></span><div><small>Scheduled time</small><strong>{pickupTime}</strong></div></article>
                         <article><span><MapPin /></span><div><small>Meeting point</small><strong>{pickupLocation}</strong></div></article>
+                        {pickup?.pickerName && <article className="sq-pickup-picker"><span><UserCheck /></span><div><small>Authorized pickup</small><strong>{pickup.pickerName}</strong></div></article>}
                     </div>
-                    <section className="sq-pickup-pass" aria-label="Pickup check-out pass">
-                        <div><p>MakerLab checkout</p><h3>Show this pass to your parent or guardian.</h3><span>Staff will confirm the pickup before you leave.</span></div>
-                        <div className="sq-pickup-qr" aria-label="Pickup QR placeholder"><QrCode /></div>
+
+                    {pickup && !['cancelled', 'exception'].includes(pickup.status) && <ol className="sq-student-pickup-progress" aria-label="Live pickup progress">
+                        {progressSteps.map((step, index) => {
+                            const Icon = step.icon;
+                            return <li key={step.status} className={position >= index ? 'is-complete' : ''}><span><Icon size={15} /></span><small>{step.label}</small></li>;
+                        })}
+                    </ol>}
+
+                    <section className={`sq-pickup-guidance${waitingForTeam ? ' is-attention' : ''}`}>
+                        <ShieldCheck size={24} />
+                        <div><strong>{pickup?.status === 'released' ? 'Leave only with the verified person.' : 'A team member completes every handoff.'}</strong><p>Never leave the academy because of a message or screen alone. Wait for a MakerLab team member to call you and complete the physical handoff.</p></div>
                     </section>
+
                     <ol className="sq-pickup-steps">
                         <li><span>1</span>Pack your project and personal items.</li>
-                        <li><span>2</span>Wait at the meeting point shown above.</li>
-                        <li><span>3</span>Check out with a MakerLab team member.</li>
+                        <li><span>2</span>Wait inside at the meeting point shown above.</li>
+                        <li><span>3</span>Leave only after a MakerLab team member verifies the pickup person.</li>
                     </ol>
                 </>
             )}

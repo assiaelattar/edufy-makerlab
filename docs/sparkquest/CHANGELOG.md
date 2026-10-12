@@ -59,6 +59,7 @@
 
 - Connected existing parent, authorized guardian, learner and Edufy staff accounts through one live pickup queue.
 - Added selected-picker announcement, arrival, staff verification/release, selected-picker receipt confirmation, cancellation and exception handling.
+- Replaced the learner's generic QR-style pickup pass with the canonical live picker, progress and safety state; stale historical records can no longer appear as an active pickup.
 - Added atomic immutable transition events, deterministic queue identity, tenant/guardian checks and focused Firestore indexes.
 - Added Pickup Status access for instructors while retaining elevated administrative access.
 - Passed the actual four-role local UI flow, lifecycle and adapter smokes, Firestore emulator suites, TypeScript and both production builds.

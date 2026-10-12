@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Clock3, Truck } from 'lucide-react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { isCanonicalPickupEntry, pickupSessionDate, previousPickupDate, selectOpenPickup, type PickupStatus } from '../domain/pickupLifecycle';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 
 interface PickupEntry {
     id: string;
+    organizationId: string;
     studentId: string;
-    status: 'on_the_way' | 'arrived' | 'confirmed' | 'released';
+    sessionDate?: string;
+    sessionId?: string;
+    status: PickupStatus | 'waiting';
     pickerName?: string;
 }
 
@@ -17,10 +21,21 @@ export const PickupNotification: React.FC = () => {
 
     useEffect(() => {
         if (!user || !userProfile?.organizationId || !db) return;
-        const pickupQuery = query(collection(db, 'pickup_queue'), where('studentId', '==', userProfile.studentId || user.uid), where('organizationId', '==', userProfile.organizationId));
+        const studentId = userProfile.studentId || user.uid;
+        const organizationId = userProfile.organizationId;
+        const today = pickupSessionDate();
+        const pickupQuery = query(
+            collection(db, 'pickup_queue'),
+            where('organizationId', '==', organizationId),
+            where('studentId', '==', studentId),
+            where('sessionDate', 'in', [today, previousPickupDate(today)]),
+        );
         return onSnapshot(pickupQuery, snapshot => {
-            const activeEntries = snapshot.docs.map(entry => ({ id: entry.id, ...entry.data() } as PickupEntry & { createdAt?: any })).filter(entry => ['on_the_way', 'arrived', 'released'].includes(entry.status)).sort((left, right) => (right.createdAt?.toMillis?.() || 0) - (left.createdAt?.toMillis?.() || 0));
-            setActivePickup(activeEntries[0] || null);
+            const records = snapshot.docs
+                .map(entry => ({ id: entry.id, ...entry.data() } as PickupEntry))
+                .filter(isCanonicalPickupEntry);
+            const selected = selectOpenPickup(records, organizationId, studentId, today);
+            setActivePickup(selected && ['on_the_way', 'arrived', 'released'].includes(selected.status) ? selected : null);
         }, error => {
             console.warn('Pickup notifications are unavailable:', error.code || error.message);
             setActivePickup(null);

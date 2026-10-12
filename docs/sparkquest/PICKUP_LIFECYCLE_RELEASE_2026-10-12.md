@@ -6,7 +6,7 @@ The pickup flow now connects the existing family, learner and Edufy staff accoun
 
 1. A verified parent selects an active authorized guardian for one linked learner and announces that person is on the way.
 2. The parent or the selected guardian marks arrival.
-3. The learner sees the live pickup state in SparkQuest.
+3. The learner sees the selected pickup person and the live four-step handoff in SparkQuest, with explicit instructions to remain inside until a team member completes the physical release.
 4. An instructor, front desk operator, admin, owner or super admin opens **Pickup Status**, checks the selected person, records the verification method and optional note, then releases the learner.
 5. Only the selected guardian can confirm receipt. Every transition writes an immutable companion event in the same Firestore transaction.
 
@@ -45,6 +45,8 @@ An isolated `demo-pickup-live` Auth/Firestore run completed the actual role flow
 - the selected guardian confirmed receipt;
 - learner, parent, guardian and staff views updated live;
 - the final queue and its four event records retained the expected actor identities.
+
+The learner Pickup card was rechecked after the integrated test exposed its older generic pass. The placeholder QR/pass was removed. The live learner dialog now selects only the canonical current-day record or an eligible overnight arrival, shows the authorized pickup person and four-step progress, and displays safe fallback, cancellation and exception guidance. The completed synthetic handoff rendered correctly in the actual learner account.
 
 The lifecycle smoke suite, parent command emulator suite, Firestore rule suites, SparkQuest TypeScript check, SparkQuest production build and integrated Edufy production build passed. Existing Firebase import, bundle size and Tailwind CDN build warnings remain unchanged.
 
