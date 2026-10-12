@@ -1,4 +1,10 @@
-# Latest handoff — SparkQuest parent detail color and image delivery
+# Latest handoff — SparkQuest student maker journey
+
+On 2026-10-12 the learner session gained focused My build, Explore, and Mentor stops over the existing workbench, mission library, project editor, and review actions. The parent portal's existing 011Y component now gives contextual learner guidance, and saved project briefs show one color-coded plan step at a time without jumping away from the clicked area. Narrow-screen ongoing builds and mission cards use snap-aligned rails. No learner records, permissions, rules, identity, or review contracts changed. Local 360px/390px browser checks covered the three stops, project brief, and next-step control. SparkQuest TypeScript, standalone and root production builds, URL/identity/Phase 2 smokes, mirrored-file hashes, and diff checks passed. Focused code commit `6853c5f` reached GitHub `main`; Vercel deployment `dpl_DAQ3mpz2FjXuQ1EJnLU3R6wRha9b` is Ready and aliased to `https://sparkquest-makerlab.vercel.app/` (HTTP 200). A designated student account and physical phone should still confirm exact assignments, evidence, and editor continuation. Details: `docs/sparkquest/STUDENT_JOURNEY_2026-10-12.md`.
+
+---
+
+# Previous handoff — SparkQuest parent detail color and image delivery
 
 On 2026-10-12 the parent project and upcoming mission detail hero began inheriting the tone of the card opened, while progress steps retain their own status colors. Parent covers, proof, galleries, and moments now request responsive WebP variants for MakerLab raster sources on Vercel, with original-image fallback; SVGs remain unchanged. A protected preview deployment returned a 3,212-byte 320px WebP for a 319,949-byte sample PNG. Local phone-width checks confirmed lilac and apricot detail pages and no horizontal overflow; SparkQuest TypeScript, both builds, and the parent image source smoke passed. Code commit `a84f32a` reached GitHub `main` with the concurrent staff Studio style repair. Vercel production deployment `dpl_BH898MbAo1vyn88wbViEu1FGBSt8` is Ready and aliased to `https://sparkquest-makerlab.vercel.app/`; its public image endpoint returned HTTP 200, `image/webp`, and 3,212 bytes. No family data, storage objects, or access rules changed.
 
