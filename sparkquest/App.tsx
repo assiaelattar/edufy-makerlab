@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import { isChunkLoadError, recoverFromChunkError } from './utils/chunkRecovery';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { FactoryProvider } from './context/FactoryContext';
 import { useMissionData } from './hooks/useMissionData';
@@ -587,20 +588,20 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
+    if (isChunkLoadError(error)) recoverFromChunkError();
   }
 
   render() {
     if (this.state.hasError) {
+      const staleChunk = isChunkLoadError(this.state.error);
       return (
         <main className="sq-entry-shell">
           <section className="sq-entry-card sq-entry-card--issue" aria-labelledby="system-issue-title">
           <div className="sq-entry-mark" aria-hidden="true"><Wrench /></div>
           <p className="sq-entry-eyebrow">SparkQuest recovery</p>
-          <h1 id="system-issue-title">The studio could not open.</h1>
-          <p className="sq-entry-copy">Refresh the page first. If the problem continues, reset only SparkQuest’s local session and sign in again.</p>
-          <pre className="sq-entry-error-detail">
-            {this.state.error?.toString()}
-          </pre>
+          <h1 id="system-issue-title">{staleChunk ? 'A fresh version is ready.' : 'The studio could not open.'}</h1>
+          <p className="sq-entry-copy">{staleChunk ? 'The app was updated while this page was open. Refresh to continue your mission.' : 'Refresh the page first. If the problem continues, reset only SparkQuest’s local session and sign in again.'}</p>
+          {!staleChunk && <pre className="sq-entry-error-detail">{this.state.error?.toString()}</pre>}
           <div className="sq-entry-actions">
           <button
             onClick={() => window.location.reload()}
@@ -608,7 +609,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
           >
             <RefreshCw size={18} /> Refresh
           </button>
-          <button
+          {!staleChunk && <button
             onClick={() => {
               ['sparkquest_bridge_user', 'sparkquest_kiosk_mode', 'sparkquest_boot_complete'].forEach(key => localStorage.removeItem(key));
               window.location.reload();
@@ -616,7 +617,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
             className="sq-entry-secondary"
           >
             Reset SparkQuest session
-          </button>
+          </button>}
           </div>
           </section>
         </main>

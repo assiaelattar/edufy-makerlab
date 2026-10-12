@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Stale tabs during a SparkQuest deployment
+
+- A tab running code from before this recovery release cannot gain the new handler until its document is refreshed once. Later releases recover a missing lazy asset automatically once; persistent network or browser failures remain on a manual refresh screen.
+- Production verification should include opening a mission detail from a signed-in learner session after the release. The local fixture and build checks do not establish real-account completion.
+
 ## Student journey acceptance
 
 - Local write-free fixtures and browser checks cover the focused student views and saved-step navigation. A designated signed-in learner should confirm their exact assignments, evidence, mentor feedback, and editor continuation on a physical phone.

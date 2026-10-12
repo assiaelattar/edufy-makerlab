@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Recover stale mission chunks after a release
+
+- When an open tab requests a lazy module from an earlier Vercel deployment, reload the document once to pick up the current asset names.
+- If loading still fails, show a refresh action instead of presenting the raw module error or suggesting a session reset.
+- Cover repeated-failure loop prevention with a focused smoke check.
+
 ## 2026-10-12 — Student maker journey
 
 - Reorganized the existing learner workbench into focused My build, Explore, and Mentor views, preserving project continuation, mission discovery, personal/Showcase creation, and Field log actions.

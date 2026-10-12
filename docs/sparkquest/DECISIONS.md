@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Recover replaced lazy assets through the current document
+
+Vercel replaces hashed assets on each standalone SparkQuest deployment. An already-open tab can request an old `StudentWizard` chunk that the current deployment no longer contains. On a Vite preload or React lazy import failure, refresh the document once per two-minute window to load the current asset map. Preserve the signed-in session and route. A repeated failure stays on a recovery screen with a manual refresh action; it must not clear local authentication state automatically.
+
 ## 2026-10-12 — Reuse the learner pipeline for the student journey
 
 The student visual pass composes `LearnerWorkbench`, `LearnerInstructorUpdates`, `LearnerMissionBoard`, `StudentMissionDetails`, and the parent's 011Y component. View switching is local UI state; canonical project, mission, review and identity selectors still drive content and actions. No new student data model or parallel submission path was introduced.
