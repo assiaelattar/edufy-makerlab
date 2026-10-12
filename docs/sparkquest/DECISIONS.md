@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Project color follows the opened card
+
+Carry the clicked card tone into its dedicated detail page, including the hero and the introduction accent; keep step status colors independent so progress still has one meaning. The parent viewer requests resized WebP for only our public raster assets and MakerLab Firebase Storage image URLs on Vercel. Use a small set of widths and quality 65, leave vector artwork alone, and fall back to the original URL if optimization fails. Keep original proof links available at full resolution.
+
 ## 2026-10-12 — Parent delight stays optional and truthful
 
 Use blue for the current project's primary card and rotate other cards through the established lime, lavender, mint, and warm orange family. Color is visual rhythm; project status remains written on every card. Parent sound is opt-in, generated locally in short quiet cues, and remembered on that device; no page-load audio. The supplied O11Y asset exposes a verified `Hit` trigger but no confirmed emotion enum, so vary its surrounding guide colors and reaction accents by page context without claiming separate Rive states. A dedicated `role=parent` entry changes presentation and PWA metadata only; the existing Firebase session, parent role, tenant, and guardian links still govern access.

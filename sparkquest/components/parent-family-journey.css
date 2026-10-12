@@ -97,11 +97,11 @@
 .pf-project-card:not(.is-featured) :is(.pf-project-card-copy),.pf-upcoming-card .pf-upcoming-card-copy { background:var(--pf-card-bg); }
 .pf-project-card:not(.is-featured) .pf-card-arrow,.pf-upcoming-card .pf-card-arrow { color:var(--pf-card-ink); }
 .pf-project-card:not(.is-featured) .pf-pill,.pf-upcoming-card .pf-pill { background:var(--pf-card-pill); color:var(--pf-card-ink); }
-.pf-project-card:not(.is-featured).is-blue,.pf-upcoming-card.is-blue { --pf-card-bg:#2448eb; --pf-card-ink:#fff; --pf-card-edge:#2448eb; --pf-card-shadow:#1736b4; --pf-card-pill:#ffffff2a; }
-.pf-project-card:not(.is-featured).is-lilac,.pf-upcoming-card.is-lilac { --pf-card-bg:#e9e1ff; --pf-card-ink:#40316d; --pf-card-edge:#d6c6f7; --pf-card-shadow:#c8b9e6; --pf-card-pill:#ffffff80; }
-.pf-project-card:not(.is-featured).is-apricot,.pf-upcoming-card.is-apricot { --pf-card-bg:#ffdfc8; --pf-card-ink:#673b2a; --pf-card-edge:#f3c5a6; --pf-card-shadow:#e4b694; --pf-card-pill:#ffffff80; }
-.pf-project-card:not(.is-featured).is-mint,.pf-upcoming-card.is-mint { --pf-card-bg:#d8f1e4; --pf-card-ink:#174d3d; --pf-card-edge:#b8decf; --pf-card-shadow:#a8d1c0; --pf-card-pill:#ffffff80; }
-.pf-project-card:not(.is-featured).is-lime,.pf-upcoming-card.is-lime { --pf-card-bg:#e4f5ac; --pf-card-ink:#34451f; --pf-card-edge:#c9df8e; --pf-card-shadow:#b8cf7c; --pf-card-pill:#ffffff80; }
+.pf-project-card:not(.is-featured).is-blue,.pf-upcoming-card.is-blue,.pf-detail.is-blue { --pf-card-bg:#2448eb; --pf-card-ink:#fff; --pf-card-edge:#2448eb; --pf-card-shadow:#1736b4; --pf-card-pill:#ffffff2a; --pf-detail-kicker:#d5f777; --pf-detail-label:#2448eb; }
+.pf-project-card:not(.is-featured).is-lilac,.pf-upcoming-card.is-lilac,.pf-detail.is-lilac { --pf-card-bg:#e9e1ff; --pf-card-ink:#40316d; --pf-card-edge:#d6c6f7; --pf-card-shadow:#c8b9e6; --pf-card-pill:#ffffff80; --pf-detail-kicker:#6445a3; --pf-detail-label:#6445a3; }
+.pf-project-card:not(.is-featured).is-apricot,.pf-upcoming-card.is-apricot,.pf-detail.is-apricot { --pf-card-bg:#ffdfc8; --pf-card-ink:#673b2a; --pf-card-edge:#f3c5a6; --pf-card-shadow:#e4b694; --pf-card-pill:#ffffff80; --pf-detail-kicker:#965137; --pf-detail-label:#965137; }
+.pf-project-card:not(.is-featured).is-mint,.pf-upcoming-card.is-mint,.pf-detail.is-mint { --pf-card-bg:#d8f1e4; --pf-card-ink:#174d3d; --pf-card-edge:#b8decf; --pf-card-shadow:#a8d1c0; --pf-card-pill:#ffffff80; --pf-detail-kicker:#286f58; --pf-detail-label:#286f58; }
+.pf-project-card:not(.is-featured).is-lime,.pf-upcoming-card.is-lime,.pf-detail.is-lime { --pf-card-bg:#e4f5ac; --pf-card-ink:#34451f; --pf-card-edge:#c9df8e; --pf-card-shadow:#b8cf7c; --pf-card-pill:#ffffff80; --pf-detail-kicker:#52672b; --pf-detail-label:#52672b; }
 .pf-project-card:not(.is-featured).is-blue .pf-project-card-copy small { color:#e9efff; }
 .pf-next { margin-top:42px; }
 .pf-next h2,.pf-archive h2,.pf-detail-intro h2,.pf-family-block h2 { margin:6px 0 17px; font-family:'Manrope','Nunito',sans-serif; font-size:clamp(22px,6vw,30px); font-weight:900; letter-spacing:-.055em; line-height:1.12; }
@@ -119,13 +119,14 @@
 .pf-archive > section { margin-top:36px; }
 .pf-card-grid { display:grid; gap:16px; }
 .pf-archive .pf-upcoming-card .pf-cover { aspect-ratio:16/9; }
-.pf-detail-hero { overflow:hidden; border-radius:25px; padding:24px 20px 13px; background:#2448eb; color:#fff; }
-.pf-detail-hero .pf-kicker { color:var(--pf-lime); }
+.pf-detail-hero { overflow:hidden; border:1px solid var(--pf-card-edge); border-radius:25px; padding:24px 20px 13px; background:var(--pf-card-bg); box-shadow:0 5px 0 var(--pf-card-shadow); color:var(--pf-card-ink); }
+.pf-detail-hero .pf-kicker { color:var(--pf-detail-kicker); }
 .pf-detail-hero h1 { max-width:23ch; margin:9px 0 7px; font-size:clamp(27px,7vw,42px); }
-.pf-detail-hero p { max-width:48ch; margin:0 0 12px; color:#e7edff; font-size:14px; line-height:1.5; }
-.pf-detail-status { display:inline-flex; border:1px solid #ffffff88; border-radius:999px; padding:6px 10px; color:#fff; font-size:11px; font-weight:850; }
+.pf-detail-hero p { max-width:48ch; margin:0 0 12px; color:var(--pf-card-ink); font-size:14px; line-height:1.5; }
+.pf-detail-status { display:inline-flex; border:1px solid var(--pf-card-edge); border-radius:999px; padding:6px 10px; background:var(--pf-card-pill); color:var(--pf-card-ink); font-size:11px; font-weight:850; }
 .pf-detail-hero .pf-cover { margin-top:21px; border-radius:17px; }
-.pf-detail-intro { margin:32px 0 22px; }
+.pf-detail-intro { margin:37px 0 22px; border-left:4px solid var(--pf-card-shadow); padding-left:15px; }
+.pf-detail-intro .pf-mini-label { color:var(--pf-detail-label); }
 .pf-detail-intro p { max-width:58ch; margin:0; color:var(--pf-muted); font-size:14px; line-height:1.5; }
 .pf-step-carousel { min-width:0; }
 .pf-step-progress { display:flex; gap:8px; overflow-x:auto; padding:2px 2px 12px; scrollbar-width:none; }

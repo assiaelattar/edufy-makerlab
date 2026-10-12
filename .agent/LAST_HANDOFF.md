@@ -1,4 +1,10 @@
-# Latest handoff — SparkQuest parent color, sound, and direct sign-in
+# Latest handoff — SparkQuest parent detail color and image delivery
+
+On 2026-10-12 the parent project and upcoming mission detail hero began inheriting the tone of the card opened, while progress steps retain their own status colors. Parent covers, proof, galleries, and moments now request responsive WebP variants for MakerLab raster sources on Vercel, with original-image fallback; SVGs remain unchanged. A protected preview deployment returned a 3,212-byte 320px WebP for a 319,949-byte sample PNG. Local phone-width checks confirmed lilac and apricot detail pages and no horizontal overflow; SparkQuest TypeScript, both builds, and the parent image source smoke passed. Production release details follow after promotion. No family data, storage objects, or access rules changed.
+
+---
+
+# Previous handoff — SparkQuest parent color, sound, and direct sign-in
 
 On 2026-10-12 the parent portal gained varied project and upcoming card colors, an opt-in remembered Web Audio cue system, contextual 011Y guide scenes, and a dedicated French parent login at `/?role=parent#login`. The parent manifest now starts at that route, and the general login links to it. The same Firebase authentication and verified guardian-linked family reader remain in force. SparkQuest TypeScript, both production builds, and phone-width browser checks of the sign-in, project archive, mascot contexts, sound toggle, and zero horizontal overflow passed locally. Focused parent family, workshop, and URL smokes passed. Code commit `0f85e48` reached GitHub `main`; Vercel production deployment `dpl_6moutm6sw7vsjKSocywhSkaPtu1V` is Ready and aliased to `https://sparkquest-makerlab.vercel.app/`. The public parent route, manifest, and parent icon returned HTTP 200; the manifest launches `/?role=parent#login`. No family data or permission rules were changed.
 

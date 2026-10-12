@@ -6,6 +6,11 @@
 - Removed Google Fonts imports from lazy-loaded Factory stylesheets and expanded the shared document font declaration into the single source.
 - This prevents Vite from rejecting the staff Studio chunk with `Unable to preload CSS` after a secure Edufy admin launch.
 
+## 2026-10-12 — Parent detail palettes and lighter images
+
+- Matched each project or upcoming mission detail hero to the color of the card that opened it, with readable status and intro accents. Progress steps keep their own semantic colors.
+- Serve responsive 320/640/960px WebP variants for MakerLab raster project covers, proof, galleries, and moments on Vercel. Keep original images as a fallback and leave SVGs untouched.
+
 ## 2026-10-12 — Parent project color, sound, and direct entry
 
 - Gave project and upcoming mission cards a rotating set of readable lilac, apricot, mint, lime, and blue treatments while preserving the current project's blue focus and full cover art.

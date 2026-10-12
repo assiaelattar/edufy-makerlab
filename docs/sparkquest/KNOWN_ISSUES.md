@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Parent image delivery follow-up
+
+- Vercel serves resized raster variants for the configured MakerLab sources. Other hosts, SVGs, blob/data URLs, and local development continue to use their original image URLs; a failed optimization also falls back to the original.
+- A physical phone check with a real family account is still needed to measure its exact project photo savings. Vercel image transformations and cache reads count toward project usage.
+
 ## Parent color, sound, and entry follow-up
 
 - Physical Android/iOS checks remain for the native install flow and the optional Web Audio cues; a browser may block or omit audio, and the parent actions must still work.
