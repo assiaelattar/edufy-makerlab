@@ -46,6 +46,10 @@ const authUserByEmail = async (auth, email) => {
 
 const guardianSubjects = student => [...new Set([student.id, student.loginInfo?.uid].filter(Boolean))];
 const cleanName = value => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+const verifiedNameCandidate = value => {
+  const name = cleanName(value);
+  return /^(parent|guardian)$/i.test(name) ? '' : name;
+};
 const exactParentEmail = value => {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!/^p\.[^@\s]{1,80}@makerlab\.academy$/.test(email)) {
@@ -65,9 +69,10 @@ const parentEvidence = async (get, db, uid, email, organizationId, confirmedName
   const familyIds = new Set(recorded.docs.map(item => item.id));
   const familySubjects = new Map(recorded.docs.map(item => [item.id, new Set(guardianSubjects({ id: item.id, ...item.data() }))]));
   const profileData = profile.data();
-  const names = new Set([cleanName(profileData?.name), ...recorded.docs.map(item => cleanName(item.data().parentName))].filter(Boolean));
+  const names = new Set([verifiedNameCandidate(profileData?.name), ...recorded.docs.map(item => verifiedNameCandidate(item.data().parentName))].filter(Boolean));
   if (learnerLogins.size || !recorded.size || names.size > 1 ||
-    (profile.exists && (profileData.role !== 'parent' || profileData.organizationId !== organizationId ||
+    (profile.exists && (profileData.role !== 'parent' ||
+      (profileData.organizationId && profileData.organizationId !== organizationId) ||
       (profileData.status && profileData.status !== 'active') || (profileData.email && profileData.email.toLowerCase() !== email))) ||
     recorded.docs.some(item => item.data().organizationId !== organizationId ||
       item.data().parentLoginInfo?.email?.toLowerCase() !== email) ||
@@ -78,10 +83,11 @@ const parentEvidence = async (get, db, uid, email, organizationId, confirmedName
     throw Object.assign(new Error('This login has conflicting identity or family links. An administrator must review it.'), { status: 409 });
   }
   const knownName = [...names][0] || '';
-  if (confirmedName && knownName && confirmedName !== knownName) {
+  const suppliedName = verifiedNameCandidate(confirmedName);
+  if (suppliedName && knownName && suppliedName !== knownName) {
     throw Object.assign(new Error('The verified parent name conflicts with an existing family record.'), { status: 409 });
   }
-  return { profile, recorded, uidStudents, links, name: knownName || confirmedName, familyIds };
+  return { profile, recorded, uidStudents, links, name: knownName || suppliedName, familyIds };
 };
 
 const linkIdMismatch = (item, uid) => item.id !== `${uid}_${item.data().subjectId}`;

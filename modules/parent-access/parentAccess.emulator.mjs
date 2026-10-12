@@ -276,6 +276,31 @@ assert.equal((await db.doc('students/legacy-sibling').get()).data().parentName, 
 assert.equal((await db.doc(`guardian_links/${legacyExact.uid}_legacy-sibling-alias`).get()).data().status, 'active');
 await assert.rejects(() => signInWithEmailAndPassword(clientAuth, legacyExact.email, 'Old-family-password-123'));
 await signInWithEmailAndPassword(clientAuth, legacyExact.email, recovered.body.password);
+
+// An invitation-era parent profile may have no organization and only a placeholder name.
+const placeholder = await adminAuth.createUser({ email: 'p.placeholder@makerlab.academy', password: 'Placeholder-old-password-123' });
+const placeholderProfile = { uid: placeholder.uid, role: 'parent', status: 'active', email: placeholder.email, name: 'Parent' };
+await Promise.all([
+  db.doc(`users/${placeholder.uid}`).set({ ...placeholderProfile, organizationId: 'org-b' }),
+  db.doc('students/placeholder-child').set({ organizationId: 'org-a', name: 'Placeholder child', parentLoginInfo: { uid: placeholder.uid, email: placeholder.email } })
+]);
+const placeholderReset = { action: 'reset', studentId: 'placeholder-child', organizationId: 'org-a', relationshipVerified: true };
+assert.equal((await invoke(staffToken, { ...placeholderReset, parentName: 'Verified Guardian' })).statusCode, 409);
+await db.doc(`users/${placeholder.uid}`).set(placeholderProfile);
+const placeholderNamePrompt = await invoke(staffToken, placeholderReset);
+assert.equal(placeholderNamePrompt.statusCode, 400);
+assert.equal(placeholderNamePrompt.body.code, 'parent_name_required');
+assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().organizationId, undefined);
+const placeholderIssued = await invoke(staffToken, { ...placeholderReset, parentName: 'Verified Guardian' });
+assert.equal(placeholderIssued.statusCode, 200, JSON.stringify(placeholderIssued.body?.error));
+assert.equal(placeholderIssued.body.parentName, 'Verified Guardian');
+assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().organizationId, 'org-a');
+assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().name, 'Verified Guardian');
+assert.equal((await db.doc('students/placeholder-child').get()).data().parentName, 'Verified Guardian');
+assert.equal((await db.doc(`guardian_links/${placeholder.uid}_placeholder-child`).get()).data().status, 'active');
+await assert.rejects(() => signInWithEmailAndPassword(clientAuth, placeholder.email, 'Placeholder-old-password-123'));
+await signInWithEmailAndPassword(clientAuth, placeholder.email, placeholderIssued.body.password);
+
 const exactLinked = await invoke(staffToken, { action: 'link', studentId: 'legacy-new', organizationId: 'org-a', reuseParentEmail: legacyExact.email, parentName: 'Verified Parent', relationshipVerified: true });
 assert.equal(exactLinked.statusCode, 200, JSON.stringify(exactLinked.body?.error));
 assert.equal((await db.doc('students/legacy-new').get()).data().parentName, 'Verified Parent');
