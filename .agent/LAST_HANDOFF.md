@@ -1,6 +1,6 @@
 # Latest handoff — SparkQuest parent install invitation
 
-On 2026-10-12 a first-visit install invitation was added to the standalone SparkQuest parent portal. It opens after the verified family loads, uses 011Y artwork, offers a native install action when the browser supplies one, and otherwise gives home-screen instructions. Dismissal is remembered per parent UID on the device; installed standalone sessions do not show it. SparkQuest TypeScript, both local production builds, and parent family/workshop smokes passed. The production deployment and AAJLANE public-account check are tracked in the active turn.
+On 2026-10-12 a first-visit install invitation was added to the standalone SparkQuest parent portal. It opens after the verified family loads, uses 011Y artwork, offers a native install action when the browser supplies one, and otherwise gives home-screen instructions. Dismissal is remembered per parent UID on the device; installed standalone sessions do not show it. Focused commit `8d5842f` reached GitHub `main`. SparkQuest TypeScript, both local production builds, parent family/workshop smokes, and phone-width invitation/close browser checks passed. Vercel production deployment `dpl_9TWkWQwrfwFUHTSULzCzkBKeQYzA` is READY and aliased to `https://sparkquest-makerlab.vercel.app/`; the page, parent manifest, and both icons returned HTTP 200. The public AAJLANE family acceptance remains pending the user's sign-in; the browser was still on login, and no guardian links or family data were modified.
 
 ---
 
