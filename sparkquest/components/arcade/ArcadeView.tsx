@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BookOpen, Check, Clock3, Gamepad2, GraduationCap, Play, Plus, Rocket, Search, Star, Ticket, X, Zap } from 'lucide-react';
 import { collection, doc, getDocs, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { isSparkQuestStaffRole } from '../../domain/staffRoles';
 import { useSession } from '../../context/SessionContext';
 import { db } from '../../services/firebase';
 import { AddPlatformModal } from './AddPlatformModal';
@@ -180,7 +181,7 @@ export const ArcadeView: React.FC<ArcadeViewProps> = ({ isOpen, onClose, preview
                         </div>
                     )}
 
-                    {mode === 'LEARN' && (userProfile?.role === 'admin' || userProfile?.role === 'instructor') && <button type="button" className="sq-arcade-add-platform" onClick={() => setShowAddPlatform(true)}><Plus size={18} /> Add learning platform</button>}
+                    {mode === 'LEARN' && isSparkQuestStaffRole(userProfile?.role) && <button type="button" className="sq-arcade-add-platform" onClick={() => setShowAddPlatform(true)}><Plus size={18} /> Add learning platform</button>}
                 </div>
 
                 {selectedVideo && <div className="sq-arcade-nested"><div><VideoQuiz video={selectedVideo} onClose={() => setSelectedVideo(null)} onComplete={handleEarnComplete} isCompleted={completedContent.includes(selectedVideo.id)} /></div></div>}

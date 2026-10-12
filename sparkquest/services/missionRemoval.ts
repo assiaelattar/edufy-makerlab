@@ -1,11 +1,12 @@
 import { collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, where, type Firestore } from 'firebase/firestore';
 import type { ProjectTemplate } from '../types';
 import type { ReviewActor } from '../domain/projectReview';
+import { isSparkQuestStaffRole } from '../domain/staffRoles';
 
 export type MissionRemovalPlan = { canDelete: boolean; hasLearnerWork: boolean; reason: string };
 
 const requireInstructor = (actor: ReviewActor) => {
-  if (!actor.uid || !actor.organizationId || !['admin', 'instructor'].includes(actor.role)) {
+  if (!actor.uid || !actor.organizationId || !isSparkQuestStaffRole(actor.role)) {
     throw new Error('A verified instructor session is required.');
   }
 };

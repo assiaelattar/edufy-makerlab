@@ -3,6 +3,8 @@
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
+const EDUFY_RELEASE = '2026-10-12-parent-access-card-v2';
+
 // Initialize the Firebase app in the service worker by passing in
 // your app's Firebase config object.
 // https://firebase.google.com/docs/web/setup#config-object
@@ -33,6 +35,7 @@ messaging.onBackgroundMessage((payload) => {
 });
 
 self.addEventListener('install', (event) => {
+  console.info('[SW] Installing Edufy release', EDUFY_RELEASE);
   self.skipWaiting();
 });
 

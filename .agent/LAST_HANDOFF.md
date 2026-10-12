@@ -432,3 +432,8 @@ The assistant is development-only. Local rules were tested, not deployed. No pro
 ## Exact next task
 
 Read ACTIVE_TASK for optional Phase 7 readiness. Inspect existing account/provider context before requesting any missing external authority. If provider integration is deferred, explicitly scope the remaining operational task/lifecycle commands or Phase 8 hardening.
+# Current task boundary — parent card visibility and staff Studio launch
+
+The parent card action now remains visible for every recorded parent login. When credentials still exist in the open learner profile it reopens the complete card; after refresh it routes through verified password reissue because plaintext is not stored. The Edufy service worker release marker is bumped so an existing installation activates the new shell after refresh. SparkQuest now treats `super_admin`, `owner`, `admin`, and `instructor` consistently across routing, Factory reads, assignment, review, import, removal, arcade management, and staff session controls. Focused role smoke, SparkQuest TypeScript, SparkQuest build, and Edufy build pass. Next: clean release, Hostinger/Vercel verification, then one affected administrator launch and parent-card browser acceptance. No production parent credential or project mutation is part of verification.
+
+---

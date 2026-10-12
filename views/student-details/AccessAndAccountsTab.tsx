@@ -284,28 +284,33 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
                 An older recorded address may come from the email invitation flow. Replacing it creates a SparkQuest login ID that needs no inbox. The latest card stays available here until staff leave or refresh this profile.
               </div>
-              {hasLatestParentCredentials && (
-                <button
-                  type="button"
-                  onClick={showLatestParentCredentials}
-                  className="edu-parent-access-action edu-parent-access-action--credentials flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors"
-                >
-                  <Eye size={16} /> Show latest email &amp; password
-                </button>
-              )}
               <button
+                type="button"
+                onClick={() => {
+                  if (hasLatestParentCredentials) {
+                    showLatestParentCredentials();
+                    return;
+                  }
+                  setRelationshipVerified(false);
+                  setPasswordNameRequired(false);
+                  setVerifiedParentName(student.parentName || '');
+                  setIsPasswordModalOpen(true);
+                }}
+                disabled={isGeneratingAccess || !canManageParentAccess}
+                className="edu-parent-access-action edu-parent-access-action--credentials flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50"
+              >
+                {isGeneratingAccess ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+                Display parent access card
+              </button>
+              {!hasLatestParentCredentials && <p className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-[11px] leading-5 text-amber-950">The login ID is available below. Edufy does not store its password, so displaying a complete card will securely issue a new password after parent verification.</p>}
+              {hasLatestParentCredentials && <button
                 type="button"
                 onClick={() => { setRelationshipVerified(false); setPasswordNameRequired(false); setVerifiedParentName(student.parentName || ''); setIsPasswordModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
                 className="edu-parent-access-action edu-parent-access-action--secondary mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50"
               >
-                {isGeneratingAccess ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={12} />
-                )}{' '}
-                Reissue password to share again
-              </button>
+                <RefreshCw size={14} /> Issue a different password
+              </button>}
               <button
                 onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}

@@ -1,12 +1,13 @@
 import React from 'react';
 import { Clock3, Square } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { isSparkQuestStaffRole } from '../domain/staffRoles';
 import { useFocusSession } from '../context/FocusSessionContext';
 
 export const SessionControls: React.FC = () => {
     const { user, userProfile } = useAuth();
     const { activeSession, elapsedSeconds, endSession } = useFocusSession();
-    if (!user || userProfile?.role === 'instructor' || userProfile?.role === 'admin' || !activeSession) return null;
+    if (!user || isSparkQuestStaffRole(userProfile?.role) || !activeSession) return null;
 
     const minutes = Math.floor(elapsedSeconds / 60);
     const seconds = elapsedSeconds % 60;

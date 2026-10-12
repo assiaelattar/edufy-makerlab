@@ -3,9 +3,10 @@ import type { ProjectTemplate } from '../types.ts';
 import type { ReviewActor } from '../domain/projectReview.ts';
 import { buildProfileAssignmentPatch } from '../domain/instructorLearner.ts';
 import { omitUndefinedDeep } from '../domain/firestorePayload.ts';
+import { isSparkQuestStaffRole } from '../domain/staffRoles.ts';
 
 export async function assignMissionToLearner(db: Firestore, missionId: string, studentId: string, actor: ReviewActor, source: 'student_profile' | 'user_auth' = 'student_profile') {
-  if (!actor.uid || !actor.organizationId || !['admin', 'instructor'].includes(actor.role)) throw new Error('A verified instructor session is required.');
+  if (!actor.uid || !actor.organizationId || !isSparkQuestStaffRole(actor.role)) throw new Error('A verified instructor session is required.');
   return runTransaction(db, async transaction => {
     const ref = doc(db, 'project_templates', missionId);
     const missionSnapshot = await transaction.get(ref);
@@ -24,7 +25,7 @@ export async function assignMissionToLearner(db: Firestore, missionId: string, s
 
 /** Class dispatch/editor saves must not erase concurrent profile assignments. */
 export async function saveMissionAudience(db: Firestore, missionId: string, data: Omit<Partial<ProjectTemplate>, 'assignedAt'> & { assignedAt?: unknown }, actor: ReviewActor, expectedUpdatedAt?: Timestamp | null) {
-  if (!actor.uid || !actor.organizationId || !['admin', 'instructor'].includes(actor.role)) throw new Error('A verified instructor session is required.');
+  if (!actor.uid || !actor.organizationId || !isSparkQuestStaffRole(actor.role)) throw new Error('A verified instructor session is required.');
   return runTransaction(db, async transaction => {
     const ref = doc(db, 'project_templates', missionId);
     const snapshot = await transaction.get(ref);

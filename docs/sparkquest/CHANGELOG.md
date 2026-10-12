@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Edufy staff Studio launch repair
+
+- Unified SparkQuest staff authority across `super_admin`, `owner`, `admin`, and `instructor`, matching the secure Edufy launch policy and Firestore rules.
+- Higher admin roles now route directly to Factory and retain mission assignment, review, import, removal, arcade management, and staff session behavior.
+- Added focused role assertions; SparkQuest TypeScript, SparkQuest production build, and the Edufy production build pass.
+
 ## 2026-10-12 — Parent first-visit install invitation
 
 - Added a one-time, account-scoped invitation after the signed-in parent family loads. The 011Y sheet offers the browser install action when available, or clear home-screen instructions, and can be dismissed.

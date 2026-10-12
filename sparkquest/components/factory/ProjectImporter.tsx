@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { useAuth } from '../../context/AuthContext';
+import { isSparkQuestStaffRole } from '../../domain/staffRoles';
 import { api } from '../../services/api';
 import { MissionImportWizard } from './MissionImportWizard';
 import type { ImportCatalog } from '../../domain/missionImport';
@@ -21,7 +22,7 @@ export const ProjectImporter: React.FC<ProjectImporterProps> = ({ onClose, onSuc
   }), [stations, processTemplates, programs, students, organizationId]);
   return <MissionImportWizard catalog={catalog} onClose={onClose} onSuccess={onSuccess}
     sessionKey={`${organizationId || ''}/${user?.uid || ''}`}
-    canWrite={Boolean(user?.uid && organizationId && ['admin', 'instructor'].includes(userProfile?.role || ''))}
+    canWrite={Boolean(user?.uid && organizationId && isSparkQuestStaffRole(userProfile?.role))}
     saveMission={actions.importMission} assignMission={actions.assignImportedMission}
     uploadFile={async (file, scope, progress) => {
       if (!organizationId || !user?.uid) throw new Error('Refresh your instructor session before uploading.');

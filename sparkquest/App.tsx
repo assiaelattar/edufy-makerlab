@@ -20,6 +20,7 @@ import { exchangeSparkQuestLaunch } from './services/appBridge';
 import { Assignment, ProcessTemplate, ProjectTemplate, StudentProject } from './types';
 import { assignmentFromMission } from './domain/missionContent';
 import { currentAcademicYear, projectAcademicYear } from './utils/academicYear';
+import { isSparkQuestStaffRole } from './domain/staffRoles';
 import { projectLane } from './domain/learnerWorkbench';
 import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from './domain/workflowPipeline';
 
@@ -310,7 +311,7 @@ const SparkQuestApp: React.FC = () => {
     }
 
     // Role Routing
-    if (userProfile?.role === 'instructor' || userProfile?.role === 'admin') {
+    if (isSparkQuestStaffRole(userProfile?.role)) {
       setView('FACTORY');
       return;
     }

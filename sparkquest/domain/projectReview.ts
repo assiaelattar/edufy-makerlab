@@ -1,4 +1,5 @@
 import type { ProjectReview, ProjectStep, ProjectStepReviewState, StudentProject } from '../types.ts';
+import { isSparkQuestStaffRole } from './staffRoles.ts';
 
 export const normalizedReviewStatus = (value: unknown) => String(value || '').trim().toLowerCase().replace(/[ -]+/g, '_');
 export const stepSubmissionFingerprint = (step: ProjectStep) => JSON.stringify([
@@ -106,7 +107,7 @@ export function submittedProof(step: ProjectStep, evidence: string, note: string
 export interface ReviewActor { uid: string; organizationId: string; role: string; name?: string; studentId?: string }
 export interface ReviewCommand { id: string; stepId?: string; outcome: ProjectReview['outcome']; feedback: string; xp?: number; expectedFingerprint: string }
 export function buildReviewPatch(project: StudentProject, command: ReviewCommand, actor: ReviewActor, reviewedAt: string): Partial<StudentProject> {
-  if (!actor.uid || !actor.organizationId || !['admin', 'instructor'].includes(actor.role) || project.organizationId !== actor.organizationId) throw new Error('Your instructor account cannot review this project.');
+  if (!actor.uid || !actor.organizationId || !isSparkQuestStaffRole(actor.role) || project.organizationId !== actor.organizationId) throw new Error('Your instructor account cannot review this project.');
   if (!command.id || !['published', 'changes_requested', 'step_approved', 'step_changes_requested'].includes(command.outcome)) throw new Error('Choose a valid review decision.');
   if ((project.reviewHistory || []).some(review => review.id === command.id)) return {};
   if (reviewFingerprint(project, command.stepId) !== command.expectedFingerprint) throw new Error('This submission changed while you were reviewing. Reopen the latest proof before deciding.');

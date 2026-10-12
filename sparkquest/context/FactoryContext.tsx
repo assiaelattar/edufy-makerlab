@@ -9,6 +9,7 @@ import { persistImportedMission, publishImportedMission } from '../services/miss
 import type { ImportCatalog, ImportDraft } from '../domain/missionImport';
 import { assignMissionToLearner, saveMissionAudience } from '../services/profileAssignment';
 import { deleteUnusedMission, inspectMissionRemoval, retireMission } from '../services/missionRemoval';
+import { isSparkQuestStaffRole } from '../domain/staffRoles';
 
 const FactoryContext = createContext<any>(null);
 
@@ -65,7 +66,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
         const firestore = db as Firestore;
-        const isElevated = userProfile.role === 'admin' || userProfile.role === 'instructor';
+        const isElevated = isSparkQuestStaffRole(userProfile.role);
 
         // Student startup stays deliberately small. The dashboard owns its
         // enrollment/mission reads, while the wizard only needs these two
@@ -257,7 +258,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (authLoading) return;
         setStudentProjects([]);
         setStudentProjectsError(null);
-        const elevated = userProfile?.role === 'admin' || userProfile?.role === 'instructor';
+        const elevated = isSparkQuestStaffRole(userProfile?.role);
         if (!db || !user?.uid || !organizationId || !elevated) {
             setStudentProjectsLoading(false);
             return;
@@ -425,7 +426,7 @@ export const FactoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [enrollmentsError, setEnrollmentsError] = useState<string | null>(null);
     useEffect(() => {
         setEnrollments([]); setEnrollmentsLoading(true); setEnrollmentsError(null);
-        if (!db || !user || !userProfile || !organizationId || (userProfile.role !== 'admin' && userProfile.role !== 'instructor')) {
+        if (!db || !user || !userProfile || !organizationId || !isSparkQuestStaffRole(userProfile.role)) {
             setEnrollments([]);
             setEnrollmentsLoading(false);
             return;

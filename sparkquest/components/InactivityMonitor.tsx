@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Power } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { isSparkQuestStaffRole } from '../domain/staffRoles';
 
 export const InactivityMonitor: React.FC = () => {
     const { userProfile } = useAuth();
@@ -51,7 +52,7 @@ export const InactivityMonitor: React.FC = () => {
         // --- 0. SECURITY & CONFIG CHECKS ---
         const isDesktopApp = !!(window as any).sparkquest;
         const isKioskMode = new URLSearchParams(window.location.search).get('kiosk') === 'true';
-        const isAdminOrInstructor = userProfile?.role === 'admin' || userProfile?.role === 'instructor';
+        const isAdminOrInstructor = isSparkQuestStaffRole(userProfile?.role);
 
         // RULE: Disable for Admins/Instructors ALWAYS
         if (isAdminOrInstructor) {

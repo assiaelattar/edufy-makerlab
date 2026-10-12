@@ -1,5 +1,9 @@
 # SparkQuest Known Issues
 
+## Staff Studio launch acceptance after 2026-10-12 repair
+
+- The client/server role mismatch for `super_admin` and `owner` is repaired locally and covered by a focused role smoke. One authenticated launch from the affected Edufy administrator account remains the final production acceptance check after release.
+
 ## Parent install invitation and AAJLANE account check
 
 - The first-visit sheet can guide installation, but a native install button depends on browser support and installability; iOS uses Safari's Share menu. Physical iOS and Android acceptance remains open.

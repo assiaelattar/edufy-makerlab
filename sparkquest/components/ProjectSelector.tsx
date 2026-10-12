@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { isSparkQuestStaffRole } from '../domain/staffRoles';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, Timestamp, addDoc } from 'firebase/firestore';
 import { ProcessTemplate, StudentProject, Station } from '../types';
@@ -109,7 +110,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
     // Check if user is admin or instructor
     const role = userRole || authProfile?.role;
-    const isAdminOrInstructor = role === 'admin' || role === 'instructor';
+    const isAdminOrInstructor = isSparkQuestStaffRole(role);
 
     // Logout Confirmation State
     const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);

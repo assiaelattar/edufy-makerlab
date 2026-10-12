@@ -3,6 +3,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { ExternalLink } from 'lucide-react';
 import { useFactoryData } from '../../hooks/useFactoryData';
 import { useAuth } from '../../context/AuthContext';
+import { isSparkQuestStaffRole } from '../../domain/staffRoles';
 import { db } from '../../services/firebase';
 import { submitInstructorReview } from '../../services/projectReview';
 import { buildReviewPatch, effectiveStepReviewStatus, normalizedReviewStatus, proofKind, projectNeedsReview, reviewFingerprint, reviewTime, safeProofUrl, stepIsApproved, stepNeedsReview, stepReviewFeedback, type ReviewCommand } from '../../domain/projectReview';
@@ -156,7 +157,7 @@ function LiveReview({ projectId, onClose, initialStepId, initialTab }: ReviewMod
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     setProject(null); setLoading(true); setError(null);
-    if (!db || !user || !userProfile?.organizationId || !['admin', 'instructor'].includes(userProfile.role)) {
+    if (!db || !user || !userProfile?.organizationId || !isSparkQuestStaffRole(userProfile.role)) {
       setError('Your instructor session is unavailable. Sign in again.'); setLoading(false); return;
     }
     return onSnapshot(doc(db, 'student_projects', projectId), snapshot => {
