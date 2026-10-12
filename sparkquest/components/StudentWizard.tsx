@@ -18,6 +18,7 @@ import { useTheme, THEMES } from '../context/ThemeContext';
 import { useFocusSession } from '../context/FocusSessionContext';
 import { ResourceViewerModal } from './ResourceViewerModal';
 import { ProjectPlanEditor } from './ProjectPlanEditor';
+import { ParentO11Y } from './ParentO11Y';
 import { ResourceLearningGate } from './ResourceLearningGate';
 import { useToast } from '../context/ToastContext';
 import { resolveMissionContent } from '../domain/missionContent';
@@ -1865,6 +1866,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
           <span className="sq-workspace-status">{project.status === 'published' ? 'Approved' : project.status === 'submitted' ? 'In review' : project.status === 'changes_requested' ? 'Your turn' : 'In progress'}</span>
         </header>
         <main className="sq-showcase-scroll">
+          <div className={`sq-studio-guide ${project.status === 'changes_requested' ? 'is-care' : project.status === 'submitted' ? 'is-calm' : 'is-proud'}`}><div><span>YOUR SHOWCASE</span><p>{project.status === 'published' ? 'You did it. Your work is ready to inspire other makers.' : project.status === 'changes_requested' ? 'One more improvement can make your story stronger.' : project.status === 'submitted' ? 'Your Showcase is with your mentor now.' : 'Show the idea, the making, and what you learned.'}</p></div><ParentO11Y cue={project.status === 'published' ? 3 : project.status === 'changes_requested' ? 2 : 1} mood={project.status === 'changes_requested' ? 'care' : project.status === 'submitted' ? 'calm' : 'proud'} /></div>
           <section className="sq-showcase-editor" aria-label="Showcase editor">
             <ShowcaseUploadContent
               previewMode={previewMode}
@@ -1905,6 +1907,7 @@ export const StudentWizard: React.FC<StudentWizardProps> = ({ assignment, initia
 
       <main className="sq-studio-main">
         <ProjectReviewNotice project={project} />
+        <div className={`sq-studio-guide ${project.status === 'changes_requested' ? 'is-care' : isWaitingForReview ? 'is-calm' : progressPercent >= 100 ? 'is-proud' : 'is-curious'}`}><div><span>{project.status === 'changes_requested' ? 'A NOTE FROM YOUR MENTOR' : isWaitingForReview ? 'MENTOR CHECKPOINT' : progressPercent >= 100 ? 'READY TO SHARE' : 'KEEP MAKING'}</span><p>{project.status === 'changes_requested' ? 'Use your mentor’s notes to improve this build, one step at a time.' : isWaitingForReview ? 'Your work is with your mentor. You can return to your saved proof.' : progressPercent >= 100 ? 'Your steps are ready. Check your proof and show what you made.' : 'Focus on your next step. Every try teaches you something.'}</p></div><ParentO11Y cue={Math.floor(progressPercent / 10) + (project.status === 'changes_requested' ? 20 : isWaitingForReview ? 30 : 1)} mood={project.status === 'changes_requested' ? 'care' : isWaitingForReview ? 'calm' : progressPercent >= 100 ? 'proud' : 'curious'} /></div>
         <section className="sq-studio-hero" aria-labelledby="studio-heading">
           <div className="sq-studio-hero-copy">
             <div>

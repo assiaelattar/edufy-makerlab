@@ -5,6 +5,7 @@
 - Reorganized the existing learner workbench into focused My build, Explore, and Mentor views, preserving project continuation, mission discovery, personal/Showcase creation, and Field log actions.
 - Reused the parent's 011Y mascot as a contextual learner guide and in saved mission steps; brought parent paper, blue, lime, and pastel patterns into the student route.
 - Added mobile project rails and a one-step-at-a-time saved mission plan with progress markers and previous/next controls.
+- Carried the contextual 011Y guide into the active build and Showcase editors, using progress and mentor-review state to shape the message while leaving editor actions unchanged.
 
 ## 2026-10-12 — Staff Studio stylesheet recovery
 
