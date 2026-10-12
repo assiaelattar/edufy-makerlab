@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Parent delight stays optional and truthful
+
+Use blue for the current project's primary card and rotate other cards through the established lime, lavender, mint, and warm orange family. Color is visual rhythm; project status remains written on every card. Parent sound is opt-in, generated locally in short quiet cues, and remembered on that device; no page-load audio. The supplied O11Y asset exposes a verified `Hit` trigger but no confirmed emotion enum, so vary its surrounding guide colors and reaction accents by page context without claiming separate Rive states. A dedicated `role=parent` entry changes presentation and PWA metadata only; the existing Firebase session, parent role, tenant, and guardian links still govern access.
+
 ## 2026-10-12 — Invite each parent once after family access loads
 
 Show the install invitation only in a verified parent session with a loaded family, so the parent first sees the value and the sheet never interrupts sign-in. Persist dismissal per parent UID on that device. Use the native browser prompt only when offered; otherwise show browser-specific home-screen steps. Do not imply that family records are available offline.

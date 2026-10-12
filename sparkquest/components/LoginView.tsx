@@ -3,14 +3,15 @@ import { Lock, ArrowRight, AlertCircle, Eye, EyeOff, Hammer, CheckCircle2, Arrow
 import { config } from '../utils/config';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
+import { ParentLoginView } from './ParentLoginView';
 
 export const LoginView: React.FC = () => {
-    const [email, setEmail] = useState(() => localStorage.getItem('sparkquest_remember_email') || '');
+    const isParentEntry = new URLSearchParams(window.location.search).get('role') === 'parent';
+    const [email, setEmail] = useState(() => isParentEntry ? '' : localStorage.getItem('sparkquest_remember_email') || '');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
-    const isParentEntry = new URLSearchParams(window.location.search).get('role') === 'parent';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -25,11 +26,13 @@ export const LoginView: React.FC = () => {
 
         } catch (err: any) {
             console.error(err);
-            setError('Invalid email or password. Please try again.');
+            setError(isParentEntry ? 'Identifiant ou mot de passe incorrect. Réessayez, ou demandez de l’aide à MakerLab.' : 'Invalid email or password. Please try again.');
         } finally {
             setLoading(false);
         }
     };
+
+    if (isParentEntry) return <ParentLoginView email={email} password={password} error={error} loading={loading} showPassword={showPassword} onEmailChange={setEmail} onPasswordChange={setPassword} onShowPasswordChange={() => setShowPassword(current => !current)} onSubmit={handleSubmit} />;
 
     return (
         <main className="sq-login-shell">
@@ -101,10 +104,9 @@ export const LoginView: React.FC = () => {
                         </button>
                     </form>
 
-                    <div className="sq-login-trust"><CheckCircle2 size={17} /><span>{isParentEntry ? 'Your access opens only the learners and records linked to your verified family account.' : 'Learning stays linked to verified Edufy accounts and family connections.'}</span></div>
-                    {isParentEntry
-                        ? <p className="sq-entry-text-action sq-login-back">Need a password reset? Ask the MakerLab team to issue one securely.</p>
-                        : <a className="sq-entry-text-action sq-login-back" href={config.erpUrl}><ArrowLeft size={16} /> Back to Edufy</a>}
+                    <div className="sq-login-trust"><CheckCircle2 size={17} /><span>Learning stays linked to verified Edufy accounts and family connections.</span></div>
+                    <a className="sq-entry-text-action sq-login-back" href="/?role=parent#login">Accès parents <ArrowRight size={16} /></a>
+                    <a className="sq-entry-text-action sq-login-back" href={config.erpUrl}><ArrowLeft size={16} /> Back to Edufy</a>
                 </div>
             </section>
         </main>

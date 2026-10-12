@@ -3,7 +3,7 @@
   "name": "SparkQuest Famille",
   "short_name": "SQ Famille",
   "description": "Le parcours MakerLab de votre enfant, ses projets et son prochain atelier.",
-  "start_url": "/#login",
+  "start_url": "/?role=parent#login",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

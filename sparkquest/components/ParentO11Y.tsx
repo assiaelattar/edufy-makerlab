@@ -5,7 +5,9 @@ const ARTBOARD = 'O11Y-Expression';
 const MACHINE = 'O11Y-Expressions';
 
 /** Patgrivet's original 011Y Rive file. A single instance survives parent rerenders. */
-export const ParentO11Y: React.FC<{ cue: number }> = ({ cue }) => {
+export type ParentMascotMood = 'welcome' | 'curious' | 'proud' | 'care' | 'calm';
+
+export const ParentO11Y: React.FC<{ cue: number; mood?: ParentMascotMood }> = ({ cue, mood = 'welcome' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const riveRef = useRef<import('@rive-app/webgl2').Rive | null>(null);
   const hitRef = useRef<import('@rive-app/webgl2').StateMachineInput | null>(null);
@@ -88,7 +90,7 @@ export const ParentO11Y: React.FC<{ cue: number }> = ({ cue }) => {
 
   useEffect(() => { if (cue > 0) react(); }, [cue]);
 
-  return <div className="sq-parent-o11y" aria-label="011Y, le compagnon du parcours">
+  return <div className={`sq-parent-o11y is-${mood}`} aria-hidden="true">
     <div className="sq-parent-o11y-art"><canvas ref={canvasRef} aria-hidden="true" /></div>
     {(!ready || failed) && <span className="sq-parent-o11y-fallback" aria-hidden="true">✳</span>}
   </div>;

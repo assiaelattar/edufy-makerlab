@@ -1,4 +1,10 @@
-# Latest handoff — SparkQuest parent install invitation
+# Latest handoff — SparkQuest parent color, sound, and direct sign-in
+
+On 2026-10-12 the parent portal gained varied project and upcoming card colors, an opt-in remembered Web Audio cue system, contextual 011Y guide scenes, and a dedicated French parent login at `/?role=parent#login`. The parent manifest now starts at that route, and the general login links to it. The same Firebase authentication and verified guardian-linked family reader remain in force. SparkQuest TypeScript, both production builds, and phone-width browser checks of the sign-in, project archive, mascot contexts, sound toggle, and zero horizontal overflow passed locally. Production deployment status is recorded after promotion. No family data or permission rules were changed.
+
+---
+
+# Previous handoff — SparkQuest parent install invitation
 
 On 2026-10-12 a first-visit install invitation was added to the standalone SparkQuest parent portal. It opens after the verified family loads, uses 011Y artwork, offers a native install action when the browser supplies one, and otherwise gives home-screen instructions. Dismissal is remembered per parent UID on the device; installed standalone sessions do not show it. Focused commit `8d5842f` reached GitHub `main`. SparkQuest TypeScript, both local production builds, parent family/workshop smokes, and phone-width invitation/close browser checks passed. Vercel production deployment `dpl_9TWkWQwrfwFUHTSULzCzkBKeQYzA` is READY and aliased to `https://sparkquest-makerlab.vercel.app/`; the page, parent manifest, and both icons returned HTTP 200. The public AAJLANE family acceptance remains pending the user's sign-in; the browser was still on login, and no guardian links or family data were modified.
 

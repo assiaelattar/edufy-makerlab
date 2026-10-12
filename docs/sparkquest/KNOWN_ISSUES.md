@@ -1,5 +1,11 @@
 # SparkQuest Known Issues
 
+## Parent color, sound, and entry follow-up
+
+- Physical Android/iOS checks remain for the native install flow and the optional Web Audio cues; a browser may block or omit audio, and the parent actions must still work.
+- The dedicated parent entry is a visual route, not a separate authorization mechanism. Public real-account sign-in and the AAJLANE three-child view still need the designated parent session to verify them.
+- O11Y's shipped Rive state machine has one verified `Hit` trigger. The guide varies the surrounding scene by context; distinct internal emotion states would require a different verified asset or controls.
+
 ## Staff Studio launch acceptance after 2026-10-12 repair
 
 - The client/server role mismatch for `super_admin` and `owner` is repaired locally and covered by a focused role smoke. One authenticated launch from the affected Edufy administrator account remains the final production acceptance check after release.

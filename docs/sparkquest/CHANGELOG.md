@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Parent project color, sound, and direct entry
+
+- Gave project and upcoming mission cards a rotating set of readable lilac, apricot, mint, lime, and blue treatments while preserving the current project's blue focus and full cover art.
+- Added optional, remembered sound effects for navigation, discovery, step changes, and opening a completed project. Sound starts off until a parent turns it on.
+- Made 011Y's surrounding guide scene react to discovery, completion, revision, and calm family contexts using the verified Rive trigger and short visual accents.
+- Added a French parent sign-in screen at `/?role=parent#login`, linked it from the general sign-in, and made the parent PWA launch there.
+
 ## 2026-10-12 — Edufy staff Studio launch repair
 
 - Unified SparkQuest staff authority across `super_admin`, `owner`, `admin`, and `instructor`, matching the secure Edufy launch policy and Firestore rules.

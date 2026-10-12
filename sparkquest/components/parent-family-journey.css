@@ -14,6 +14,7 @@
 .pf-header-actions button { display:grid; width:44px; height:44px; place-items:center; border:0; border-radius:12px; background:transparent; color:#2b4566; }
 .pf-header-actions button:hover { background:#eff3fa; }
 .pf-header-actions button:disabled { opacity:.4; }
+.pf-header-actions .pf-sound-toggle[aria-pressed=true] { background:#e9f3d5; color:#305425; }
 .pf-preview-badge { border-radius:999px; padding:6px 9px; background:#eee9ff; color:#504179; font-size:10px; font-weight:900; white-space:nowrap; }
 .pf-page { width:min(100%,960px); min-height:calc(100dvh - 62px); margin-inline:auto; padding:20px 20px 118px; }
 .pf-screen-choose .pf-page,.pf-screen-detail .pf-page,.pf-screen-moments .pf-page { padding-bottom:48px; }
@@ -23,6 +24,16 @@
 .pf-back { display:inline-flex; min-height:44px; align-items:center; gap:8px; border:0; padding:0 2px; background:transparent; color:var(--pf-blue); font-size:14px; font-weight:850; }
 .pf-guide { display:flex; min-height:100px; align-items:center; justify-content:space-between; gap:12px; margin:2px 0 22px; border:1px solid #e1e8dc; border-radius:23px; padding:11px 10px 10px 17px; background:#edf4e5; }
 .pf-guide.is-welcome { min-height:132px; margin-top:12px; background:#eaf1fe; border-color:#dce7ff; }
+.pf-guide.is-curious { background:#eee9ff; border-color:#d9cdfb; }
+.pf-guide.is-proud { background:#e8f7d5; border-color:#c7e69f; }
+.pf-guide.is-care { background:#fff0e2; border-color:#f2d4b8; }
+.pf-guide.is-calm { background:#e7f3f0; border-color:#c9e0d9; }
+.pf-guide-mascot { position:relative; display:block; flex:none; }
+.pf-mascot-spark { position:absolute; top:3px; right:0; display:grid; width:30px; height:30px; place-items:center; border:2px solid #fff; border-radius:50%; background:#2448eb; color:#fff; font:900 18px/1 'Manrope',system-ui,sans-serif; box-shadow:0 3px 0 #1736b4; animation:pf-mascot-spark .55s cubic-bezier(.2,.8,.2,1) both; }
+.pf-guide.is-proud .pf-mascot-spark { background:#d5f777; color:#305425; box-shadow:0 3px 0 #a8c76b; }
+.pf-guide.is-care .pf-mascot-spark { background:#ffb785; color:#663c25; box-shadow:0 3px 0 #d79568; }
+.pf-guide.is-calm .pf-mascot-spark { background:#c3e6d8; color:#225744; box-shadow:0 3px 0 #95c9b7; }
+@keyframes pf-mascot-spark { from { opacity:0; transform:translate(-8px,8px) scale(.55); } to { opacity:1; transform:translate(0,0) scale(1); } }
 .pf-guide-copy { min-width:0; max-width:390px; }
 .pf-guide-copy p { max-width:27ch; margin:5px 0 0; font-family:'Manrope','Nunito',sans-serif; font-size:clamp(16px,4.4vw,23px); font-weight:850; letter-spacing:-.045em; line-height:1.16; }
 .pf-guide .sq-parent-o11y { position:relative; display:grid; width:94px; height:92px; flex:none; align-items:center; justify-items:center; overflow:hidden; mix-blend-mode:multiply; -webkit-mask-image:radial-gradient(ellipse 56% 53% at 50% 51%,#000 62%,transparent 100%); mask-image:radial-gradient(ellipse 56% 53% at 50% 51%,#000 62%,transparent 100%); }
@@ -80,6 +91,18 @@
 .pf-project-card.is-featured .pf-project-card-copy strong { font-size:clamp(23px,6.4vw,31px); }
 .pf-project-card.is-featured .pf-pill { background:#ffffff2b; color:#fff; }
 .pf-project-card.is-featured :is(small,.pf-card-arrow) { color:#eff3ff; }
+.pf-project-card:not(.is-featured),.pf-upcoming-card { border-color:var(--pf-card-edge); background:var(--pf-card-bg); color:var(--pf-card-ink); box-shadow:0 5px 0 var(--pf-card-shadow); }
+.pf-project-card:not(.is-featured):hover,.pf-upcoming-card:hover { box-shadow:0 8px 0 var(--pf-card-shadow); }
+.pf-project-card:not(.is-featured):active,.pf-upcoming-card:active { box-shadow:0 2px 0 var(--pf-card-shadow); }
+.pf-project-card:not(.is-featured) :is(.pf-project-card-copy),.pf-upcoming-card .pf-upcoming-card-copy { background:var(--pf-card-bg); }
+.pf-project-card:not(.is-featured) .pf-card-arrow,.pf-upcoming-card .pf-card-arrow { color:var(--pf-card-ink); }
+.pf-project-card:not(.is-featured) .pf-pill,.pf-upcoming-card .pf-pill { background:var(--pf-card-pill); color:var(--pf-card-ink); }
+.pf-project-card:not(.is-featured).is-blue,.pf-upcoming-card.is-blue { --pf-card-bg:#2448eb; --pf-card-ink:#fff; --pf-card-edge:#2448eb; --pf-card-shadow:#1736b4; --pf-card-pill:#ffffff2a; }
+.pf-project-card:not(.is-featured).is-lilac,.pf-upcoming-card.is-lilac { --pf-card-bg:#e9e1ff; --pf-card-ink:#40316d; --pf-card-edge:#d6c6f7; --pf-card-shadow:#c8b9e6; --pf-card-pill:#ffffff80; }
+.pf-project-card:not(.is-featured).is-apricot,.pf-upcoming-card.is-apricot { --pf-card-bg:#ffdfc8; --pf-card-ink:#673b2a; --pf-card-edge:#f3c5a6; --pf-card-shadow:#e4b694; --pf-card-pill:#ffffff80; }
+.pf-project-card:not(.is-featured).is-mint,.pf-upcoming-card.is-mint { --pf-card-bg:#d8f1e4; --pf-card-ink:#174d3d; --pf-card-edge:#b8decf; --pf-card-shadow:#a8d1c0; --pf-card-pill:#ffffff80; }
+.pf-project-card:not(.is-featured).is-lime,.pf-upcoming-card.is-lime { --pf-card-bg:#e4f5ac; --pf-card-ink:#34451f; --pf-card-edge:#c9df8e; --pf-card-shadow:#b8cf7c; --pf-card-pill:#ffffff80; }
+.pf-project-card:not(.is-featured).is-blue .pf-project-card-copy small { color:#e9efff; }
 .pf-next { margin-top:42px; }
 .pf-next h2,.pf-archive h2,.pf-detail-intro h2,.pf-family-block h2 { margin:6px 0 17px; font-family:'Manrope','Nunito',sans-serif; font-size:clamp(22px,6vw,30px); font-weight:900; letter-spacing:-.055em; line-height:1.12; }
 .pf-rail { display:flex; gap:14px; overflow-x:auto; padding:2px 3px 9px; scroll-snap-type:x mandatory; scrollbar-width:none; }
@@ -206,5 +229,6 @@
 }
 @media (max-width:360px) { .pf-page { padding-inline:17px; } .pf-guide .sq-parent-o11y { width:77px; } .pf-guide.is-welcome .sq-parent-o11y { width:100px; } .pf-detail-hero { padding-inline:17px; } .pf-step-slide { padding:16px; } }
 @media (max-width:390px) { .pf-nav { gap:2px; padding-inline:6px; } .pf-nav button { font-size:10px; } .pf-family-pickup-link { gap:10px; padding-inline:12px; } }
+@media (max-width:430px) { .pf-header { gap:7px; padding-inline:12px; } .pf-header-actions { gap:0; } .pf-brand { font-size:15px; } .pf-preview-badge { display:none; } }
 @media (prefers-reduced-motion:reduce) { .pf-app *, .pf-app *::before, .pf-app *::after { animation-duration:.01ms !important; transition-duration:.01ms !important; scroll-behavior:auto !important; } }
 @media (prefers-reduced-motion:reduce) { .pf-nav.is-hidden { transform:none !important; opacity:1 !important; pointer-events:auto !important; } }

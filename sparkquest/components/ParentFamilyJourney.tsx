@@ -1,20 +1,23 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Car, Check, ChevronLeft, ChevronRight, CircleAlert, CreditCard, Download, ExternalLink, FileText, Image as ImageIcon, LogOut, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Car, Check, ChevronLeft, ChevronRight, CircleAlert, CreditCard, Download, ExternalLink, FileText, Image as ImageIcon, LogOut, RefreshCw, ShieldCheck, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import type { ProjectStep, Resource } from '../types';
 import type { FamilyChild, FamilyProject } from '../hooks/useParentFamily';
 import type { FamilyUpcomingMission } from '../domain/parentUpcoming';
 import type { FamilySource } from '../domain/parentFamilyOperations';
 import { currentStepReview, effectiveStepReviewStatus, proofKind, reviewTime, stepIsApproved, stepNeedsReview, stepReviewFeedback } from '../domain/projectReview';
 import { isSafeFamilyHref, isSafeProjectImage, projectEvidenceImages, resolveParentProjectImage } from '../domain/parentProjectVisual';
-import { ParentO11Y } from './ParentO11Y';
+import { ParentO11Y, type ParentMascotMood } from './ParentO11Y';
 import { ParentFamilyLoading } from './ParentFamilyLoading';
 import { ParentPickupExperience } from './ParentPickupExperience';
 import { ParentInstallInvitation } from './ParentInstallInvitation';
+import { useParentSound } from '../hooks/useParentSound';
 import './parent-family-journey.css';
 
 type Screen = 'choose' | 'home' | 'projects' | 'detail' | 'moments' | 'family' | 'pickup';
 type Detail = { kind: 'project' | 'upcoming'; id: string; from: 'home' | 'projects' };
 type StepTone = 'done' | 'active' | 'sent' | 'revise' | 'later';
+type CardTone = 'blue' | 'lilac' | 'apricot' | 'mint' | 'lime';
+const cardTones: CardTone[] = ['lilac', 'apricot', 'mint', 'lime', 'blue'];
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
 const installChoiceKey = (parentUid: string) => `sparkquest:parent-install-choice:v1:${parentUid}`;
 const isInstalledApp = () => window.matchMedia('(display-mode: standalone)').matches
@@ -65,17 +68,17 @@ const Cover: React.FC<{ src?: string | null; title: string; className?: string }
   </span>;
 };
 
-const ProjectCard: React.FC<{ project: FamilyProject; onOpen: () => void; large?: boolean }> = ({ project, onOpen, large = false }) => {
+const ProjectCard: React.FC<{ project: FamilyProject; onOpen: () => void; large?: boolean; tone?: CardTone }> = ({ project, onOpen, large = false, tone = 'blue' }) => {
   const steps = project.steps || [];
   const next = project.status === 'published' ? null : steps.find(step => !stepIsApproved(project, step));
-  return <button type="button" className={`pf-project-card${large ? ' is-featured' : ''}`} onClick={onOpen} aria-label={`Voir le projet ${project.title}`}>
+  return <button type="button" className={`pf-project-card is-${tone}${large ? ' is-featured' : ''}`} onClick={onOpen} aria-label={`Voir le projet ${project.title}`}>
     <Cover src={projectCover(project)} title={project.title} />
     <span className="pf-project-card-copy"><span className="pf-pill">{statusLabel(project.status)}</span><strong>{project.title || 'Projet sans titre'}</strong>{next && <small>Prochaine étape · {next.title}</small>}<span className="pf-card-arrow">Voir le projet <ArrowRight size={18} /></span></span>
   </button>;
 };
 
-const UpcomingCard: React.FC<{ mission: FamilyUpcomingMission; onOpen: () => void }> = ({ mission, onOpen }) =>
-  <button type="button" className="pf-upcoming-card" onClick={onOpen} aria-label={`Découvrir la mission à venir ${mission.title}`}>
+const UpcomingCard: React.FC<{ mission: FamilyUpcomingMission; onOpen: () => void; tone?: CardTone }> = ({ mission, onOpen, tone = 'lilac' }) =>
+  <button type="button" className={`pf-upcoming-card is-${tone}`} onClick={onOpen} aria-label={`Découvrir la mission à venir ${mission.title}`}>
     <Cover src={mission.thumbnailUrl} title={mission.title} />
     <span className="pf-upcoming-card-copy"><span className="pf-pill pf-pill-next">À venir</span><strong>{mission.title}</strong><span className="pf-card-arrow">Découvrir <ArrowRight size={17} /></span></span>
   </button>;
@@ -138,6 +141,7 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, load
   const [navHidden, setNavHidden] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [showInstallInvite, setShowInstallInvite] = useState(false);
+  const sound = useParentSound();
   const scrollRef = useRef<HTMLElement>(null);
   const lastScrollTop = useRef(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -226,29 +230,32 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, load
     }
   };
 
-  const move = (next: Screen) => {
+  const move = (next: Screen, cue: 'open' | 'navigate' | 'celebrate' = 'navigate') => {
+    sound.play(cue);
     setScreen(next);
     setNavHidden(false);
     lastScrollTop.current = 0;
     setMascotCue(value => value + 1);
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
   };
-  const choose = (id: string) => { setSelectedChildId(id); setDetail(null); setUpcomingIndex(0); move('home'); };
+  const choose = (id: string) => { setSelectedChildId(id); setDetail(null); setUpcomingIndex(0); move('home', 'open'); };
   const openProject = (kind: Detail['kind'], id: string, from: Detail['from']) => {
     setDetail({ kind, id, from });
     const project = kind === 'project' ? projects.find(item => item.id === id) : undefined;
     setStepIndex(project ? Math.max(0, (project.steps || []).findIndex(step => !stepIsApproved(project, step))) : 0);
-    move('detail');
+    move('detail', project?.status === 'published' ? 'celebrate' : 'open');
   };
   const back = () => { if (screen === 'detail') move(detail?.from || 'home'); else if (screen === 'pickup') move('family'); else if (screen === 'moments') move('projects'); else if (screen === 'home') move('choose'); else move('home'); };
   const shiftUpcoming = (direction: number) => {
     if (!upcoming.length) return;
     const next = Math.min(upcoming.length - 1, Math.max(0, upcomingIndex + direction));
+    if (next !== upcomingIndex) sound.play('step');
     setUpcomingIndex(next);
     upcomingRailRef.current?.children[next]?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', inline: 'start', block: 'nearest' });
   };
   const changeStep = (next: number) => {
     if (next < 0 || next >= steps.length || next === stepIndex) return;
+    sound.play('step');
     setStepIndex(next);
     setMascotCue(value => value + 1);
     window.requestAnimationFrame(() => {
@@ -265,6 +272,13 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, load
     : screen === 'moments' ? 'Les petits instants racontent aussi son parcours.'
     : screen === 'pickup' ? 'Son prochain rendez-vous, puis le retour à la maison.'
     : 'Les informations utiles à la famille.';
+  const activeStepTone = selectedProject && activeStep ? stepState(selectedProject, activeStep).tone : null;
+  const mascotMood: ParentMascotMood = screen === 'choose' ? 'welcome'
+    : screen === 'detail' && (activeStepTone === 'done' || selectedProject?.status === 'published') ? 'proud'
+    : screen === 'detail' && activeStepTone === 'revise' ? 'care'
+    : screen === 'pickup' || screen === 'family' ? 'calm'
+    : screen === 'moments' ? 'proud' : 'curious';
+  const mascotSpark = mascotMood === 'proud' ? '✦' : mascotMood === 'care' ? '♡' : mascotMood === 'curious' ? '?' : '✳';
 
   const gallery = activeChild ? [
     ...(activeChild.media.status === 'ready' ? activeChild.media.data.map(item => ({ id: item.id, url: item.url, caption: item.caption })) : []),
@@ -279,14 +293,14 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, load
   if (loading && children.length === 0 && !error) return <ParentFamilyLoading />;
 
   return <main className={`pf-app pf-screen-${screen}${activeChild ? ' pf-has-nav' : ''}`} ref={scrollRef} onScroll={handleScroll}>
-    <header className="pf-header"><div className="pf-brand"><span>✳</span><strong>sparkquest<span>.</span></strong></div><div className="pf-header-actions">{previewMode && <span className="pf-preview-badge">Famille exemple</span>}{installPrompt && <button type="button" onClick={requestInstall} aria-label="Installer SparkQuest Famille" title="Installer SparkQuest Famille"><Download size={19} /></button>}{!previewMode && <button type="button" onClick={onRefresh} aria-label="Actualiser" disabled={loading}><RefreshCw size={19} /></button>}<button type="button" onClick={onSignOut} aria-label={previewMode ? 'Quitter l’aperçu' : 'Se déconnecter'}><LogOut size={19} /></button></div></header>
+    <header className="pf-header"><div className="pf-brand"><span>✳</span><strong>sparkquest<span>.</span></strong></div><div className="pf-header-actions">{previewMode && <span className="pf-preview-badge">Famille exemple</span>}{installPrompt && <button type="button" onClick={requestInstall} aria-label="Installer SparkQuest Famille" title="Installer SparkQuest Famille"><Download size={19} /></button>}<button type="button" className="pf-sound-toggle" onClick={sound.toggle} aria-label={sound.enabled ? 'Désactiver les sons' : 'Activer les sons'} aria-pressed={sound.enabled} title={sound.enabled ? 'Sons activés' : 'Sons désactivés'}>{sound.enabled ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>{!previewMode && <button type="button" onClick={onRefresh} aria-label="Actualiser" disabled={loading}><RefreshCw size={19} /></button>}<button type="button" onClick={onSignOut} aria-label={previewMode ? 'Quitter l’aperçu' : 'Se déconnecter'}><LogOut size={19} /></button></div></header>
     <div className="pf-page">
       {loading && children.length > 0 && <div className="pf-refresh-state" role="status"><span className="pf-refresh-spinner" aria-hidden="true" /> On actualise son parcours…</div>}
       {error && <div className="pf-state pf-error" role="alert"><CircleAlert size={25} /><p>{error}</p><button type="button" onClick={onRefresh}>Réessayer</button></div>}
       {!loading && !error && children.length === 0 && <div className="pf-state"><BookOpen size={28} /><h1>Aucun enfant lié à ce compte</h1><p>Demandez à l’académie de relier votre compte parent aux enfants concernés.</p></div>}
       {!error && children.length > 0 && <>
         {screen !== 'choose' && <button type="button" className="pf-back" onClick={back}><ArrowLeft size={19} /> {screen === 'detail' ? detail?.from === 'home' ? 'Retour à l’accueil' : 'Retour aux projets' : screen === 'home' ? 'Changer d’enfant' : screen === 'pickup' ? 'Retour au suivi famille' : 'Retour'}</button>}
-        <div className={`pf-guide${screen === 'choose' ? ' is-welcome' : ''}`}><div className="pf-guide-copy"><span className="pf-mini-label">{screen === 'choose' ? 'BIENVENUE DANS LEUR ATELIER' : `LE PARCOURS DE ${firstName(activeChild?.name || '').toLocaleUpperCase()}`}</span><p>{guideMessage}</p></div><ParentO11Y cue={mascotCue} /></div>
+        <div className={`pf-guide is-${mascotMood}${screen === 'choose' ? ' is-welcome' : ''}`}><div className="pf-guide-copy"><span className="pf-mini-label">{screen === 'choose' ? 'BIENVENUE DANS LEUR ATELIER' : `LE PARCOURS DE ${firstName(activeChild?.name || '').toLocaleUpperCase()}`}</span><p>{guideMessage}</p></div><span className="pf-guide-mascot"><ParentO11Y cue={mascotCue} mood={mascotMood} /><span key={mascotCue} className="pf-mascot-spark" aria-hidden="true">{mascotSpark}</span></span></div>
 
         {screen === 'choose' && <section className="pf-choose" aria-labelledby="pf-title"><span className="pf-kicker">Bonjour{parentName ? ` ${firstName(parentName)}` : ''}.</span><h1 id="pf-title" ref={headingRef}>Qui souhaitez-vous retrouver aujourd’hui ?</h1><p>Choisissez un enfant pour suivre ses projets et ses découvertes.</p><div className="pf-children">{children.map((child, index) => {
           const focus = currentProjectFor(child.projects);
@@ -296,11 +310,11 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, load
         {activeChild && screen === 'home' && <><section className="pf-home-head"><span className="pf-kicker">{firstName(activeChild.name)} · SON ATELIER</span><h1 ref={headingRef} tabIndex={-1}>Ce que {firstName(activeChild.name)} fabrique en ce moment<span>.</span></h1><p>Un projet à découvrir, étape après étape.</p></section>{activeChild.issue && <p className="pf-source-warning" role="alert">{activeChild.issue}</p>}
           {currentProject ? <section className="pf-home-current" aria-labelledby="pf-current-title"><div className="pf-section-line"><span>01 / EN CE MOMENT</span><strong>{statusLabel(currentProject.status)}</strong></div><h2 id="pf-current-title" className="pf-visually-hidden">Son projet en cours</h2><ProjectCard project={currentProject} large onOpen={() => openProject('project', currentProject.id, 'home')} /></section>
             : <div className="pf-state pf-home-empty"><BookOpen size={27} /><h2>Pas encore de projet commencé</h2><p>Les projets enregistrés apparaîtront ici. Les missions assignées sont juste en dessous.</p></div>}
-          <section className="pf-next" aria-labelledby="pf-next-title"><div className="pf-section-line"><span>02 / ET APRÈS ?</span>{upcoming.length > 1 && <span>{upcomingIndex + 1} / {upcoming.length}</span>}</div><h2 id="pf-next-title">Les idées qui l’attendent.</h2>{activeChild.upcoming.status === 'ready' ? <>{upcoming.length ? <><div className="pf-rail" ref={upcomingRailRef}>{upcoming.map(mission => <UpcomingCard key={mission.id} mission={mission} onOpen={() => openProject('upcoming', mission.id, 'home')} />)}</div>{upcoming.length > 1 && <div className="pf-rail-controls"><button type="button" onClick={() => shiftUpcoming(-1)} disabled={upcomingIndex === 0} aria-label="Mission précédente"><ChevronLeft size={20} /></button><button type="button" onClick={() => shiftUpcoming(1)} disabled={upcomingIndex === upcoming.length - 1} aria-label="Mission suivante"><ChevronRight size={20} /></button></div>}</> : <p className="pf-quiet-state">Aucune nouvelle mission assignée n’est visible pour cet enfant.</p>}{activeChild.upcoming.data.contextNote && <p className="pf-source-warning">{activeChild.upcoming.data.contextNote}</p>}</> : <div className="pf-quiet-state" role={activeChild.upcoming.status === 'error' ? 'alert' : 'status'}>{activeChild.upcoming.reason}{activeChild.upcoming.status === 'error' && <button type="button" onClick={onRefresh}>Réessayer</button>}</div>}</section>
+          <section className="pf-next" aria-labelledby="pf-next-title"><div className="pf-section-line"><span>02 / ET APRÈS ?</span>{upcoming.length > 1 && <span>{upcomingIndex + 1} / {upcoming.length}</span>}</div><h2 id="pf-next-title">Les idées qui l’attendent.</h2>{activeChild.upcoming.status === 'ready' ? <>{upcoming.length ? <><div className="pf-rail" ref={upcomingRailRef}>{upcoming.map((mission, index) => <UpcomingCard key={mission.id} mission={mission} tone={cardTones[index % cardTones.length]} onOpen={() => openProject('upcoming', mission.id, 'home')} />)}</div>{upcoming.length > 1 && <div className="pf-rail-controls"><button type="button" onClick={() => shiftUpcoming(-1)} disabled={upcomingIndex === 0} aria-label="Mission précédente"><ChevronLeft size={20} /></button><button type="button" onClick={() => shiftUpcoming(1)} disabled={upcomingIndex === upcoming.length - 1} aria-label="Mission suivante"><ChevronRight size={20} /></button></div>}</> : <p className="pf-quiet-state">Aucune nouvelle mission assignée n’est visible pour cet enfant.</p>}{activeChild.upcoming.data.contextNote && <p className="pf-source-warning">{activeChild.upcoming.data.contextNote}</p>}</> : <div className="pf-quiet-state" role={activeChild.upcoming.status === 'error' ? 'alert' : 'status'}>{activeChild.upcoming.reason}{activeChild.upcoming.status === 'error' && <button type="button" onClick={onRefresh}>Réessayer</button>}</div>}</section>
           <button type="button" className="pf-wide-link" onClick={() => move('projects')}>Voir tous ses projets <ArrowRight size={19} /></button>
         </>}
 
-        {activeChild && screen === 'projects' && <section className="pf-archive"><span className="pf-kicker">TOUTES SES IDÉES</span><h1 ref={headingRef} tabIndex={-1}>Les projets de {firstName(activeChild.name)}.</h1><p>Choisissez un projet pour découvrir son histoire sur une page dédiée.</p>{projects.filter(project => project.status !== 'published').length > 0 && <section><h2>En cours</h2><div className="pf-card-grid">{projects.filter(project => project.status !== 'published').map(project => <ProjectCard key={project.id} project={project} onOpen={() => openProject('project', project.id, 'projects')} />)}</div></section>}{upcoming.length > 0 && <section><h2>À venir</h2><div className="pf-card-grid">{upcoming.map(mission => <UpcomingCard key={mission.id} mission={mission} onOpen={() => openProject('upcoming', mission.id, 'projects')} />)}</div></section>}{projects.filter(project => project.status === 'published').length > 0 && <section><h2>Terminés</h2><div className="pf-card-grid">{projects.filter(project => project.status === 'published').map(project => <ProjectCard key={project.id} project={project} onOpen={() => openProject('project', project.id, 'projects')} />)}</div></section>}{!projects.length && !upcoming.length && <div className="pf-state"><BookOpen size={26} /><h2>Encore aucun projet visible</h2><p>Les projets enregistrés et les missions assignées apparaîtront ici.</p></div>}<button type="button" className="pf-wide-link" onClick={() => move('moments')}><ImageIcon size={20} /> Voir ses moments partagés <ArrowRight size={19} /></button></section>}
+        {activeChild && screen === 'projects' && <section className="pf-archive"><span className="pf-kicker">TOUTES SES IDÉES</span><h1 ref={headingRef} tabIndex={-1}>Les projets de {firstName(activeChild.name)}.</h1><p>Choisissez un projet pour découvrir son histoire sur une page dédiée.</p>{projects.filter(project => project.status !== 'published').length > 0 && <section><h2>En cours</h2><div className="pf-card-grid">{projects.filter(project => project.status !== 'published').map((project, index) => <ProjectCard key={project.id} project={project} tone={cardTones[index % cardTones.length]} onOpen={() => openProject('project', project.id, 'projects')} />)}</div></section>}{upcoming.length > 0 && <section><h2>À venir</h2><div className="pf-card-grid">{upcoming.map((mission, index) => <UpcomingCard key={mission.id} mission={mission} tone={cardTones[(index + 2) % cardTones.length]} onOpen={() => openProject('upcoming', mission.id, 'projects')} />)}</div></section>}{projects.filter(project => project.status === 'published').length > 0 && <section><h2>Terminés</h2><div className="pf-card-grid">{projects.filter(project => project.status === 'published').map((project, index) => <ProjectCard key={project.id} project={project} tone={cardTones[(index + 1) % cardTones.length]} onOpen={() => openProject('project', project.id, 'projects')} />)}</div></section>}{!projects.length && !upcoming.length && <div className="pf-state"><BookOpen size={26} /><h2>Encore aucun projet visible</h2><p>Les projets enregistrés et les missions assignées apparaîtront ici.</p></div>}<button type="button" className="pf-wide-link" onClick={() => move('moments')}><ImageIcon size={20} /> Voir ses moments partagés <ArrowRight size={19} /></button></section>}
 
         {activeChild && screen === 'detail' && (selectedProject || selectedMission) && <section className="pf-detail"><div className="pf-detail-hero"><span className="pf-kicker">{selectedMission ? 'MISSION À VENIR' : 'SON PROJET'}</span><h1 ref={headingRef} tabIndex={-1}>{selectedProject?.title || selectedMission?.title || 'Projet'}</h1><p>{selectedProject?.description || selectedMission?.intention || 'Un projet à découvrir.'}</p><span className="pf-detail-status">{selectedMission ? 'Pas encore commencé' : statusLabel(selectedProject!.status)}</span><Cover src={selectedProject ? projectCover(selectedProject) : selectedMission?.thumbnailUrl} title={selectedProject?.title || selectedMission?.title || 'Projet'} /></div>
           {selectedMission ? <div className="pf-detail-intro"><span className="pf-mini-label">LE PROCHAIN PAS</span><h2>Une idée prête à démarrer.</h2><p>Cette mission a été assignée à {firstName(activeChild.name)}. Son travail et ses étapes apparaîtront lorsqu’un projet sera commencé.</p></div>
