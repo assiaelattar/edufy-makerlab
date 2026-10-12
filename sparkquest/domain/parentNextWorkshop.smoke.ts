@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import type { Enrollment, Program } from '../../types';
 import { nextWorkshopFromSchedule } from './parentNextWorkshop.ts';
+import { isWorkshopEligible } from './parentWorkshopEligibility.ts';
+import { isEnrollmentEligibleForAttendance } from '../../utils/membershipLifecycle.ts';
 
 const enrollment = { id: 'en-one', studentId: 'child-one', organizationId: 'org-one', programId: 'prog-one', programName: 'STEMQuest', groupId: 'group-one', gradeId: 'grade-one', status: 'active', startDate: '2026-09-01', endDate: '2027-07-01' } as Enrollment;
 const program = { id: 'prog-one', organizationId: 'org-one', name: 'STEMQuest', status: 'active', type: 'Regular Program', description: '', packs: [], runSetup: { startDate: '2026-09-01', endDate: '2027-07-01', timezone: 'Africa/Casablanca' }, grades: [{ id: 'grade-one', organizationId: 'org-one', name: 'Makers', groups: [{ id: 'group-one', name: 'Mini Makers', day: 'lundi', time: '15:00', scheduleBlocks: [{ id: 'slot-one', day: 'lundi', startTime: '15:00', endTime: '16:30' }] }] }] } as Program;
@@ -24,4 +26,18 @@ assert.equal(nextWorkshopFromSchedule([{ ...enrollment, groupId: 'other-group' }
 assert.equal(nextWorkshopFromSchedule([enrollment], [{ ...program, grades: [] }], new Date('2026-10-12T09:00:00Z')), null);
 assert.equal(nextWorkshopFromSchedule([{ ...enrollment, groupId: undefined, groupTime: 'Lundi 15:00–16:30' }], [{ ...program, grades: [] }], new Date('2026-10-12T09:00:00Z'))?.endTime, '16:30');
 
-console.log('parent next workshop: 9 schedule checks passed');
+for (const sample of [
+  { enrollment, program, date: '2026-10-12' },
+  { enrollment, program: { ...program, status: 'paused', pausedAt: '2026-10-01' } as Program, date: '2026-10-12' },
+  { enrollment, program: { ...program, status: 'draft' } as Program, date: '2026-10-12' },
+  { enrollment, program, date: '2027-08-01' },
+  { enrollment: { ...enrollment, status: 'completed' } as Enrollment, program, date: '2026-10-12' },
+  { enrollment: { ...enrollment, enrollmentMode: 'rolling_membership', serviceEndDate: '2026-10-01' } as Enrollment,
+    program: { ...program, enrollmentPolicy: { mode: 'rolling_membership' } } as Program, date: '2026-10-12' }
+]) {
+  assert.equal(isWorkshopEligible(sample.enrollment, sample.program, sample.date),
+    isEnrollmentEligibleForAttendance(sample.enrollment, sample.program, sample.date),
+    `SparkQuest schedule eligibility matches Edufy for ${sample.date}/${sample.program.status}`);
+}
+
+console.log('parent next workshop: 15 schedule and parity checks passed');

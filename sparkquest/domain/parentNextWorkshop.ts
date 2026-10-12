@@ -1,5 +1,5 @@
 import type { Enrollment, Program, ProgramScheduleSlot } from '../../types';
-import { isEnrollmentEligibleForAttendance } from '../../utils/membershipLifecycle.ts';
+import { isWorkshopEligible } from './parentWorkshopEligibility.ts';
 
 export interface FamilyNextWorkshop {
   date: string;
@@ -64,7 +64,7 @@ export const nextWorkshopFromSchedule = (
         if (candidateDay.getUTCDay() !== weekday) continue;
         const date = `${candidateDay.getUTCFullYear()}-${pad(candidateDay.getUTCMonth() + 1)}-${pad(candidateDay.getUTCDate())}`;
         if (offset === 0 && today.minute >= minutes(endTime || slot.startTime)) continue;
-        if (!isEnrollmentEligibleForAttendance(enrollment, program, date)) continue;
+        if (!isWorkshopEligible(enrollment, program, date)) continue;
         candidates.push({
           date, startTime: slot.startTime, endTime, timezone,
           programName: program.name || enrollment.programName || 'Atelier MakerLab',
