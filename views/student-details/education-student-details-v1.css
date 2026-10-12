@@ -117,6 +117,20 @@
 .edu-student-details-v1__access [class*='text-slate-4'],
 .edu-student-details-v1__access [class*='text-slate-5'] { color: var(--edu-muted) !important; }
 .edu-student-details-v1__access button { min-height: 44px !important; border-radius: 12px !important; }
+.edu-student-details-v1__access .edu-parent-access-action { box-shadow: 0 8px 18px rgba(30, 41, 35, .1); }
+.edu-student-details-v1__access .edu-parent-access-action--credentials { border-color: #17231b !important; color: #fff !important; background: #17231b !important; }
+.edu-student-details-v1__access .edu-parent-access-action--credentials:hover { border-color: #2d4032 !important; background: #2d4032 !important; }
+.edu-student-details-v1__access .edu-parent-access-action--secondary { border-color: #356a8c !important; color: #17425e !important; background: #e7f4fb !important; }
+.edu-student-details-v1__access .edu-parent-access-action--secondary:hover { background: #d6ebf7 !important; }
+.edu-student-details-v1__access .edu-parent-access-action--primary { border-color: #93c514 !important; color: #172013 !important; background: #c7ff35 !important; }
+.edu-student-details-v1__access .edu-parent-access-action--primary:hover { background: #b9ef2f !important; }
+.edu-student-details-v1__access .edu-parent-access-action--whatsapp { border-color: #087a58 !important; color: #fff !important; background: #079669 !important; }
+.edu-student-details-v1__access .edu-parent-access-action--whatsapp:hover { background: #087a58 !important; }
+.edu-student-details-v1__access .edu-parent-access-action:focus-visible,
+.atlas-dialog .edu-credentials-copy:focus-visible { outline: 3px solid rgba(34, 111, 84, .35); outline-offset: 2px; }
+.edu-student-details-v1__access .edu-parent-access-action:disabled { border-color: #cfd5cc !important; color: #777f74 !important; background: #e7ebe4 !important; box-shadow: none; opacity: 1 !important; }
+.education-ui-v1-active .atlas-dialog .edu-credentials-copy { border-color: #7d8978 !important; color: #263124 !important; background: #fff !important; }
+.education-ui-v1-active .atlas-dialog .edu-credentials-copy:hover { border-color: #263124 !important; background: #eef3ea !important; }
 
 .edu-student-portal-v1 { color: var(--edu-ink); }
 .edu-student-portal-v1 > div:nth-child(2) { border-color: var(--edu-border) !important; border-radius: 28px !important; box-shadow: var(--edu-shadow-sm) !important; }

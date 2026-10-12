@@ -44,7 +44,7 @@ export const StudentDetailsView = ({
     const [selectedProject, setSelectedProject] = useState<StudentProject | null>(null);
 
     // Credentials Modal State
-    const [credentialsModal, setCredentialsModal] = useState<{ isOpen: boolean, data: { name: string, email: string, pass: string, role: string } | null }>({ isOpen: false, data: null });
+    const [credentialsModal, setCredentialsModal] = useState<{ isOpen: boolean, data: { studentId: string, name: string, email: string, pass: string, role: string } | null }>({ isOpen: false, data: null });
 
     const student = useMemo(() => {
         if (isStudentRole && userProfile) {
@@ -477,7 +477,7 @@ export const StudentDetailsView = ({
                 result = await manageParentAccess({ action: 'repairStaffLink', studentId: student.id, organizationId, parentName: student.parentName, aliasBasis, relationshipVerified });
             }
             if (result.password) {
-                setCredentialsModal({ isOpen: true, data: { name: result.parentName || verifiedParentName || student.parentName || 'Parent', email: result.email, pass: result.password, role: 'Parent' } });
+                setCredentialsModal({ isOpen: true, data: { studentId: student.id, name: result.parentName || verifiedParentName || student.parentName || 'Parent', email: result.email, pass: result.password, role: 'Parent' } });
             } else {
                 await showAlert('Parent linked', `${result.email} can now open this learner in SparkQuest. The existing password was not changed.`, 'success');
             }
@@ -851,7 +851,8 @@ export const StudentDetailsView = ({
                         isGeneratingAccess={isGeneratingAccess}
                         generateAccessCardPrint={generateAccessCardPrint}
                         shareAccount={shareAccount}
-                        setCredentialsModal={setCredentialsModal}
+                        hasLatestParentCredentials={credentialsModal.data?.role === 'Parent' && credentialsModal.data.studentId === student.id}
+                        showLatestParentCredentials={() => setCredentialsModal(previous => previous.data?.role === 'Parent' && previous.data.studentId === student.id ? { ...previous, isOpen: true } : previous)}
                         settings={settings}
                         isAdult={isAdult}
                     />
@@ -1052,7 +1053,7 @@ export const StudentDetailsView = ({
             </Modal>
 
             {/* CREDENTIALS POPUP */}
-            <Modal isOpen={credentialsModal.isOpen} onClose={() => setCredentialsModal({ isOpen: false, data: null })} title="Access Credentials Created">
+            <Modal isOpen={credentialsModal.isOpen} onClose={() => setCredentialsModal(previous => ({ ...previous, isOpen: false }))} title={credentialsModal.data?.role === 'Parent' ? 'Parent access card' : 'Access credentials'}>
                 {credentialsModal.data && (
                     <div className="space-y-6">
                         <div className="text-center">
@@ -1061,7 +1062,7 @@ export const StudentDetailsView = ({
                             </div>
                             <h3 className="text-xl font-bold text-white mb-1">{credentialsModal.data.role === 'Parent' ? 'SparkQuest family login ready' : 'Account ready'}</h3>
                             <p className="text-slate-400 text-sm">Share these details with the {credentialsModal.data.role.toLowerCase()}.</p>
-                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 text-xs text-amber-200">This password is shown once. Copy, print, or share it with the verified parent now. Later, use “Reissue password to share again” on this learner’s profile; Edufy will show a fresh card and retire the previous password. The login ID is not a mailbox.</p>}
+                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-left text-xs leading-5 text-amber-950">You can reopen this card while this learner profile stays open. Copy, print, or share it with the verified parent now. After leaving or refreshing, issue a new password; Edufy does not store parent passwords.</p>}
                         </div>
 
                         <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 relative overflow-hidden">
@@ -1069,16 +1070,16 @@ export const StudentDetailsView = ({
                             <div className="space-y-4 relative z-10">
                                 <div>
                                     <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider mb-1 block">{credentialsModal.data.role === 'Parent' ? 'SparkQuest login ID' : 'Login email'}</label>
-                                    <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-800">
-                                        <code className="text-white font-mono text-sm">{credentialsModal.data.email}</code>
-                                        <button onClick={() => copyCredential('Email', credentialsModal.data!.email)} className="rounded-lg p-1 text-slate-500 hover:bg-white/[0.05] hover:text-white" title="Copy email" aria-label="Copy email"><Copy size={14} /></button>
+                                    <div className="flex items-center justify-between gap-3 bg-slate-900 p-2 rounded border border-slate-800">
+                                        <code className="min-w-0 break-all text-white font-mono text-sm">{credentialsModal.data.email}</code>
+                                        <button onClick={() => copyCredential('Email', credentialsModal.data!.email)} className="edu-credentials-copy inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold" title="Copy email" aria-label="Copy email"><Copy size={14} /> Copy</button>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider mb-1 block">Password</label>
-                                    <div className="flex items-center justify-between bg-slate-900 p-2 rounded border border-slate-800">
-                                        <code className="text-emerald-400 font-mono text-lg font-bold">{credentialsModal.data.pass}</code>
-                                        <button onClick={() => copyCredential('Password', credentialsModal.data!.pass)} className="rounded-lg p-1 text-slate-500 hover:bg-white/[0.05] hover:text-white" title="Copy password" aria-label="Copy password"><Copy size={14} /></button>
+                                    <div className="flex items-center justify-between gap-3 bg-slate-900 p-2 rounded border border-slate-800">
+                                        <code className="min-w-0 break-all text-emerald-400 font-mono text-lg font-bold">{credentialsModal.data.pass}</code>
+                                        <button onClick={() => copyCredential('Password', credentialsModal.data!.pass)} className="edu-credentials-copy inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-bold" title="Copy password" aria-label="Copy password"><Copy size={14} /> Copy</button>
                                     </div>
                                 </div>
                             </div>

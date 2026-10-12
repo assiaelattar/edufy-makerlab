@@ -12,7 +12,8 @@ interface AccessAndAccountsTabProps {
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
   shareAccount: (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => void;
-  setCredentialsModal: (modal: { isOpen: boolean; data: any }) => void;
+  hasLatestParentCredentials: boolean;
+  showLatestParentCredentials: () => void;
   settings: any;
   isAdult?: boolean;
 }
@@ -35,7 +36,8 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   isGeneratingAccess,
   generateAccessCardPrint,
   shareAccount,
-  setCredentialsModal,
+  hasLatestParentCredentials,
+  showLatestParentCredentials,
   settings,
   isAdult = false,
 }) => {
@@ -280,13 +282,22 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 <div className="break-all font-mono text-sm text-white select-all">{student.parentLoginInfo.email}</div>
               </div>
               <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                An older recorded address may come from the email invitation flow. Replacing it creates a SparkQuest login ID that needs no inbox. Staff see the new password once and share it directly with the verified parent.
+                An older recorded address may come from the email invitation flow. Replacing it creates a SparkQuest login ID that needs no inbox. The latest card stays available here until staff leave or refresh this profile.
               </div>
+              {hasLatestParentCredentials && (
+                <button
+                  type="button"
+                  onClick={showLatestParentCredentials}
+                  className="edu-parent-access-action edu-parent-access-action--credentials flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors"
+                >
+                  <Eye size={16} /> Show latest email &amp; password
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { setRelationshipVerified(false); setPasswordNameRequired(false); setVerifiedParentName(student.parentName || ''); setIsPasswordModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
-                className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-2 text-sm font-bold text-sky-100 transition-colors hover:bg-sky-500/25 disabled:opacity-50"
+                className="edu-parent-access-action edu-parent-access-action--secondary mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50"
               >
                 {isGeneratingAccess ? (
                   <Loader2 size={12} className="animate-spin" />
@@ -298,12 +309,12 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <button
                 onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
-                className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
+                className="edu-parent-access-action edu-parent-access-action--primary min-h-10 w-full rounded-lg border px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50"
               >
                 Create new SparkQuest login ID and password
               </button>
-              <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. Edufy displays the new card once; the previous password stops working. The learner’s work stays linked to this login.</p>
-              <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
+              <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. The previous password stops working and the learner’s work stays linked to this login.</p>
+              <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="edu-parent-access-action edu-parent-access-action--whatsapp flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-bold"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
             </div>
           ) : (
@@ -312,7 +323,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <button
                 onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
-                className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-teal-400"
+                className="edu-parent-access-action edu-parent-access-action--primary flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors"
               >
                 {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Create Parent
                 Account
