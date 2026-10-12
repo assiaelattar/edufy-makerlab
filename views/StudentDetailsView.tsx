@@ -1061,7 +1061,7 @@ export const StudentDetailsView = ({
                             </div>
                             <h3 className="text-xl font-bold text-white mb-1">{credentialsModal.data.role === 'Parent' ? 'SparkQuest family login ready' : 'Account ready'}</h3>
                             <p className="text-slate-400 text-sm">Share these details with the {credentialsModal.data.role.toLowerCase()}.</p>
-                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 text-xs text-amber-200">This password is shown once. The email-shaped login ID is not a mailbox, and no setup link is sent. Share the card directly with the verified parent.</p>}
+                            {credentialsModal.data.role === 'Parent' && <p className="mt-2 text-xs text-amber-200">This password is shown once. Copy, print, or share it with the verified parent now. Later, use “Reissue password to share again” on this learner’s profile; Edufy will show a fresh card and retire the previous password. The login ID is not a mailbox.</p>}
                         </div>
 
                         <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 relative overflow-hidden">

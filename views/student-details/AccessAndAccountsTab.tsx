@@ -293,7 +293,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 ) : (
                   <RefreshCw size={12} />
                 )}{' '}
-                Issue new parent password
+                Reissue password to share again
               </button>
               <button
                 onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
@@ -302,7 +302,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               >
                 Create new SparkQuest login ID and password
               </button>
-              <p className="text-[11px] text-slate-400">The existing password cannot be displayed. This action keeps the login ID and gives staff a new one-time password to share with the verified parent.</p>
+              <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. Edufy displays the new card once; the previous password stops working. The learner’s work stays linked to this login.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
             </div>
