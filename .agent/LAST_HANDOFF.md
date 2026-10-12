@@ -2,6 +2,8 @@
 
 On 2026-10-12 the learner session gained focused My build, Explore, and Mentor stops over the existing workbench, mission library, project editor, and review actions. The parent portal's existing 011Y component now gives contextual learner guidance, and saved project briefs show one color-coded plan step at a time without jumping away from the clicked area. Narrow-screen ongoing builds and mission cards use snap-aligned rails. No learner records, permissions, rules, identity, or review contracts changed. Local 360px/390px browser checks covered the three stops, project brief, and next-step control. SparkQuest TypeScript, standalone and root production builds, URL/identity/Phase 2 smokes, mirrored-file hashes, and diff checks passed. Focused code commit `6853c5f` reached GitHub `main`; Vercel deployment `dpl_DAQ3mpz2FjXuQ1EJnLU3R6wRha9b` is Ready and aliased to `https://sparkquest-makerlab.vercel.app/` (HTTP 200). A designated student account and physical phone should still confirm exact assignments, evidence, and editor continuation. Details: `docs/sparkquest/STUDENT_JOURNEY_2026-10-12.md`.
 
+Follow-up: the active build and Showcase editors now use the same context-sensitive 011Y guide for progress, mentor review, revision, and completion. The write-free `?designPreview=studio` editor was checked at phone width; TypeScript and both production builds passed again. Code commit `27bc310` reached GitHub `main`; Vercel production deployment `dpl_Am7zphFyoXeUyeWHS1SPsXP51atC` is Ready and aliased to the same public URL (HTTP 200). Existing editor actions and data contracts remain unchanged.
+
 ---
 
 # Previous handoff — SparkQuest parent detail color and image delivery
