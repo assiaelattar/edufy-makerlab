@@ -4,7 +4,7 @@ import { db } from '../services/firebase';
 import type { StudentProject } from '../types';
 import { childHasCanonicalPermission, childPermissions, familyChildIds, permittedSubjectsForChild, projectSubjectsForChild, type GuardianFamilyLink } from '../domain/parentFamily';
 import { summarizeAttendance, summarizeFinance, type AttendanceSummaryInput, type EnrollmentSummaryInput, type FamilyOperations, type FamilySource, type PaymentSummaryInput } from '../domain/parentFamilyOperations';
-import { pickupSessionDate, previousPickupDate, selectOpenPickup, type PickupStatus } from '../../modules/pickup/domain/pickupLifecycle';
+import { pickupSessionDate, previousPickupDate, selectOpenPickup, type PickupStatus } from '../domain/pickupLifecycle';
 import { isSafeProjectImage, resolveParentProjectImage } from '../domain/parentProjectVisual';
 
 export interface FamilyProject extends StudentProject {

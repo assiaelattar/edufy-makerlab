@@ -1,4 +1,4 @@
-import type { PickupStatus } from '../../modules/pickup/domain/pickupLifecycle';
+import type { PickupStatus } from './pickupLifecycle';
 
 export type FamilySourceStatus = 'ready' | 'unavailable' | 'error';
 

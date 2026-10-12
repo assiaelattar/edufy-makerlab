@@ -8,7 +8,7 @@ SparkQuest is a learner application connected to Edufy Core. Edufy owns learner,
 
 ## Current canonical contracts
 
-- Application URLs: `../utils/appUrls.ts`; SparkQuest consumes them through `utils/config.ts`.
+- Application URLs: `utils/appUrls.ts`; SparkQuest consumes them through `utils/config.ts`. The standalone Vercel project uploads only `sparkquest/`, so this file must stay byte-for-byte aligned with `../utils/appUrls.ts`. Likewise, `domain/pickupLifecycle.ts` mirrors `../modules/pickup/domain/pickupLifecycle.ts` for parent reads. Check both pairs before a release.
 - Authenticated learner identity: `domain/studentIdentity.ts`.
 - Authentication/profile resolution: `context/AuthContext.tsx`.
 - Project selection and creation: `components/ProjectSelector.tsx` and `hooks/useMissionData.ts`.
