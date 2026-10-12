@@ -5,7 +5,7 @@ import { collection, connectFirestoreEmulator, doc, getDoc, getDocs, getFirestor
 import { getAuth } from 'firebase-admin/auth';
 import { deleteApp as deleteAdminApp } from 'firebase-admin/app';
 import { getDb, getFirebaseAdminApp } from '../../api/agent/_lib/firebaseAdmin.js';
-import handler, { parentAliasBase } from '../../api/parent-access/index.js';
+import handler, { familyLabelFromStudent, parentAliasBase } from '../../api/parent-access/index.js';
 
 assert(process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.FIRESTORE_EMULATOR_HOST);
 assert(process.env.GCLOUD_PROJECT?.startsWith('demo-'));
@@ -15,6 +15,8 @@ const app = initializeClientApp({ apiKey: 'demo-key', authDomain: 'localhost', p
 const clientAuth = getClientAuth(app);
 connectAuthEmulator(clientAuth, `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
 assert.equal(parentAliasBase('  Élodie   Ben Ali  '), 'p.elodie.ben.ali');
+assert.equal(familyLabelFromStudent('YASMINE OUBELLA', 'p.oubella@makerlab.academy'), 'OUBELLA family');
+assert.equal(familyLabelFromStudent('AAJLANE NADA', 'p.aajlane@makerlab.academy'), 'AAJLANE family');
 
 const invoke = async (token, body) => {
   const req = { method: 'POST', headers: { authorization: `Bearer ${token}` }, body };
@@ -50,6 +52,11 @@ assert(first.body.password?.length >= 30);
 const firstAuth = await adminAuth.getUserByEmail(first.body.email);
 assert.equal(firstAuth.displayName, 'Samira Ajlane');
 assert.equal(firstAuth.emailVerified, false);
+await db.doc('students/child-no-parent-name').set({ organizationId: 'org-a', name: 'LINA BENALI' });
+const nameFreeIssue = await invoke(staffToken, { action: 'issue', studentId: 'child-no-parent-name', organizationId: 'org-a', relationshipVerified: true });
+assert.equal(nameFreeIssue.statusCode, 200, JSON.stringify(nameFreeIssue.body?.error));
+assert.equal(nameFreeIssue.body.email, 'p.benali@makerlab.academy');
+assert.equal((await db.doc('students/child-no-parent-name').get()).data().parentName, 'BENALI family');
 assert.equal((await db.doc('students/child-a').get()).data().parentLoginInfo.uid, firstAuth.uid);
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_child-a`).get()).data().status, 'active');
 assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().role, 'parent');
@@ -235,8 +242,8 @@ assert.equal(replacementReset.statusCode, 200);
 // Recover an exact legacy p.* login with no users profile, no guardian links, and a missing name.
 const legacyExact = await adminAuth.createUser({ email: 'p.older.family@makerlab.academy', password: 'Old-family-password-123' });
 await Promise.all([
-  db.doc('students/legacy-main').set({ organizationId: 'org-a', name: 'Legacy main', parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } }),
-  db.doc('students/legacy-sibling').set({ organizationId: 'org-a', name: 'Legacy sibling', loginInfo: { uid: 'legacy-sibling-alias' }, parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } }),
+  db.doc('students/legacy-main').set({ organizationId: 'org-a', name: '', parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } }),
+  db.doc('students/legacy-sibling').set({ organizationId: 'org-a', name: '', loginInfo: { uid: 'legacy-sibling-alias' }, parentLoginInfo: { uid: legacyExact.uid, email: legacyExact.email } }),
   db.doc('students/legacy-new').set({ organizationId: 'org-a', name: 'New sibling' })
 ]);
 const lookupRequest = { action: 'lookup', studentId: 'legacy-main', organizationId: 'org-a', reuseParentEmail: legacyExact.email, relationshipVerified: true };
@@ -278,25 +285,21 @@ await assert.rejects(() => signInWithEmailAndPassword(clientAuth, legacyExact.em
 await signInWithEmailAndPassword(clientAuth, legacyExact.email, recovered.body.password);
 
 // An invitation-era parent profile may have no organization and only a placeholder name.
-const placeholder = await adminAuth.createUser({ email: 'p.placeholder@makerlab.academy', password: 'Placeholder-old-password-123' });
+const placeholder = await adminAuth.createUser({ email: 'p.oubella@makerlab.academy', password: 'Placeholder-old-password-123' });
 const placeholderProfile = { uid: placeholder.uid, role: 'parent', status: 'active', email: placeholder.email, name: 'Parent' };
 await Promise.all([
   db.doc(`users/${placeholder.uid}`).set({ ...placeholderProfile, organizationId: 'org-b' }),
-  db.doc('students/placeholder-child').set({ organizationId: 'org-a', name: 'Placeholder child', parentLoginInfo: { uid: placeholder.uid, email: placeholder.email } })
+  db.doc('students/placeholder-child').set({ organizationId: 'org-a', name: 'YASMINE OUBELLA', parentLoginInfo: { uid: placeholder.uid, email: placeholder.email } })
 ]);
 const placeholderReset = { action: 'reset', studentId: 'placeholder-child', organizationId: 'org-a', relationshipVerified: true };
 assert.equal((await invoke(staffToken, { ...placeholderReset, parentName: 'Verified Guardian' })).statusCode, 409);
 await db.doc(`users/${placeholder.uid}`).set(placeholderProfile);
-const placeholderNamePrompt = await invoke(staffToken, placeholderReset);
-assert.equal(placeholderNamePrompt.statusCode, 400);
-assert.equal(placeholderNamePrompt.body.code, 'parent_name_required');
-assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().organizationId, undefined);
-const placeholderIssued = await invoke(staffToken, { ...placeholderReset, parentName: 'Verified Guardian' });
+const placeholderIssued = await invoke(staffToken, placeholderReset);
 assert.equal(placeholderIssued.statusCode, 200, JSON.stringify(placeholderIssued.body?.error));
-assert.equal(placeholderIssued.body.parentName, 'Verified Guardian');
+assert.equal(placeholderIssued.body.parentName, 'OUBELLA family');
 assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().organizationId, 'org-a');
-assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().name, 'Verified Guardian');
-assert.equal((await db.doc('students/placeholder-child').get()).data().parentName, 'Verified Guardian');
+assert.equal((await db.doc(`users/${placeholder.uid}`).get()).data().name, 'OUBELLA family');
+assert.equal((await db.doc('students/placeholder-child').get()).data().parentName, 'OUBELLA family');
 assert.equal((await db.doc(`guardian_links/${placeholder.uid}_placeholder-child`).get()).data().status, 'active');
 await assert.rejects(() => signInWithEmailAndPassword(clientAuth, placeholder.email, 'Placeholder-old-password-123'));
 await signInWithEmailAndPassword(clientAuth, placeholder.email, placeholderIssued.body.password);

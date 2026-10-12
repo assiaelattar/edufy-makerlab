@@ -46,6 +46,13 @@ const authUserByEmail = async (auth, email) => {
 
 const guardianSubjects = student => [...new Set([student.id, student.loginInfo?.uid].filter(Boolean))];
 const cleanName = value => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ') : '';
+export const familyLabelFromStudent = (studentName, parentEmail = '') => {
+  const parts = cleanName(studentName).split(' ').filter(Boolean);
+  const alias = /^p\.([^@]+)@makerlab\.academy$/i.exec(parentEmail)?.[1]?.toLowerCase() || '';
+  const normalized = value => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const family = parts.find(part => normalized(part) === normalized(alias)) || parts.at(-1);
+  return family && normalized(family) ? `${family.toUpperCase()} family` : '';
+};
 const verifiedNameCandidate = value => {
   const name = cleanName(value);
   return /^(parent|guardian)$/i.test(name) ? '' : name;
@@ -223,9 +230,9 @@ export default async function handler(req, res) {
       }
       const evidence = await parentEvidence(ref => ref.get(), db, uid, email, organizationId, cleanName(parentName));
       if (!evidence.familyIds.has(student.id)) return response(res, 409, { ok: false, error: 'This learner is not linked to the recorded parent login.' });
-      const verifiedName = evidence.name;
+      const verifiedName = evidence.name || familyLabelFromStudent(student.name, email);
       if (!verifiedName || verifiedName.length < 2) {
-        return response(res, 400, { ok: false, code: 'parent_name_required', error: 'Enter and verify this parent’s full name, then issue the password again.' });
+        return response(res, 400, { ok: false, code: 'parent_name_required', error: 'Enter a family display label, then issue the password again.' });
       }
       const hasCurrentLinks = evidence.recorded.docs.every(item => guardianSubjects({ id: item.id, ...item.data() }).every(subjectId =>
         evidence.links.docs.some(link => link.id === `${uid}_${subjectId}` && link.data().status === 'active' &&
@@ -547,10 +554,11 @@ export default async function handler(req, res) {
       }
       verifiedParentName = accountName;
     } else {
-      if (!confirmedParentName || (recordedParentName && confirmedParentName !== recordedParentName)) {
-        return response(res, 400, { ok: false, error: 'Verify the recorded parent name before issuing a login.' });
+      verifiedParentName = recordedParentName || confirmedParentName || familyLabelFromStudent(student.name);
+      if (!verifiedParentName || (recordedParentName && confirmedParentName && confirmedParentName !== recordedParentName)) {
+        return response(res, 400, { ok: false, error: 'Enter a family display label before issuing a login.' });
       }
-      const issued = await createIssuedParent(auth, aliasBasis, confirmedParentName);
+      const issued = await createIssuedParent(auth, aliasBasis || verifiedParentName.replace(/ family$/i, ''), verifiedParentName);
       ({ uid, email, password } = issued);
       created = true;
     }
@@ -579,7 +587,7 @@ export default async function handler(req, res) {
           throw Object.assign(new Error('Recorded parent name changed. Refresh the learner record.'), { status: 409 });
         }
         if (created) transaction.create(db.doc(`users/${uid}`), {
-          uid, organizationId, email, name: confirmedParentName, role: 'parent', status: 'active', accessVersion: 2,
+          uid, organizationId, email, name: verifiedParentName, role: 'parent', status: 'active', accessVersion: 2,
           createdAt: FieldValue.serverTimestamp()
         });
         transaction.update(studentRef, {
@@ -597,7 +605,7 @@ export default async function handler(req, res) {
       if (created) await auth.deleteUser(uid).catch(() => {});
       throw error;
     }
-    return response(res, 200, { ok: true, action, email, ...(created ? { password } : {}) });
+    return response(res, 200, { ok: true, action, email, parentName: verifiedParentName, ...(created ? { password } : {}) });
   } catch (error) {
     if (error?.status === 400 || error?.status === 409) return response(res, error.status, { ok: false, error: error.message });
     console.error('[parent-access] action failed', { code: error?.code || 'unknown' });
