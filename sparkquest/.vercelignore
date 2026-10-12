@@ -1,6 +1,7 @@
 # Ignore build outputs
 dist/
 build/
+.env*
 
 # Ignore Electron-specific files
 electron/

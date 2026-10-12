@@ -26,6 +26,7 @@ const isInstalledApp = () => window.matchMedia('(display-mode: standalone)').mat
 
 interface Props {
   parentUid: string;
+  organizationId: string;
   children: FamilyChild[];
   loading: boolean;
   error: string | null;
@@ -141,7 +142,7 @@ const FamilyPickupLink: React.FC<{ child: FamilyChild; onOpen: () => void }> = (
   </button>;
 };
 
-export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, loading, error, parentName, onRefresh, onSignOut, previewMode = false }) => {
+export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId, children, loading, error, parentName, onRefresh, onSignOut, previewMode = false }) => {
   const [screen, setScreen] = useState<Screen>('choose');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -340,7 +341,7 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, load
 
         {activeChild && screen === 'family' && <section className="pf-family"><span className="pf-kicker">LES INFORMATIONS UTILES</span><h1 ref={headingRef} tabIndex={-1}>Le suivi de {firstName(activeChild.name)}.</h1><p>Ces informations viennent des dossiers de l’académie et restent en lecture seule.</p><FamilyPickupLink child={activeChild} onOpen={() => move('pickup')} /><div className="pf-family-grid"><SourcePanel title="Présences" icon={<CalendarDays size={23} />} source={activeChild.operations.attendance} retry={onRefresh} render={attendance => <><strong>{attendance.latestStatus ? ({ present: 'Présent', absent: 'Absent', late: 'En retard', excused: 'Absence justifiée' })[attendance.latestStatus] || 'Présence enregistrée' : 'Aucune présence enregistrée'}</strong><p>{attendance.latestDate ? `${dateLabel(attendance.latestDate)} · ${count(attendance.present, 'présence', 'présences')} · ${count(attendance.late, 'retard', 'retards')}` : 'Après sa première séance, le suivi apparaîtra ici.'}</p>{attendance.records.length > 0 && <details className="pf-detail-disclosure"><summary>Voir les séances</summary>{attendance.records.map((item, index) => <p key={`${item.date}-${index}`}>{dateLabel(item.date)} · {item.status}</p>)}</details>}</>} /><SourcePanel title="Paiements" icon={<CreditCard size={23} />} source={activeChild.operations.finance} retry={onRefresh} render={finance => <><strong>{finance.enrollmentCount ? finance.balance > 0 ? `${money(finance.balance)} restants` : 'Tout est réglé' : 'Aucun montant dû'}</strong><p>{finance.enrollmentCount ? `${money(finance.paid)} réglés sur ${money(finance.agreed)}` : 'Aucune inscription facturée enregistrée.'}</p>{finance.enrollments.length > 0 && <details className="pf-detail-disclosure"><summary>Inscriptions et paiements</summary>{finance.enrollments.map(item => <p key={item.id}><b>{item.programName}</b> · {item.packName} · {money(item.paid)} réglés</p>)}{finance.payments.map(item => <p key={item.id}>{dateLabel(item.date)} · {money(item.amount)} · {item.status.replaceAll('_', ' ')}</p>)}</details>}</>} /></div><div className="pf-family-block"><h2>Ressources de ses projets</h2><SafeResources resources={resources} />{resources.length === 0 && <p className="pf-quiet-state">Les guides partagés avec ses projets apparaîtront ici.</p>}</div></section>}
 
-        {activeChild && screen === 'pickup' && <section className="pf-pickup"><span className="pf-kicker">ATELIER & RÉCUPÉRATION</span><h1 ref={headingRef} tabIndex={-1}>Le prochain rendez-vous de {firstName(activeChild.name)}.</h1><ParentPickupExperience child={activeChild} onRefresh={onRefresh} previewMode={previewMode} /></section>}
+        {activeChild && screen === 'pickup' && <section className="pf-pickup"><span className="pf-kicker">ATELIER & RÉCUPÉRATION</span><h1 ref={headingRef} tabIndex={-1}>Le prochain rendez-vous de {firstName(activeChild.name)}.</h1><ParentPickupExperience child={activeChild} parentUid={parentUid} organizationId={organizationId} currentParentName={parentName} onRefresh={onRefresh} previewMode={previewMode} /></section>}
       </>}
       <p className="pf-credit">011Y par <a href="https://rive.app/marketplace/26076-48718-011y/" target="_blank" rel="noopener noreferrer">Patgrivet</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>
     </div>

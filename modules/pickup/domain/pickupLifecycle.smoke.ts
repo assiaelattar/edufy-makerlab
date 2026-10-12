@@ -28,6 +28,7 @@ assert.equal(isCanonicalPickupEntry(entries[3]), true);
 assert.equal(isCanonicalPickupEntry({ ...entries[3], sessionDate: 'old' }), false);
 assert.equal(selectDatedPickup(entries, 'org-a', 'student-b', '2026-10-10'), null);
 assert.equal(selectOpenPickup(entries.map(entry => ({ ...entry, status: entry.sessionDate === '2026-10-09' ? 'released' : 'confirmed' })), 'org-a', 'student-a', '2026-10-10')?.sessionDate, '2026-10-10');
-assert.equal(selectOpenPickup(entries.filter(entry => entry.sessionDate === '2026-10-09').map(entry => ({ ...entry, status: 'released' })), 'org-a', 'student-a', '2026-10-10')?.sessionDate, '2026-10-09');
+assert.equal(selectOpenPickup(entries.filter(entry => entry.sessionDate === '2026-10-09').map(entry => ({ ...entry, status: 'released' })), 'org-a', 'student-a', '2026-10-10'), null);
+assert.equal(selectOpenPickup(entries.filter(entry => entry.sessionDate === '2026-10-09').map(entry => ({ ...entry, status: 'arrived' })), 'org-a', 'student-a', '2026-10-10')?.sessionDate, '2026-10-09');
 
 console.log('Pickup lifecycle domain smoke passed.');

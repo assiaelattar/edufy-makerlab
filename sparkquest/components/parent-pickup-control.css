@@ -1,0 +1,53 @@
+.sq-pickup-control { overflow: hidden; border: 1.5px solid #c7d9e8; border-radius: 22px; background: #fff; box-shadow: 0 5px 0 #d8e5ee; }
+.sq-pickup-control.is-locked { padding-bottom: 18px; }
+.sq-pickup-control.is-locked > p { margin: 15px 18px 0; color: #60758b; font-size: 13px; line-height: 1.5; }
+.sq-pickup-control-head { display: grid; grid-template-columns: auto minmax(0,1fr); align-items: center; gap: 11px; padding: 18px; background: linear-gradient(135deg,#122f5b,#174f87); color: #fff; }
+.sq-pickup-control-head > span { display: grid; width: 43px; height: 43px; place-items: center; border-radius: 14px; background: #c9f46e; color: #244c2e; }
+.sq-pickup-control-head div { min-width: 0; }
+.sq-pickup-control-head p { margin: 0 0 3px; color: #bcd8f6; font-size: 9px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.sq-pickup-control-head h3 { margin: 0; font-size: clamp(19px,5vw,25px); font-weight: 900; letter-spacing: -.04em; line-height: 1.1; }
+.sq-pickup-control-head em { grid-column: 1/-1; width: fit-content; border: 1px solid #ffffff30; border-radius: 999px; padding: 5px 9px; background: #ffffff12; color: #eaf4ff; font-size: 10px; font-style: normal; font-weight: 900; }
+.sq-pickup-progress { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 0; margin: 0; padding: 16px 12px 11px; list-style: none; }
+.sq-pickup-progress li { position: relative; display: grid; justify-items: center; gap: 5px; color: #91a0ad; text-align: center; }
+.sq-pickup-progress li::before { position: absolute; z-index: 0; top: 14px; right: 50%; left: -50%; height: 3px; background: #dce6ed; content: ''; }
+.sq-pickup-progress li:first-child::before { display: none; }
+.sq-pickup-progress span { z-index: 1; display: grid; width: 30px; height: 30px; place-items: center; border: 3px solid #dce6ed; border-radius: 50%; background: #fff; }
+.sq-pickup-progress small { max-width: 70px; font-size: 9px; font-weight: 900; line-height: 1.15; }
+.sq-pickup-progress li.is-complete { color: #315f29; }
+.sq-pickup-progress li.is-complete::before { background: #85bc48; }
+.sq-pickup-progress li.is-complete span { border-color: #85bc48; background: #e8f8c9; }
+.sq-pickup-message { display: flex; align-items: flex-start; gap: 9px; margin: 8px 16px; border-radius: 12px; padding: 11px 12px; background: #eff6fc; color: #3a5874; font-size: 12px; line-height: 1.4; }
+.sq-pickup-message > svg { flex: none; margin-top: 1px; }
+.sq-pickup-message > span { flex: 1; }
+.sq-pickup-message button { display: inline-flex; min-height: 34px; flex: none; align-items: center; gap: 5px; border: 0; border-radius: 8px; padding: 5px 8px; background: #fff; color: inherit; font-size: 11px; font-weight: 900; cursor: pointer; }
+.sq-pickup-message.is-error { background: #fff0ec; color: #8a3d2b; }
+.sq-pickup-message.is-warning { background: #fff5d6; color: #76530d; }
+.sq-pickup-message.is-success { background: #e8f8d6; color: #356126; }
+.sq-pickup-actions { display: grid; gap: 12px; padding: 8px 17px 19px; }
+.sq-pickup-actions > label,.sq-pickup-cancel > label { color: #1c3328; font-size: 12px; font-weight: 900; }
+.sq-pickup-actions > select,.sq-pickup-cancel textarea { width: 100%; min-height: 48px; border: 1.5px solid #c6d5e0; border-radius: 12px; padding: 10px 12px; background: #fff; color: #1c3328; font: inherit; font-size: 13px; outline: none; }
+.sq-pickup-cancel textarea { min-height: 76px; resize: vertical; }
+.sq-pickup-actions :is(select,textarea):focus { border-color: #2448eb; box-shadow: 0 0 0 3px #c9deff; }
+.sq-pickup-actions > p { display: flex; align-items: center; gap: 8px; margin: 0; color: #526a80; font-size: 12px; line-height: 1.45; }
+.sq-pickup-actions button { font-family: inherit; }
+.sq-pickup-primary { display: inline-flex; width: 100%; min-height: 50px; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 13px; padding: 11px 15px; background: #2448eb; box-shadow: 0 4px 0 #1736b4; color: #fff; font-size: 13px; font-weight: 900; cursor: pointer; }
+.sq-pickup-primary:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #1736b4; }
+.sq-pickup-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.sq-pickup-inline-warning { border-radius: 11px; padding: 11px; background: #fff4d8; color: #74530d !important; }
+.sq-pickup-wait,.sq-pickup-complete { display: flex; align-items: flex-start; gap: 11px; border-radius: 14px; padding: 14px; background: #fff5d6; color: #725112; }
+.sq-pickup-wait.is-released,.sq-pickup-complete { background: #e8f8d6; color: #315c27; }
+.sq-pickup-wait > svg,.sq-pickup-complete > svg { flex: none; }
+.sq-pickup-wait strong,.sq-pickup-complete strong { display: block; font-size: 13px; }
+.sq-pickup-wait p,.sq-pickup-complete p { margin: 4px 0 0; font-size: 11px; line-height: 1.45; }
+.sq-pickup-cancel { display: grid; gap: 10px; margin-top: 4px; border-top: 1px solid #dce7ef; padding-top: 15px; }
+.sq-pickup-cancel > button,.sq-pickup-cancel > div button { min-height: 44px; border: 0; border-radius: 11px; padding: 8px 12px; background: transparent; color: #64778a; font-size: 12px; font-weight: 900; text-decoration: underline; cursor: pointer; }
+.sq-pickup-cancel > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.sq-pickup-cancel > div .sq-pickup-danger { background: #a74332; color: #fff; text-decoration: none; }
+.sq-spin { animation: sq-parent-spin .8s linear infinite; }
+@keyframes sq-parent-spin { to { transform: rotate(360deg); } }
+@media (min-width: 680px) {
+  .sq-pickup-control-head { grid-template-columns: auto minmax(0,1fr) auto; padding: 22px; }
+  .sq-pickup-control-head em { grid-column: auto; }
+  .sq-pickup-progress { padding-inline: 26px; }
+  .sq-pickup-actions { padding: 12px 24px 24px; }
+}

@@ -736,39 +736,154 @@ service cloud.firestore {
         request.resource.data.bookedAt == request.time;
     }
 
-    function validLinkedPickupCreate() {
-      return hasUserProfile() &&
-        (currentRole() == 'student' || legacyParentProfile(request.resource.data.organizationId)) &&
-        requestHasOrg() &&
-        isSameOrg(request.resource.data.organizationId) &&
-        request.resource.data.status == 'on_the_way' &&
-        request.resource.data.createdAt == request.time &&
-        request.resource.data.notifiedAt == request.time &&
-        request.resource.data.keys().hasOnly([
-          'organizationId',
-          'studentId',
-          'studentName',
-          'parentName',
-          'pickerName',
-          'pickerRelation',
-          'status',
-          'notifiedAt',
-          'createdAt'
-        ]) &&
-        studentLinkedToRequester(request.resource.data.studentId, request.resource.data.organizationId);
+    // V1 pickup records have a deterministic learner/day ID and a matching
+    // append-only event in the same atomic write. Legacy random-ID records
+    // remain readable, but cannot be changed or deleted by a client.
+    function pickupStudent(data) {
+      return get(/databases/$(database)/documents/students/$(data.studentId));
     }
 
-    function validLinkedPickupUpdate() {
-      return hasUserProfile() &&
-        (currentRole() == 'student' || legacyParentProfile(resource.data.organizationId)) &&
-        resourceHasOrg() &&
-        requestHasOrg() &&
-        request.resource.data.organizationId == resource.data.organizationId &&
-        isSameOrg(resource.data.organizationId) &&
-        request.resource.data.studentId == resource.data.studentId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'arrivedAt', 'confirmedAt']) &&
-        request.resource.data.status in ['arrived', 'confirmed'] &&
-        studentLinkedToRequester(resource.data.studentId, resource.data.organizationId);
+    function pickupLinkedGuardian(data) {
+      let linkPath = /databases/$(database)/documents/guardian_links/$(request.auth.uid + '_' + data.studentId);
+      let link = get(linkPath).data;
+      return hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
+        currentRole() == 'parent' && currentOrgId() == data.organizationId &&
+        exists(linkPath) && link.parentUid == request.auth.uid &&
+        link.organizationId == data.organizationId && link.studentId == data.studentId &&
+        link.status == 'active' && link.get('permissions', []).hasAny(['pickup']);
+    }
+
+    function pickupCreatingGuardian(data) {
+      return pickupLinkedGuardian(data) && data.parentUid == request.auth.uid;
+    }
+
+    function pickupStaff(data) {
+      return hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
+        currentRole() in ['super_admin', 'owner', 'admin', 'instructor'] &&
+        isSameOrg(data.organizationId);
+    }
+
+    function pickupReader(data) {
+      return pickupStaff(data) ||
+        (hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
+          learnerLinkedToRequester(data.studentId, data.organizationId)) ||
+        pickupLinkedGuardian(data);
+    }
+
+    function pickupIdentity(entryId, data) {
+      let student = pickupStudent(data).data;
+      return data.keys().hasAll(['organizationId', 'studentId', 'studentName', 'parentName', 'parentUid', 'pickerName', 'sessionDate', 'sessionId']) &&
+        data.organizationId is string && data.organizationId.size() > 0 &&
+        data.studentId is string && data.studentId.size() > 0 &&
+        data.sessionDate is string && data.sessionDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+        data.sessionId == 'daily' &&
+        entryId == data.organizationId + '_' + data.studentId + '_' + data.sessionDate + '_daily' &&
+        data.studentName is string && data.studentName.size() > 0 &&
+        data.parentName is string && data.parentName.size() > 0 &&
+        data.parentUid is string && data.parentUid.size() > 0 &&
+        data.pickerName is string && data.pickerName.size() > 0 && data.pickerName.size() <= 100 &&
+        student.organizationId == data.organizationId;
+    }
+
+    function pickupCurrentAuthorization(data) {
+      let student = pickupStudent(data).data;
+      return student.status == 'active' && data.studentName == student.name &&
+        data.parentName == student.get('parentName', '') &&
+        (data.pickerName == data.parentName || student.get('authorizedPickups', []).hasAny([data.pickerName]));
+    }
+
+    function pickupToday(data) {
+      return int(data.sessionDate[0:4]) == request.time.year() &&
+        int(data.sessionDate[5:7]) == request.time.month() &&
+        int(data.sessionDate[8:10]) == request.time.day();
+    }
+
+    function pickupEventMatches(entryId, status) {
+      let path = /databases/$(database)/documents/pickup_queue/$(entryId)/events/$(status);
+      return existsAfter(path) &&
+        getAfter(path).data.status == status &&
+        getAfter(path).data.at == request.time &&
+        getAfter(path).data.actorUid == request.auth.uid &&
+        getAfter(path).data.organizationId == request.resource.data.organizationId &&
+        getAfter(path).data.studentId == request.resource.data.studentId &&
+        getAfter(path).data.pickerName == request.resource.data.pickerName;
+    }
+
+    function validPickupCreate(entryId) {
+      let data = request.resource.data;
+      return (pickupCreatingGuardian(data) ||
+          (pickupStaff(data) && data.parentUid == pickupStudent(data).data.parentLoginInfo.uid)) &&
+        pickupIdentity(entryId, data) && pickupToday(data) && pickupCurrentAuthorization(data) &&
+        data.keys().hasOnly(['organizationId', 'studentId', 'studentName', 'parentName', 'parentUid', 'pickerName', 'pickerRelation', 'sessionDate', 'sessionId', 'status', 'createdAt', 'notifiedAt', 'updatedAt', 'createdByUid', 'lastActorUid', 'lastEventId']) &&
+        data.status == 'on_the_way' && data.lastEventId == 'on_the_way' &&
+        data.createdAt == request.time && data.notifiedAt == request.time && data.updatedAt == request.time &&
+        data.createdByUid == request.auth.uid && data.lastActorUid == request.auth.uid &&
+        pickupEventMatches(entryId, 'on_the_way');
+    }
+
+    function validPickupUpdate(entryId) {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys();
+      return pickupIdentity(entryId, before) && pickupIdentity(entryId, after) &&
+        after.organizationId == before.organizationId && after.studentId == before.studentId &&
+        after.sessionDate == before.sessionDate && after.sessionId == before.sessionId &&
+        after.parentUid == before.parentUid && after.pickerName == before.pickerName &&
+        after.createdAt == before.createdAt && after.notifiedAt == before.notifiedAt &&
+        after.createdByUid == before.createdByUid &&
+        after.lastActorUid == request.auth.uid && after.updatedAt == request.time &&
+        after.lastEventId == after.status && after.status != before.status &&
+        (
+          (before.status == 'on_the_way' && after.status == 'arrived' &&
+            changed.hasOnly(['status', 'arrivedAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
+            after.arrivedAt == request.time && (pickupLinkedGuardian(after) || pickupStaff(after))) ||
+          (before.status == 'arrived' && after.status == 'released' &&
+            changed.hasOnly(['status', 'releasedAt', 'updatedAt', 'lastActorUid', 'lastEventId', 'verifiedPickerName', 'verificationMethod', 'verificationNote', 'verifiedByUid']) &&
+            after.releasedAt == request.time && after.verifiedByUid == request.auth.uid &&
+            after.verifiedPickerName == after.pickerName &&
+            after.verificationMethod in ['photo_id', 'known_person'] &&
+            after.verificationNote is string && after.verificationNote.size() >= 8 && after.verificationNote.size() <= 500 &&
+            pickupStaff(after) && pickupCurrentAuthorization(after)) ||
+          (before.status == 'released' && after.status == 'confirmed' &&
+            changed.hasOnly(['status', 'confirmedAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
+            after.confirmedAt == request.time &&
+            currentUser().data.get('name', '') == after.pickerName && pickupLinkedGuardian(after)) ||
+          (before.status in ['on_the_way', 'arrived'] && after.status == 'cancelled' &&
+            changed.hasOnly(['status', 'cancelledAt', 'exceptionReason', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
+            after.cancelledAt == request.time && after.exceptionReason is string &&
+            after.exceptionReason.size() >= 8 && after.exceptionReason.size() <= 500 &&
+            (pickupLinkedGuardian(after) || pickupStaff(after))) ||
+          (before.status in ['on_the_way', 'arrived', 'released'] && after.status == 'exception' &&
+            changed.hasOnly(['status', 'exceptionAt', 'exceptionReason', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
+            after.exceptionAt == request.time && after.exceptionReason is string &&
+            after.exceptionReason.size() >= 8 && after.exceptionReason.size() <= 500 && pickupStaff(after))
+        ) && pickupEventMatches(entryId, after.status);
+    }
+
+    function pickupReceiptActorMatches() {
+      return !(resource.data.status == 'released' && request.resource.data.status == 'confirmed') ||
+        (hasUserProfile() && currentUser().data.get('name', '') == resource.data.pickerName);
+    }
+
+    function validPickupEventCreate(entryId, eventId) {
+      let after = getAfter(/databases/$(database)/documents/pickup_queue/$(entryId)).data;
+      return request.auth != null &&
+        request.resource.data.keys().hasOnly(['organizationId', 'studentId', 'pickerName', 'status', 'at', 'actorUid', 'verificationMethod', 'verificationNote', 'verifiedPickerName', 'exceptionReason']) &&
+        request.resource.data.keys().hasAll(['organizationId', 'studentId', 'pickerName', 'status', 'at', 'actorUid']) &&
+        eventId in ['on_the_way', 'arrived', 'released', 'confirmed', 'cancelled', 'exception'] &&
+        eventId == request.resource.data.status && after.status == eventId && after.lastEventId == eventId &&
+        request.resource.data.at == request.time && request.resource.data.actorUid == request.auth.uid &&
+        request.resource.data.organizationId == after.organizationId &&
+        request.resource.data.studentId == after.studentId && request.resource.data.pickerName == after.pickerName &&
+        (!exists(/databases/$(database)/documents/pickup_queue/$(entryId)) ||
+          get(/databases/$(database)/documents/pickup_queue/$(entryId)).data.status != eventId) &&
+        (eventId != 'released' || (
+          request.resource.data.verificationMethod == after.verificationMethod &&
+          request.resource.data.verificationNote == after.verificationNote &&
+          request.resource.data.verifiedPickerName == after.verifiedPickerName)) &&
+        (eventId == 'released' || !request.resource.data.keys().hasAny(['verificationMethod', 'verificationNote', 'verifiedPickerName'])) &&
+        (!(eventId in ['cancelled', 'exception']) || request.resource.data.exceptionReason == after.exceptionReason) &&
+        (eventId in ['cancelled', 'exception'] || !request.resource.data.keys().hasAny(['exceptionReason']));
     }
 
     // --- Identity and tenancy ---
@@ -1112,15 +1227,16 @@ service cloud.firestore {
     }
 
     match /pickup_queue/{entryId} {
-      allow read: if canReadTenantDoc() ||
-        (resourceHasOrg() && (
-          learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
-          legacyParentLinkedToRequester(resource.data.studentId, resource.data.organizationId) ||
-          guardianHasPermission(resource.data.studentId, resource.data.organizationId, 'pickup')
-        ));
-      allow create: if canCreateTenantDoc() || validLinkedPickupCreate();
-      allow update: if canUpdateTenantDoc() || validLinkedPickupUpdate();
-      allow delete: if canDeleteTenantDoc();
+      allow read: if resourceHasOrg() && pickupReader(resource.data);
+      allow create: if validPickupCreate(entryId);
+      allow update: if pickupReceiptActorMatches() && validPickupUpdate(entryId);
+      allow delete: if false;
+
+      match /events/{eventId} {
+        allow read: if resourceHasOrg() && pickupReader(resource.data);
+        allow create: if validPickupEventCreate(entryId, eventId);
+        allow update, delete: if false;
+      }
     }
 
     match /notifications/{notifId} {

@@ -653,7 +653,7 @@ const App: React.FC = () => {
                 <SessionProvider>
                   <SessionOverlay />
                   <InactivityMonitor />
-                  {/* <PickupNotification /> -- TEMPORARILY DISABLED: Missing Firestore indexes */}
+                  <PickupNotification />
                   <SessionControls />
                   <SparkQuestApp />
                 </SessionProvider>

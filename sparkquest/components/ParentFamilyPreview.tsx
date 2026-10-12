@@ -11,6 +11,7 @@ const children: FamilyChild[] = [
   {
     id: 'preview-learner-one', name: 'Maya Maker', issue: null,
     permissions: ['portfolio', 'gallery', 'enrollments', 'payments', 'pickup'],
+    pickupProfile: { active: true, parentName: 'Samira Maker', authorizedPickups: ['Family guardian'] },
     media: { status: 'ready', data: [
       { id: 'bench-photo', url: '/mission-plant-guardian.svg', caption: 'Testing the plant sensor in the workshop', date: '2026-10-10' }
     ] },
@@ -69,6 +70,7 @@ const children: FamilyChild[] = [
   {
     id: 'preview-learner-two', name: 'Adam Maker', issue: null,
     permissions: ['portfolio', 'gallery', 'enrollments', 'payments', 'pickup'],
+    pickupProfile: { active: true, parentName: 'Samira Maker', authorizedPickups: ['Family guardian'] },
     media: { status: 'ready', data: [] }, projects: [],
     upcoming: { status: 'ready', data: { missions: [], contextNote: null } },
     operations: {
@@ -83,6 +85,7 @@ const children: FamilyChild[] = [
 children.push({
   id: 'preview-learner-three', name: 'Leila Maker', issue: null,
   permissions: ['portfolio', 'gallery', 'enrollments', 'payments', 'pickup'],
+  pickupProfile: { active: true, parentName: 'Samira Maker', authorizedPickups: ['Family guardian'] },
   media: { status: 'ready', data: [] }, projects: [],
   upcoming: { status: 'ready', data: { missions: [], contextNote: null } },
   operations: children[1].operations,

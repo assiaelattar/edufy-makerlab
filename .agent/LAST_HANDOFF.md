@@ -30,6 +30,14 @@ On 2026-10-12 a first-visit install invitation was added to the standalone Spark
 
 ---
 
+# Latest handoff — Canonical pickup lifecycle release candidate
+
+On 2026-10-12 the pickup experience was connected across the existing family, learner and Edufy staff accounts. A verified parent selects an active guardian and announces/arrives; the learner sees the status; authorized staff record verification and release; only the selected picker confirms receipt. Queue transitions require matching immutable event records in the same transaction. The actual local UI flow passed with separate parent, guardian, learner and staff identities, including denial of receipt by the wrong guardian and live updates in every role.
+
+The focused release includes the Edufy Pickup Status desk, parent controls, canonical domain/command adapters, instructor navigation/permission wiring, Firestore rules and indexes, and supporting tests. SparkQuest TypeScript, both builds, lifecycle smoke, command emulators and Firestore rule suites pass. Production bundles point to `edufy-makerlab` and contain no local demo project or localhost Firebase endpoint; deployment ignore files exclude `.env*`. Release the GitHub/Hostinger client, linked Vercel client and Firestore rules/indexes together; then verify the public bundles before operational use. Details: `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
+
+---
+
 # Previous handoff — SparkQuest parent mobile portal release
 
 On 2026-10-12 the parent portal mobile journey, weekly Pickup/workshop surface, visual project detail and upcoming work, contextual 011Y mascot, smart persistent navigation, parent PWA shell, and unified mascot loading animation were released to the standalone SparkQuest client. The 011Y loader/guide no longer exposes a white square. Focused code commits `6e10cba`, `f044690`, and `09c44c2` reached GitHub `main`; Vercel production is READY and aliased to `https://sparkquest-makerlab.vercel.app/`. TypeScript, both local production builds, parent schedule/assignment/access/visual smokes, Vercel build, public manifest/icon/mascot requests, and an authenticated 390px browser pass. The browser confirmed Pickup, project detail, step focus, contextual mascot, and no horizontal overflow. The release is based on the current parent account code. It does not modify family records, Firestore rules, indexes, or the trusted parent API. See `docs/sparkquest/CHANGELOG.md` and `docs/sparkquest/KNOWN_ISSUES.md` for behavior and remaining device checks.

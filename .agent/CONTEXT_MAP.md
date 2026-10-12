@@ -2,6 +2,10 @@
 
 Parent legacy login repair: read `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`, `docs/parent/CREDENTIALS_PHASE_3_2026-10-10.md`, `api/parent-access/index.js`, `services/parentAccess.ts`, the Student Details parent access components, and the synthetic emulator. Release through the registered Edufy app only; Vercel trusted API and Hostinger static client are distinct deployment targets.
 
+# Pickup lifecycle
+
+Read `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`, `sparkquest/AGENT_CONTEXT.md`, decisions and known issues. Canonical files are `modules/pickup/domain/pickupLifecycle.ts`, `modules/pickup/services/pickupCommands.ts`, `sparkquest/services/parentPickupCommands.ts`, both pickup UIs, `firestore.rules` and `firestore.indexes.json`. Run the lifecycle smoke, parent-command and rule emulator suites only against explicit localhost demo emulators, then SparkQuest TypeScript and both production builds.
+
 Protected step review: read `docs/sparkquest/REVIEW_SECURITY_PHASE_2.md`, both earlier review reports, SparkQuest context, decisions and known issues. Run the review, learner-pipeline and profile-assignment emulators only against explicit localhost demo services, all domain suites, scoped TypeScript, both builds and the write-free `?designPreview=reviewLoop` browser flow.
 
 Review security: read `docs/sparkquest/REVIEW_SECURITY_PHASE_1.md`, Review reliability, SparkQuest context, decisions and known issues. Run `domain/projectReview.emulator.mjs`, `domain/profileAssignment.emulator.mjs` and `domain/studentPipeline.emulator.mjs` only with explicit localhost demo emulators; Storage may be excluded only when recording that limitation. Then run all domain suites, scoped TypeScript and both builds.
@@ -30,7 +34,7 @@ Learner workbench/desktop Phase 1: read `docs/sparkquest/LEARNER_WORKSPACE_PHASE
 | Authorization/data | `context/AuthContext.tsx`, `context/AppContext.tsx`, `firestore.rules`, `firestore.indexes.json` |
 | WhatsApp assistant | `docs/admissions/WHATSAPP_ASSISTED_OPERATIONS.md`, `modules/admissions/ui/EducationAdmissionsWhatsAppAssistant.tsx`, `views/CommunicationsView.tsx` |
 | SparkQuest rescue | `sparkquest/AGENT_CONTEXT.md`, `docs/sparkquest/RESCUE_PHASE_1.md` through `docs/sparkquest/RESCUE_PHASE_6.md`, `docs/sparkquest/DECISIONS.md`, `docs/sparkquest/KNOWN_ISSUES.md` |
-| SparkQuest parent family | `docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md`, `docs/sparkquest/PARENT_FAMILY_PHASE_3_2026-10-11.md`, `sparkquest/components/ParentFamilyWorkspace.tsx`, `sparkquest/hooks/useParentFamily.ts`, `firestore.rules` |
+| SparkQuest parent family and Pickup | `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`, `docs/sparkquest/PARENT_FAMILY_MOBILE_PHASE_4_2026-10-11.md`, `sparkquest/components/ParentFamilyWorkspace.tsx`, `sparkquest/components/ParentPickupControl.tsx`, `modules/pickup/`, `firestore.rules` |
 
 
 ## Finance service catalogue

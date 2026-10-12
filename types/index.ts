@@ -981,13 +981,28 @@ export interface PickupEntry {
   studentId: string;
   studentName: string;
   parentName: string; // The primary parent
+  /** Required for canonical V1 entries; legacy entries remain read-only. */
+  parentUid?: string;
+  sessionDate?: string;
+  sessionId?: 'daily';
+  createdByUid?: string;
+  lastActorUid?: string;
+  lastEventId?: string;
   pickerName?: string; // Who is actually coming (e.g. "Mom", "Uncle John")
   pickerRelation?: string;
-  status: 'waiting' | 'on_the_way' | 'arrived' | 'released' | 'confirmed' | 'dismissed';
+  status: 'waiting' | 'on_the_way' | 'arrived' | 'released' | 'confirmed' | 'dismissed' | 'cancelled' | 'exception';
   notifiedAt?: Timestamp; // When "On my way" was clicked
   arrivedAt?: Timestamp; // When "I'm Here" was clicked
   releasedAt?: Timestamp; // When instructor released
   confirmedAt?: Timestamp; // When parent confirmed receipt
+  cancelledAt?: Timestamp;
+  exceptionAt?: Timestamp;
+  exceptionReason?: string;
+  verifiedPickerName?: string;
+  verificationMethod?: 'photo_id' | 'known_person';
+  verificationNote?: string;
+  verifiedByUid?: string;
+  updatedAt?: Timestamp;
   createdAt: Timestamp;
 }
 

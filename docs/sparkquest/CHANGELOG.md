@@ -55,6 +55,16 @@
 - Added a one-time, account-scoped invitation after the signed-in parent family loads. The 011Y sheet offers the browser install action when available, or clear home-screen instructions, and can be dismissed.
 - The sheet stays hidden in installed standalone mode. A development-only preview exercises the invitation without changing live family data.
 
+# 2026-10-12 — Connected pickup lifecycle
+
+- Connected existing parent, authorized guardian, learner and Edufy staff accounts through one live pickup queue.
+- Added selected-picker announcement, arrival, staff verification/release, selected-picker receipt confirmation, cancellation and exception handling.
+- Added atomic immutable transition events, deterministic queue identity, tenant/guardian checks and focused Firestore indexes.
+- Added Pickup Status access for instructors while retaining elevated administrative access.
+- Passed the actual four-role local UI flow, lifecycle and adapter smokes, Firestore emulator suites, TypeScript and both production builds.
+
+---
+
 ## 2026-10-12 — Parent mobile portal and PWA
 
 - Rebuilt the parent journey around child selection, a visual weekly project path, standalone project detail, Moments, Records, and a weekly Pickup destination near the top of the experience.

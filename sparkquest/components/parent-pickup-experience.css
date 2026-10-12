@@ -48,6 +48,7 @@
 .pf-pickup-stages > span.is-past i { border-color:#d5f777; background:#d5f777; }
 .pf-pickup-stages small { font-size:10px; font-weight:850; line-height:1.15; }
 .pf-pickup-stale { margin:17px 0 0; border-top:1px solid #e5e7df; padding-top:13px; color:#74532d; font-size:12px; line-height:1.45; }
+.pf-pickup-live-control { margin-top:24px; }
 .pf-pickup-refresh { display:flex; width:100%; min-height:54px; align-items:center; justify-content:center; gap:9px; margin-top:26px; border:0; border-radius:15px; background:#d5f777; box-shadow:0 4px 0 #a2c353; color:#263d29; font-size:14px; font-weight:900; }
 .pf-pickup-readonly { display:flex; align-items:flex-start; gap:8px; margin:24px 4px 0; color:#62746a; font-size:12px; line-height:1.5; }
 .pf-pickup-readonly svg { flex:none; }

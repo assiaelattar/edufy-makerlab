@@ -21,6 +21,11 @@ export interface FamilyChild {
   projects: FamilyProject[];
   issue: string | null;
   permissions: string[];
+  pickupProfile?: {
+    active: boolean;
+    parentName: string;
+    authorizedPickups: string[];
+  };
   operations: FamilyOperations;
   media: FamilySource<FamilyMediaItem[]>;
   upcoming: FamilySource<{ missions: FamilyUpcomingMission[]; contextNote: string | null }>;
@@ -304,7 +309,21 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
               : missingCanonicalLink || missingLegacyLink
                 ? 'Some projects may require the academy to complete this learner’s family links.'
                 : null;
-            return { id, name, projects: visualProjects, issue, permissions, operations: { finance, attendance, pickup, workshop }, media, upcoming };
+            return {
+              id,
+              name,
+              projects: visualProjects,
+              issue,
+              permissions,
+              pickupProfile: {
+                active: student.status === 'active',
+                parentName: student.parentName?.trim() || '',
+                authorizedPickups: student.authorizedPickups || []
+              },
+              operations: { finance, attendance, pickup, workshop },
+              media,
+              upcoming
+            };
           } catch (cause) {
             console.error('Unable to load linked learner', id, cause);
             return {

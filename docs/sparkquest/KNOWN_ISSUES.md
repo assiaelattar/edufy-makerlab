@@ -65,7 +65,7 @@
 
 - The live Edufy screenshot still shows the earlier setup-link card. The one-time staff-issued credential and SparkQuest family journey are local candidate code until the API, rules/indexes and both frontend releases are coordinated.
 - Actual parent media access depends on stored download URLs or approved Storage permissions. Check a designated family's recent and legacy project/gallery assets before release; do not widen Storage access based on a broken image alone.
-- Parent Pickup is view-only. The new rule removes the former direct parent write exception; coordinate this with any separate Pickup action release.
+- Historical note: Parent Pickup was view-only in the Phase 4 release. The 2026-10-12 connected lifecycle above supersedes that behavior with constrained parent and authorized-guardian commands.
 - Large family histories currently load all authorized enrollment, payment, attendance and gallery records; pagination and bounded history reads are a follow-up for high-volume families.
 
 ## Review security Phase 2 release gate
@@ -141,3 +141,11 @@
 - The structured workflow pipeline still needs authenticated end-to-end QA with designated instructor and learner accounts, including real mission creation, assignment, evidence submission, revision, approval, and snapshot immutability.
 - Phase 6 aligns the remaining instructor reward, import, editor, and review workflows. Less-frequent fields inside the large mission editor retain some legacy density and can migrate incrementally without changing the workflow contract.
 - Authenticated instructor visual QA still needs a designated instructor session at desktop and phone widths. The available local browser sessions were authenticated as a learner, and this phase did not use production writes or credentials to manufacture an instructor session.
+# Pickup lifecycle release notes — 2026-10-12
+
+- The connected pickup lifecycle supersedes the earlier parent view-only Pickup note below. Parent and authorized-guardian writes are now limited to explicit lifecycle commands and selected-picker rules.
+- Local role and emulator acceptance used synthetic accounts. Run one designated production-family acceptance before relying on the flow for real departures.
+- Some intentionally denied emulator writes can reach Firestore's rule-expression ceiling after the request has already failed the authorization path. Valid lifecycle writes pass. Keep this under observation when the production rules are next simplified; do not weaken guardian or event checks to remove a denial-path diagnostic.
+- The staff UI permission is `pickup.view`; Firestore release authorization currently follows the established instructor/elevated role contract. Use a restricted custom staff role if a reception-only identity is introduced.
+
+---

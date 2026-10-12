@@ -1033,3 +1033,12 @@ Target checklist:
 Added a tenant service catalogue using the eight Future Makers 2026 PDF services and a rapid multi-service invoice form on the existing Finance ledger. Editable invoice snapshots, annual numbering, credit notes and print/export are preserved. Source prices are unspecified, and no defaults are written on startup. Local schema/version/archive rules retain the existing organization-manager permission boundary.
 
 Domain, real emulator, isolated browser, focused TypeScript and production build pass. Global TypeScript errors outside the changed Finance files and existing build warnings remain. Next work requires a new explicit scope; staff permission alignment is documented, not silently broadened. No production mutation or release occurred. See `docs/finance/SERVICE_CATALOGUE_PHASE_1.md` and `.agent/LAST_HANDOFF.md`.
+# 2026-10-12 — Connected pickup lifecycle release
+
+- Connected the existing family, learner and Edufy staff identities through one canonical pickup state machine.
+- Added active authorized-picker selection, parent announcement/arrival/cancellation, learner live status, staff verification/release, selected-picker receipt and immutable event history.
+- Added instructor Pickup Status navigation and permission while retaining admin, owner and super-admin access.
+- Proved the actual role-separated UI flow plus lifecycle, adapter and Firestore emulator suites; SparkQuest TypeScript and both production builds pass.
+- Coordinated release includes GitHub/Hostinger Edufy, the linked SparkQuest Vercel project, and Firestore rules/indexes. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
+
+---

@@ -97,7 +97,8 @@ const DEFAULT_ROLES: RoleDefinition[] = [
       'toolkit.view',
       'toolkit.manage',
       'media.view',
-      'media.manage'
+      'media.manage',
+      'pickup.view'
     ]
   },
   {

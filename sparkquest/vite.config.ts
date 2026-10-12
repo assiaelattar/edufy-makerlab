@@ -18,7 +18,7 @@ export default defineConfig(({ mode, command }) => {
     },
     plugins: [
       react(),
-      ...(command === 'serve' && env.VITE_LOCAL_FIREBASE_PROJECT_ID === 'demo-parent-journey'
+      ...(command === 'serve' && /^demo-[a-z0-9-]+$/.test(env.VITE_LOCAL_FIREBASE_PROJECT_ID || '')
         ? [{
             name: 'local-parent-demo-csp',
             transformIndexHtml(html: string) {

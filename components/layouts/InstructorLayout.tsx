@@ -4,6 +4,7 @@ import {
     Box,
     CalendarCheck,
     Camera,
+    Car,
     Gamepad2,
     Home,
     LogOut,
@@ -26,6 +27,7 @@ const menuItems = [
     { id: 'learning', icon: BookOpen, label: 'Studio Manager' },
     { id: 'students', icon: Users, label: 'Students' },
     { id: 'attendance', icon: CalendarCheck, label: 'Attendance' },
+    { id: 'pickup', icon: Car, label: 'Pickup Status' },
     { id: 'tools', icon: Box, label: 'Inventory' },
     { id: 'media', icon: Camera, label: 'Gallery' },
     { id: 'arcade-mgr', icon: Gamepad2, label: 'Arcade Manager' }
