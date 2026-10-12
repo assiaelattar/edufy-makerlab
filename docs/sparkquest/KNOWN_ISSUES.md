@@ -8,7 +8,7 @@
 
 ## Staff Studio launch acceptance after 2026-10-12 repair
 
-- The client/server role mismatch for `super_admin` and `owner` is repaired locally and covered by a focused role smoke. One authenticated launch from the affected Edufy administrator account remains the final production acceptance check after release.
+- The client/server role mismatch for `super_admin` and `owner` is repaired and covered by a focused role smoke. Browser tracing then found the authenticated Studio was stopped by the Factory stylesheet's CSP-blocked Google Fonts import; the policy and duplicate import are repaired. Repeat the affected administrator launch after the focused production release.
 
 ## Parent install invitation and AAJLANE account check
 

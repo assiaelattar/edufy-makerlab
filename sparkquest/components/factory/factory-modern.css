@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-
 .sparkfactory-shell { --factory-ink:#202124; --factory-paper:#f5f5f6; --factory-line:#e6e7e9; --factory-muted:#747980; --factory-blue:#1769f5; --factory-lime:#c7f53c; box-sizing:border-box; padding:20px; background:#bfc1c9; color:#202124; font-family:'DM Sans',Inter,Arial,sans-serif; }
 .sparkfactory-shell h1,.sparkfactory-shell h2,.sparkfactory-shell h3 { font-family:'DM Sans',Inter,Arial,sans-serif; letter-spacing:-.045em; }
 .sparkfactory-shell > div.flex-1 { height:100%; min-width:0; border:1px solid #ffffff80; border-radius:20px; overflow:hidden; background:#f5f5f6; box-shadow:0 22px 70px #34394325; }
