@@ -124,6 +124,58 @@ const createIssuedParent = async (auth, aliasBasis, parentName) => {
   throw Object.assign(new Error('No available parent login could be issued.'), { status: 409 });
 };
 
+const parentDirectory = async (db, organizationId) => {
+  const [profiles, links, learners] = await Promise.all([
+    db.collection('users').where('organizationId', '==', organizationId).get(),
+    db.collection('guardian_links').where('organizationId', '==', organizationId).get(),
+    db.collection('students').where('organizationId', '==', organizationId).get()
+  ]);
+  const learnerById = new Map(learners.docs.map(item => [item.id, item.data()]));
+  const childrenByParent = new Map();
+  for (const link of links.docs) {
+    const data = link.data();
+    if (data.status !== 'active' || data.organizationId !== organizationId ||
+      link.id !== `${data.parentUid}_${data.subjectId}`) continue;
+    const learner = learnerById.get(data.studentId);
+    if (!learner || learner.parentLoginInfo?.uid !== data.parentUid ||
+      !guardianSubjects({ id: data.studentId, ...learner }).includes(data.subjectId)) continue;
+    if (!childrenByParent.has(data.parentUid)) childrenByParent.set(data.parentUid, new Map());
+    childrenByParent.get(data.parentUid).set(data.studentId, { id: data.studentId, name: cleanName(learner.name) || 'Learner' });
+  }
+  return profiles.docs.flatMap(item => {
+    const profile = item.data();
+    const children = [...(childrenByParent.get(item.id)?.values() || [])]
+      .filter(child => learnerById.get(child.id)?.parentLoginInfo?.email?.toLowerCase() === profile.email?.toLowerCase());
+    if (profile.role !== 'parent' || profile.status !== 'active' || profile.organizationId !== organizationId ||
+      !/^[^@\s]+@[^@\s]+$/.test(profile.email || '') || !cleanName(profile.name) || !children.length) return [];
+    return [{ uid: item.id, email: profile.email, parentName: cleanName(profile.name), children }];
+  }).sort((a, b) => a.parentName.localeCompare(b.parentName) || a.email.localeCompare(b.email));
+};
+
+const repairParentFamily = async (db, authUser, email, organizationId, confirmedName, studentId) => {
+  await db.runTransaction(async transaction => {
+    const current = await parentEvidence(ref => transaction.get(ref), db, authUser.uid, email, organizationId, confirmedName);
+    if (!current.familyIds.has(studentId)) throw Object.assign(new Error('Parent access changed. Refresh the learner record.'), { status: 409 });
+    const profileRef = db.doc(`users/${authUser.uid}`);
+    transaction.set(profileRef, {
+      uid: authUser.uid, organizationId, email, name: confirmedName, role: 'parent', status: 'active', accessVersion: 2,
+      updatedAt: FieldValue.serverTimestamp(), ...(!current.profile.exists ? { createdAt: FieldValue.serverTimestamp() } : {})
+    }, { merge: true });
+    for (const item of current.recorded.docs) {
+      const data = item.data();
+      const patch = { parentUids: FieldValue.arrayUnion(authUser.uid) };
+      if (!cleanName(data.parentName)) patch.parentName = confirmedName;
+      transaction.update(item.ref, patch);
+      for (const subjectId of guardianSubjects({ id: item.id, ...data })) {
+        transaction.set(db.doc(`guardian_links/${authUser.uid}_${subjectId}`), {
+          organizationId, parentUid: authUser.uid, studentId: item.id, subjectId,
+          status: 'active', permissions, updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    }
+  });
+};
+
 export default async function handler(req, res) {
   if (!applyOriginPolicy(req, res)) return response(res, 403, { ok: false, error: 'Origin is not allowed.' });
   if (req.method === 'OPTIONS') return response(res, 200, { ok: true });
@@ -141,6 +193,7 @@ export default async function handler(req, res) {
       typeof organizationId !== 'string' || actorProfile.organizationId !== organizationId) {
       return response(res, 403, { ok: false, error: 'Parent access management is not permitted for this workspace.' });
     }
+    if (action === 'directory') return response(res, 200, { ok: true, action, accounts: await parentDirectory(db, organizationId) });
     if (typeof studentId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(studentId)) {
       return response(res, 400, { ok: false, error: 'A valid learner ID is required.' });
     }
@@ -156,16 +209,29 @@ export default async function handler(req, res) {
     if (action === 'reset') {
       const uid = student.parentLoginInfo?.uid;
       if (!uid) return response(res, 409, { ok: false, error: 'No parent login is recorded for this learner.' });
-      const guardian = uid ? await db.doc(`guardian_links/${uid}_${student.id}`).get() : null;
-      if (!(await linkedParent(db, uid, organizationId)) || !guardian?.exists ||
-        guardian.data().parentUid !== uid || guardian.data().studentId !== student.id ||
-        guardian.data().organizationId !== organizationId || guardian.data().status !== 'active') {
-        return response(res, 409, { ok: false, code: 'recovery_required', error: 'This older parent login needs recovery. Open Parent access and choose Recover this exact login and issue password.' });
+      if (relationshipVerified !== true) return response(res, 400, { ok: false, error: 'Verify the real parent’s identity and relationship first.' });
+      const email = exactParentEmail(student.parentLoginInfo?.email);
+      const user = await authUserByEmail(auth, email);
+      if (!user || user.uid !== uid || user.disabled || (user.customClaims?.role && user.customClaims.role !== 'parent')) {
+        return response(res, 409, { ok: false, error: 'The recorded login is not an active parent account. Review this learner’s access.' });
+      }
+      const evidence = await parentEvidence(ref => ref.get(), db, uid, email, organizationId, cleanName(parentName));
+      if (!evidence.familyIds.has(student.id)) return response(res, 409, { ok: false, error: 'This learner is not linked to the recorded parent login.' });
+      const verifiedName = evidence.name;
+      if (!verifiedName || verifiedName.length < 2) {
+        return response(res, 400, { ok: false, code: 'parent_name_required', error: 'Enter and verify this parent’s full name, then issue the password again.' });
+      }
+      const hasCurrentLinks = evidence.recorded.docs.every(item => guardianSubjects({ id: item.id, ...item.data() }).every(subjectId =>
+        evidence.links.docs.some(link => link.id === `${uid}_${subjectId}` && link.data().status === 'active' &&
+          link.data().studentId === item.id && link.data().organizationId === organizationId)));
+      if (!evidence.profile.exists || evidence.profile.data().accessVersion !== 2 ||
+        evidence.profile.data().status !== 'active' || !hasCurrentLinks) {
+        await repairParentFamily(db, user, email, organizationId, verifiedName, student.id);
       }
       const password = newParentPassword();
       await auth.revokeRefreshTokens(uid);
-      const user = await auth.updateUser(uid, { password });
-      return response(res, 200, { ok: true, action, email: user.email, password });
+      await auth.updateUser(uid, { password, displayName: verifiedName });
+      return response(res, 200, { ok: true, action, email, password, parentName: verifiedName, linkedLearnerCount: evidence.recorded.size });
     }
 
     if (relationshipVerified !== true) {

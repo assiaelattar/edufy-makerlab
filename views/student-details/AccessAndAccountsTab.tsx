@@ -4,12 +4,11 @@ import { Student } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../../components/Modal';
 import { useConfirm } from '../../context/ConfirmContext';
-import { manageParentAccess, type ParentAccessResult } from '../../services/parentAccess';
+import { getParentDirectory, manageParentAccess, type ParentAccessResult, type ParentDirectoryAccount } from '../../services/parentAccess';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'recover', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string) => void;
-  parentAccounts: Array<{ uid: string; email: string; parentName: string; childName: string; childId: string }>;
+  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'recover', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string) => Promise<'success' | 'name_required' | 'error' | 'cancelled'>;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
   shareAccount: (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => void;
@@ -25,7 +24,6 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   student,
   handleGenerateAccess,
   handleCreateParentAccess,
-  parentAccounts,
   isGeneratingAccess,
   generateAccessCardPrint,
   shareAccount,
@@ -42,6 +40,11 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const [isUpdatingPin, setIsUpdatingPin] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const [isParentChoiceModalOpen, setIsParentChoiceModalOpen] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordNameRequired, setPasswordNameRequired] = useState(false);
+  const [directoryAccounts, setDirectoryAccounts] = useState<ParentDirectoryAccount[]>([]);
+  const [isDirectoryLoading, setIsDirectoryLoading] = useState(false);
+  const [directoryError, setDirectoryError] = useState('');
   const [reuseParentUid, setReuseParentUid] = useState('');
   const [aliasBasis, setAliasBasis] = useState(student.parentName || '');
   const [relationshipVerified, setRelationshipVerified] = useState(false);
@@ -49,7 +52,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const [exactParentEmail, setExactParentEmail] = useState('');
   const [exactLookup, setExactLookup] = useState<ParentAccessResult | null>(null);
   const [isLookingUpParent, setIsLookingUpParent] = useState(false);
-  const selectedParentAccount = parentAccounts.find(account => account.uid === reuseParentUid);
+  const selectedParentAccount = directoryAccounts.find(account => account.uid === reuseParentUid);
   const aliasPreview = aliasBasis.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 48).replace(/\.+$/, '');
 
@@ -63,6 +66,22 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
     setShowPassword(false);
     setShowPin(false);
   }, [student.id, student.parentName]);
+
+  useEffect(() => {
+    if (!isParentChoiceModalOpen || !canManageParentAccess) return;
+    const organizationId = currentOrganization?.id || student.organizationId;
+    if (!organizationId || organizationId !== student.organizationId) return;
+    let active = true;
+    setIsDirectoryLoading(true);
+    setDirectoryAccounts([]);
+    setDirectoryError('');
+    getParentDirectory(organizationId).then(accounts => {
+      if (active) setDirectoryAccounts(accounts);
+    }).catch((error: Error) => {
+      if (active) { setDirectoryAccounts([]); setDirectoryError(error.message || 'Could not load parent accounts.'); }
+    }).finally(() => { if (active) setIsDirectoryLoading(false); });
+    return () => { active = false; };
+  }, [isParentChoiceModalOpen, canManageParentAccess, currentOrganization?.id, student.organizationId]);
 
   const lookupExactParent = async () => {
     const organizationId = currentOrganization?.id || student.organizationId;
@@ -255,16 +274,17 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 An older recorded address may come from the email invitation flow. Replacing it creates a SparkQuest login ID that needs no inbox. Staff see the new password once and share it directly with the verified parent.
               </div>
               <button
-                onClick={() => handleCreateParentAccess('reset')}
+                type="button"
+                onClick={() => { setRelationshipVerified(false); setPasswordNameRequired(false); setVerifiedParentName(student.parentName || ''); setIsPasswordModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
-                className="mt-2 flex min-h-10 w-full items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
+                className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-2 text-sm font-bold text-sky-100 transition-colors hover:bg-sky-500/25 disabled:opacity-50"
               >
                 {isGeneratingAccess ? (
                   <Loader2 size={12} className="animate-spin" />
                 ) : (
                   <RefreshCw size={12} />
                 )}{' '}
-                Issue new password for this login ID
+                Issue new parent password
               </button>
               <button
                 onClick={() => { setRelationshipVerified(false); setIsParentChoiceModalOpen(true); }}
@@ -273,7 +293,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               >
                 Create new SparkQuest login ID and password
               </button>
-              <p className="text-[11px] text-slate-400">If this older login has no modern family profile, use Recover existing login below to keep its ID and issue a new password.</p>
+              <p className="text-[11px] text-slate-400">The existing password cannot be displayed. This action keeps the login ID and gives staff a new one-time password to share with the verified parent.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="flex min-h-11 w-full items-center justify-center gap-1 rounded-lg bg-emerald-600 px-2 text-xs font-bold text-white hover:bg-emerald-500"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
             </div>
@@ -293,6 +313,22 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
 
         </div>
       )}
+      <Modal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Issue new parent password">
+        <div className="space-y-4 text-sm text-slate-200">
+          <p>This keeps <strong className="break-all text-white">{student.parentLoginInfo?.email}</strong> as the SparkQuest login ID. The current password will stop working. Share the new password from the one-time card only with the verified parent.</p>
+          {passwordNameRequired && <label className="block text-xs font-bold uppercase text-slate-300">Verified parent full name
+            <input value={verifiedParentName} onChange={event => setVerifiedParentName(event.target.value)} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-600 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="Parent’s real full name" />
+          </label>}
+          <label className="flex items-start gap-2 text-xs leading-5 text-slate-200"><input type="checkbox" checked={relationshipVerified} onChange={event => setRelationshipVerified(event.target.checked)} className="mt-1" />I verified the real parent’s identity and relationship to this learner.</label>
+          <button type="button" disabled={!relationshipVerified || (passwordNameRequired && verifiedParentName.trim().length < 2) || isGeneratingAccess || !canManageParentAccess}
+            onClick={async () => {
+              const result = await handleCreateParentAccess('reset', undefined, undefined, relationshipVerified, verifiedParentName);
+              if (result === 'name_required') setPasswordNameRequired(true);
+              if (result === 'success') setIsPasswordModalOpen(false);
+            }}
+            className="min-h-11 w-full rounded-lg bg-sky-500 px-4 py-2.5 font-bold text-slate-950 disabled:opacity-50">{isGeneratingAccess ? 'Issuing…' : 'Issue new one-time password'}</button>
+        </div>
+      </Modal>
       <Modal isOpen={isParentChoiceModalOpen} onClose={() => setIsParentChoiceModalOpen(false)} title="Parent access">
         <div className="space-y-4">
           <p className="text-sm text-slate-400">
@@ -321,19 +357,18 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           >
             {student.parentLoginInfo?.uid ? 'Replace parent login' : 'Issue new parent login'}
           </button>
-          {student.parentLoginInfo?.uid && <div className="border-t border-white/10 pt-4">
-            <p className="mb-2 text-xs leading-5 text-slate-300">Keep the recorded login ID and repair older family access. This issues a new one-time password.</p>
-            <button type="button" disabled={!verifiedParentName.trim() || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess('recover', undefined, undefined, relationshipVerified, verifiedParentName); }} className="min-h-11 w-full rounded-lg border border-sky-400/30 bg-sky-500/15 px-4 text-sm font-bold text-sky-100 disabled:opacity-50">Recover this exact login and issue password</button>
-          </div>}
           <div className="border-t border-white/10 pt-4">
             <label className="mb-2 block text-xs font-bold uppercase text-slate-400">{student.parentLoginInfo?.uid ? 'Move to an existing family login' : 'Link an existing parent login'}</label>
-            {parentAccounts.some(account => account.uid !== student.parentLoginInfo?.uid) && <select value={reuseParentUid} onChange={event => { setReuseParentUid(event.target.value); setExactLookup(null); }} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
+            {isDirectoryLoading && <p className="mt-2 text-xs text-slate-300">Loading verified family logins…</p>}
+            {directoryError && <p className="mt-2 text-xs text-amber-200">{directoryError} You can still verify an exact login ID below.</p>}
+            {!isDirectoryLoading && !directoryError && directoryAccounts.every(account => account.uid === student.parentLoginInfo?.uid) && <p className="mt-2 text-xs text-slate-300">No other verified family login is available in this workspace.</p>}
+            {directoryAccounts.some(account => account.uid !== student.parentLoginInfo?.uid) && <select value={reuseParentUid} onChange={event => { setReuseParentUid(event.target.value); setExactLookup(null); }} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
               <option value="">Choose the exact account</option>
-              {parentAccounts.filter(account => account.uid !== student.parentLoginInfo?.uid).map(account => <option key={account.uid} value={account.uid}>{account.email} · {account.parentName || 'Parent name missing'} · {account.childName}</option>)}
+              {directoryAccounts.filter(account => account.uid !== student.parentLoginInfo?.uid).map(account => <option key={account.uid} value={account.uid}>{account.parentName} · {account.email} · {account.children.map(child => child.name).join(', ')}</option>)}
             </select>}
             {selectedParentAccount && <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
-              <p><strong className="text-white">Recorded parent:</strong> {selectedParentAccount.parentName || 'Missing on source learner'}</p>
-              <p><strong className="text-white">Source learner:</strong> {selectedParentAccount.childName} ({selectedParentAccount.childId})</p>
+              <p><strong className="text-white">Recorded parent:</strong> {selectedParentAccount.parentName}</p>
+              <p><strong className="text-white">Linked learners:</strong> {selectedParentAccount.children.map(child => child.name).join(', ')}</p>
               <p className="break-all"><strong className="text-white">Exact parent UID:</strong> {selectedParentAccount.uid}</p>
               <p className="mt-2 text-amber-200">Confirm this is the same real parent of {student.name}. The service checks its active parent profile and guardian link.</p>
             </div>}

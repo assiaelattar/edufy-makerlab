@@ -1,6 +1,13 @@
 import { auth } from './firebase';
 
-export type ParentAccessAction = 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover';
+export type ParentAccessAction = 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover' | 'directory';
+
+export interface ParentDirectoryAccount {
+  uid: string;
+  email: string;
+  parentName: string;
+  children: Array<{ id: string; name: string }>;
+}
 
 export interface ParentAccessResult {
   action: ParentAccessAction;
@@ -10,6 +17,7 @@ export interface ParentAccessResult {
   uid?: string;
   parentName?: string;
   needsRecovery?: boolean;
+  accounts?: ParentDirectoryAccount[];
 }
 
 const parentAccessEndpoint = (): string => {
@@ -27,7 +35,7 @@ const parentAccessEndpoint = (): string => {
 
 export const manageParentAccess = async (request: {
   action: ParentAccessAction;
-  studentId: string;
+  studentId?: string;
   organizationId: string;
   parentName?: string;
   aliasBasis?: string;
@@ -53,4 +61,9 @@ export const manageParentAccess = async (request: {
     throw error;
   }
   return payload as ParentAccessResult;
+};
+
+export const getParentDirectory = async (organizationId: string): Promise<ParentDirectoryAccount[]> => {
+  const result = await manageParentAccess({ action: 'directory', organizationId });
+  return result.accounts || [];
 };
