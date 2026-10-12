@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Reuse the learner pipeline for the student journey
+
+The student visual pass composes `LearnerWorkbench`, `LearnerInstructorUpdates`, `LearnerMissionBoard`, `StudentMissionDetails`, and the parent's 011Y component. View switching is local UI state; canonical project, mission, review and identity selectors still drive content and actions. No new student data model or parallel submission path was introduced.
+
 ## 2026-10-12 — Project color follows the opened card
 
 Carry the clicked card tone into its dedicated detail page, including the hero and the introduction accent; keep step status colors independent so progress still has one meaning. The parent viewer requests resized WebP for only our public raster assets and MakerLab Firebase Storage image URLs on Vercel. Use a small set of widths and quality 65, leave vector artwork alone, and fall back to the original URL if optimization fails. Keep original proof links available at full resolution.

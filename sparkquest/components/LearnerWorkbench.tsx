@@ -22,11 +22,12 @@ interface WorkbenchProps {
   onContinue: (id: string) => void;
   onPreview: (id: string) => void;
   onFieldLog: () => void;
+  onDiscoverMissions?: () => void;
   onDelete?: (project: StudentProject) => void;
 }
 
 const isPersonal = (project: StudentProject) => ['free-build-template', 'showcase-template'].includes(project.templateId || '');
-export function LearnerWorkbench({ projects, academicYear, stationLabels, lastOpenedId, onContinue, onPreview, onFieldLog, onDelete }: WorkbenchProps) {
+export function LearnerWorkbench({ projects, academicYear, stationLabels, lastOpenedId, onContinue, onPreview, onFieldLog, onDiscoverMissions, onDelete }: WorkbenchProps) {
   const [showAllBuilds, setShowAllBuilds] = useState(false);
   const { pinned, others, instructor } = selectWorkbench(projects, academicYear, lastOpenedId);
   const progress = pinned && projectProgress(pinned);
@@ -43,7 +44,7 @@ export function LearnerWorkbench({ projects, academicYear, stationLabels, lastOp
         <div className="sq-workbench-actions"><button type="button" className="sq-workbench-primary" onClick={() => onContinue(pinned.id)}><Hammer size={19} /> Continue building <ArrowRight size={19} /></button><button type="button" onClick={() => onPreview(pinned.id)}>Project brief</button>{onDelete && isPersonal(pinned) && <button type="button" className="sq-workbench-remove" onClick={() => onDelete(pinned)} aria-label={`Delete ${pinned.title}`}>Delete project</button>}</div>
       </div>
       <div className="sq-workbench-picture"><ProjectPicture project={pinned} />{displayStation(pinned.station, stationLabels) !== 'Maker project' && <span>{displayStation(pinned.station, stationLabels)}</span>}</div>
-    </article> : <div className="sq-workbench-empty"><Hammer size={28} /><div><h2>{instructor.length ? 'Your builds are with your instructor.' : 'Your next build starts here.'}</h2><p>{hasFeedback ? 'See your instructor feedback below, or discover a new mission.' : instructor.length ? 'View your submitted work below, or discover a new mission.' : 'Discover a mission below, or start an idea of your own.'}</p></div><a href="#learner-new-missions">Discover missions <ArrowRight size={17} /></a></div>}
+    </article> : <div className="sq-workbench-empty"><Hammer size={28} /><div><h2>{instructor.length ? 'Your builds are with your instructor.' : 'Your next build starts here.'}</h2><p>{hasFeedback ? 'See your instructor feedback in Mentor, or discover a new mission.' : instructor.length ? 'View your submitted work in Mentor, or discover a new mission.' : 'Explore a mission, or start an idea of your own.'}</p></div>{onDiscoverMissions ? <button type="button" onClick={onDiscoverMissions}>Explore missions <ArrowRight size={17} /></button> : <a href="#learner-new-missions">Explore missions <ArrowRight size={17} /></a>}</div>}
     {others.length > 0 && <section className="sq-workbench-others" aria-labelledby="other-builds-title"><div className="sq-workbench-others-head"><h2 id="other-builds-title">Other ongoing builds <small>{others.length}</small></h2>{others.length > 2 && <button type="button" aria-expanded={showAllBuilds} aria-controls="other-builds-list" onClick={() => setShowAllBuilds(value => !value)}>{showAllBuilds ? 'Show fewer' : `View all ${others.length} builds`} <ArrowRight size={16} /></button>}</div><div id="other-builds-list">{visibleOthers.map(project => { const otherProgress = projectProgress(project); return <article key={project.id}><div className="sq-workbench-mini-picture"><ProjectPicture project={project} /></div><div><p>En cours · {workbenchStatus(project.status)}</p><h3>{project.title}</h3><span>{otherProgress.done}/{otherProgress.total} steps complete</span><div className="sq-workbench-mini-progress" role="progressbar" aria-label={`${project.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={otherProgress.percent}><i style={{ width: `${otherProgress.percent}%` }} /></div><button type="button" onClick={() => onContinue(project.id)}>Continue <ArrowRight size={16} /></button>{onDelete && isPersonal(project) && <button type="button" className="sq-workbench-remove" onClick={() => onDelete(project)} aria-label={`Delete ${project.title}`}>Delete project</button>}</div></article>; })}</div></section>}
   </section>;
 }

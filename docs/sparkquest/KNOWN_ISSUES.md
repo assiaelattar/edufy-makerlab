@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Student journey acceptance
+
+- Local write-free fixtures and browser checks cover the focused student views and saved-step navigation. A designated signed-in learner should confirm their exact assignments, evidence, mentor feedback, and editor continuation on a physical phone.
+- The reused 011Y Rive file has one verified `Hit` trigger. Contextual messages and scene colors provide the learner cues; distinct internal mascot emotions require a new verified asset or controls.
+
 ## Parent image delivery follow-up
 
 - Vercel serves resized raster variants for the configured MakerLab sources. Other hosts, SVGs, blob/data URLs, and local development continue to use their original image URLs; a failed optimization also falls back to the original.

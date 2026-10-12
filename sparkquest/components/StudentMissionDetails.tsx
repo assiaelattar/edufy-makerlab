@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
     ArrowLeft, ArrowRight, BookOpen, Camera, Check, CheckCircle2, Clock3,
@@ -11,7 +11,9 @@ import { resolveMissionContent } from '../domain/missionContent';
 import { currentAcademicYear, projectAcademicYear } from '../utils/academicYear';
 import { workbenchStatus } from '../domain/learnerWorkbench';
 import { effectiveStepReviewStatus, stepReviewFeedback } from '../domain/projectReview';
+import { ParentO11Y } from './ParentO11Y';
 import './learner-learning.css';
+import './learner-journey.css';
 
 interface StudentMissionDetailsProps {
     project: ProjectTemplate | StudentProject;
@@ -89,6 +91,9 @@ export const StudentMissionDetails: React.FC<StudentMissionDetailsProps> = ({
     const actionLabel = isExistingProject ? 'Continue building' : 'Start building';
     const coverImage = project.thumbnailUrl || ('coverImage' in project ? project.coverImage : '') || '/mission-plant-guardian.svg';
     const reduceMotion = useReducedMotion();
+    const [stepIndex, setStepIndex] = useState(0);
+    useEffect(() => { setStepIndex(0); }, [project.id]);
+    const selectedStep = content.steps[Math.min(stepIndex, Math.max(content.steps.length - 1, 0))];
     const deliverables = content.deliverables.length
         ? content.deliverables
         : [{ id: 'proof', title: 'My finished project', evidenceType: 'any' as const }];
@@ -181,18 +186,12 @@ export const StudentMissionDetails: React.FC<StudentMissionDetailsProps> = ({
 
                 <section id="route" className="sq-brief-route scroll-mt-24">
                     <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#3563e9]">Now build it</p><h2 className="mt-1 text-3xl font-black tracking-[-0.035em]">Follow your project plan</h2><p className="mt-2 text-sm font-semibold text-[#63738a]">Finish one stage, check your work, then move to the next.</p></div><span className="rounded-full bg-white px-3 py-2 text-xs font-black text-[#53647b] shadow-sm">{content.steps.length} stages</span></div>
-                    <ol className="sq-brief-route-list mt-5 grid gap-4 md:grid-cols-2">
-                        {content.steps.map((step, index) => {
-                            const look = stepLooks[index % stepLooks.length];
-                            const Icon = stepIcon(step.title, index);
-                            return <motion.li key={step.id} initial={reduceMotion ? false : { opacity: 0, y: 14 }} whileInView={reduceMotion ? {} : { opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.22 }} transition={{ duration: 0.36, delay: reduceMotion ? 0 : (index % 2) * 0.06 }} whileHover={reduceMotion ? {} : { y: -3 }} className={`sq-brief-route-step relative min-h-48 overflow-hidden rounded-[24px] border p-5 shadow-sm ${look.surface} ${look.border}`}>
-                                <div className="flex items-start justify-between gap-4"><span className={`grid h-12 w-12 place-items-center rounded-2xl bg-white shadow-sm ${look.ink}`}><Icon size={24} /></span><span className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs font-black text-white ${look.number}`}>{index + 1}</span></div>
-                                <h3 className="mt-5 text-xl font-extrabold leading-tight">{step.title}</h3>
-                                {step.description && <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-[#596b82]">{step.description}</p>}
-                                {step.resourceCount > 0 && <p className={`mt-4 inline-flex items-center gap-1.5 text-xs font-black ${look.ink}`}><BookOpen size={14} /> {step.resourceCount} helper{step.resourceCount === 1 ? '' : 's'}</p>}
-                            </motion.li>;
-                        })}
-                    </ol>
+                    {selectedStep ? <div className="sq-learner-step-focus">
+                        <div className="sq-learner-step-guide"><div><span>ONE STEP AT A TIME</span><p>{stepIndex === 0 ? 'Start here. A good question leads to a great build.' : stepIndex === content.steps.length - 1 ? 'You’re close. Show what you discovered.' : 'Nice progress. Try this part, then check what changed.'}</p></div><ParentO11Y cue={stepIndex + 1} mood={stepIndex === content.steps.length - 1 ? 'proud' : 'curious'} /></div>
+                        <div className="sq-learner-step-track" aria-label="Build step progress">{content.steps.map((step, index) => <button type="button" key={step.id} aria-label={'Show step ' + (index + 1) + ': ' + step.title} aria-current={index === stepIndex ? 'step' : undefined} onClick={() => setStepIndex(index)}><i /></button>)}</div>
+                        <article className={'sq-learner-step-card is-' + (stepIndex % 4)} aria-live="polite"><span className="sq-learner-step-count">STEP {String(stepIndex + 1).padStart(2, '0')} / {String(content.steps.length).padStart(2, '0')}</span><h3>{selectedStep.title}</h3><p>{selectedStep.description || 'Open your build to work on this step and save what you discover.'}</p>{selectedStep.resourceCount > 0 && <a href="#resources"><BookOpen size={16} /> {selectedStep.resourceCount} helper{selectedStep.resourceCount === 1 ? '' : 's'}</a>}</article>
+                        <div className="sq-learner-step-actions"><button type="button" disabled={stepIndex === 0} onClick={() => setStepIndex(index => index - 1)}><ArrowLeft size={17} /> Previous</button><button type="button" disabled={stepIndex >= content.steps.length - 1} onClick={() => setStepIndex(index => index + 1)}>Next step <ArrowRight size={17} /></button></div>
+                    </div> : <p className="sq-brief-route-empty">Your build plan will appear here when your mentor adds its steps.</p>}
                 </section>
 
                 <section id="submit" className="sq-brief-submit scroll-mt-24 rounded-[28px] bg-[#14213d] p-5 text-white shadow-[0_18px_50px_rgba(20,33,61,.16)] sm:p-8">

@@ -5,7 +5,7 @@ import { isSparkQuestStaffRole } from '../domain/staffRoles';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, Timestamp, addDoc } from 'firebase/firestore';
 import { ProcessTemplate, StudentProject, Station } from '../types';
-import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, List, Sparkles } from 'lucide-react';
+import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, List, MessageCircle } from 'lucide-react';
 
 import { AvatarSelector } from './AvatarSelector';
 import { CredentialWallet } from './CredentialWallet';
@@ -31,8 +31,9 @@ import { missionIsVisibleToLearner } from '../domain/missionAssignment';
 import { resolveLinkedStudentRecord } from '../services/studentIdentity';
 import { buildProjectStepsFromWorkflow, createWorkflowSnapshot } from '../domain/workflowPipeline';
 import { LearnerWorkbench, LearnerInstructorUpdates, LearnerMissionBoard } from './LearnerWorkbench';
+import { LearnerJourneyNav, type LearnerJourneyView } from './LearnerJourneyNav';
 import { ResourceLibrary } from './ResourceLibrary';
-import { isVerifiedOwnedProject, readWorkbenchPin, rememberWorkbenchPin, workbenchStorageKey } from '../domain/learnerWorkbench';
+import { isVerifiedOwnedProject, projectLane, readWorkbenchPin, rememberWorkbenchPin, selectWorkbench, workbenchStorageKey } from '../domain/learnerWorkbench';
 
 const ProjectDetailsEnhanced = React.lazy(() => import('./ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 
@@ -66,6 +67,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     const [projects, setProjects] = useState<StudentProject[]>([]);
     const [loading, setLoading] = useState(true);
     const [studentName, setStudentName] = useState<string>('');
+    const [journeyView, setJourneyView] = useState<LearnerJourneyView>('today');
 
     // Resolved ID state
     const [effectiveStudentId, setEffectiveStudentId] = useState<string | null>(null);
@@ -210,6 +212,12 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     const [searchQuery, setSearchQuery] = useState('');
 
     const activeAcademicYear = currentAcademicYear();
+    const journeyWorkbench = selectWorkbench(projects, activeAcademicYear);
+    const revisionNeeded = journeyWorkbench.instructor.some(project => projectLane(project.status) === 'feedback');
+    const changeJourneyView = (view: LearnerJourneyView) => {
+        setJourneyView(view);
+        window.requestAnimationFrame(() => document.getElementById('sq-journey-start')?.scrollIntoView({ block: 'start', behavior: 'smooth' }));
+    };
     const workbenchKey = workbenchStorageKey(authProfile?.organizationId, effectiveStudentId);
     const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
     useEffect(() => { setLastOpenedId(readWorkbenchPin(workbenchKey)); }, [workbenchKey]);
@@ -754,7 +762,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 onOpenWallet={() => setIsWalletOpen(true)}
                 onOpenProgress={() => setIsProgressOpen(true)}
                 onOpenResources={() => setIsResourceLibraryOpen(true)}
-                onHome={() => document.getElementById('sq-workbench-home')?.scrollIntoView({ block: 'start' })}
+                onHome={() => { changeJourneyView('today'); document.getElementById('sq-journey-start')?.scrollIntoView({ block: 'start' }); }}
                 onOpenSettings={() => setIsSettingsOpen(true)}
                 onLogout={() => setIsLogoutConfirmOpen(true)}
             />
@@ -774,70 +782,26 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
             <div className="flex-1 overflow-y-auto relative z-10 scroll-smooth pb-32 md:pb-20">
                 <div className="sq-content container mx-auto px-5 py-7 md:px-10 md:py-10 max-w-[1800px]">
 
-                    {/* Header */}
-                    <header id="sq-workbench-home" className="sq-dashboard-greeting">
-                        <div className="sq-hero__copy">
-                            <span className="sq-kicker">Your workbench · {activeAcademicYear}</span>
-                            <h2>Hi, {studentName.trim().split(/\s+/)[0] || 'Maker'}.</h2>
-                            <p className="sq-dashboard-intro">Your next idea is waiting at the workbench.</p>
-                            <p className={`sq-enrollment ${assignmentContext.gradeId || assignmentContext.gradeName ? 'is-ready' : 'is-waiting'}`}>
-                                {assignmentContext.gradeId || assignmentContext.gradeName
-                                    ? `${activeAcademicYear} · ${assignmentContext.gradeName || assignmentContext.gradeId}${assignmentContext.groupName ? ` · ${assignmentContext.groupName}` : ''}`
-                                    : `No active enrollment found for ${activeAcademicYear}`}
-                            </p>
-                        </div>
-                        <span className="sq-dashboard-motto" aria-hidden="true"><Sparkles size={18} /> Imagine · Make · Improve</span>
-                        {/* Preview Mode Banner */}
-                        {isAdminOrInstructor && availableGrades.length > 0 && (
-                            <div className="flex items-center gap-3 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-yellow-500/30">
-                                <span className="text-yellow-400 text-xs font-bold uppercase">Preview:</span>
-                                <select value={previewGradeId || ''} onChange={(e) => setPreviewGradeId(e.target.value || null)} className="bg-transparent text-yellow-100 text-xs outline-none cursor-pointer font-bold uppercase">
-                                    <option value="">🔴 Live View</option>
-                                    {availableGrades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                                </select>
-                            </div>
-                        )}
-
-                        {/* USER CONTROLS (Restored) */}
-                        <div className="sq-profile flex items-center gap-3">
-                            <button
-                                onClick={() => setIsProfileOpen(true)}
-                                className="flex items-center gap-3 px-4 py-2 transition-all group"
-                            >
-                                <div className="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white/20 overflow-hidden relative">
-                                    {avatarUrl ? (
-                                        <img src={avatarUrl} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="flex items-center justify-center h-full text-xs font-bold text-white">
-                                            {studentName.charAt(0)}
-                                        </div>
-                                    )}
-                                </div>
-                                <span className="text-white font-bold text-sm hidden md:block group-hover:text-indigo-200 transition-colors">
-                                    {studentName}
-                                </span>
-                            </button>
-                            <button
-                                onClick={() => setIsLogoutConfirmOpen(true)}
-                                className="sq-logout p-2 text-slate-400 hover:text-red-300 rounded-full transition-colors"
-                                title="Logout"
-                            >
-                                <LogOut size={20} />
-                            </button>
-                        </div>
-                    </header>
-
-
-
-                    <LearnerWorkbench projects={projects} academicYear={activeAcademicYear} stationLabels={stationLabels} lastOpenedId={lastOpenedId}
+                    <LearnerJourneyNav view={journeyView} onChange={changeJourneyView}
+                        firstName={studentName.trim().split(/\s+/)[0] || 'Maker'} academicYear={activeAcademicYear}
+                        hasCurrentBuild={Boolean(journeyWorkbench.pinned)} needsRevision={revisionNeeded}
+                        updateCount={journeyWorkbench.instructor.length} onFieldLog={() => setIsPortfolioOpen(true)}
+                        actions={<><button type="button" className="sq-learner-icon-action" onClick={() => setIsProfileOpen(true)} aria-label="Open maker profile">{avatarUrl ? <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" /> : <UserIcon size={19} />}</button><button type="button" className="sq-learner-icon-action" onClick={() => setIsLogoutConfirmOpen(true)} aria-label="Sign out"><LogOut size={19} /></button></>}>
+                        {isAdminOrInstructor && availableGrades.length > 0 && <label className="sq-learner-preview-grade">Preview grade <select value={previewGradeId || ''} onChange={event => setPreviewGradeId(event.target.value || null)}><option value="">Live view</option>{availableGrades.map(grade => <option key={grade.id} value={grade.id}>{grade.name}</option>)}</select></label>}
+                        {(assignmentContext.gradeId || assignmentContext.gradeName) && <p className="sq-learner-enrollment">{assignmentContext.gradeName || assignmentContext.gradeId}{assignmentContext.groupName ? ' · ' + assignmentContext.groupName : ''}</p>}
+                    </LearnerJourneyNav>
+                    {journeyView === 'today' && <LearnerWorkbench projects={projects} academicYear={activeAcademicYear} stationLabels={stationLabels} lastOpenedId={lastOpenedId}
                         onContinue={continueProject} onPreview={previewProject}
                         onDelete={project => { setDeleteError(''); setDeleteCandidate(project); }}
-                        onFieldLog={() => setIsPortfolioOpen(true)} />
-                    <LearnerInstructorUpdates projects={projects} academicYear={activeAcademicYear}
+                        onDiscoverMissions={() => changeJourneyView('missions')}
+                        onFieldLog={() => setIsPortfolioOpen(true)} />}
+                    {journeyView === 'mentor' && <><LearnerInstructorUpdates projects={projects} academicYear={activeAcademicYear}
                         onOpenProject={continueProject} onPreview={previewProject} />
+                        {journeyWorkbench.instructor.length === 0 && <div className="sq-learner-mentor-empty"><MessageCircle size={27} /><h2>Nothing to review yet</h2><p>Keep building. Your mentor’s notes will appear here after you submit your work.</p></div>}
+                    </>}
 
                     {/* CONTROL BAR: Search & Filter & START BUTTON */}
-                    <div className="sq-control-deck sq-dashboard-controls flex flex-col md:flex-row gap-4 justify-between items-center mb-10 p-3 md:p-4" aria-label="Find or start a mission">
+                    {journeyView === 'missions' && <><div className="sq-control-deck sq-dashboard-controls flex flex-col md:flex-row gap-4 justify-between items-center mb-10 p-3 md:p-4" aria-label="Find or start a mission">
                         {/* Search */}
                         <div className="relative w-full md:w-80 group">
                             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-blue-400 transition-colors">
@@ -895,7 +859,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
 
                     <LearnerMissionBoard projects={projects} templates={filteredTemplates} academicYear={activeAcademicYear} stationLabels={stationLabels}
                         onDiscover={template => void openMissionBrief(template)}
-                        onFieldLog={() => setIsPortfolioOpen(true)} isFiltered={Boolean(searchQuery)} />
+                        onFieldLog={() => setIsPortfolioOpen(true)} isFiltered={Boolean(searchQuery)} /></>}
 
                     {/* Footer Quote */}
                     <div className="text-center mt-12 mb-12 opacity-20 hover:opacity-40 transition-opacity">

@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Student maker journey
+
+- Reorganized the existing learner workbench into focused My build, Explore, and Mentor views, preserving project continuation, mission discovery, personal/Showcase creation, and Field log actions.
+- Reused the parent's 011Y mascot as a contextual learner guide and in saved mission steps; brought parent paper, blue, lime, and pastel patterns into the student route.
+- Added mobile project rails and a one-step-at-a-time saved mission plan with progress markers and previous/next controls.
+
 ## 2026-10-12 — Staff Studio stylesheet recovery
 
 - Allowed the declared Google font stylesheet and font file origins in SparkQuest's Content Security Policy.

@@ -1,5 +1,7 @@
 # Source-of-Truth Registry
 
+Student maker journey: `sparkquest/components/LearnerJourneyNav.tsx`, `learner-journey.css`, `LearnerWorkbench.tsx`, `ProjectSelector.tsx`, and `StudentMissionDetails.tsx` compose the focused learner stops and saved-step focus over existing canonical project selectors and actions. `ParentO11Y.tsx` remains the shared mascot renderer. See `docs/sparkquest/STUDENT_JOURNEY_2026-10-12.md`.
+
 Protected step review: `sparkquest/domain/projectReview.ts` (`stepSubmissionFingerprint`, canonical step state/status/approval selectors), `sparkquest/types.ts` (`ProjectStepReviewState`), `sparkquest/services/projectReview.ts` (preservation), `firestore.rules` (protocol/map immutability), and learner/instructor consumers. Current/local; docs/sparkquest/REVIEW_SECURITY_PHASE_2.md. Legacy projects retain fallback until an instructor decision adopts protocol v1.
 
 Review security: `firestore.rules` (`learnerCreatesUnreviewedProject`, `learnerPreservesProjectReviewTruth`, role-routed student-project writes) plus `sparkquest/domain/projectReview.emulator.mjs` (direct SDK denial and valid review-loop proof). Current/local; docs/sparkquest/REVIEW_SECURITY_PHASE_1.md and Phase 2 above. Top-level and protocol-v1 proof-bound step review fields are canonical.

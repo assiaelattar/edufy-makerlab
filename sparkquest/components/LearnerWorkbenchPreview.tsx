@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import type { ProjectTemplate, StudentProject } from '../types';
 import { currentAcademicYear, previousAcademicYear } from '../utils/academicYear';
 import { LearnerWorkbench, LearnerInstructorUpdates, LearnerMissionBoard } from './LearnerWorkbench';
+import { LearnerJourneyNav, type LearnerJourneyView } from './LearnerJourneyNav';
+import { selectWorkbench } from '../domain/learnerWorkbench';
 import { StudentPortfolio } from './StudentPortfolio';
 import { StudentMissionDetails } from './StudentMissionDetails';
 import { MissionOnboarding } from './MissionOnboarding';
@@ -28,20 +30,22 @@ export default function LearnerWorkbenchPreview() {
   const [notice, setNotice] = useState('');
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState('');
+  const [view, setView] = useState<LearnerJourneyView>('today');
   const params = new URLSearchParams(window.location.search);
   const visible = params.get('state') === 'empty' ? [] : params.get('state') === 'review' ? projects.filter(project => project.status === 'submitted') : projects;
+  const workbench = selectWorkbench(visible, year);
   const open = (id: string) => { const project = projects.find(project => project.id === id); if (project) setPreview(project); };
   if (preview) return 'steps' in preview
     ? <StudentMissionDetails project={preview} onBack={() => setPreview(null)} />
     : <MissionOnboarding project={preview} onBack={() => setPreview(null)} onLaunch={() => { setPreview(null); setNotice('The build workspace opens after starting a mission. This preview did not create a project.'); }} />;
   return <div className="sparkquest-dashboard sq-sparkbook sq-desktop-workspace sq-workbench-preview sq-learning-learner">
-    <Sidebar studentName="Aya Maker" avatarUrl="" coins={150} isAdminOrInstructor={false} onHome={() => document.getElementById('sq-preview-home')?.scrollIntoView()} onEditProfile={() => setNotice('Maker profile — preview only.')} onOpenPortfolio={() => setLogOpen(true)} onOpenArcade={() => setNotice('Play lab — preview only.')} onOpenStore={() => setNotice('Exchange — preview only.')} onOpenGallery={() => setNotice('Evidence wall — preview only.')} onOpenPickup={() => setNotice('Pickup card — preview only.')} onOpenWallet={() => setNotice('Key cabinet — preview only.')} onOpenProgress={() => setNotice('Build rhythm — preview only.')} />
+    <Sidebar studentName="Aya Maker" avatarUrl="" coins={150} isAdminOrInstructor={false} onHome={() => { setView('today'); document.getElementById('sq-journey-start')?.scrollIntoView(); }} onEditProfile={() => setNotice('Maker profile — preview only.')} onOpenPortfolio={() => setLogOpen(true)} onOpenArcade={() => setNotice('Play lab — preview only.')} onOpenStore={() => setNotice('Exchange — preview only.')} onOpenGallery={() => setNotice('Evidence wall — preview only.')} onOpenPickup={() => setNotice('Pickup card — preview only.')} onOpenWallet={() => setNotice('Key cabinet — preview only.')} onOpenProgress={() => setNotice('Build rhythm — preview only.')} />
     <main>
-    <header id="sq-preview-home" className="sq-dashboard-greeting"><div><span className="sq-kicker">Your workbench · {year}</span><h2>Hi, Aya.</h2><p className="sq-dashboard-intro">Your next idea is waiting at the workbench.</p></div><span className="sq-dashboard-motto" aria-hidden="true">✦ Imagine · Make · Improve</span><button type="button" className="sq-action sq-action--primary" onClick={() => setNaming(true)}>New project</button></header>
+    <LearnerJourneyNav view={view} onChange={setView} firstName="Aya" academicYear={year} hasCurrentBuild={Boolean(workbench.pinned)} needsRevision={false} updateCount={workbench.instructor.length} onFieldLog={() => setLogOpen(true)} />
     {notice && <div role="status" className="sq-workbench-preview-notice">{notice}</div>}
-    <LearnerWorkbench projects={visible} academicYear={year} lastOpenedId={pin} onContinue={id => { setPin(id); setNotice(`Opening ${projects.find(project => project.id === id)?.title}. Preview only — no progress changed.`); }} onPreview={open} onFieldLog={() => setLogOpen(true)} />
-    <LearnerInstructorUpdates projects={visible} academicYear={year} onOpenProject={open} onPreview={open} />
-    <LearnerMissionBoard projects={visible} templates={templates} academicYear={year} onDiscover={setPreview} onFieldLog={() => setLogOpen(true)} />
+    {view === 'today' && <LearnerWorkbench projects={visible} academicYear={year} lastOpenedId={pin} onContinue={id => { setPin(id); setNotice(`Opening ${projects.find(project => project.id === id)?.title}. Preview only — no progress changed.`); }} onPreview={open} onFieldLog={() => setLogOpen(true)} onDiscoverMissions={() => setView('missions')} />}
+    {view === 'mentor' && <><LearnerInstructorUpdates projects={visible} academicYear={year} onOpenProject={open} onPreview={open} />{workbench.instructor.length === 0 && <div className="sq-learner-mentor-empty"><h2>Nothing to review yet</h2><p>Keep building. Your mentor’s notes will appear here after you submit your work.</p></div>}</>}
+    {view === 'missions' && <><div className="sq-preview-mission-start"><p>Have your own idea?</p><button type="button" onClick={() => setNaming(true)}>Start a personal project</button></div><LearnerMissionBoard projects={visible} templates={templates} academicYear={year} onDiscover={setPreview} onFieldLog={() => setLogOpen(true)} /></>}
     <StudentPortfolio isOpen={logOpen} previewMode previewProjects={projects} onSelectProject={(_id, project) => { if (project) setPreview(project); }} onClose={() => setLogOpen(false)} />
   </main><NameMissionDialog isOpen={naming} name={name} onChange={setName} onClose={() => setNaming(false)} onSubmit={() => { setNaming(false); setNotice(`“${name.trim()}” — preview only. No project created.`); }} /></div>;
 }
