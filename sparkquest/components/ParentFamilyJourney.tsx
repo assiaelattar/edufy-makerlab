@@ -9,14 +9,19 @@ import { isSafeFamilyHref, isSafeProjectImage, projectEvidenceImages, resolvePar
 import { ParentO11Y } from './ParentO11Y';
 import { ParentFamilyLoading } from './ParentFamilyLoading';
 import { ParentPickupExperience } from './ParentPickupExperience';
+import { ParentInstallInvitation } from './ParentInstallInvitation';
 import './parent-family-journey.css';
 
 type Screen = 'choose' | 'home' | 'projects' | 'detail' | 'moments' | 'family' | 'pickup';
 type Detail = { kind: 'project' | 'upcoming'; id: string; from: 'home' | 'projects' };
 type StepTone = 'done' | 'active' | 'sent' | 'revise' | 'later';
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
+const installChoiceKey = (parentUid: string) => `sparkquest:parent-install-choice:v1:${parentUid}`;
+const isInstalledApp = () => window.matchMedia('(display-mode: standalone)').matches
+  || Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
 
 interface Props {
+  parentUid: string;
   children: FamilyChild[];
   loading: boolean;
   error: string | null;
@@ -122,7 +127,7 @@ const FamilyPickupLink: React.FC<{ child: FamilyChild; onOpen: () => void }> = (
   </button>;
 };
 
-export const ParentFamilyJourney: React.FC<Props> = ({ children, loading, error, parentName, onRefresh, onSignOut, previewMode = false }) => {
+export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, children, loading, error, parentName, onRefresh, onSignOut, previewMode = false }) => {
   const [screen, setScreen] = useState<Screen>('choose');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -132,6 +137,7 @@ export const ParentFamilyJourney: React.FC<Props> = ({ children, loading, error,
   const [showAllMoments, setShowAllMoments] = useState(false);
   const [navHidden, setNavHidden] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [showInstallInvite, setShowInstallInvite] = useState(false);
   const scrollRef = useRef<HTMLElement>(null);
   const lastScrollTop = useRef(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -159,7 +165,11 @@ export const ParentFamilyJourney: React.FC<Props> = ({ children, loading, error,
     if (theme) theme.content = '#2448eb';
     document.title = 'SparkQuest Famille';
     const onInstall = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
-    const onInstalled = () => setInstallPrompt(null);
+    const onInstalled = () => {
+      try { localStorage.setItem(installChoiceKey(parentUid), 'installed'); } catch { /* private browsing */ }
+      setShowInstallInvite(false);
+      setInstallPrompt(null);
+    };
     window.addEventListener('beforeinstallprompt', onInstall);
     window.addEventListener('appinstalled', onInstalled);
     return () => {
@@ -169,7 +179,25 @@ export const ParentFamilyJourney: React.FC<Props> = ({ children, loading, error,
       window.removeEventListener('beforeinstallprompt', onInstall);
       window.removeEventListener('appinstalled', onInstalled);
     };
-  }, []);
+  }, [parentUid]);
+
+  useEffect(() => {
+    if (loading || error || children.length === 0 || isInstalledApp()) return;
+    const previewInvite = previewMode && new URLSearchParams(window.location.search).get('installPreview') === '1';
+    if (previewMode && !previewInvite) return;
+    if (!previewInvite) {
+      try { if (localStorage.getItem(installChoiceKey(parentUid))) return; } catch { /* private browsing */ }
+    }
+    const timer = window.setTimeout(() => setShowInstallInvite(true), 850);
+    return () => window.clearTimeout(timer);
+  }, [loading, error, children.length, parentUid, previewMode]);
+
+  const dismissInstallInvite = () => {
+    setShowInstallInvite(false);
+    if (!previewMode) {
+      try { localStorage.setItem(installChoiceKey(parentUid), 'dismissed'); } catch { /* private browsing */ }
+    }
+  };
 
   const handleScroll = () => {
     const scroller = scrollRef.current;
@@ -185,9 +213,17 @@ export const ParentFamilyJourney: React.FC<Props> = ({ children, loading, error,
 
   const requestInstall = async () => {
     if (!installPrompt) return;
-    await installPrompt.prompt();
-    await installPrompt.userChoice;
-    setInstallPrompt(null);
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        try { localStorage.setItem(installChoiceKey(parentUid), 'accepted'); } catch { /* private browsing */ }
+        setShowInstallInvite(false);
+      } else dismissInstallInvite();
+      setInstallPrompt(null);
+    } catch {
+      setInstallPrompt(null);
+    }
   };
 
   const move = (next: Screen) => {
@@ -284,5 +320,6 @@ export const ParentFamilyJourney: React.FC<Props> = ({ children, loading, error,
       <p className="pf-credit">011Y par <a href="https://rive.app/marketplace/26076-48718-011y/" target="_blank" rel="noopener noreferrer">Patgrivet</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>
     </div>
     {activeChild && <nav className={`pf-nav${navHidden ? ' is-hidden' : ''}`} aria-label="Navigation parent" onFocusCapture={() => setNavHidden(false)}><button type="button" aria-current={screen === 'home' || (screen === 'detail' && detail?.from === 'home') ? 'page' : undefined} onClick={() => move('home')}><Sparkles size={22} /><span>Aujourd’hui</span></button><button type="button" aria-current={screen === 'projects' || screen === 'moments' || (screen === 'detail' && detail?.from === 'projects') ? 'page' : undefined} onClick={() => move('projects')}><BookOpen size={22} /><span>Projets</span></button><button type="button" aria-current={screen === 'pickup' ? 'page' : undefined} onClick={() => move('pickup')}><Car size={22} /><span>Sortie</span></button><button type="button" aria-current={screen === 'family' ? 'page' : undefined} onClick={() => move('family')}><CreditCard size={22} /><span>Famille</span></button></nav>}
+    {showInstallInvite && <ParentInstallInvitation nativeReady={Boolean(installPrompt)} onInstall={requestInstall} onDismiss={dismissInstallInvite} />}
   </main>;
 };

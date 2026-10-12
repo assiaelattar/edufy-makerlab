@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Parent install invitation and AAJLANE account check
+
+- The first-visit sheet can guide installation, but a native install button depends on browser support and installability; iOS uses Safari's Share menu. Physical iOS and Android acceptance remains open.
+- The public browser last showed an OUBELLA login, while the verified AAJLANE parent account previously had exact guardian links for NADA, ALI, and KENZA. Confirm the signed-in account and tenant before changing any family data; never infer a guardian link from surname.
+
 ## Parent mobile portal follow-up after 2026-10-12 release
 
 - The PWA shell is installable but needs network access for sign-in and family data. The service worker does not store authenticated responses for offline use.

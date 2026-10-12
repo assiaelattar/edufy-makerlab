@@ -1,5 +1,10 @@
 # SparkQuest changelog
 
+## 2026-10-12 — Parent first-visit install invitation
+
+- Added a one-time, account-scoped invitation after the signed-in parent family loads. The 011Y sheet offers the browser install action when available, or clear home-screen instructions, and can be dismissed.
+- The sheet stays hidden in installed standalone mode. A development-only preview exercises the invitation without changing live family data.
+
 ## 2026-10-12 — Parent mobile portal and PWA
 
 - Rebuilt the parent journey around child selection, a visual weekly project path, standalone project detail, Moments, Records, and a weekly Pickup destination near the top of the experience.

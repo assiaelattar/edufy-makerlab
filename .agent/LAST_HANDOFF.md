@@ -1,4 +1,10 @@
-# Latest handoff — SparkQuest parent mobile portal release
+# Latest handoff — SparkQuest parent install invitation
+
+On 2026-10-12 a first-visit install invitation was added to the standalone SparkQuest parent portal. It opens after the verified family loads, uses 011Y artwork, offers a native install action when the browser supplies one, and otherwise gives home-screen instructions. Dismissal is remembered per parent UID on the device; installed standalone sessions do not show it. SparkQuest TypeScript, both local production builds, and parent family/workshop smokes passed. The production deployment and AAJLANE public-account check are tracked in the active turn.
+
+---
+
+# Previous handoff — SparkQuest parent mobile portal release
 
 On 2026-10-12 the parent portal mobile journey, weekly Pickup/workshop surface, visual project detail and upcoming work, contextual 011Y mascot, smart persistent navigation, parent PWA shell, and unified mascot loading animation were released to the standalone SparkQuest client. The 011Y loader/guide no longer exposes a white square. Focused code commits `6e10cba`, `f044690`, and `09c44c2` reached GitHub `main`; Vercel production is READY and aliased to `https://sparkquest-makerlab.vercel.app/`. TypeScript, both local production builds, parent schedule/assignment/access/visual smokes, Vercel build, public manifest/icon/mascot requests, and an authenticated 390px browser pass. The browser confirmed Pickup, project detail, step focus, contextual mascot, and no horizontal overflow. The release is based on the current parent account code. It does not modify family records, Firestore rules, indexes, or the trusted parent API. See `docs/sparkquest/CHANGELOG.md` and `docs/sparkquest/KNOWN_ISSUES.md` for behavior and remaining device checks.
 

@@ -1,0 +1,31 @@
+.pf-install-dialog { position:fixed; inset:0; width:min(440px,calc(100vw - 24px)); max-width:none; max-height:calc(100dvh - 28px); margin:auto; overflow:auto; border:1px solid #cbd8ca; border-radius:28px; padding:0; background:#f7f6f1; color:#20282a; box-shadow:0 24px 70px #142b3355,0 6px 0 #a8c76b; font-family:'DM Sans',system-ui,sans-serif; animation:pf-install-appear .36s cubic-bezier(.2,.8,.2,1) both; }
+.pf-install-dialog::backdrop { background:#0b1c2f91; backdrop-filter:blur(5px); }
+.pf-install-dialog * { box-sizing:border-box; }
+.pf-install-dialog button { font:inherit; cursor:pointer; }
+.pf-install-dialog button:focus-visible { outline:3px solid #2448eb; outline-offset:3px; }
+.pf-install-close { position:absolute; z-index:2; top:14px; right:14px; display:grid; width:42px; height:42px; place-items:center; border:1px solid #ffffffaa; border-radius:13px; background:#ffffffda; color:#213636; }
+.pf-install-hero { position:relative; display:grid; height:188px; place-items:center; overflow:hidden; background:#d5f777; isolation:isolate; }
+.pf-install-orbit { position:absolute; width:235px; height:235px; border:1.5px solid #2448eb4d; border-radius:50%; }
+.pf-install-orbit-one { transform:translate(-85px,55px); }.pf-install-orbit-two { transform:translate(105px,-90px); }
+.pf-install-spark { position:absolute; color:#2448eb; font-weight:900; }.pf-install-spark-one { top:27px; left:58px; font-size:32px; }.pf-install-spark-two { right:82px; bottom:24px; font-size:31px; }
+.pf-install-hero .sq-parent-o11y { position:relative; z-index:1; display:grid; width:188px; height:170px; place-items:center; overflow:hidden; mix-blend-mode:multiply; mask-image:radial-gradient(ellipse 57% 54% at 50% 51%,#000 62%,transparent 100%); -webkit-mask-image:radial-gradient(ellipse 57% 54% at 50% 51%,#000 62%,transparent 100%); }
+.pf-install-hero .sq-parent-o11y-art,.pf-install-hero .sq-parent-o11y canvas { display:block; width:100%; height:100%; }
+.pf-install-hero .sq-parent-o11y canvas { transform:translateY(11px) scale(1.22); }
+.pf-install-hero .sq-parent-o11y-fallback { position:absolute; color:#2448eb; font-size:40px; }
+.pf-install-app-icon { position:absolute; z-index:2; right:58px; bottom:17px; display:grid; width:52px; height:52px; place-items:center; border:2px solid #fff; border-radius:15px; background:#2448eb; box-shadow:0 4px 0 #1539b2; color:#d5f777; font-size:30px; line-height:1; transform:rotate(10deg); }
+.pf-install-content { padding:25px 25px 22px; }
+.pf-install-kicker { color:#2448eb; font-size:10px; font-weight:900; letter-spacing:.13em; }
+.pf-install-content h2 { margin:9px 0 10px; font-family:'Manrope','Nunito',system-ui,sans-serif; font-size:clamp(29px,7.8vw,38px); font-weight:900; letter-spacing:-.065em; line-height:1.03; }
+.pf-install-content h2 span { color:#2448eb; }
+.pf-install-content > p { margin:0 0 22px; color:#526454; font-size:14px; line-height:1.5; }
+.pf-install-primary { display:flex; width:100%; min-height:58px; align-items:center; justify-content:center; gap:10px; border:0; border-radius:16px; padding:12px 15px; background:#2448eb; box-shadow:0 5px 0 #1736b4; color:#fff; font-size:15px; font-weight:900 !important; }
+.pf-install-primary svg:last-child { margin-left:auto; }.pf-install-primary svg:first-child { flex:none; }
+.pf-install-primary:active { transform:translateY(3px); box-shadow:0 2px 0 #1736b4; }
+.pf-install-later { display:block; min-height:44px; margin:12px auto 0; border:0; padding:8px 16px; background:transparent; color:#2448eb; font-size:14px; font-weight:850 !important; }
+.pf-install-content > small { display:block; margin-top:6px; color:#667667; font-size:11px; line-height:1.4; text-align:center; }
+.pf-install-steps { margin:0 0 19px; border:1px solid #cee0bb; border-radius:15px; padding:13px 14px; background:#edf7e3; color:#273c2b; }
+.pf-install-steps strong { display:block; margin-bottom:5px; font-size:13px; font-weight:900; }
+.pf-install-steps p { margin:0; font-size:13px; line-height:1.5; }.pf-install-steps svg { display:inline; vertical-align:-3px; }
+@keyframes pf-install-appear { from { opacity:0; transform:translateY(22px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
+@media(max-width:520px) { .pf-install-dialog { inset:auto 0 0; width:100%; max-height:calc(100dvh - 10px); margin:0; border-radius:27px 27px 0 0; border-bottom:0; box-shadow:0 -12px 50px #142b3355; } .pf-install-hero { height:158px; } .pf-install-hero .sq-parent-o11y { width:161px; height:151px; } .pf-install-content { padding:23px 22px calc(20px + env(safe-area-inset-bottom)); } }
+@media(prefers-reduced-motion:reduce) { .pf-install-dialog { animation:none; } }

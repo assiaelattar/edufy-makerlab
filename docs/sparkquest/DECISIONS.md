@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-12 — Invite each parent once after family access loads
+
+Show the install invitation only in a verified parent session with a loaded family, so the parent first sees the value and the sheet never interrupts sign-in. Persist dismissal per parent UID on that device. Use the native browser prompt only when offered; otherwise show browser-specific home-screen steps. Do not imply that family records are available offline.
+
 ## 2026-10-12 — Parent journey and installable shell
 
 Give a parent one main decision at a time: choose a learner, see this week's work, open a dedicated project page, or check the next workshop and Pickup. Keep upcoming projects visual. Project steps use distinct progress colors and reveal their detail in place without resetting scroll. Keep the child-specific mobile navigation available throughout the journey while allowing it to recede during downward reading. Use the same contextual 011Y mascot for guidance and loading. The installable parent shell does not cache authenticated family data or add a new Pickup command.

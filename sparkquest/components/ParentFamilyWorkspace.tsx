@@ -15,5 +15,5 @@ export const ParentFamilyWorkspace: React.FC<Props> = ({ parentUid, organization
   const { children, loading, error, refresh } = previewChildren
     ? { children: previewChildren, loading: false, error: null, refresh: () => undefined }
     : family;
-  return <ParentFamilyJourney children={children} loading={loading} error={error} parentName={parentName} onRefresh={refresh} onSignOut={onSignOut} previewMode={Boolean(previewChildren)} />;
+  return <ParentFamilyJourney parentUid={parentUid} children={children} loading={loading} error={error} parentName={parentName} onRefresh={refresh} onSignOut={onSignOut} previewMode={Boolean(previewChildren)} />;
 };
