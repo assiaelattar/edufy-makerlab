@@ -569,24 +569,30 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
     // 3. Today's Schedule (Classes & Workshops)
     const todaySchedule = useMemo(() => {
         const today = new Date();
-        const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
+        const dayNames = [
+            today.toLocaleDateString('en-US', { weekday: 'long' }),
+            today.toLocaleDateString('fr-FR', { weekday: 'long' })
+        ].map(day => day.toLowerCase());
         const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const timeForToday = (value?: string) => {
+            const match = value?.trim().match(/^(sunday|dimanche|monday|lundi|tuesday|mardi|wednesday|mercredi|thursday|jeudi|friday|vendredi|saturday|samedi)\b/i);
+            return match && dayNames.includes(match[1].toLowerCase()) ? value!.trim().slice(match[0].length).trim() : null;
+        };
 
         // A. Regular Classes
         const classes = enrollments
             .filter(enrollment => {
                 const program = programs.find(item => item.id === enrollment.programId);
-                return isEnrollmentEligibleForAttendance(enrollment, program, dateStr)
-                    && (enrollment.groupTime?.includes(dayName) || enrollment.secondGroupTime?.includes(dayName));
+                return isEnrollmentEligibleForAttendance(enrollment, program, dateStr);
             })
+            .flatMap(enrollment => [
+                { time: timeForToday(enrollment.groupTime), title: `${enrollment.programName} - ${enrollment.groupName}`, type: 'class' },
+                { time: timeForToday(enrollment.secondGroupTime), title: `${enrollment.programName} (DIY) - ${enrollment.secondGroupName}`, type: 'diy' }
+            ])
+            .filter((slot): slot is { time: string; title: string; type: string } => slot.time !== null)
             .reduce((acc, curr) => {
-                // Determine which slot is today
-                let time = "", group = "", type = "";
-                if (curr.groupTime?.includes(dayName)) { time = curr.groupTime.replace(dayName, '').trim(); group = `${curr.programName} - ${curr.groupName}`; type = 'class'; }
-                else if (curr.secondGroupTime?.includes(dayName)) { time = curr.secondGroupTime.replace(dayName, '').trim(); group = `${curr.programName} (DIY) - ${curr.secondGroupName}`; type = 'diy'; }
-
-                const key = `${time}-${group}`;
-                if (!acc[key]) acc[key] = { time, title: group, type, count: 0, students: [] };
+                const key = `${curr.time}-${curr.title}`;
+                if (!acc[key]) acc[key] = { time: curr.time, title: curr.title, type: curr.type, count: 0, students: [] };
                 acc[key].count++;
                 return acc;
             }, {} as Record<string, any>);
@@ -605,7 +611,11 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                 };
             });
 
-        return [...Object.values(classes), ...workshops].sort((a, b) => a.time.localeCompare(b.time));
+        const startMinute = (value: string) => {
+            const match = value.match(/\b(\d{1,2}):(\d{2})\b/);
+            return match ? Number(match[1]) * 60 + Number(match[2]) : Number.MAX_SAFE_INTEGER;
+        };
+        return [...Object.values(classes), ...workshops].sort((a, b) => startMinute(a.time) - startMinute(b.time));
     }, [enrollments, programs, workshopSlots, workshopTemplates]);
 
     // 4. Alerts & Actionable Items

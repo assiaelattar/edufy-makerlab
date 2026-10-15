@@ -7,6 +7,7 @@
 - The dashboard waits for settings and the first role-relevant records: students, programs, enrollments, and, for school administrators, finance, workshops, attendance, tasks, leads and learner projects.
 - A required read failure displays a specific retryable error instead of an empty dashboard. Missing or unassigned organizations display an access message.
 - The operational context remounts when the user or organization changes, so records from the previous account cannot appear while the next one loads.
+- The dashboard accepts English and French weekday names in existing class records and includes both primary and second group sessions on the same day.
 
 ## Decisions
 
