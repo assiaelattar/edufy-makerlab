@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import type { Enrollment, Program } from '../../types';
-import { nextWorkshopFromSchedule } from './parentNextWorkshop.ts';
+import { nextWorkshopFromSchedule, workshopsOnDateFromSchedule } from './parentNextWorkshop.ts';
 import { isWorkshopEligible } from './parentWorkshopEligibility.ts';
 import { isEnrollmentEligibleForAttendance } from '../../utils/membershipLifecycle.ts';
 
@@ -25,6 +25,11 @@ assert.equal(nextWorkshopFromSchedule([enrollment], [{ ...program, organizationI
 assert.equal(nextWorkshopFromSchedule([{ ...enrollment, groupId: 'other-group' }], [program], new Date('2026-10-12T09:00:00Z')), null);
 assert.equal(nextWorkshopFromSchedule([enrollment], [{ ...program, grades: [] }], new Date('2026-10-12T09:00:00Z')), null);
 assert.equal(nextWorkshopFromSchedule([{ ...enrollment, groupId: undefined, groupTime: 'Lundi 15:00–16:30' }], [{ ...program, grades: [] }], new Date('2026-10-12T09:00:00Z'))?.endTime, '16:30');
+assert.equal(workshopsOnDateFromSchedule([enrollment], [program], '2026-10-12')[0]?.endTime, '16:30');
+assert.equal(workshopsOnDateFromSchedule([enrollment], [program], '2026-10-13').length, 0);
+assert.equal(workshopsOnDateFromSchedule([{ ...enrollment, status: 'dropped' }], [program], '2026-10-12').length, 0);
+assert.equal(workshopsOnDateFromSchedule([enrollment], [{ ...program, organizationId: 'other' }], '2026-10-12').length, 0);
+assert.equal(workshopsOnDateFromSchedule([enrollment], [program], 'not-a-date').length, 0);
 
 for (const sample of [
   { enrollment, program, date: '2026-10-12' },

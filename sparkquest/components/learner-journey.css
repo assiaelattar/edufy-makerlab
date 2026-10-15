@@ -9,6 +9,7 @@
 .sq-learner-journey-brand strong { color:#182a25; font-weight:900; }
 .sq-learner-journey-top button { display:inline-flex; min-height:44px; align-items:center; gap:8px; border:1px solid #dce4dc; border-radius:13px; padding:8px 12px; background:#fff; color:#254439; font-size:13px; font-weight:850; box-shadow:0 3px 0 #dce5d9; }
 .sq-learner-journey-top .sq-learner-icon-action { width:44px; justify-content:center; padding:0; }
+.sq-learner-journey-top .sq-learner-pickup-action { color:#183059; background:#d8f7a7; border-color:#183059; }
 .sq-learner-guide { display:flex; min-height:173px; align-items:center; justify-content:space-between; gap:8px; overflow:hidden; border:2px solid #c9dafb; border-radius:27px; padding:20px 19px 18px 25px; background:linear-gradient(110deg,#edf3ff,#e8f0ff 65%,#eee9ff); box-shadow:0 5px 0 #c5d5f1; }
 .sq-learner-guide.is-proud { border-color:#c8e799; background:linear-gradient(115deg,#eff9d9,#def5ca 65%,#edf8e8); box-shadow:0 5px 0 #c9e7a2; }
 .sq-learner-guide.is-curious { border-color:#d9cafa; background:linear-gradient(115deg,#f3edff,#e9e3ff 65%,#f6e8fa); box-shadow:0 5px 0 #ddd0f6; }

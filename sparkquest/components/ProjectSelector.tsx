@@ -5,13 +5,13 @@ import { isSparkQuestStaffRole } from '../domain/staffRoles';
 import { db } from '../services/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc, getDoc, Timestamp, addDoc } from 'firebase/firestore';
 import { ProcessTemplate, StudentProject, Station } from '../types';
-import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, List, MessageCircle } from 'lucide-react';
+import { User as UserIcon, X, Zap, Award, Image as ImageIcon, Key, LogOut, Settings, TrendingUp, Trash2, Search, Filter, List, MessageCircle, Truck } from 'lucide-react';
 
 import { AvatarSelector } from './AvatarSelector';
 import { CredentialWallet } from './CredentialWallet';
 import { StudentPortfolio } from './StudentPortfolio';
 import { StudentGallery } from './StudentGallery';
-import { PickupSchedule } from './PickupSchedule';
+import { openStudentPickup } from './PickupNotification';
 import { AdminSettings } from './AdminSettings';
 import { ArcadeView } from './arcade/ArcadeView';
 import { Gamepad2, ShoppingBag } from 'lucide-react';
@@ -99,7 +99,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     // Modal States
     const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
     const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-    const [isPickupOpen, setIsPickupOpen] = useState(false);
     const [isWalletOpen, setIsWalletOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -786,7 +785,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 onOpenArcade={() => setIsArcadeOpen(true)}
                 onOpenPortfolio={() => setIsPortfolioOpen(true)}
                 onOpenGallery={() => setIsGalleryOpen(true)}
-                onOpenPickup={() => setIsPickupOpen(true)}
+                onOpenPickup={openStudentPickup}
                 onOpenWallet={() => setIsWalletOpen(true)}
                 onOpenProgress={() => setIsProgressOpen(true)}
                 onOpenResources={() => setIsResourceLibraryOpen(true)}
@@ -804,6 +803,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 onOpenWallet={() => setIsWalletOpen(true)}
                 onOpenProfile={() => setIsProfileOpen(true)}
                 onOpenResources={() => setIsResourceLibraryOpen(true)}
+                onOpenPickup={openStudentPickup}
             />
 
             {/* MAIN CONTENT AREA */}
@@ -814,7 +814,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                         firstName={studentName.trim().split(/\s+/)[0] || 'Maker'} academicYear={activeAcademicYear}
                         hasCurrentBuild={Boolean(journeyWorkbench.pinned)} needsRevision={revisionNeeded}
                         updateCount={journeyWorkbench.instructor.length} onFieldLog={() => setIsPortfolioOpen(true)}
-                        actions={<><button type="button" className="sq-learner-icon-action" onClick={() => setIsProfileOpen(true)} aria-label="Open maker profile">{avatarUrl ? <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" /> : <UserIcon size={19} />}</button><button type="button" className="sq-learner-icon-action" onClick={() => setIsLogoutConfirmOpen(true)} aria-label="Sign out"><LogOut size={19} /></button></>}>
+                        actions={<><button type="button" className="sq-learner-icon-action sq-learner-pickup-action" onClick={openStudentPickup} aria-label="Open pickup details"><Truck size={19} /></button><button type="button" className="sq-learner-icon-action" onClick={() => setIsProfileOpen(true)} aria-label="Open maker profile">{avatarUrl ? <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" /> : <UserIcon size={19} />}</button><button type="button" className="sq-learner-icon-action" onClick={() => setIsLogoutConfirmOpen(true)} aria-label="Sign out"><LogOut size={19} /></button></>}>
                         {isAdminOrInstructor && availableGrades.length > 0 && <label className="sq-learner-preview-grade">Preview grade <select value={previewGradeId || ''} onChange={event => setPreviewGradeId(event.target.value || null)}><option value="">Live view</option>{availableGrades.map(grade => <option key={grade.id} value={grade.id}>{grade.name}</option>)}</select></label>}
                         {(assignmentContext.gradeId || assignmentContext.gradeName) && <p className="sq-learner-enrollment">{assignmentContext.gradeName || assignmentContext.gradeId}{assignmentContext.groupName ? ' · ' + assignmentContext.groupName : ''}</p>}
                     </LearnerJourneyNav>
@@ -930,7 +930,6 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 }}
             />
             <StudentGallery isOpen={isGalleryOpen} onClose={() => setIsGalleryOpen(false)} />
-            <PickupSchedule isOpen={isPickupOpen} onClose={() => setIsPickupOpen(false)} />
             <CredentialWallet isOpen={isWalletOpen} onClose={() => setIsWalletOpen(false)} />
 
             <ArcadeView isOpen={isArcadeOpen} onClose={() => setIsArcadeOpen(false)} />

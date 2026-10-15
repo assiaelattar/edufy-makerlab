@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Award, BookOpen, Gamepad2, Image as ImageIcon, KeyRound, PackageOpen, ShoppingBag, Trophy, User, X } from 'lucide-react';
+import { Award, BookOpen, Gamepad2, Image as ImageIcon, KeyRound, PackageOpen, ShoppingBag, Trophy, Truck, User, X } from 'lucide-react';
 
 interface MobileNavigationProps {
     onOpenStore: () => void;
@@ -9,6 +9,7 @@ interface MobileNavigationProps {
     onOpenWallet: () => void;
     onOpenProfile: () => void;
     onOpenResources?: () => void;
+    onOpenPickup: () => void;
     onOpenContests?: () => void;
 }
 
@@ -16,7 +17,7 @@ const NavItem = ({ icon: Icon, label, onClick, featured = false }: { icon: React
     <button type="button" onClick={onClick} className={`sq-mobile-kit-item ${featured ? 'is-featured' : ''}`}><span><Icon size={featured ? 23 : 20} /></span><small>{label}</small></button>
 );
 
-export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenStore, onOpenArcade, onOpenPortfolio, onOpenGallery, onOpenWallet, onOpenProfile, onOpenResources = () => undefined, onOpenContests }) => {
+export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenStore, onOpenArcade, onOpenPortfolio, onOpenGallery, onOpenWallet, onOpenProfile, onOpenPickup, onOpenResources = () => undefined, onOpenContests }) => {
     const [kitOpen, setKitOpen] = useState(false);
     const openFromKit = (action: () => void) => {
         setKitOpen(false);
@@ -31,6 +32,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenStore,
                     <button type="button" onClick={() => openFromKit(onOpenGallery)}><ImageIcon size={22} /><span><strong>Evidence wall</strong><small>Photos from the bench</small></span></button>
                     <button type="button" onClick={() => openFromKit(onOpenWallet)}><KeyRound size={22} /><span><strong>Key cabinet</strong><small>Learning-tool logins</small></span></button>
                     <button type="button" onClick={() => openFromKit(onOpenResources)}><BookOpen size={22} /><span><strong>Resources &amp; tools</strong><small>Guides, apps and project tools</small></span></button>
+                    <button type="button" onClick={() => openFromKit(onOpenStore)}><ShoppingBag size={22} /><span><strong>Spark Exchange</strong><small>Use your Sparks</small></span></button>
                     {onOpenContests && <button type="button" onClick={() => openFromKit(onOpenContests)}><Trophy size={22} /><span><strong>Contests</strong><small>Current maker challenges</small></span></button>}
                 </div></section>
             </div>}
@@ -38,7 +40,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({ onOpenStore,
                 <NavItem icon={Award} label="Log" onClick={onOpenPortfolio} />
                 <NavItem icon={Gamepad2} label="Play" onClick={onOpenArcade} />
                 <NavItem icon={User} label="Me" onClick={onOpenProfile} featured />
-                <NavItem icon={ShoppingBag} label="Exchange" onClick={onOpenStore} />
+                <NavItem icon={Truck} label="Pickup" onClick={onOpenPickup} />
                 <NavItem icon={PackageOpen} label="Kit" onClick={() => setKitOpen(true)} />
             </nav>
         </>

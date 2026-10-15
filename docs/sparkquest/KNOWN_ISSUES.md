@@ -7,6 +7,11 @@
 - A printed one-click QR expires after five minutes and one use. Print the manual login QR for a card that must remain usable later.
 - Root repository-wide TypeScript currently fails in unrelated `App.tsx` and `maker-pro/` files. Both production builds pass, and no new quick-access file appears in those diagnostics.
 
+## Learner Pickup phone acceptance
+
+- Local 390px previews confirm the cancelled state has no invented time or entrance and the mobile navigation exposes Pickup. A designated signed-in learner still needs to verify real timetable data, alerts and handoff states on a physical phone after release.
+- Pickup records do not currently contain a configured handoff location. The learner must confirm the meeting point with staff; a workshop venue is not presented as the handoff point.
+
 ## Parent Pickup visual acceptance
 
 - Synthetic phone and desktop preview covers the parent actions and note views. A designated signed-in parent and learner should still check the live handoff on a physical phone before operational use for a real departure.

@@ -12,6 +12,7 @@ import { config } from './utils/config';
 import { SessionOverlay } from './components/SessionOverlay';
 import { InactivityMonitor } from './components/InactivityMonitor';
 import { PickupNotification } from './components/PickupNotification';
+import { PickupSchedule, type StudentPickupEntry } from './components/PickupSchedule';
 import { FocusSessionProvider } from './context/FocusSessionContext';
 import { SessionControls } from './components/SessionControls';
 import { ToastProvider } from './context/ToastContext';
@@ -634,6 +635,12 @@ const App: React.FC = () => {
     : null;
 
   if (preview === 'login') return <LoginView />;
+  if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'pickupLearner') {
+    const state = new URLSearchParams(window.location.search).get('pickupState') || 'arrived';
+    const status = (['on_the_way', 'arrived', 'ready', 'released', 'confirmed', 'cancelled', 'exception'].includes(state) ? state : 'arrived') as StudentPickupEntry['status'];
+    const pickupEntry: StudentPickupEntry = { id: 'preview_learner_2026-10-12_daily', organizationId: 'preview', studentId: 'learner', sessionDate: '2026-10-12', status, pickerName: 'Samira' };
+    return <div className="sq-pickup-preview"><PickupSchedule isOpen onClose={() => window.history.back()} pickupEntry={state === 'none' ? null : pickupEntry} previewWorkshop={new URLSearchParams(window.location.search).has('noSchedule') ? null : { date: '2026-10-12', startTime: '15:00', endTime: '16:30', timezone: 'Africa/Casablanca', programName: 'STEMQuest', groupName: 'Mini Makers', locationName: null, isUnderway: false }} /></div>;
+  }
   if (preview === 'student-project') return <LazyView><StudentProjectDetailsDemo /></LazyView>;
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'import') return <LazyView><MissionImportPreview /></LazyView>;
   if (import.meta.env.DEV && isLocalHostname(window.location.hostname) && new URLSearchParams(window.location.search).get('designPreview') === 'workbench') return <LazyView><LearnerWorkbenchPreview /></LazyView>;

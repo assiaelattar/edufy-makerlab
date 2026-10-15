@@ -40,9 +40,9 @@ const legacySlot = (value?: string): ProgramScheduleSlot | null => {
 };
 
 /** A timetable projection, never a claim that a one-off session was confirmed. */
-export const nextWorkshopFromSchedule = (
-  enrollments: Enrollment[], programs: Program[], now = new Date()
-): FamilyNextWorkshop | null => {
+const workshopCandidates = (
+  enrollments: Enrollment[], programs: Program[], now: Date, targetDate?: string
+): FamilyNextWorkshop[] => {
   const programsById = new Map(programs.map(program => [program.id, program]));
   const candidates: FamilyNextWorkshop[] = [];
   for (const enrollment of enrollments) {
@@ -57,19 +57,19 @@ export const nextWorkshopFromSchedule = (
       const weekday = weekdays[slot.day?.trim().toLowerCase() || ''];
       if (weekday === undefined || !validTime(slot.startTime)) return;
       const endTime = validTime(slot.endTime) && minutes(slot.endTime) > minutes(slot.startTime) ? slot.endTime : null;
-      const base = new Date(`${today.date}T12:00:00Z`);
-      for (let offset = 0; offset < 14; offset++) {
+      const base = new Date(`${targetDate || today.date}T12:00:00Z`);
+      for (let offset = 0; offset < (targetDate ? 1 : 14); offset++) {
         const candidateDay = new Date(base);
         candidateDay.setUTCDate(base.getUTCDate() + offset);
         if (candidateDay.getUTCDay() !== weekday) continue;
         const date = `${candidateDay.getUTCFullYear()}-${pad(candidateDay.getUTCMonth() + 1)}-${pad(candidateDay.getUTCDate())}`;
-        if (offset === 0 && today.minute >= minutes(endTime || slot.startTime)) continue;
+        if (!targetDate && offset === 0 && today.minute >= minutes(endTime || slot.startTime)) continue;
         if (!isWorkshopEligible(enrollment, program, date)) continue;
         candidates.push({
           date, startTime: slot.startTime, endTime, timezone,
           programName: program.name || enrollment.programName || 'Atelier MakerLab',
           groupName, locationName: program.runSetup?.locationName?.trim() || null,
-          isUnderway: offset === 0 && today.minute >= minutes(slot.startTime)
+          isUnderway: !targetDate && offset === 0 && today.minute >= minutes(slot.startTime)
         });
         break;
       }
@@ -90,5 +90,20 @@ export const nextWorkshopFromSchedule = (
       if (second) addSlot(second, enrollment.secondGroupName || '');
     }
   }
-  return candidates.sort((a, b) => `${a.date}T${a.startTime}`.localeCompare(`${b.date}T${b.startTime}`))[0] || null;
+  return candidates;
 };
+
+/** Timetable slots for a dated learner pickup. This does not confirm attendance. */
+export const workshopsOnDateFromSchedule = (
+  enrollments: Enrollment[], programs: Program[], sessionDate: string
+): FamilyNextWorkshop[] => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return [];
+  return workshopCandidates(enrollments, programs, new Date(`${sessionDate}T12:00:00Z`), sessionDate)
+    .sort((a, b) => `${a.endTime || a.startTime}`.localeCompare(`${b.endTime || b.startTime}`));
+};
+
+/** A timetable projection, never a claim that a one-off session was confirmed. */
+export const nextWorkshopFromSchedule = (
+  enrollments: Enrollment[], programs: Program[], now = new Date()
+): FamilyNextWorkshop | null => workshopCandidates(enrollments, programs, now)
+  .sort((a, b) => `${a.date}T${a.startTime}`.localeCompare(`${b.date}T${b.startTime}`))[0] || null;

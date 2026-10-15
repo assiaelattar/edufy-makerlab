@@ -2771,7 +2771,7 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 .sq-resource-empty strong { font-size: 25px; font-weight: 1000; }
 .sq-resource-empty span { max-width: 500px; color: var(--kit-muted); font-size: 13px; font-weight: 700; line-height: 1.55; }
 
-.sq-pickup-body { display: grid; gap: 22px; }
+.sq-pickup-body { display: grid; align-content: start; gap: 22px; }
 .sq-pickup-live { display: grid; gap: 5px; border: 2px solid var(--kit-ink); border-radius: 20px 7px 20px 7px; padding: 18px 20px; background: var(--kit-orange-soft); box-shadow: 5px 5px 0 var(--kit-ink); }
 .sq-pickup-live.is-released, .sq-pickup-live.is-confirmed { background: var(--kit-lime-soft); }
 .sq-pickup-live.is-exception, .sq-pickup-live.is-cancelled { background: #fff0ec; }
@@ -2788,7 +2788,9 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 .sq-pickup-facts small, .sq-pickup-facts strong { display: block; }
 .sq-pickup-facts small { color: var(--kit-muted); font-size: 9px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
 .sq-pickup-facts strong { margin-top: 3px; font-size: 20px; font-weight: 1000; }
-.sq-student-pickup-progress { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sq-pickup-facts p { margin: 4px 0 0; color: var(--kit-muted); font-size: 11px; font-weight: 740; line-height: 1.35; }
+.sq-pickup-preview { min-height: 100vh; background: #dce9f8; }
+.sq-student-pickup-progress { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
 .sq-student-pickup-progress li { display: grid; justify-items: center; gap: 7px; color: var(--kit-muted); text-align: center; }
 .sq-student-pickup-progress li span { display: grid; width: 36px; height: 36px; place-items: center; border: 2px solid var(--kit-ink); border-radius: 50%; background: #fff; }
 .sq-student-pickup-progress li small { font-size: 9px; font-weight: 900; }
@@ -2923,9 +2925,13 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 .sq-focus-chip small { color: var(--kit-muted); font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
 .sq-focus-chip strong { font-size: 15px; font-weight: 1000; }
 .sq-focus-chip button { display: flex; min-width: 74px; align-items: center; justify-content: center; gap: 6px; border: 0; border-left: 2px solid var(--kit-ink); color: #fff; background: #c9364e; font-size: 10px; font-weight: 950; }
-.sq-pickup-toast { position: fixed; z-index: 12000; top: 14px; left: 50%; display: grid; width: min(430px,calc(100vw - 24px)); grid-template-columns: auto 1fr; align-items: center; gap: 12px; border: 2px solid var(--kit-ink); border-radius: 19px 6px 19px 6px; padding: 11px 13px; color: var(--kit-ink); background: var(--kit-orange-soft); box-shadow: 5px 5px 0 var(--kit-ink); transform: translateX(-50%); }
+.sq-pickup-toast { position: fixed; z-index: 12000; top: max(14px, env(safe-area-inset-top)); left: 50%; display: flex; width: min(430px,calc(100vw - 24px)); align-items: flex-start; gap: 5px; border: 2px solid var(--kit-ink); border-radius: 19px 6px 19px 6px; padding: 8px; color: var(--kit-ink); background: var(--kit-orange-soft); box-shadow: 5px 5px 0 var(--kit-ink); transform: translateX(-50%); }
 .sq-pickup-toast.is-released { background: var(--kit-lime-soft); }
-.sq-pickup-toast > span { display: grid; width: 43px; height: 43px; place-items: center; border: 2px solid var(--kit-ink); border-radius: 14px 5px 14px 5px; background: #fff; }
+.sq-pickup-toast.is-arrived, .sq-pickup-toast.is-cancelled, .sq-pickup-toast.is-exception { background: #ffe2d5; }
+.sq-pickup-toast-open { display: grid; flex: 1; grid-template-columns: auto 1fr; gap: 11px; align-items: center; min-height: 54px; border: 0; padding: 2px; background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
+.sq-pickup-toast-open > span:first-child { display: grid; width: 43px; height: 43px; place-items: center; border: 2px solid var(--kit-ink); border-radius: 14px 5px 14px 5px; background: #fff; }
+.sq-pickup-toast-close { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--kit-ink); cursor: pointer; }
+.sq-pickup-toast :is(button):focus-visible { outline: 3px solid #215bf3; outline-offset: 2px; }
 .sq-pickup-toast small, .sq-pickup-toast strong, .sq-pickup-toast p { display: block; margin: 0; }
 .sq-pickup-toast small { color: var(--kit-orange); font-size: 8px; font-weight: 950; letter-spacing: .1em; text-transform: uppercase; }
 .sq-pickup-toast strong { margin-top: 2px; font-size: 14px; font-weight: 1000; }

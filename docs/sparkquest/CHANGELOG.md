@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Learner Pickup truth and mobile access
+
+- Replaced the learner Pickup dialog's fixed time and entrance with the dated workshop timetable from the learner's active Edufy enrollments and program schedule. Missing end times and handoff points are stated plainly.
+- Cancelled and exception states now lead with the instruction to stay with the team and do not show stale pickup facts or progress.
+- Added Pickup to the student's five-item phone navigation and a direct journey-header action. Live status notices open the same detail view.
+- Kept the learner-ready signal optional and reduced the phone Pickup panel height to its content.
+
 ## 2026-10-15 — Daily Pickup roster and optional learner signal
 
 - Edufy Pickup now projects every active learner scheduled for today from the canonical workshop enrollment and group-time data, before any family action creates a queue record.

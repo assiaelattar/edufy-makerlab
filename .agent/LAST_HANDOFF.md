@@ -1,4 +1,10 @@
-# Latest handoff — Parent and learner one-click SparkQuest access
+# Latest handoff — Learner Pickup truth and phone access
+
+On 2026-10-15 a focused local SparkQuest candidate removed the fixed “3:00 PM” and “Main Entrance” from the learner Pickup dialog. It derives a dated workshop end time from active tenant-scoped enrollments/program schedules, shows missing information honestly, and hides stale facts during cancelled/exception states. Pickup is now a primary mobile destination and a journey-header action; live status alerts open the same detail screen. The optional ready signal and staff physical handoff remain unchanged. At 390px, the cancelled preview shows only the live cancellation and stay-with-team guidance, and navigation shows Pickup. SparkQuest TypeScript, both production builds and scoped smokes pass. This work is in the isolated learner Pickup branch; no push, deployment, Firestore rule or production-data change was made. A signed-in student on a physical phone remains the acceptance check.
+
+---
+
+# Previous handoff — Parent and learner one-click SparkQuest access
 
 On 2026-10-15 the clean `origin/main` worktree gained staff-issued, five-minute, single-use SparkQuest links and QR codes for exact verified parent or learner accounts. The Edufy student profile also displays printable reusable manual-login QR cards. Issuance checks staff/tenant/module/account identity; parent delivery requires current exact guardian evidence. Exchange rechecks issuer and recipient before atomic consumption; Firebase custom tokens stay in the API response, never the URL. Manual passwords and Showcase password reauthentication remain available. Local policy smoke (17 assertions), existing launch smoke (28 assertions), SparkQuest TypeScript, API imports, and both production builds pass. Root repository-wide TypeScript still reports existing `App.tsx`/`maker-pro` errors, with no new quick-access diagnostics. No production account or data changed; no deployment occurred. See `docs/sparkquest/RECIPIENT_QUICK_ACCESS_2026-10-15.md`.
 
