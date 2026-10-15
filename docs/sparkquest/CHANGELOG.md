@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Focused parent Pickup journey
+
+- Put the live departure status, selected picker and next parent action at the top of Pickup.
+- Reduced the workshop schedule to a compact card and moved process, cancellation and safety details behind disclosures.
+- Opened private parent/learner notes in their own focused view with a visible composer, character count and clear return path. Guardian and terminal-state visibility rules remain unchanged.
+- Added local-only preview states for ready, released and completed parent checks.
+
 ## 2026-10-15 — Learner-ready pickup and private notes
 
 - Added the missing learner handoff step: after the selected picker arrives, the learner packs, tidies the space, and marks **I’m ready** while remaining inside.

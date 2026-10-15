@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, LockKeyhole, MessageCircle, Send } from 'lucide-react';
 import { addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -20,6 +20,7 @@ interface Props {
   role: 'parent' | 'student';
   closed?: boolean;
   previewMode?: boolean;
+  hideIntro?: boolean;
 }
 
 const previewMessages: PickupMessage[] = [
@@ -34,12 +35,18 @@ export const PickupPrivateNotes: React.FC<Props> = ({
   role,
   closed = false,
   previewMode = false,
+  hideIntro = false,
 }) => {
   const [messages, setMessages] = useState<PickupMessage[]>(previewMode ? previewMessages : []);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(!previewMode);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+  }, [messages.length]);
 
   useEffect(() => {
     if (previewMode || !db) return;
@@ -86,10 +93,9 @@ export const PickupPrivateNotes: React.FC<Props> = ({
     }
   };
 
-  return <section className="sq-pickup-notes" aria-labelledby={`pickup-notes-${entryId}`}>
-    <header><span><LockKeyhole size={17} /></span><div><small>Canal privé</small><strong id={`pickup-notes-${entryId}`}>Parent ↔ enfant</strong></div></header>
-    <p className="sq-pickup-notes-help">Visible seulement par l’enfant et le parent qui a lancé cette sortie.</p>
-    <div className="sq-pickup-notes-list" aria-live="polite">
+  return <section className="sq-pickup-notes" aria-labelledby={hideIntro ? undefined : `pickup-notes-${entryId}`} aria-label={hideIntro ? 'Conversation privée parent et enfant' : undefined}>
+    {!hideIntro && <><header><span><LockKeyhole size={17} /></span><div><small>Canal privé</small><strong id={`pickup-notes-${entryId}`}>Parent ↔ enfant</strong></div></header><p className="sq-pickup-notes-help">Visible seulement par l’enfant et le parent qui a lancé cette sortie.</p></>}
+    <div className="sq-pickup-notes-list" ref={listRef} aria-live="polite">
       {loading && <span className="sq-pickup-notes-state"><Loader2 className="sq-spin" size={16} /> Chargement des notes…</span>}
       {!loading && messages.length === 0 && <span className="sq-pickup-notes-state"><MessageCircle size={16} /> « N’oublie pas ta veste », « J’ai rangé mon projet »…</span>}
       {messages.map(message => {
@@ -99,9 +105,10 @@ export const PickupPrivateNotes: React.FC<Props> = ({
       })}
     </div>
     {error && <p className="sq-pickup-notes-error" role="alert">{error}</p>}
-    {closed ? <p className="sq-pickup-notes-closed">La sortie est terminée. Les notes restent visibles dans l’historique du jour.</p> : <form onSubmit={send}>
+    {closed ? <p className="sq-pickup-notes-closed">La sortie est terminée. Les notes restent visibles en lecture seule.</p> : <form onSubmit={send}>
       <label className="sr-only" htmlFor={`pickup-note-message-${entryId}`}>Écrire une note privée</label>
       <textarea id={`pickup-note-message-${entryId}`} rows={2} maxLength={500} value={draft} onChange={event => setDraft(event.target.value)} placeholder={role === 'parent' ? 'Ex. N’oublie pas ta veste…' : 'Ex. J’ai rangé mon projet…'} />
+      <small className="sq-pickup-notes-count">{draft.length}/500</small>
       <button type="submit" disabled={!draft.trim() || sending}>{sending ? <Loader2 className="sq-spin" size={16} /> : <Send size={16} />} Envoyer</button>
     </form>}
   </section>;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ParentFamilyWorkspace } from './ParentFamilyWorkspace';
 import type { FamilyChild } from '../hooks/useParentFamily';
+import type { PickupStatus } from '../domain/pickupLifecycle';
 
 const today = new Date();
 const previewSessionDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
@@ -91,5 +92,16 @@ children.push({
   operations: children[1].operations,
 });
 
-export const ParentFamilyPreview: React.FC = () =>
-  <ParentFamilyWorkspace parentUid="preview-parent" organizationId="preview-org" parentName="Samira Maker" onSignOut={() => { window.location.assign(`${window.location.pathname}#login`); }} previewChildren={children} />;
+const pickupStates: PickupStatus[] = ['on_the_way', 'arrived', 'ready', 'released', 'confirmed', 'cancelled', 'exception'];
+
+export const ParentFamilyPreview: React.FC = () => {
+  const requested = new URLSearchParams(window.location.search).get('pickupState');
+  const state = pickupStates.find(value => value === requested);
+  const previewChildren: FamilyChild[] = state ? children.map((child, index) => index === 0 ? {
+    ...child,
+    operations: { ...child.operations, pickup: { status: 'ready', data: {
+      status: state, sessionDate: previewSessionDate, pickerName: 'Samira Maker', isPreviousDay: false, initiatedByCurrentGuardian: true,
+    } } },
+  } : child) : children;
+  return <ParentFamilyWorkspace parentUid="preview-parent" organizationId="preview-org" parentName="Samira Maker" onSignOut={() => { window.location.assign(`${window.location.pathname}#login`); }} previewChildren={previewChildren} />;
+};

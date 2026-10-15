@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — One immediate parent Pickup action
+
+The Pickup screen leads with the live record and the only parent action appropriate to its state. The workshop calendar is secondary; the full lifecycle and cancellation stay behind disclosures. A separate notes view keeps a private reminder from competing with the handoff decision. The view change does not authorize a new actor or transition: Firestore and command contracts remain the authority.
+
 ## 2026-10-15 — Learner readiness gates physical release
 
 Arrival means the selected picker is at MakerLab; it does not mean the learner may leave. The exact linked learner must first pack their project and personal items, tidy the space, and move the pickup to `ready`. Staff release is valid only from `ready`, after verifying the authorized picker. The learner remains inside until the staff handoff is recorded.

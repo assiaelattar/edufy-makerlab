@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Parent Pickup visual acceptance
+
+- Synthetic phone and desktop preview covers the parent actions and note views. A designated signed-in parent and learner should still check the live handoff on a physical phone before operational use for a real departure.
+- Pickup status is a live Firestore read. The workshop card uses the family's recorded schedule; it can be absent or delayed independently of the live pickup.
+
 ## Pickup lifecycle release acceptance
 
 - The corrected five-state handoff and private notes passed isolated Auth/Firestore emulators and the full local parent → learner → instructor → parent UI flow on 2026-10-15. Public operational use still requires the coordinated SparkQuest, Edufy and Firestore release plus one designated-family live acceptance.

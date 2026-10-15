@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowRight,
   Car,
   CheckCircle2,
-  Clock3,
   Loader2,
+  LockKeyhole,
   MapPin,
+  MessageCircle,
   PackageCheck,
   RefreshCw,
   ShieldCheck,
@@ -49,6 +51,8 @@ interface Props {
   currentParentName?: string;
   initialSource: FamilySource<FamilyPickupSummary>;
   previewMode?: boolean;
+  view: 'status' | 'notes';
+  onViewChange: (view: 'status' | 'notes') => void;
 }
 
 const steps = [
@@ -96,6 +100,8 @@ export const ParentPickupControl: React.FC<Props> = ({
   currentParentName,
   initialSource,
   previewMode = false,
+  view,
+  onViewChange,
 }) => {
   const [sessionDate, setSessionDate] = useState(() => pickupSessionDate());
   const [entry, setEntry] = useState<PickupRecord | null>(() => previewMode
@@ -108,7 +114,6 @@ export const ParentPickupControl: React.FC<Props> = ({
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState<ParentAction | null>(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [showCancel, setShowCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const allowed = child.permissions.includes('pickup') && Boolean(child.pickupProfile?.active);
   const pickerOptions = useMemo(() => Array.from(new Set([
@@ -227,7 +232,6 @@ export const ParentPickupControl: React.FC<Props> = ({
             ? 'Réception confirmée. La remise d’aujourd’hui est terminée.'
             : 'La demande a été annulée et conservée dans l’historique.');
       if (action === 'cancel') {
-        setShowCancel(false);
         setCancelReason('');
       }
     } catch (error) {
@@ -243,7 +247,9 @@ export const ParentPickupControl: React.FC<Props> = ({
   </section>;
 
   const position = statusPosition(entry?.status);
+  const canOpenNotes = Boolean(entry && entry.parentUid === parentUid);
   const previousDay = Boolean(entry?.sessionDate && entry.sessionDate !== sessionDate);
+  const firstName = child.name.trim().split(/\s+/)[0] || 'votre enfant';
   const title = !entry ? `Préparer la sortie de ${child.name}`
     : entry.status === 'on_the_way' ? 'L’équipe vous attend'
       : entry.status === 'arrived' ? 'La personne autorisée est sur place'
@@ -253,19 +259,28 @@ export const ParentPickupControl: React.FC<Props> = ({
             : entry.status === 'cancelled' ? 'Sortie annulée'
               : 'Vérification nécessaire par l’équipe';
 
+  if (view === 'notes') return <section className="sq-pickup-notes-page" aria-labelledby="sq-pickup-notes-title">
+    <div className="sq-pickup-notes-intro"><span><LockKeyhole size={20} /></span><div><p>VOTRE ESPACE PRIVÉ</p><strong id="sq-pickup-notes-title">Entre vous et {firstName}</strong><small>L’équipe ne lit pas ces notes.</small></div></div>
+    {loading ? <div className="sq-pickup-message"><Loader2 className="sq-spin" size={19} /><span>Connexion aux notes privées…</span></div> : readError ? <div className="sq-pickup-message is-error" role="alert"><AlertCircle size={19} /><span>{readError}</span><button type="button" onClick={() => setRetryKey(value => value + 1)}>Réessayer</button></div> : canOpenNotes && entry ? <PickupPrivateNotes
+      entryId={entry.id}
+      organizationId={organizationId}
+      studentId={child.id}
+      currentUid={parentUid}
+      role="parent"
+      closed={['confirmed', 'cancelled', 'exception'].includes(entry.status)}
+      previewMode={previewMode}
+      hideIntro
+    /> : <div className="sq-pickup-message is-warning"><LockKeyhole size={19} /><span>Les notes sont ouvertes uniquement au parent qui a lancé cette sortie et à {firstName}.</span></div>}
+  </section>;
+
   return <section className="sq-pickup-control" aria-labelledby="sq-pickup-control-title">
     <div className="sq-pickup-control-head">
-      <span><Car size={21} /></span>
-      <div><p>{previousDay ? 'Ouvert depuis la veille' : 'Remise sécurisée du jour'} · {entry?.sessionDate || sessionDate}</p><h3 id="sq-pickup-control-title">{title}</h3></div>
-      {entry?.pickerName && <em>{entry.pickerName}</em>}
+      <span><Car size={22} /></span>
+      <div><p>{previousDay ? 'SORTIE OUVERTE DEPUIS LA VEILLE' : `AUJOURD’HUI · ${entry?.sessionDate || sessionDate}`}</p><h3 id="sq-pickup-control-title">{title}</h3><small>{!entry ? 'Choisissez la personne autorisée avant de prévenir MakerLab.' : entry.status === 'on_the_way' ? `${entry.pickerName || 'La personne autorisée'} est en route. Signalez son arrivée quand elle est sur place.` : entry.status === 'arrived' ? `${firstName} prépare ses affaires. Restez sur place pendant la vérification.` : entry.status === 'ready' ? `L’équipe va vérifier ${entry.pickerName || 'la personne autorisée'} avant la remise.` : entry.status === 'released' ? 'La remise a été enregistrée. La personne sélectionnée confirme la réception.' : entry.status === 'confirmed' ? 'La sortie est terminée. À bientôt pour le prochain atelier !' : 'Contactez MakerLab avant tout départ.'}</small></div>
+      {entry?.pickerName && <em>Récupération : {entry.pickerName}</em>}
     </div>
 
-    <ol className="sq-pickup-progress" aria-label="Pickup progress">
-      {steps.map((step, index) => {
-        const Icon = step.icon;
-        return <li key={step.status} className={position >= index ? 'is-complete' : ''}><span><Icon size={15} /></span><small>{step.label}</small></li>;
-      })}
-    </ol>
+    {position >= 0 && <div className="sq-pickup-progress-summary" aria-label={`Étape ${position + 1} sur ${steps.length} : ${steps[position].label}`}><span>ÉTAPE {position + 1} / {steps.length}</span><strong>{steps[position].label}</strong><div className="sq-pickup-progress-bars" aria-hidden="true">{steps.map((step, index) => <i key={step.status} className={position >= index ? 'is-done' : ''} />)}</div></div>}
 
     {loading && <div className="sq-pickup-message"><Loader2 className="sq-spin" size={19} /><span>Connexion au bureau de sortie…</span></div>}
     {readError && <div className="sq-pickup-message is-error" role="alert"><AlertCircle size={19} /><span>{readError}</span><button type="button" onClick={() => setRetryKey(value => value + 1)}><RefreshCw size={15} /> Réessayer</button></div>}
@@ -284,7 +299,6 @@ export const ParentPickupControl: React.FC<Props> = ({
         </button>
       </>}
       {entry?.status === 'on_the_way' && <>
-        <p><Clock3 size={17} /> L’équipe voit que <strong>{entry.pickerName}</strong> est en route vers l’académie.</p>
         <button type="button" className="sq-pickup-primary" onClick={() => void perform('arrive')} disabled={pending !== null}>
           {pending === 'arrive' ? <Loader2 className="sq-spin" size={17} /> : <MapPin size={17} />} Je suis sur place
         </button>
@@ -300,22 +314,14 @@ export const ParentPickupControl: React.FC<Props> = ({
       {entry?.status === 'confirmed' && <div className="sq-pickup-complete"><CheckCircle2 size={26} /><div><strong>La remise d’aujourd’hui est terminée.</strong><p>La remise par l’équipe et la confirmation familiale restent dans l’historique.</p></div></div>}
       {(entry?.status === 'cancelled' || entry?.status === 'exception') && <div className="sq-pickup-wait"><AlertCircle size={22} /><div><strong>{entry.status === 'cancelled' ? 'Cette sortie a été annulée.' : 'Une vérification par l’équipe est nécessaire.'}</strong><p>Contactez l’académie avant tout départ avec {child.name}.</p></div></div>}
 
-      {entry && ['on_the_way', 'arrived', 'ready'].includes(entry.status) && <div className="sq-pickup-cancel">
-        {!showCancel ? <button type="button" onClick={() => setShowCancel(true)}>Annuler cette sortie</button> : <>
+      {entry && ['on_the_way', 'arrived', 'ready'].includes(entry.status) && <details className="sq-pickup-cancel">
+          <summary>Annuler cette sortie</summary>
           <label htmlFor={`sq-pickup-reason-${child.id}`}>Pourquoi cette sortie est-elle annulée ?</label>
           <textarea id={`sq-pickup-reason-${child.id}`} rows={2} minLength={8} maxLength={500} value={cancelReason} onChange={event => setCancelReason(event.target.value)} />
-          <div><button type="button" className="sq-pickup-danger" disabled={pending !== null || cancelReason.trim().length < 8} onClick={() => void perform('cancel')}>Confirmer l’annulation</button><button type="button" onClick={() => setShowCancel(false)}>Conserver la sortie</button></div>
-        </>}
-      </div>}
+          <button type="button" className="sq-pickup-danger" disabled={pending !== null || cancelReason.trim().length < 8} onClick={() => void perform('cancel')}>Confirmer l’annulation</button>
+      </details>}
     </div>}
-    {entry && (previewMode || entry.parentUid === parentUid) && <PickupPrivateNotes
-      entryId={entry.id}
-      organizationId={organizationId}
-      studentId={child.id}
-      currentUid={parentUid}
-      role="parent"
-      closed={['confirmed', 'cancelled', 'exception'].includes(entry.status)}
-      previewMode={previewMode}
-    />}
+    {canOpenNotes && <button type="button" className="sq-pickup-notes-link" onClick={() => onViewChange('notes')}><span><MessageCircle size={21} /></span><span><strong>Notes privées avec {firstName}</strong><small>{entry && ['confirmed', 'cancelled', 'exception'].includes(entry.status) ? 'Relire les notes de cette sortie' : 'Écrire un mot que seul votre enfant verra'}</small></span><ArrowRight size={19} /></button>}
+    {position >= 0 && <details className="sq-pickup-timeline"><summary>Voir les étapes de la remise</summary><ol className="sq-pickup-progress" aria-label="Étapes de la remise">{steps.map((step, index) => { const Icon = step.icon; return <li key={step.status} className={position >= index ? 'is-complete' : ''}><span><Icon size={15} /></span><small>{step.label}</small></li>; })}</ol><p>La préparation et le départ de {firstName} restent sous la responsabilité de l’équipe MakerLab.</p></details>}
   </section>;
 };

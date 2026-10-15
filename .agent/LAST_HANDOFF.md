@@ -1,4 +1,10 @@
-# Latest handoff — Corrected pickup lifecycle ready for coordinated release
+# Latest handoff — Parent Pickup focus pass
+
+On 2026-10-15 the parent Pickup destination was reorganized around the current status and next parent action, followed by a compact next-workshop card. Private notes now have a focused view, while process explanation, cancellation and planning/security details are disclosed on demand. The existing lifecycle, selected-picker check and private-message rules were not changed. Browser checks at 390px/1280px covered announce, cancellation disclosure, notes, arrival and overflow; phone previews covered ready, released, confirmed/read-only and another initiating guardian without note access. SparkQuest TypeScript, standalone/root builds and scoped smokes pass. The focused release should be promoted from this clean main-based worktree and the signed-in family flow checked after Vercel deployment. See `docs/sparkquest/PARENT_PICKUP_FOCUS_2026-10-15.md`.
+
+---
+
+# Previous handoff — Corrected pickup lifecycle ready for coordinated release
 
 On 2026-10-15 the missing learner-ready gate and private parent/learner notes were added to the connected pickup lifecycle. The complete isolated UI flow passed using distinct parent, learner and instructor sessions: parent on the way, parent arrived, private reminder, learner reply and ready status, staff identity verification and release, then parent receipt confirmation. Edufy's ready/released counters and all SparkQuest views updated live. Firestore keeps notes private to the initiating parent and exact learner, limits them to 500 characters, denies edits/deletes, and closes new messages after completion. The rules/emulator suites, lifecycle and parent-command smokes, TypeScript and both production builds are the release gates. No production deployment or family record change has occurred yet.
 

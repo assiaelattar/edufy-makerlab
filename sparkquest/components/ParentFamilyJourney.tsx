@@ -144,6 +144,7 @@ const FamilyPickupLink: React.FC<{ child: FamilyChild; onOpen: () => void }> = (
 
 export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId, children, loading, error, parentName, onRefresh, onSignOut, previewMode = false }) => {
   const [screen, setScreen] = useState<Screen>('choose');
+  const [pickupPanel, setPickupPanel] = useState<'status' | 'notes'>('status');
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [stepIndex, setStepIndex] = useState(0);
@@ -245,10 +246,20 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId
   const move = (next: Screen, cue: 'open' | 'navigate' | 'celebrate' = 'navigate') => {
     sound.play(cue);
     setScreen(next);
+    setPickupPanel('status');
     setNavHidden(false);
     lastScrollTop.current = 0;
     setMascotCue(value => value + 1);
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+  };
+  const changePickupPanel = (next: 'status' | 'notes') => {
+    sound.play('navigate');
+    setPickupPanel(next);
+    setNavHidden(false);
+    window.requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+      headingRef.current?.focus({ preventScroll: true });
+    });
   };
   const choose = (id: string) => { setSelectedChildId(id); setDetail(null); setUpcomingIndex(0); move('home', 'open'); };
   const openProject = (kind: Detail['kind'], id: string, from: Detail['from'], tone: CardTone = 'blue') => {
@@ -257,7 +268,7 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId
     setStepIndex(project ? Math.max(0, (project.steps || []).findIndex(step => !stepIsApproved(project, step))) : 0);
     move('detail', project?.status === 'published' ? 'celebrate' : 'open');
   };
-  const back = () => { if (screen === 'detail') move(detail?.from || 'home'); else if (screen === 'pickup') move('family'); else if (screen === 'moments') move('projects'); else if (screen === 'home') move('choose'); else move('home'); };
+  const back = () => { if (screen === 'detail') move(detail?.from || 'home'); else if (screen === 'pickup' && pickupPanel === 'notes') changePickupPanel('status'); else if (screen === 'pickup') move('family'); else if (screen === 'moments') move('projects'); else if (screen === 'home') move('choose'); else move('home'); };
   const shiftUpcoming = (direction: number) => {
     if (!upcoming.length) return;
     const next = Math.min(upcoming.length - 1, Math.max(0, upcomingIndex + direction));
@@ -282,7 +293,8 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId
     : screen === 'detail' && activeStep ? `Étape ${stepIndex + 1} : ${stepState(selectedProject!, activeStep).label.toLowerCase()}.`
     : screen === 'projects' ? 'Toutes ses idées sont ici, une à la fois.'
     : screen === 'moments' ? 'Les petits instants racontent aussi son parcours.'
-    : screen === 'pickup' ? 'Son prochain rendez-vous, puis le retour à la maison.'
+    : screen === 'pickup' && pickupPanel === 'notes' ? 'Un petit mot, juste entre vous deux.'
+    : screen === 'pickup' ? 'On suit son retour, étape après étape.'
     : 'Les informations utiles à la famille.';
   const activeStepTone = selectedProject && activeStep ? stepState(selectedProject, activeStep).tone : null;
   const mascotMood: ParentMascotMood = screen === 'choose' ? 'welcome'
@@ -311,8 +323,8 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId
       {error && <div className="pf-state pf-error" role="alert"><CircleAlert size={25} /><p>{error}</p><button type="button" onClick={onRefresh}>Réessayer</button></div>}
       {!loading && !error && children.length === 0 && <div className="pf-state"><BookOpen size={28} /><h1>Aucun enfant lié à ce compte</h1><p>Demandez à l’académie de relier votre compte parent aux enfants concernés.</p></div>}
       {!error && children.length > 0 && <>
-        {screen !== 'choose' && <button type="button" className="pf-back" onClick={back}><ArrowLeft size={19} /> {screen === 'detail' ? detail?.from === 'home' ? 'Retour à l’accueil' : 'Retour aux projets' : screen === 'home' ? 'Changer d’enfant' : screen === 'pickup' ? 'Retour au suivi famille' : 'Retour'}</button>}
-        <div className={`pf-guide is-${mascotMood}${screen === 'choose' ? ' is-welcome' : ''}`}><div className="pf-guide-copy"><span className="pf-mini-label">{screen === 'choose' ? 'BIENVENUE DANS LEUR ATELIER' : `LE PARCOURS DE ${firstName(activeChild?.name || '').toLocaleUpperCase()}`}</span><p>{guideMessage}</p></div><span className="pf-guide-mascot"><ParentO11Y cue={mascotCue} mood={mascotMood} /><span key={mascotCue} className="pf-mascot-spark" aria-hidden="true">{mascotSpark}</span></span></div>
+        {screen !== 'choose' && <button type="button" className="pf-back" onClick={back}><ArrowLeft size={19} /> {screen === 'detail' ? detail?.from === 'home' ? 'Retour à l’accueil' : 'Retour aux projets' : screen === 'home' ? 'Changer d’enfant' : screen === 'pickup' ? pickupPanel === 'notes' ? 'Retour au suivi de sortie' : 'Retour au suivi famille' : 'Retour'}</button>}
+        {!(screen === 'pickup' && pickupPanel === 'notes') && <div className={`pf-guide is-${mascotMood}${screen === 'choose' ? ' is-welcome' : ''}`}><div className="pf-guide-copy"><span className="pf-mini-label">{screen === 'choose' ? 'BIENVENUE DANS LEUR ATELIER' : `LE PARCOURS DE ${firstName(activeChild?.name || '').toLocaleUpperCase()}`}</span><p>{guideMessage}</p></div><span className="pf-guide-mascot"><ParentO11Y cue={mascotCue} mood={mascotMood} /><span key={mascotCue} className="pf-mascot-spark" aria-hidden="true">{mascotSpark}</span></span></div>}
 
         {screen === 'choose' && <section className="pf-choose" aria-labelledby="pf-title"><span className="pf-kicker">Bonjour{parentName ? ` ${firstName(parentName)}` : ''}.</span><h1 id="pf-title" ref={headingRef}>Qui souhaitez-vous retrouver aujourd’hui ?</h1><p>Choisissez un enfant pour suivre ses projets et ses découvertes.</p><div className="pf-children">{children.map((child, index) => {
           const focus = currentProjectFor(child.projects);
@@ -341,7 +353,7 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId
 
         {activeChild && screen === 'family' && <section className="pf-family"><span className="pf-kicker">LES INFORMATIONS UTILES</span><h1 ref={headingRef} tabIndex={-1}>Le suivi de {firstName(activeChild.name)}.</h1><p>Ces informations viennent des dossiers de l’académie et restent en lecture seule.</p><FamilyPickupLink child={activeChild} onOpen={() => move('pickup')} /><div className="pf-family-grid"><SourcePanel title="Présences" icon={<CalendarDays size={23} />} source={activeChild.operations.attendance} retry={onRefresh} render={attendance => <><strong>{attendance.latestStatus ? ({ present: 'Présent', absent: 'Absent', late: 'En retard', excused: 'Absence justifiée' })[attendance.latestStatus] || 'Présence enregistrée' : 'Aucune présence enregistrée'}</strong><p>{attendance.latestDate ? `${dateLabel(attendance.latestDate)} · ${count(attendance.present, 'présence', 'présences')} · ${count(attendance.late, 'retard', 'retards')}` : 'Après sa première séance, le suivi apparaîtra ici.'}</p>{attendance.records.length > 0 && <details className="pf-detail-disclosure"><summary>Voir les séances</summary>{attendance.records.map((item, index) => <p key={`${item.date}-${index}`}>{dateLabel(item.date)} · {item.status}</p>)}</details>}</>} /><SourcePanel title="Paiements" icon={<CreditCard size={23} />} source={activeChild.operations.finance} retry={onRefresh} render={finance => <><strong>{finance.enrollmentCount ? finance.balance > 0 ? `${money(finance.balance)} restants` : 'Tout est réglé' : 'Aucun montant dû'}</strong><p>{finance.enrollmentCount ? `${money(finance.paid)} réglés sur ${money(finance.agreed)}` : 'Aucune inscription facturée enregistrée.'}</p>{finance.enrollments.length > 0 && <details className="pf-detail-disclosure"><summary>Inscriptions et paiements</summary>{finance.enrollments.map(item => <p key={item.id}><b>{item.programName}</b> · {item.packName} · {money(item.paid)} réglés</p>)}{finance.payments.map(item => <p key={item.id}>{dateLabel(item.date)} · {money(item.amount)} · {item.status.replaceAll('_', ' ')}</p>)}</details>}</>} /></div><div className="pf-family-block"><h2>Ressources de ses projets</h2><SafeResources resources={resources} />{resources.length === 0 && <p className="pf-quiet-state">Les guides partagés avec ses projets apparaîtront ici.</p>}</div></section>}
 
-        {activeChild && screen === 'pickup' && <section className="pf-pickup"><span className="pf-kicker">ATELIER & RÉCUPÉRATION</span><h1 ref={headingRef} tabIndex={-1}>Le prochain rendez-vous de {firstName(activeChild.name)}.</h1><ParentPickupExperience child={activeChild} parentUid={parentUid} organizationId={organizationId} currentParentName={parentName} onRefresh={onRefresh} previewMode={previewMode} /></section>}
+        {activeChild && screen === 'pickup' && <section className="pf-pickup"><span className="pf-kicker">{pickupPanel === 'notes' ? 'UN MOT ENTRE VOUS' : 'SORTIE & ATELIER'}</span><h1 ref={headingRef} tabIndex={-1}>{pickupPanel === 'notes' ? `Notes avec ${firstName(activeChild.name)}.` : `La sortie de ${firstName(activeChild.name)}.`}</h1><ParentPickupExperience child={activeChild} parentUid={parentUid} organizationId={organizationId} currentParentName={parentName} onRefresh={onRefresh} previewMode={previewMode} view={pickupPanel} onViewChange={changePickupPanel} /></section>}
       </>}
       <p className="pf-credit">011Y par <a href="https://rive.app/marketplace/26076-48718-011y/" target="_blank" rel="noopener noreferrer">Patgrivet</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>
     </div>

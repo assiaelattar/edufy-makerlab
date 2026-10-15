@@ -1,0 +1,9 @@
+# Parent Pickup focus — 2026-10-15
+
+The parent Pickup destination now answers one immediate question first: **what is happening with this child's departure, and what can I do next?** The current state, selected picker, and parent action lead the screen. The next workshop remains visible in a smaller calendar card. The five-stage explanation, cancellation, and planning/security details are available through disclosures.
+
+Private parent/learner notes open as a focused second view with a visible composer and a route back to Pickup status. The thread still uses the existing Firestore subscription and append-only write; the client retains the 500-character limit and makes terminal threads read-only. The entry point is shown only when the signed-in parent UID matches the pickup initiator. The local preview can render specific lifecycle states through `?designPreview=family&pickupState=ready|released|confirmed` for visual checks. Preview controls do not write production records.
+
+The change does not alter the pickup lifecycle, canonical record selection, guardian checks, learner readiness, Edufy staff release, selected-picker receipt, Firestore rules, or data model. The parent remains responsible for announcing arrival and, when selected, confirming receipt. The learner marks ready. MakerLab staff verify and record the physical release.
+
+Verification: local browser interaction at 390px and 1280px covered announce, cancellation disclosure, notes, return, arrival, and horizontal overflow. Phone-width state checks covered ready, released, confirmed/read-only, and a different initiating guardian with no private-note entry point. SparkQuest TypeScript, standalone and root production builds, URL, identity, Phase 2, family-access and next-workshop smokes passed. Public-release checks are recorded in the handoff.
