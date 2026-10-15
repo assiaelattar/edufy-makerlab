@@ -20,6 +20,7 @@
     "@headlessui/react": "^2.2.9",
     "@openai-oauth/ai-sdk": "^2.0.0",
     "@openai-oauth/react": "^2.0.0",
+    "@rive-app/webgl2": "2.44.2",
     "@types/qrcode.react": "^1.0.5",
     "ai": "^6.0.116",
     "clsx": "^2.1.1",
