@@ -1,4 +1,10 @@
-# Latest handoff — Edufy Students navigation and action UX
+# Latest handoff — SparkQuest one-click launch CSP repair
+
+On 2026-10-15, a real Android Chrome parent one-click link reached SparkQuest but showed “Failed to fetch” at account connection. Production SparkQuest HTML omitted `https://edufy-makerlab.vercel.app` from `connect-src` even though the shipped client exchanges `?launch=` there. The isolated fix adds only that API origin to the SparkQuest CSP. The SparkQuest build and scoped TypeScript pass; a synthetic API request returns a structured invalid-code response with the SparkQuest origin allowed. Publish this SparkQuest-only change from current `origin/main`, verify the live HTML and a designated fresh one-use parent/learner link, and keep the original link unused.
+
+---
+
+# Previous handoff — Edufy Students navigation and action UX
 
 On 2026-10-15, the Students smart roster gained direct profile navigation on the learner row and a separate eye control for the operational passport. The passport's action now opens the missing profile field, existing enrollment's class editor, enrollment wizard, or a read-only exact-record comparison. Student view is on the left of the profile hero. Roster and profile colors use scoped blue/green layers, leaving shared tokens and other modules intact. The registered Edufy production build passed. Release to Hostinger through `origin/main`, verify live bundle delivery, and use a designated staff account for desktop/phone data-specific acceptance. See `docs/students/{CHANGELOG,DECISIONS,KNOWN_ISSUES}.md`.
 

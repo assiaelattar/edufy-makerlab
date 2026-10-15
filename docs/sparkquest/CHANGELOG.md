@@ -1,5 +1,9 @@
 # SparkQuest changelog
 
+## 2026-10-15 — One-click launch browser connection fix
+
+- Allowed the trusted Edufy Vercel exchange API in SparkQuest's browser `connect-src` policy so parent and learner one-click links can reach it. The API, token handling and Pickup data are unchanged.
+
 ## 2026-10-15 — Edufy student profile quick-access render fix
 
 - Fixed a crash when staff opened a learner profile before selecting a manual or one-click QR mode. The unopened access card no longer reads an absent link's `expiresAt`.

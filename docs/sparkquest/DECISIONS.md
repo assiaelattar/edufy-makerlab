@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Allow only the trusted launch API origin
+
+SparkQuest's one-click exchange is hosted at `https://edufy-makerlab.vercel.app`, so its browser CSP permits that exact origin for connections. The allowlist remains explicit; no wildcard or alternate recipient identity path is added. A fresh single-use link on a designated device is required to confirm the full sign-in flow.
+
 ## 2026-10-15 — Render recipient links only after selection
 
 The Edufy learner profile keeps the recipient quick-link state empty until staff selects manual sign-in or issues a one-click link. Link URL, QR and expiry details render only for that selected mode and available link, so opening a learner record never reads an absent one-click session.

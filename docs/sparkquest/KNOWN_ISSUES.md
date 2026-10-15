@@ -1,5 +1,9 @@
 # SparkQuest Known Issues
 
+## One-click link device acceptance
+
+- The missing SparkQuest CSP origin caused Chrome to block the Edufy exchange and show “Failed to fetch.” The one-origin CSP repair passes local build/type checks and synthetic API guards. A newly issued designated parent and learner link still need real-device acceptance after deployment; never reuse the consumed or expired link.
+
 ## Recipient quick-access live acceptance
 
 - The initial Edufy profile-render crash is fixed locally and covered by a parent/learner render smoke. After release, verify the Hostinger student profile displays both QR controls and a designated linked parent can receive and consume a one-use link. No real parent password is needed for this smoke.
