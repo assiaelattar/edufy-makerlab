@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Tenant provisioning input repair
+
+The SaaS tenant form now supports an explicit custom-access path without a subscription, rejects empty access and duplicate/invalid slugs, and writes organization and admin profile atomically after account creation. Failed profile persistence attempts to remove the just-created Firebase Auth account. This focused client fix does not promote the separate multi-tenant rules, index, public-catalog, or legacy ownership migration. See `docs/releases/TENANT_PROVISION_REPAIR_2026-10-15.md`.
+
 ## 2026-10-15 — Students roster and profile UX
 
 The smart roster learner row now opens its profile, while an eye button previews its operational passport. Missing contact/profile, class placement, and enrollment actions route to the relevant existing editor; possible duplicates open a read-only comparison. Student view moved to the left side of the profile hero. Blue/green layered styling is scoped to Students. The production build passed. The next step is Hostinger release verification, then authenticated desktop/phone acceptance; audited duplicate merge and the module-wide visual audit are separate work. See `docs/students/`.

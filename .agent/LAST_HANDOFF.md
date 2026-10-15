@@ -1,4 +1,10 @@
-# Latest handoff — SparkQuest one-click launch CSP repair
+# Latest handoff — Edufy tenant provisioning repair
+
+On 2026-10-15, tenant creation without a selected subscription plan failed client-side because `subscription: undefined` was sent to Firestore. The focused Edufy repair omits absent plan fields, requires either a plan or a selected module, validates a unique workspace slug, and creates the organization with its real admin UID and user profile in one Firestore batch. If the batch fails after Firebase Auth creates the admin, the fresh account is removed when possible. No production tenant was created as a test. Verify the registered Edufy build, then release and check both public Edufy clients. This fixes provisioning input and partial Firestore writes; the full cross-tenant rollout still depends on ownership, rules/index, public-catalog, and two-tenant acceptance gates. See `docs/releases/TENANT_PROVISION_REPAIR_2026-10-15.md`.
+
+---
+
+# Previous handoff — SparkQuest one-click launch CSP repair
 
 On 2026-10-15, a real Android Chrome parent one-click link reached SparkQuest but showed “Failed to fetch” at account connection. Production SparkQuest HTML omitted `https://edufy-makerlab.vercel.app` from `connect-src` even though the shipped client exchanges `?launch=` there. The isolated fix adds only that API origin to the SparkQuest CSP. The SparkQuest build and scoped TypeScript pass; a synthetic API request returns a structured invalid-code response with the SparkQuest origin allowed. Publish this SparkQuest-only change from current `origin/main`, verify the live HTML and a designated fresh one-use parent/learner link, and keep the original link unused.
 

@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { auth, db, firebaseConfig } from '../services/firebase';
-import { User, onAuthStateChanged, signOut as firebaseSignOut, getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut as firebaseSignOut, getAuth, createUserWithEmailAndPassword, deleteUser } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, getDocs, serverTimestamp, query, where, Timestamp, updateDoc } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { UserProfile, RoleDefinition, RoleType, Organization } from '../types';
@@ -23,7 +23,7 @@ interface AuthContextType {
   loginAsDemo: () => Promise<void>;
   switchRole: (role: RoleType) => Promise<void>;
   impersonateUser: (uid: string, email: string, role: RoleType) => Promise<void>;
-  createSecondaryUser: (email: string, pass: string) => Promise<string>;
+  createSecondaryUser: (email: string, pass: string, persistProfile?: (uid: string) => Promise<void>) => Promise<string>;
   // Missing properties used by PrivateRoute
   isAuthorized: boolean;
   authError: string | null;
@@ -575,14 +575,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false);
   };
 
-  const createSecondaryUser = async (email: string, pass: string): Promise<string> => {
+  const createSecondaryUser = async (email: string, pass: string, persistProfile?: (uid: string) => Promise<void>): Promise<string> => {
     // Use a unique name to prevent app duplication errors if cleanup fails
     const appName = `Secondary_${Date.now()}_${Math.random().toString(36).substring(7)}`;
     const secondaryApp = initializeApp(firebaseConfig, appName);
     const secondaryAuth = getAuth(secondaryApp);
     try {
       const cred = await createUserWithEmailAndPassword(secondaryAuth, email, pass);
-      return cred.user.uid;
+      try {
+        await persistProfile?.(cred.user.uid);
+        return cred.user.uid;
+      } catch (error) {
+        try {
+          await deleteUser(cred.user);
+        } catch (cleanupError) {
+          console.error('Unable to remove an incomplete secondary account.', cleanupError);
+          throw new Error('Account setup failed and the sign-in account may need staff cleanup before retrying.');
+        }
+        throw error;
+      }
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         throw new Error("User with this email already exists.");
