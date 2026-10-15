@@ -211,7 +211,7 @@ export const EducationDashboardV1 = ({
             route: alert.route,
             params: alert.params,
             icon: alert.icon,
-            tone: index % 2 === 0 ? 'brand' : 'warm'
+            tone: 'brand'
         }));
 
         return actions.slice(0, 5);
@@ -220,7 +220,7 @@ export const EducationDashboardV1 = ({
     const operationsReadiness = Math.round((actionHealth + alertHealth + dataQualityScore + (todaySchedule.length > 0 ? todayAttendanceRate : 100)) / 4);
     const schedulePreview = todaySchedule.slice(0, 5);
     const hasSchoolDay = schedulePreview.length > 0;
-    const nextSession = schedulePreview[0];
+    const firstSession = schedulePreview[0];
 
     return (
         <div className="edu-v1 edu-dashboard-v1" data-testid="education-dashboard-v1">
@@ -250,6 +250,75 @@ export const EducationDashboardV1 = ({
                 </div>
             </header>
 
+            <section className="edu-dashboard-v1__command-grid" aria-label="Today’s command center">
+                <EducationSurface className="edu-dashboard-v1__school-day">
+                    <EducationSectionHeader
+                        eyebrow="The school day"
+                        title="Where learners and staff need to be"
+                        description={firstSession ? `${todaySchedule.length} ${todaySchedule.length === 1 ? 'session' : 'sessions'} on today’s timetable. Open the right working view directly from the dayline.` : 'No class or workshop is scheduled for today.'}
+                        action={<EducationButton variant="secondary" icon={ClipboardCheck} onClick={() => navigateTo('attendance')}>Open attendance</EducationButton>}
+                    />
+
+                    {hasSchoolDay ? (
+                        <>
+                        <div className="edu-dashboard-v1__day-focus">
+                            <span>First on the timetable <b>·</b> {firstSession.time || 'Time to confirm'}</span>
+                            <strong>{firstSession.title}</strong>
+                            <p>{firstSession.count} {firstSession.count === 1 ? 'learner' : 'learners'} scheduled{firstSession.capacity ? ` · ${firstSession.capacity} places available` : ''}</p>
+                            <button type="button" onClick={() => navigateTo(firstSession.type === 'workshop' ? 'workshops' : 'attendance')}>
+                                {firstSession.type === 'workshop' ? 'Open workshop' : 'Open attendance'} <ArrowRight size={16} aria-hidden="true" />
+                            </button>
+                        </div>
+                        <div className="edu-dashboard-v1__dayline">
+                            {schedulePreview.map((item, index) => {
+                                const Icon = item.type === 'workshop' ? Rocket : item.type === 'diy' ? Sparkles : CalendarDays;
+                                return (
+                                    <button key={`${item.time}-${item.title}-${index}`} type="button" className="edu-dashboard-v1__session-row" onClick={() => navigateTo(item.type === 'workshop' ? 'workshops' : 'attendance')}>
+                                        <time>{item.time || 'TBD'}</time>
+                                        <span className="edu-dashboard-v1__dayline-marker" data-tone={getScheduleTone(item.type)}><Icon size={16} aria-hidden="true" /></span>
+                                        <span className="edu-dashboard-v1__session-copy">
+                                            <strong>{item.title}</strong>
+                                            <small>{item.count} {item.count === 1 ? 'student' : 'students'} · {item.type === 'workshop' ? 'Workshop' : item.type === 'diy' ? 'Open studio' : 'Class'}</small>
+                                        </span>
+                                        {item.capacity ? <span className="edu-dashboard-v1__capacity">{item.count}/{item.capacity}</span> : <span className="edu-dashboard-v1__capacity">Roster ready</span>}
+                                        <ChevronRight size={16} aria-hidden="true" />
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        </>
+                    ) : (
+                        <div className="edu-dashboard-v1__clear-day">
+                            <span><CalendarDays size={22} aria-hidden="true" /></span>
+                            <div><strong>The school day is clear</strong><p>Review upcoming programs or use the action queue to close outstanding work.</p></div>
+                            <EducationButton icon={ArrowRight} onClick={() => navigateTo('programs')}>Review programs</EducationButton>
+                        </div>
+                    )}
+                </EducationSurface>
+
+                <EducationSurface className="edu-dashboard-v1__priorities">
+                    <EducationSectionHeader
+                        eyebrow="Your attention"
+                        title={priorityActions.length > 0 ? `${totalActiveAlerts} open follow-ups` : 'You’re caught up'}
+                        description="Only work that can move forward from here appears in this queue."
+                    />
+                    <div className="edu-dashboard-v1__priority-list">
+                        {priorityActions.length > 0 ? priorityActions.map(action => {
+                            const Icon = action.icon;
+                            return (
+                                <button key={action.key} type="button" onClick={() => navigateTo(action.route, action.params)}>
+                                    <span data-tone={action.tone}><Icon size={16} aria-hidden="true" /></span>
+                                    <span><strong>{action.title}</strong><small>{action.detail}</small></span>
+                                    <ChevronRight size={16} aria-hidden="true" />
+                                </button>
+                            );
+                        }) : (
+                            <div className="edu-dashboard-v1__caught-up"><CheckCircle2 size={24} aria-hidden="true" /><strong>No decisions are waiting</strong><p>Your payment, task, and operational queues are clear.</p></div>
+                        )}
+                    </div>
+                </EducationSurface>
+            </section>
+
             <section className="edu-dashboard-v1__metrics" aria-label="Academy overview">
                 <MetricCard
                     label="Active students"
@@ -276,65 +345,6 @@ export const EducationDashboardV1 = ({
                     role="ink"
                     onClick={() => navigateTo('finance')}
                 />
-            </section>
-
-            <section className="edu-dashboard-v1__command-grid" aria-label="Today’s command center">
-                <EducationSurface className="edu-dashboard-v1__school-day">
-                    <EducationSectionHeader
-                        eyebrow="The school day"
-                        title="Where learners and staff need to be"
-                        description={nextSession ? `The first visible session starts at ${nextSession.time}. Attendance stays one action away.` : 'No class or workshop is scheduled for today.'}
-                        action={<EducationButton variant="secondary" icon={ClipboardCheck} onClick={() => navigateTo('attendance')}>Open attendance</EducationButton>}
-                    />
-
-                    {hasSchoolDay ? (
-                        <div className="edu-dashboard-v1__dayline">
-                            {schedulePreview.map((item, index) => {
-                                const Icon = item.type === 'workshop' ? Rocket : item.type === 'diy' ? Sparkles : CalendarDays;
-                                return (
-                                    <button key={`${item.time}-${item.title}-${index}`} type="button" className="edu-dashboard-v1__session-row" onClick={() => navigateTo(item.type === 'workshop' ? 'workshops' : 'attendance')}>
-                                        <time>{item.time || 'TBD'}</time>
-                                        <span className="edu-dashboard-v1__dayline-marker" data-tone={getScheduleTone(item.type)}><Icon size={16} aria-hidden="true" /></span>
-                                        <span className="edu-dashboard-v1__session-copy">
-                                            <strong>{item.title}</strong>
-                                            <small>{item.count} {item.count === 1 ? 'student' : 'students'} · {item.type === 'workshop' ? 'Workshop' : item.type === 'diy' ? 'Open studio' : 'Class'}</small>
-                                        </span>
-                                        {item.capacity ? <span className="edu-dashboard-v1__capacity">{item.count}/{item.capacity}</span> : <span className="edu-dashboard-v1__capacity">Roster ready</span>}
-                                        <ChevronRight size={16} aria-hidden="true" />
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className="edu-dashboard-v1__clear-day">
-                            <span><CalendarDays size={22} aria-hidden="true" /></span>
-                            <div><strong>The school day is clear</strong><p>Review upcoming programs or use the action queue to close outstanding work.</p></div>
-                            <EducationButton icon={ArrowRight} onClick={() => navigateTo('programs')}>Review programs</EducationButton>
-                        </div>
-                    )}
-                </EducationSurface>
-
-                <EducationSurface role="warm" className="edu-dashboard-v1__priorities">
-                    <EducationSectionHeader
-                        eyebrow="Your attention"
-                        title={priorityActions.length > 0 ? `${totalActiveAlerts} open follow-ups` : 'You’re caught up'}
-                        description="Only work that can move forward from here appears in this queue."
-                    />
-                    <div className="edu-dashboard-v1__priority-list">
-                        {priorityActions.length > 0 ? priorityActions.map(action => {
-                            const Icon = action.icon;
-                            return (
-                                <button key={action.key} type="button" onClick={() => navigateTo(action.route, action.params)}>
-                                    <span data-tone={action.tone}><Icon size={16} aria-hidden="true" /></span>
-                                    <span><strong>{action.title}</strong><small>{action.detail}</small></span>
-                                    <ChevronRight size={16} aria-hidden="true" />
-                                </button>
-                            );
-                        }) : (
-                            <div className="edu-dashboard-v1__caught-up"><CheckCircle2 size={24} aria-hidden="true" /><strong>No decisions are waiting</strong><p>Your payment, task, and operational queues are clear.</p></div>
-                        )}
-                    </div>
-                </EducationSurface>
             </section>
 
             <section className="edu-dashboard-v1__insights-grid" aria-label="Academy health and finance">

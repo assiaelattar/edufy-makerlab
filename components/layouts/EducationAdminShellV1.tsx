@@ -6,6 +6,7 @@ import {
     Grid2X2,
     LogOut,
     Menu,
+    Moon,
     PanelLeftClose,
     PanelLeftOpen,
     Rows3,
@@ -15,6 +16,7 @@ import {
     ShoppingBag,
     Sparkles,
     Star,
+    Sun,
     Eye,
     EyeOff,
     X
@@ -27,6 +29,7 @@ import { AtlasWorkspaceTabs, type AtlasWorkspaceTab } from '../atlas/AtlasWorksp
 import '../education-ui/education-ui-v1.css';
 import '../education-ui/education-module-compat-v1.css';
 import './education-admin-shell-v1.css';
+import './education-school-themes.css';
 
 type Density = 'comfortable' | 'compact';
 
@@ -57,6 +60,8 @@ interface EducationAdminShellV1Props {
     setIsSidebarCompact: React.Dispatch<React.SetStateAction<boolean>>;
     density: Density;
     setDensity: React.Dispatch<React.SetStateAction<Density>>;
+    theme: 'light' | 'dark';
+    onThemeChange: (theme: 'light' | 'dark') => void;
     hiddenModuleIds: string[];
     setHiddenModuleIds: React.Dispatch<React.SetStateAction<string[]>>;
     favoriteModuleIds: string[];
@@ -123,6 +128,8 @@ export const EducationAdminShellV1 = ({
     setIsSidebarCompact,
     density,
     setDensity,
+    theme,
+    onThemeChange,
     hiddenModuleIds,
     setHiddenModuleIds,
     favoriteModuleIds,
@@ -150,7 +157,7 @@ export const EducationAdminShellV1 = ({
         || currentView.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 
     return (
-        <div className="edu-v1 edu-shell-v1" data-edu-density={density} data-testid="education-admin-shell-v1">
+        <div className="edu-v1 edu-shell-v1" data-edu-density={density} data-edu-theme={theme} data-testid="education-admin-shell-v1">
             {isMobileMenuOpen && <button type="button" className="edu-shell-v1__scrim" aria-label="Close navigation" onClick={closeMenu} />}
 
             <aside className="edu-shell-v1__sidebar" data-open={isMobileMenuOpen} data-compact={isSidebarCompact} aria-label="Main navigation">
@@ -182,6 +189,10 @@ export const EducationAdminShellV1 = ({
                         <button type="button" onClick={() => setIsNavigationEditorOpen(true)}><Settings2 size={16} />Organize</button>
                         <button type="button" onClick={() => goTo('app-store')}><ShoppingBag size={16} />Add tools</button>
                     </div>
+                    <button type="button" className="edu-shell-v1__drawer-theme" onClick={() => onThemeChange(theme === 'light' ? 'dark' : 'light')} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}>
+                        {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
+                        <span>{theme === 'light' ? 'Dark theme' : 'Light theme'}</span>
+                    </button>
 
                     <nav className="edu-shell-v1__module-list" aria-label="Workspace modules">
                         {favoriteModules.length > 0 && (
@@ -277,6 +288,7 @@ export const EducationAdminShellV1 = ({
                         <div className="edu-shell-v1__top-actions">
                             <button type="button" aria-label={isSidebarCompact ? 'Expand navigation' : 'Collapse navigation'} title={isSidebarCompact ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setIsSidebarCompact(value => !value)}>{isSidebarCompact ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button>
                             <button type="button" data-active={density === 'compact'} aria-label={density === 'compact' ? 'Use comfortable spacing' : 'Use compact spacing'} title={density === 'compact' ? 'Use comfortable spacing' : 'Use compact spacing'} onClick={() => setDensity(value => value === 'compact' ? 'comfortable' : 'compact')}><Rows3 size={18} /></button>
+                            <button type="button" aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`} onClick={() => onThemeChange(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}</button>
                             <span className="edu-shell-v1__tenant-pill"><i />{tenantName}</span>
                             <div className="edu-shell-v1__desktop-notifications"><NotificationDropdown /></div>
                             <button type="button" className="edu-shell-v1__top-avatar" aria-label={`${userName}, ${roleLabel}`} title={`${userName} · ${roleLabel}`}>{userInitial}</button>

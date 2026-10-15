@@ -2,90 +2,89 @@
  * Education UI v1 compatibility layer
  * -----------------------------------
  * Gives every administrative route a complete light-system baseline while its
- * workflow receives a deeper module-specific redesign. The Education shell is
- * now the default product surface, so these rules intentionally cover every
- * administrative module that has not yet received a dedicated stylesheet.
+ * workflow receives a deeper module-specific redesign. The light theme uses this bridge for legacy routes. Dark mode keeps the
+ * original dark module styling until each workflow receives its own redesign.
  */
 
-.education-ui-v1-active {
-    --atlas-app-bg: #e9ede7;
-    --atlas-sidebar-bg: #fbfcf9;
+.education-ui-v1-active[data-edu-theme='light'] {
+    --atlas-app-bg: #eef3fb;
+    --atlas-sidebar-bg: #f9fbff;
     --atlas-topbar-bg: rgba(251,252,249,.94);
     --atlas-surface: #ffffff;
     --atlas-surface-raised: #ffffff;
-    --atlas-surface-muted: #f3f5f1;
-    --atlas-row: #f6f8f4;
-    --atlas-control: #f5f7f3;
-    --atlas-control-hover: #eef2e9;
-    --atlas-border: #dce1d9;
-    --atlas-border-strong: #c6ccc2;
-    --atlas-text: #292d27;
-    --atlas-text-strong: #111311;
-    --atlas-text-muted: #646a61;
-    --atlas-text-subtle: #8e948b;
-    --atlas-accent-text: #41631b;
-    --atlas-volt: #c8ff3d;
-    --atlas-volt-strong: #b8ee31;
-    color: #111311;
-    background: #e9ede7;
+    --atlas-surface-muted: #f4f7fc;
+    --atlas-row: #f4f7fc;
+    --atlas-control: #f2f6fd;
+    --atlas-control-hover: #e6edff;
+    --atlas-border: #dce4f1;
+    --atlas-border-strong: #becce4;
+    --atlas-text: #283b60;
+    --atlas-text-strong: #172441;
+    --atlas-text-muted: #51617b;
+    --atlas-text-subtle: #71819c;
+    --atlas-accent-text: #3159d6;
+    --atlas-volt: #3159d6;
+    --atlas-volt-strong: #264abd;
+    color: #172441;
+    background: #eef3fb;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='bg-slate-950'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='bg-gray-950'] {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='bg-slate-950'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='bg-gray-950'] {
     color: var(--edu-ink);
-    background-color: #f6f8f4 !important;
+    background-color: #f4f7fc !important;
     background-image: none !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='bg-slate-900'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='bg-gray-900'] {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='bg-slate-900'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='bg-gray-900'] {
     color: var(--edu-ink);
     background-color: #fff !important;
     background-image: none !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='bg-slate-800'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='bg-gray-800'] {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='bg-slate-800'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='bg-gray-800'] {
     color: var(--edu-ink);
     background-color: #edf1ea !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='border-white/'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='border-slate-8'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='border-slate-7'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='divide-white/'] > :not([hidden]) ~ :not([hidden]),
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='divide-slate-8'] > :not([hidden]) ~ :not([hidden]) {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='border-white/'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='border-slate-8'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='border-slate-7'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='divide-white/'] > :not([hidden]) ~ :not([hidden]),
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='divide-slate-8'] > :not([hidden]) ~ :not([hidden]) {
     border-color: #dfe4dc !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-white'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-slate-100'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-slate-2'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-slate-3'] {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-white'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-slate-100'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-slate-2'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-slate-3'] {
     color: var(--edu-ink) !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-slate-4'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-slate-5'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-slate-6'] {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-slate-4'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-slate-5'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-slate-6'] {
     color: var(--edu-muted) !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-teal-2'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-teal-3'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-emerald-2'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-emerald-3'] {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-teal-2'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-teal-3'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-emerald-2'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-emerald-3'] {
     color: #24724f !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-amber-2'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-amber-3'] { color: #8b5a18 !important; }
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-red-2'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-red-3'] { color: #a44040 !important; }
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-sky-2'],
-.education-ui-v1-active .edu-shell-v1__content-inner [class*='text-sky-3'] { color: #356da4 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-amber-2'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-amber-3'] { color: #8b5a18 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-red-2'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-red-3'] { color: #a44040 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-sky-2'],
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner [class*='text-sky-3'] { color: #356da4 !important; }
 
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header {
     border: 1px solid #d9ded6 !important;
     border-radius: 20px !important;
     color: var(--edu-ink) !important;
@@ -95,19 +94,19 @@
     box-shadow: 0 8px 24px rgba(17, 19, 17, .045) !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header::after { border-color: rgba(171,194,154,.42); }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__signal { background: var(--edu-brand); }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__icon { color: var(--edu-ink); background: var(--edu-brand); }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__body { gap: 16px; padding: 17px 18px; }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__icon { width: 42px; height: 42px; border-radius: 13px; box-shadow: none; }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header h2 { font-size: clamp(1.25rem, 2vw, 1.65rem); }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header p { margin-top: 5px; line-height: 1.45; }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action { min-height: 40px; border-radius: 12px; box-shadow: none; }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='primary'] { border-color: #9dc127; background: var(--edu-brand); }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='primary']:hover { background: #b9ed35; }
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='secondary'] { color: var(--edu-ink-soft); background: #fff; border-color: #d9ded6; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header::after { border-color: rgba(171,194,154,.42); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header__signal { background: var(--edu-brand); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header__icon { color: var(--edu-on-brand); background: var(--edu-brand); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header__body { gap: 16px; padding: 17px 18px; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header__icon { width: 42px; height: 42px; border-radius: 13px; box-shadow: none; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header h2 { font-size: clamp(1.25rem, 2vw, 1.65rem); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header p { margin-top: 5px; line-height: 1.45; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-action { min-height: 40px; border-radius: 12px; box-shadow: none; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='primary'] { border-color: var(--edu-brand); color: var(--edu-on-brand); background: var(--edu-brand); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='primary']:hover { background: var(--edu-brand-hover); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-action[data-atlas-variant='secondary'] { color: var(--edu-ink-soft); background: #fff; border-color: #d9ded6; }
 
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-signal-card {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-signal-card {
     min-height: 112px;
     border-color: #dfe4dc !important;
     border-radius: 18px !important;
@@ -115,7 +114,7 @@
     box-shadow: 0 6px 20px rgba(17, 19, 17, .04) !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-signal-card::before {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-signal-card::before {
     position: absolute;
     top: 0;
     right: 16px;
@@ -126,17 +125,17 @@
     background: var(--atlas-signal);
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-toolbar,
-.education-ui-v1-active .edu-shell-v1__content-inner .atlas-empty-state {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-toolbar,
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-empty-state {
     border-color: var(--edu-border) !important;
     border-radius: 16px !important;
     background: #fff !important;
     box-shadow: var(--edu-shadow-sm);
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner input:not([type='checkbox']):not([type='radio']),
-.education-ui-v1-active .edu-shell-v1__content-inner select,
-.education-ui-v1-active .edu-shell-v1__content-inner textarea {
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner input:not([type='checkbox']):not([type='radio']),
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner select,
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner textarea {
     min-height: 44px;
     border-color: #d9ded6 !important;
     border-radius: 13px !important;
@@ -144,34 +143,34 @@
     background-color: #f7f9f5 !important;
 }
 
-.education-ui-v1-active .edu-shell-v1__content-inner input::placeholder,
-.education-ui-v1-active .edu-shell-v1__content-inner textarea::placeholder { color: #969c92 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner input::placeholder,
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner textarea::placeholder { color: #969c92 !important; }
 
-.education-ui-v1-active .edu-shell-v1__content-inner table { color: var(--edu-ink); }
-.education-ui-v1-active .edu-shell-v1__content-inner thead { color: var(--edu-muted) !important; background: #f0f3ee !important; }
-.education-ui-v1-active .edu-shell-v1__content-inner tbody { border-color: #e2e6df !important; }
-.education-ui-v1-active .edu-shell-v1__content-inner tbody tr:hover { background: #f7f9f5 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner table { color: var(--edu-ink); }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner thead { color: var(--edu-muted) !important; background: #f0f3ee !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner tbody { border-color: #e2e6df !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner tbody tr:hover { background: #f7f9f5 !important; }
 
-.education-ui-v1-active .atlas-dialog-backdrop { background: rgba(17,19,17,.48); backdrop-filter: blur(7px); }
-.education-ui-v1-active .atlas-dialog { border-color: #dce1d9; border-radius: 24px; color: #111311; background: #fff; box-shadow: 0 30px 100px rgba(17,19,17,.22); }
-.education-ui-v1-active .atlas-dialog-header { border-color: #e1e5de; background: #f7f9f5; }
-.education-ui-v1-active .atlas-dialog-body { background: #fff; }
-.education-ui-v1-active .atlas-dialog-close { border-color: #dce1d9; border-radius: 13px; color: #596057; background: #fff; }
-.education-ui-v1-active .atlas-dialog [class*='bg-slate-950'],
-.education-ui-v1-active .atlas-dialog [class*='bg-slate-900'],
-.education-ui-v1-active .atlas-dialog [class*='bg-slate-800'] { border-color: #dfe4dc !important; color: #111311 !important; background: #f5f7f3 !important; }
-.education-ui-v1-active .atlas-dialog [class*='text-white'],
-.education-ui-v1-active .atlas-dialog [class*='text-slate-2'],
-.education-ui-v1-active .atlas-dialog [class*='text-slate-3'] { color: #111311 !important; }
-.education-ui-v1-active .atlas-dialog [class*='text-slate-4'],
-.education-ui-v1-active .atlas-dialog [class*='text-slate-5'] { color: #646a61 !important; }
-.education-ui-v1-active .atlas-dialog input,
-.education-ui-v1-active .atlas-dialog select,
-.education-ui-v1-active .atlas-dialog textarea { min-height: 44px; border-color: #d9ded6 !important; border-radius: 13px !important; color: #111311 !important; background: #f7f9f5 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog-backdrop { background: rgba(17,19,17,.48); backdrop-filter: blur(7px); }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog { border-color: #dce4f1; border-radius: 24px; color: #172441; background: #fff; box-shadow: 0 30px 100px rgba(17,19,17,.22); }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog-header { border-color: #e1e5de; background: #f7f9f5; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog-body { background: #fff; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog-close { border-color: #dce4f1; border-radius: 13px; color: #596057; background: #fff; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='bg-slate-950'],
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='bg-slate-900'],
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='bg-slate-800'] { border-color: #dfe4dc !important; color: #172441 !important; background: #f2f6fd !important; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='text-white'],
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='text-slate-2'],
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='text-slate-3'] { color: #172441 !important; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='text-slate-4'],
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog [class*='text-slate-5'] { color: #51617b !important; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog input,
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog select,
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog textarea { min-height: 44px; border-color: #d9ded6 !important; border-radius: 13px !important; color: #172441 !important; background: #f7f9f5 !important; }
 
 @media (max-width: 700px) {
-    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header { border-radius: 16px !important; }
-    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__body { padding: 14px; }
-    .education-ui-v1-active .edu-shell-v1__content-inner .atlas-command-header__signal { display: none; }
-    .education-ui-v1-active .atlas-dialog { border-radius: 22px 22px 0 0; }
+    .education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header { border-radius: 16px !important; }
+    .education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header__body { padding: 14px; }
+    .education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .atlas-command-header__signal { display: none; }
+    .education-ui-v1-active[data-edu-theme='light'] .atlas-dialog { border-radius: 22px 22px 0 0; }
 }

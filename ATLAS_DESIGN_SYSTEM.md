@@ -26,27 +26,25 @@ Edufy is a school-day workspace, not a collection of SaaS dashboards. The shell 
 
 ### Color
 
-- Atlas Ink `#08111F`: application shell and primary text on paper.
-- Night Panel `#0F1B2D`: elevated operational surfaces.
-- Service Teal `#14B8A6`: primary action, focus, active navigation.
-- Care Amber `#F2C766`: attention, pending work, human follow-up.
-- Atlas Paper `#F7F1E4`: marketing and high-contrast light surfaces.
-- Signal Rose `#FB7185`: destructive actions and urgent risk only.
-- Edufy Volt `#C8FF00`: the product's signature action capsule, selected workspace state, and small readiness signal. It is deliberately rare and always paired with ink text.
-- Electric Blue `#8DB5FF`: expressive school-category surfaces and supporting information, never the default action color.
+- School Canvas `#EEF3FB`: the light workspace background.
+- Work Surface `#FFFFFF`: light cards, controls, and navigation.
+- School Ink `#172441`: light primary text and the dark rail.
+- Action Blue `#3159D6`: primary actions and focused navigation, with white text.
+- Blue Wash `#E6EDFF`: selected or supporting surfaces with ink text.
+- Night Canvas `#0E172D` and Night Surface `#172440`: the dark workspace.
+- Night Action `#7293F7`: dark-theme actions, with deep navy text.
+- Success, warning, and danger colors appear only when the underlying data has that meaning.
 
-Module colors identify data categories; they do not replace Service Teal as the interaction color.
+The Education UI shell uses one blue family for hierarchy. Card position, size, and content distinguish school operations; decorative lime, peach, and lilac category rotations are retired from this shell.
 
 ### Theme
 
-- Atlas supports `dark` and `light` themes through `data-atlas-theme` on the document root and application shell.
+- The Education UI supports `light` and `dark` themes through `data-atlas-theme` on the document root and `data-edu-theme` on the shell and body.
 - A user's explicit choice is stored per tenant at `atlas:theme:<tenant-id>`. Light is used only when that key does not yet exist.
-- Light is the default for a new school workspace and uses a cool paper canvas `#F2F4F7`, white work surfaces, graphite text, and restrained slate borders. A stored explicit preference is always preserved.
+- Light is the default for a new school workspace and uses School Canvas, white work surfaces, navy text, and restrained blue-gray borders. A stored explicit preference is always preserved.
 - Dark is a fully designed alternative using deep navy canvas and surfaces. It follows the same hierarchy and semantic components; it is not an inversion filter or a separate layout.
-- Soft mint, sky, peach, lilac, and sun tones identify school-day categories in both themes. Dark mode uses controlled translucent equivalents rather than bright pastel fills.
-- On owner overview screens, color should occupy the card surface rather than appear only as a small icon accent. Use an approximate 65/25/10 balance: calm paper and neutral space, category pastels, then a small amount of high-contrast ink or saturated action color.
-- The strongest spectrum treatment is reserved for one priority card per view, such as verified payments. Supporting cards use one pastel family each so the page remains warm without becoming noisy.
-- Service Teal and Care Amber keep the same meaning in both themes. Their light-theme text variants must be dark enough for readable contrast.
+- On owner overview screens, the real school-day timeline leads. One blue focus surface may have stronger contrast; supporting cards use neutral or blue-wash surfaces.
+- Attention is expressed by action order and plain language. Semantic warning and danger colors remain available for actual warning and error states.
 - Shared components consume semantic `--atlas-*` surface, border, and text tokens. New module work must not add theme-specific branching in React.
 - The scoped light compatibility rules in `index.css` are a migration bridge for existing dark Tailwind utilities, not the preferred pattern for new surfaces.
 

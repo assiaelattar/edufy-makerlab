@@ -116,7 +116,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     const [isSidebarCompact, setIsSidebarCompact] = useState(false);
     const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable');
     const showEducationShellV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const theme = showEducationShellV1 ? 'light' as const : 'dark' as const;
+    const [selectedTheme, setSelectedTheme] = useState<'light' | 'dark'>(() => {
+        try {
+            return localStorage.getItem(`atlas:theme:${currentOrganization?.id || 'default'}`) === 'dark' ? 'dark' : 'light';
+        } catch {
+            return 'light';
+        }
+    });
+    const theme = showEducationShellV1 ? selectedTheme : 'dark';
     const [workspaceTabIds, setWorkspaceTabIds] = useState<string[]>([]);
     const [hiddenModuleIds, setHiddenModuleIds] = useState<string[]>([]);
     const [favoriteModuleIds, setFavoriteModuleIds] = useState<string[]>([]);
@@ -164,12 +171,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             setFavoriteModuleIds(Array.isArray(storedFavoriteModules) ? storedFavoriteModules : []);
             setIsSidebarCompact(localStorage.getItem(`atlas:sidebar-compact:${preferenceScope}`) === 'true');
             setDensity(localStorage.getItem(`atlas:density:${preferenceScope}`) === 'compact' ? 'compact' : 'comfortable');
+            setSelectedTheme(localStorage.getItem(`atlas:theme:${preferenceScope}`) === 'dark' ? 'dark' : 'light');
         } catch {
             setWorkspaceTabIds([]);
             setHiddenModuleIds([]);
             setFavoriteModuleIds([]);
             setIsSidebarCompact(false);
             setDensity('comfortable');
+            setSelectedTheme('light');
         }
         loadedPreferenceScopeRef.current = preferenceScope;
         setPreferencesReady(true);
@@ -178,6 +187,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     useEffect(() => {
         document.documentElement.dataset.atlasTheme = theme;
         document.documentElement.style.colorScheme = theme;
+        document.body.dataset.eduTheme = theme;
     }, [theme]);
 
     useEffect(() => {
@@ -199,7 +209,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         localStorage.setItem(`atlas:favorite-modules:${preferenceScope}`, JSON.stringify(favoriteModuleIds));
         localStorage.setItem(`atlas:sidebar-compact:${preferenceScope}`, String(isSidebarCompact));
         localStorage.setItem(`atlas:density:${preferenceScope}`, density);
-    }, [density, favoriteModuleIds, hiddenModuleIds, isSidebarCompact, preferenceScope, preferencesReady, workspaceTabIds]);
+        localStorage.setItem(`atlas:theme:${preferenceScope}`, selectedTheme);
+    }, [density, favoriteModuleIds, hiddenModuleIds, isSidebarCompact, preferenceScope, preferencesReady, selectedTheme, workspaceTabIds]);
 
     useEffect(() => {
         const content = moduleContentRef.current;
@@ -265,6 +276,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 setIsSidebarCompact={setIsSidebarCompact}
                 density={density}
                 setDensity={setDensity}
+                theme={selectedTheme}
+                onThemeChange={setSelectedTheme}
                 hiddenModuleIds={hiddenModuleIds}
                 setHiddenModuleIds={setHiddenModuleIds}
                 favoriteModuleIds={favoriteModuleIds}

@@ -6,20 +6,20 @@ This map keeps the visual migration deliberate and reversible. Each module must 
 
 | Primitive | Purpose | Current use |
 | --- | --- | --- |
-| `EducationSurface` | Semantic white, lime, warm, dark, and outline surfaces | Dashboard metrics and work areas |
+| `EducationSurface` | Semantic neutral, blue focus, dark ink, and outline surfaces | Dashboard metrics and work areas |
 | `EducationButton` | Primary, secondary, and quiet actions with consistent states | Dashboard quick actions and section actions |
 | `EducationKicker` | Short contextual labels | Dashboard sections |
 | `EducationSectionHeader` | Title, explanation, and one clear action | School day, finance, and workshop sections |
 | `EducationProgress` | Accessible, text-backed readiness indicators | Operations readiness |
 
-The Education UI is the authenticated production default; `?ui=atlas-legacy` remains the temporary rollback. Module styles use `.edu-v1` roots and the compatibility bridge is scoped by the active Education UI body class.
+The Education UI is the authenticated production default; `?ui=atlas-legacy` remains the temporary rollback. Module styles use `.edu-v1` roots. The light compatibility bridge is scoped to `data-edu-theme='light'`; dark mode uses its own semantic tokens and the existing dark module base. The theme preference is stored per establishment.
 
 ## Module migration status
 
 | Module | UX archetype | Status | Safety boundary |
 | --- | --- | --- | --- |
 | Admin shell | One responsive school-workspace navigation plus closable workspace tabs | Compact production shell complete | One desktop workbar; mobile tabs removed; all permission and route callbacks are preserved |
-| Dashboard | Daily school command center | Preview complete | Existing selectors, derived data, actions, and dialogs are preserved |
+| Dashboard | Daily school command center with real first session, timeline, and action queue before metrics | Two-theme local candidate | Existing selectors, derived data, actions, and dialogs are preserved |
 | Students and families | Action-first operations desk with learner and household passports | Focused redesign implemented; awaiting user approval | Existing filters, search, records, bulk actions, family statements, and profile routes are preserved |
 | Student profile | Learner record, signals, access, and action timeline | Preview complete | Existing tabs, account actions, and record workflows are preserved |
 | Classes and attendance | Session-first school-day workspace | Focused redesign complete | Existing class, roster, attendance, and absence behavior is preserved |

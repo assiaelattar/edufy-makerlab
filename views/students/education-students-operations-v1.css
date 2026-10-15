@@ -295,7 +295,7 @@
 .edu-student-ops__duplicate-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
 .edu-student-ops__duplicate-heading button { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 9px; background: #d8efed; }
 .edu-student-ops__duplicate-review p { margin: 5px 0 10px; color: var(--student-ops-muted); font-size: 10px; }
-.edu-student-ops__duplicate-record { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; padding: 9px; border: 1px solid var(--student-ops-line); border-radius: 11px; background: #fff; }
+.edu-student-ops__duplicate-record { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; padding: 9px; border: 1px solid var(--student-ops-line); border-radius: 11px; background: var(--edu-surface); }
 .edu-student-ops__duplicate-record strong,
 .edu-student-ops__duplicate-record span { display: block; font-size: 10px; }
 .edu-student-ops__duplicate-record span { margin-top: 2px; color: var(--student-ops-muted); }

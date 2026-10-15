@@ -130,8 +130,8 @@
 .edu-student-details-v1__access .edu-parent-access-action:focus-visible,
 .atlas-dialog .edu-credentials-copy:focus-visible { outline: 3px solid rgba(34, 111, 84, .35); outline-offset: 2px; }
 .edu-student-details-v1__access .edu-parent-access-action:disabled { border-color: #cfd5cc !important; color: #777f74 !important; background: #e7ebe4 !important; box-shadow: none; opacity: 1 !important; }
-.education-ui-v1-active .atlas-dialog .edu-credentials-copy { border-color: #7d8978 !important; color: #263124 !important; background: #fff !important; }
-.education-ui-v1-active .atlas-dialog .edu-credentials-copy:hover { border-color: #263124 !important; background: #eef3ea !important; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog .edu-credentials-copy { border-color: #7d8978 !important; color: #263124 !important; background: #fff !important; }
+.education-ui-v1-active[data-edu-theme='light'] .atlas-dialog .edu-credentials-copy:hover { border-color: #263124 !important; background: #eef3ea !important; }
 
 .edu-student-portal-v1 { color: var(--edu-ink); }
 .edu-student-portal-v1 > div:nth-child(2) { border-color: var(--edu-border) !important; border-radius: 28px !important; box-shadow: var(--edu-shadow-sm) !important; }

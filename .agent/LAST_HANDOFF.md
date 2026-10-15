@@ -1,4 +1,10 @@
-# Latest handoff — Edufy tenant provisioning repair
+# Latest handoff — Edufy school-day themes release candidate
+
+On 2026-10-15, an isolated Edufy worktree at `agent/edufy-school-theme-20261015` gained a light-default, navy/cobalt school workspace and a tenant-persisted dark option. The dashboard now leads with the first real scheduled session and its direct action, the daily timeline, and actionable follow-ups before metrics. The Education shell and existing module bridges share the two theme token sets; light-only legacy compatibility rules no longer overwrite dark screens. No data selectors, permissions, API, or Firebase rules changed. The production build passes. A write-free synthetic visual fixture confirmed light/dark rendering, 390px horizontal fit, and scrolling, then was removed. Signed-in real-data review on desktop and phone is still needed before release. Repository-wide TypeScript has existing errors outside the changed TSX files; filtered diagnostics for those files are empty. No Git push or deployment occurred.
+
+---
+
+# Previous handoff — Edufy tenant provisioning repair
 
 On 2026-10-15, tenant creation without a selected subscription plan failed client-side because `subscription: undefined` was sent to Firestore. The focused Edufy repair omits absent plan fields, requires either a plan or a selected module, validates a unique workspace slug, and creates the organization with its real admin UID and user profile in one Firestore batch. If the batch fails after Firebase Auth creates the admin, the fresh account is removed when possible. No production tenant was created as a test. Verify the registered Edufy build, then release and check both public Edufy clients. This fixes provisioning input and partial Firestore writes; the full cross-tenant rollout still depends on ownership, rules/index, public-catalog, and two-tenant acceptance gates. See `docs/releases/TENANT_PROVISION_REPAIR_2026-10-15.md`.
 
