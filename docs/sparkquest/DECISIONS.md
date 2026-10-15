@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Parent contact email is not login authority
+
+The parent login is the exact Firebase Auth UID plus academy-issued login ID. An enrollment contact email is not proof of a working SparkQuest account. Staff must verify the real parent and the family links before issuing a replacement. A password card is recreated by rotating the password; plaintext is not stored for later display.
+
 ## 2026-10-12 — Recover replaced lazy assets through the current document
 
 Vercel replaces hashed assets on each standalone SparkQuest deployment. An already-open tab can request an old `StudentWizard` chunk that the current deployment no longer contains. On a Vite preload or React lazy import failure, refresh the document once per two-minute window to load the current asset map. Preserve the signed-in session and route. A repeated failure stays on a recovery screen with a manual refresh action; it must not clear local authentication state automatically.

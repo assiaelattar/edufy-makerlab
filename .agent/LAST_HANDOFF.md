@@ -461,3 +461,8 @@ The parent card action now remains visible for every recorded parent login. When
 Authenticated browser tracing after that release isolated a second Studio failure: lazy Factory CSS imported Google Fonts after the document CSP was active, so the browser blocked the import and Vite raised `Unable to preload CSS`. The focused follow-up allows the declared Google font origins, moves every Factory font family into the shared document link, and removes the lazy stylesheet imports. Next: SparkQuest build, focused Vercel release, and retest the existing affected admin session; no production record mutation is required.
 
 ---
+# Latest handoff — Parent access legacy login hotfix (2026-10-15)
+
+The Edufy parent API and Student Details flow now handle a historical contact email or orphan UID by creating a verified `p.*@makerlab.academy` login, moving only consistent same-tenant family links, and preserving learner records. Platform super admins under `atlas-platform` may manage existing target organizations; other staff stay same-tenant. Staff enter the real parent name and verify the relationship. After refresh, displaying a card issues a new password and invalidates the old one; no plaintext parent password is retained. Synthetic Auth/Firestore emulator passes the orphan/external/staff-link/tenant/password cases. The Edufy build passes; repo-wide TypeScript still reports existing unrelated errors. Release status is recorded in `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`. Multi-tenant ownership remediation follows as a separate phase.
+
+---

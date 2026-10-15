@@ -8,7 +8,7 @@ import { getParentDirectory, manageParentAccess, type ParentAccessResult, type P
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'recover', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string) => Promise<'success' | 'name_required' | 'error' | 'cancelled'>;
+  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'recover', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string) => Promise<'success' | 'name_required' | 'login_missing' | 'error' | 'cancelled'>;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
   shareAccount: (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => void;
@@ -27,6 +27,11 @@ const familyFromStudent = (name: string, loginEmail = '') => {
   const normalized = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
   const family = parts.find(part => normalized(part) === normalized(alias)) || parts[parts.length - 1];
   return family && normalized(family) ? { label: `${family.toUpperCase()} family`, alias: family } : { label: '', alias: '' };
+};
+const recordedRealParentName = (name?: string) => name?.trim() && !/^(parent|guardian)$/i.test(name.trim()) && !/\s+family$/i.test(name.trim()) ? name.trim() : '';
+const parentAliasFromName = (name: string) => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] || '';
 };
 
 export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
@@ -57,9 +62,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const [directoryError, setDirectoryError] = useState('');
   const [reuseParentUid, setReuseParentUid] = useState('');
   const suggestedFamily = familyFromStudent(student.name, student.parentLoginInfo?.email);
-  const [aliasBasis, setAliasBasis] = useState(student.parentName || suggestedFamily.alias);
+  const [aliasBasis, setAliasBasis] = useState(parentAliasFromName(recordedRealParentName(student.parentName)));
+  const [aliasManuallyEdited, setAliasManuallyEdited] = useState(false);
   const [relationshipVerified, setRelationshipVerified] = useState(false);
-  const [verifiedParentName, setVerifiedParentName] = useState(student.parentName || '');
+  const [verifiedParentName, setVerifiedParentName] = useState(recordedRealParentName(student.parentName));
   const [exactParentEmail, setExactParentEmail] = useState('');
   const [exactLookup, setExactLookup] = useState<ParentAccessResult | null>(null);
   const [isLookingUpParent, setIsLookingUpParent] = useState(false);
@@ -69,9 +75,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
 
   useEffect(() => {
     setReuseParentUid('');
-    setAliasBasis(student.parentName || familyFromStudent(student.name, student.parentLoginInfo?.email).alias);
+    setAliasBasis(parentAliasFromName(recordedRealParentName(student.parentName)));
+    setAliasManuallyEdited(false);
     setRelationshipVerified(false);
-    setVerifiedParentName(student.parentName || '');
+    setVerifiedParentName(recordedRealParentName(student.parentName));
     setExactParentEmail('');
     setExactLookup(null);
     setShowPassword(false);
@@ -266,7 +273,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             </h3>
             {student.parentLoginInfo ? (
               <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-0.5 rounded border border-emerald-500/50 font-bold">
-                RECORDED
+                LOGIN ON FILE
               </span>
             ) : (
               <span className="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded border border-slate-700 font-bold">
@@ -282,7 +289,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 <div className="break-all font-mono text-sm text-white select-all">{student.parentLoginInfo.email}</div>
               </div>
               <div className="rounded border border-teal-300/15 bg-teal-400/[0.06] p-3 text-xs leading-5 text-slate-300">
-                An older recorded address may come from the email invitation flow. Replacing it creates a SparkQuest login ID that needs no inbox. The latest card stays available here until staff leave or refresh this profile.
+                An older recorded address may only be a contact email from enrollment. Create a new MakerLab login for the verified parent. The password card is available after it is issued.
               </div>
               <button
                 type="button"
@@ -293,8 +300,12 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                   }
                   setRelationshipVerified(false);
                   setPasswordNameRequired(false);
-                  setVerifiedParentName(student.parentName || '');
-                  setIsPasswordModalOpen(true);
+                  setVerifiedParentName(recordedRealParentName(student.parentName));
+                  if (!/^p\.[^@\s]+@makerlab\.academy$/i.test(student.parentLoginInfo?.email || '')) {
+                    setIsParentChoiceModalOpen(true);
+                  } else {
+                    setIsPasswordModalOpen(true);
+                  }
                 }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
                 className="edu-parent-access-action edu-parent-access-action--credentials flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50"
@@ -302,10 +313,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 {isGeneratingAccess ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
                 Display parent access card
               </button>
-              {!hasLatestParentCredentials && <p className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-[11px] leading-5 text-amber-950">The login ID is available below. Edufy does not store its password, so displaying a complete card will securely issue a new password after parent verification.</p>}
+              {!hasLatestParentCredentials && <p className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-[11px] leading-5 text-amber-950">After verifying the parent, this button issues and displays a fresh password. Any previous password stops working.</p>}
               {hasLatestParentCredentials && <button
                 type="button"
-                onClick={() => { setRelationshipVerified(false); setPasswordNameRequired(false); setVerifiedParentName(student.parentName || ''); setIsPasswordModalOpen(true); }}
+                onClick={() => { setRelationshipVerified(false); setPasswordNameRequired(false); setVerifiedParentName(recordedRealParentName(student.parentName)); setIsPasswordModalOpen(true); }}
                 disabled={isGeneratingAccess || !canManageParentAccess}
                 className="edu-parent-access-action edu-parent-access-action--secondary mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition-colors disabled:opacity-50"
               >
@@ -340,7 +351,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
       )}
       <Modal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Issue new parent password">
         <div className="space-y-4 text-sm text-slate-200">
-          <p>This keeps <strong className="break-all text-white">{student.parentLoginInfo?.email}</strong> as the SparkQuest login ID. The current password will stop working. Share the new password from the one-time card only with the verified parent.</p>
+          <p>This keeps <strong className="break-all text-white">{student.parentLoginInfo?.email}</strong> as the SparkQuest login ID. The current password will stop working. If the old ID has no Auth account, you will be guided to create a new MakerLab login.</p>
           <p className="rounded-lg bg-slate-800 p-3 text-xs leading-5 text-slate-200">Family display label: <strong>{student.parentName || suggestedFamily.label || 'Add one below'}</strong>. This label is inferred from the learner’s name when no parent name is recorded. It does not verify the parent’s identity.</p>
           {passwordNameRequired && <label className="block text-xs font-bold uppercase text-slate-300">Family display label
             <input value={verifiedParentName} onChange={event => setVerifiedParentName(event.target.value)} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-600 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder={suggestedFamily.label || 'Family label'} />
@@ -350,6 +361,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             onClick={async () => {
               const result = await handleCreateParentAccess('reset', undefined, undefined, relationshipVerified, verifiedParentName);
               if (result === 'name_required') setPasswordNameRequired(true);
+              if (result === 'login_missing') { setIsPasswordModalOpen(false); setIsParentChoiceModalOpen(true); }
               if (result === 'success') setIsPasswordModalOpen(false);
             }}
             className="min-h-11 w-full rounded-lg bg-sky-500 px-4 py-2.5 font-bold text-slate-950 disabled:opacity-50">{isGeneratingAccess ? 'Issuing…' : 'Issue new one-time password'}</button>
@@ -357,32 +369,33 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
       </Modal>
       <Modal isOpen={isParentChoiceModalOpen} onClose={() => setIsParentChoiceModalOpen(false)} title="Parent access">
         <div className="space-y-4">
-          <p className="text-sm text-slate-400">Verify the real parent first. The family label and login alias are suggested from the learner’s name and do not prove identity. Choosing an existing parent links this learner to that exact account.</p>
+          <p className="text-sm text-slate-300">Enter the verified parent’s real name and choose their MakerLab login ID. A learner surname alone does not verify a parent. Choosing an existing parent links this learner to that exact account.</p>
           {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">This replaces a recorded parent account for all of its linked learners. If the recorded login belongs to staff, Edufy will ask separately before detaching this learner; the staff account stays active.</p>}
           <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
             <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Family display label</span>
-            <strong>{student.parentName?.trim() || suggestedFamily.label || 'Enter one below'}</strong>
+            <strong>{recordedRealParentName(student.parentName) || 'Enter the verified parent name below'}</strong>
           </div>
-          {!student.parentName?.trim() && <label className="block text-xs font-bold uppercase text-slate-400">Edit family display label (optional)
-            <input value={verifiedParentName} onChange={event => setVerifiedParentName(event.target.value)} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder={suggestedFamily.label || 'Family label'} />
+          {!recordedRealParentName(student.parentName) && <label className="block text-xs font-bold uppercase text-slate-300">Verified parent full name
+            <input value={verifiedParentName} onChange={event => { setVerifiedParentName(event.target.value); if (!aliasManuallyEdited) setAliasBasis(parentAliasFromName(event.target.value)); }} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="Parent’s real full name" />
           </label>}
           <label className="block text-xs font-bold uppercase text-slate-400" htmlFor="parent-alias-basis">Login alias basis</label>
-          <input id="parent-alias-basis" value={aliasBasis} onChange={event => setAliasBasis(event.target.value)} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
+          <input id="parent-alias-basis" value={aliasBasis} onChange={event => { setAliasBasis(event.target.value); setAliasManuallyEdited(true); }} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
           <p className="text-xs text-slate-300">Preview: <strong className="break-all text-teal-300">{aliasPreview ? `p.${aliasPreview}@makerlab.academy` : 'Enter an alias basis'}</strong>. An existing login gets a numeric suffix.</p>
           <p className="text-xs text-slate-400">This email-shaped ID is for SparkQuest sign-in only. It does not need to receive messages.</p>
           <label className="flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={relationshipVerified} onChange={event => setRelationshipVerified(event.target.checked)} className="mt-1" />I verified the real parent identity and this learner’s relationship. I am not relying on a shared surname.</label>
           <button 
-            onClick={() => {
-              setIsParentChoiceModalOpen(false);
-              handleCreateParentAccess(student.parentLoginInfo?.uid ? 'replace' : 'issue', undefined, aliasBasis, relationshipVerified, verifiedParentName || suggestedFamily.label);
+            onClick={async () => {
+              const result = await handleCreateParentAccess(student.parentLoginInfo?.uid ? 'replace' : 'issue', undefined, aliasBasis, relationshipVerified, verifiedParentName);
+              if (result === 'success') setIsParentChoiceModalOpen(false);
             }}
-            disabled={!(verifiedParentName.trim() || suggestedFamily.label) || !aliasPreview || !relationshipVerified || isGeneratingAccess || !canManageParentAccess || (!!student.parentLoginInfo?.uid && !student.parentName?.trim())}
+            disabled={!verifiedParentName.trim() || !aliasPreview || !relationshipVerified || isGeneratingAccess || !canManageParentAccess}
             className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
           >
             {student.parentLoginInfo?.uid ? 'Replace parent login' : 'Issue new parent login'}
           </button>
           <div className="border-t border-white/10 pt-4">
-            <label className="mb-2 block text-xs font-bold uppercase text-slate-400">{student.parentLoginInfo?.uid ? 'Move to an existing family login' : 'Link an existing parent login'}</label>
+            <label className="mb-2 block text-xs font-bold uppercase text-slate-300">{student.parentLoginInfo?.uid ? 'Move to an existing family login' : 'Link an existing parent login'}</label>
+            <p className="mb-2 text-xs leading-5 text-slate-300">Only working SparkQuest family accounts appear here. An old enrollment contact email will not appear; use <strong>Create new parent login</strong> above.</p>
             {isDirectoryLoading && <p className="mt-2 text-xs text-slate-300">Loading verified family logins…</p>}
             {directoryError && <p className="mt-2 text-xs text-amber-200">{directoryError} You can still verify an exact login ID below.</p>}
             {!isDirectoryLoading && !directoryError && directoryAccounts.every(account => account.uid === student.parentLoginInfo?.uid) && <p className="mt-2 text-xs text-slate-300">No other verified family login is available in this workspace.</p>}

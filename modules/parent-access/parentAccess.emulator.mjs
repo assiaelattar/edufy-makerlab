@@ -53,10 +53,11 @@ const firstAuth = await adminAuth.getUserByEmail(first.body.email);
 assert.equal(firstAuth.displayName, 'Samira Ajlane');
 assert.equal(firstAuth.emailVerified, false);
 await db.doc('students/child-no-parent-name').set({ organizationId: 'org-a', name: 'LINA BENALI' });
-const nameFreeIssue = await invoke(staffToken, { action: 'issue', studentId: 'child-no-parent-name', organizationId: 'org-a', relationshipVerified: true });
+assert.equal((await invoke(staffToken, { action: 'issue', studentId: 'child-no-parent-name', organizationId: 'org-a', relationshipVerified: true })).statusCode, 400);
+const nameFreeIssue = await invoke(staffToken, { action: 'issue', studentId: 'child-no-parent-name', organizationId: 'org-a', parentName: 'Verified Benali', aliasBasis: 'Benali', relationshipVerified: true });
 assert.equal(nameFreeIssue.statusCode, 200, JSON.stringify(nameFreeIssue.body?.error));
 assert.equal(nameFreeIssue.body.email, 'p.benali@makerlab.academy');
-assert.equal((await db.doc('students/child-no-parent-name').get()).data().parentName, 'BENALI family');
+assert.equal((await db.doc('students/child-no-parent-name').get()).data().parentName, 'Verified Benali');
 assert.equal((await db.doc('students/child-a').get()).data().parentLoginInfo.uid, firstAuth.uid);
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_child-a`).get()).data().status, 'active');
 assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().role, 'parent');
@@ -143,6 +144,14 @@ assert.equal(deniedRoleLink.statusCode, 403);
 const parentToken = await (await signInWithEmailAndPassword(clientAuth, 'parent@example.test', 'Demo-parent-password-123')).user.getIdToken();
 assert.equal((await invoke(parentToken, { action: 'issue', studentId: 'child-a', organizationId: 'org-a' })).statusCode, 403);
 const foreignToken = await (await signInWithEmailAndPassword(clientAuth, 'other@example.test', 'Demo-other-password-123')).user.getIdToken();
+const platformAdmin = await adminAuth.createUser({ email: 'platform@example.test', password: 'Demo-platform-password-123' });
+await Promise.all([
+  db.doc(`users/${platformAdmin.uid}`).set({ organizationId: 'atlas-platform', role: 'super_admin', status: 'active' }),
+  db.doc('organizations/org-a').set({ name: 'Organization A', status: 'active' })
+]);
+const platformToken = await (await signInWithEmailAndPassword(clientAuth, 'platform@example.test', 'Demo-platform-password-123')).user.getIdToken();
+assert.equal((await invoke(platformToken, { action: 'directory', organizationId: 'org-a' })).statusCode, 200);
+assert.equal((await invoke(platformToken, { action: 'directory', organizationId: 'unknown' })).statusCode, 403);
 const foreignFamily = await adminAuth.createUser({ email: 'p.foreign.family@makerlab.academy', password: 'Foreign-family-password-123' });
 await Promise.all([
   db.doc(`users/${foreignFamily.uid}`).set({ organizationId: 'org-b', role: 'parent', status: 'active', email: foreignFamily.email, name: 'Foreign Family' }),
@@ -195,6 +204,60 @@ await assert.rejects(() => signInWithEmailAndPassword(clientAuth, first.body.ema
 await signInWithEmailAndPassword(clientAuth, first.body.email, reset.body.password);
 const stored = JSON.stringify({ student: (await db.doc('students/child-a').get()).data(), profile: (await db.doc(`users/${firstAuth.uid}`).get()).data(), link: (await db.doc(`guardian_links/${firstAuth.uid}_child-a`).get()).data() });
 assert(!stored.includes(first.body.password) && !stored.includes(reset.body.password));
+
+// An enrollment-era contact address may point to no Auth user or parent profile.
+await Promise.all([
+  db.doc('students/contact-child-1').set({ organizationId: 'org-a', name: 'Child One', parentLoginInfo: { uid: 'old-contact-uid', email: 'contact@example.test' }, parentUids: ['old-contact-uid'] }),
+  db.doc('students/contact-child-2').set({ organizationId: 'org-a', name: 'Child Two', parentName: 'CONTACT family', parentLoginInfo: { uid: 'old-contact-uid', email: 'contact@example.test' }, parentUids: ['old-contact-uid'] })
+]);
+const contactReset = await invoke(platformToken, { action: 'reset', studentId: 'contact-child-1', organizationId: 'org-a', relationshipVerified: true });
+assert.equal(contactReset.statusCode, 400);
+const contactReplaceRequest = { action: 'replace', studentId: 'contact-child-1', organizationId: 'org-a', parentName: 'Verified Guardian', aliasBasis: 'Guardian', relationshipVerified: true };
+assert.equal((await invoke(platformToken, { ...contactReplaceRequest, relationshipVerified: false })).statusCode, 400);
+await db.doc('students/contact-foreign').set({ organizationId: 'org-b', parentLoginInfo: { uid: 'old-contact-uid', email: 'contact@example.test' } });
+assert.equal((await invoke(platformToken, contactReplaceRequest)).statusCode, 409);
+await db.doc('students/contact-foreign').delete();
+const contactReplacement = await invoke(platformToken, contactReplaceRequest);
+assert.equal(contactReplacement.statusCode, 200, JSON.stringify(contactReplacement.body?.error));
+assert.equal(contactReplacement.body.email, 'p.guardian@makerlab.academy');
+const contactAuth = await adminAuth.getUserByEmail(contactReplacement.body.email);
+for (const id of ['contact-child-1', 'contact-child-2']) {
+  const child = (await db.doc(`students/${id}`).get()).data();
+  assert.equal(child.parentName, 'Verified Guardian');
+  assert.equal(child.parentLoginInfo.uid, contactAuth.uid);
+  assert.deepEqual(child.parentUids, [contactAuth.uid]);
+  assert.equal((await db.doc(`guardian_links/${contactAuth.uid}_${id}`).get()).data().status, 'active');
+}
+await signInWithEmailAndPassword(clientAuth, contactReplacement.body.email, contactReplacement.body.password);
+const redisplayed = await invoke(platformToken, { action: 'reset', studentId: 'contact-child-1', organizationId: 'org-a', relationshipVerified: true });
+assert.equal(redisplayed.statusCode, 200);
+assert.notEqual(redisplayed.body.password, contactReplacement.body.password);
+await assert.rejects(() => signInWithEmailAndPassword(clientAuth, contactReplacement.body.email, contactReplacement.body.password));
+await signInWithEmailAndPassword(clientAuth, contactReplacement.body.email, redisplayed.body.password);
+
+const oldEmailAuth = await adminAuth.createUser({ email: 'old-parent-contact@example.test', password: 'Old-contact-password-123' });
+await Promise.all([
+  db.doc(`users/${oldEmailAuth.uid}`).set({ uid: oldEmailAuth.uid, organizationId: 'org-a', role: 'parent', status: 'active', name: 'Verified Contact', email: oldEmailAuth.email }),
+  db.doc('students/external-auth-child').set({ organizationId: 'org-a', name: 'External child', parentName: 'Verified Contact',
+    parentLoginInfo: { uid: oldEmailAuth.uid, email: oldEmailAuth.email }, parentUids: [oldEmailAuth.uid] })
+]);
+const externalAuthReplacement = await invoke(staffToken, { action: 'replace', studentId: 'external-auth-child', organizationId: 'org-a',
+  parentName: 'Verified Contact', aliasBasis: 'Contact', relationshipVerified: true });
+assert.equal(externalAuthReplacement.statusCode, 200, JSON.stringify(externalAuthReplacement.body?.error));
+assert.equal(externalAuthReplacement.body.email, 'p.contact@makerlab.academy');
+assert.equal((await adminAuth.getUser(oldEmailAuth.uid)).disabled, true);
+assert.equal((await db.doc(`users/${oldEmailAuth.uid}`).get()).data().status, 'inactive');
+await signInWithEmailAndPassword(clientAuth, externalAuthReplacement.body.email, externalAuthReplacement.body.password);
+
+await db.doc('students/platform-mislink-child').set({ organizationId: 'org-a', name: 'Platform mislink',
+  parentLoginInfo: { uid: platformAdmin.uid, email: platformAdmin.email }, parentUids: [platformAdmin.uid] });
+const platformMislink = { action: 'replace', studentId: 'platform-mislink-child', organizationId: 'org-a',
+  parentName: 'Verified Platform Guardian', aliasBasis: 'Platform Guardian', relationshipVerified: true };
+assert.equal((await invoke(platformToken, platformMislink)).body.code, 'staff_login_mislinked');
+const platformRepaired = await invoke(platformToken, { ...platformMislink, action: 'repairStaffLink' });
+assert.equal(platformRepaired.statusCode, 200, JSON.stringify(platformRepaired.body?.error));
+assert.equal((await db.doc('students/platform-mislink-child').get()).data().parentName, 'Verified Platform Guardian');
+assert.equal((await adminAuth.getUser(platformAdmin.uid)).disabled, false);
 
 // Legacy setup-link accounts may have an old email, linked siblings, and incomplete guardian links.
 const legacy = await adminAuth.createUser({ email: 'p.legacy.ajlane@makerlab.academy', password: 'Legacy-password-123', displayName: 'Samira Ajlane' });
@@ -339,6 +402,6 @@ assert.equal((await db.doc('students/legacy-transfer').get()).data().parentLogin
 assert.equal((await db.doc(`users/${oldExact.uid}`).get()).exists, false);
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_legacy-transfer`).get()).data().status, 'active');
 assert.equal((await adminAuth.getUser(oldExact.uid)).disabled, true);
-console.log('Parent access emulator: issue, same-org verified directory filtering, modern reset, automatic legacy repair and reset, missing-name retry, exact lookup/recovery/link, cross-tenant and role denial, sibling transfer, staff-link repair, legacy replacement and plaintext checks passed.');
+console.log('Parent access emulator: verified naming, platform-admin authorization, same-tenant directory, legacy contact/orphan conversion, external Auth replacement, sibling links, password invalidation, cross-tenant and role denial, staff-link repair, recovery, and plaintext checks passed.');
 await Promise.all([deleteClientApp(app), deleteClientApp(familyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());

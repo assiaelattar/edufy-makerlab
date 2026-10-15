@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Parent access acceptance after the 2026-10-15 Edufy hotfix
+
+- A real affected family still needs staff to verify the parent identity and confirm the intended linked learners before replacing its login. The synthetic emulator proves the transaction and denials, but does not substitute for a live family sign-in.
+- The trusted Edufy Vercel API and Hostinger client have separate release states. A GitHub push alone does not confirm that both live surfaces serve this hotfix.
+
 ## Stale tabs during a SparkQuest deployment
 
 - A tab running code from before this recovery release cannot gain the new handler until its document is refreshed once. Later releases recover a missing lazy asset automatically once; persistent network or browser failures remain on a manual refresh screen.

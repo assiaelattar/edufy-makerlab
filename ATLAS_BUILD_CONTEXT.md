@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Parent access legacy login repair
+
+Edufy's staff parent access flow now distinguishes an old enrollment contact address from a working SparkQuest login. Verified staff can issue a new academy login for a consistent legacy family pointer even when its old Auth user or parent profile is absent; platform super admins can manage an existing target organization. The display action issues a fresh password after verification and invalidates the old one. Synthetic family/tenant emulator and the registered Edufy build are the release checks. See `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`. Resume the paused multi-tenant ownership audit after this hotfix release; the separate 297 missing-tenant-ID inventory must not be silently backfilled.
+
 Last updated: 2026-10-01
 
 ## Latest loop — SparkQuest instructor learner workspace Phase 1

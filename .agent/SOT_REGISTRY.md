@@ -1,5 +1,7 @@
 # Source-of-Truth Registry
 
+Parent account provisioning and historical link repair: `api/parent-access/index.js` (staff/tenant authority, Auth and family transactions), `views/student-details/AccessAndAccountsTab.tsx` and `views/StudentDetailsView.tsx` (verified staff flow and ephemeral credentials card), `modules/parent-access/parentAccess.emulator.mjs` (synthetic proof). See `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`.
+
 Student maker journey: `sparkquest/components/LearnerJourneyNav.tsx`, `learner-journey.css`, `LearnerWorkbench.tsx`, `ProjectSelector.tsx`, `StudentMissionDetails.tsx`, `StudentWizard.tsx`, and `studio-build-experience.css` compose the focused learner stops, saved-step focus, and contextual build/editor guide over existing canonical project selectors and actions. `ParentO11Y.tsx` remains the shared mascot renderer. See `docs/sparkquest/STUDENT_JOURNEY_2026-10-12.md`.
 
 Protected step review: `sparkquest/domain/projectReview.ts` (`stepSubmissionFingerprint`, canonical step state/status/approval selectors), `sparkquest/types.ts` (`ProjectStepReviewState`), `sparkquest/services/projectReview.ts` (preservation), `firestore.rules` (protocol/map immutability), and learner/instructor consumers. Current/local; docs/sparkquest/REVIEW_SECURITY_PHASE_2.md. Legacy projects retain fallback until an instructor decision adopts protocol v1.

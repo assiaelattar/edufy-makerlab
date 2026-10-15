@@ -1,5 +1,7 @@
 # Context Map
 
+Parent legacy login repair: read `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`, `docs/parent/CREDENTIALS_PHASE_3_2026-10-10.md`, `api/parent-access/index.js`, `services/parentAccess.ts`, the Student Details parent access components, and the synthetic emulator. Release through the registered Edufy app only; Vercel trusted API and Hostinger static client are distinct deployment targets.
+
 Protected step review: read `docs/sparkquest/REVIEW_SECURITY_PHASE_2.md`, both earlier review reports, SparkQuest context, decisions and known issues. Run the review, learner-pipeline and profile-assignment emulators only against explicit localhost demo services, all domain suites, scoped TypeScript, both builds and the write-free `?designPreview=reviewLoop` browser flow.
 
 Review security: read `docs/sparkquest/REVIEW_SECURITY_PHASE_1.md`, Review reliability, SparkQuest context, decisions and known issues. Run `domain/projectReview.emulator.mjs`, `domain/profileAssignment.emulator.mjs` and `domain/studentPipeline.emulator.mjs` only with explicit localhost demo emulators; Storage may be excluded only when recording that limitation. Then run all domain suites, scoped TypeScript and both builds.

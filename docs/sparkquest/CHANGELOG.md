@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Edufy parent account repair
+
+- Edufy now creates a new SparkQuest family login when a recorded enrollment contact email or orphan account cannot be used as a login.
+- Verified staff can reissue and display a new password; the prior password stops working. Existing linked learner work remains connected to the family account.
+- This change is in the Edufy account-management API and interface; the SparkQuest parent portal remains on its existing reader.
+
 ## 2026-10-12 — Recover stale mission chunks after a release
 
 - When an open tab requests a lazy module from an earlier Vercel deployment, reload the document once to pick up the current asset names.

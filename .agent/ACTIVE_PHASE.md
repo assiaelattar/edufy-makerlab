@@ -176,3 +176,8 @@ Make parent follow-up visible through tenant templates, preview, durable consent
 - No provider connection, production message/data write, migration, deployment or release occurred.
 
 Stop at this phase boundary. Follow ACTIVE_TASK before beginning provider work.
+# Current phase override — Parent access legacy login hotfix (2026-10-15)
+
+The user requested urgent repair of Edufy parent account creation before resuming multi-tenant work. Scope: platform super admin authorization, conversion of legacy recorded contact emails or orphan Auth pointers into a new academy login, verified parent naming, and repeatable card display by issuing a new password. Preserve exact UID/family/tenant checks and no plaintext password storage. See `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`. Stop after focused validation and release assessment; multi-tenant ownership remediation is the next separate phase.
+
+---
