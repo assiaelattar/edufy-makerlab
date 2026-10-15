@@ -1,4 +1,4 @@
-export type PickupStatus = 'on_the_way' | 'arrived' | 'released' | 'confirmed' | 'cancelled' | 'exception';
+export type PickupStatus = 'on_the_way' | 'arrived' | 'ready' | 'released' | 'confirmed' | 'cancelled' | 'exception';
 
 export const pickupEntryId = (organizationId: string, studentId: string, sessionDate: string): string => {
   if (!organizationId || !studentId || !/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) {
@@ -21,10 +21,11 @@ export const previousPickupDate = (sessionDate: string): string => {
 
 export const canAdvancePickup = (from: PickupStatus, to: PickupStatus): boolean =>
   (from === 'on_the_way' && to === 'arrived') ||
-  (from === 'arrived' && to === 'released') ||
+  (from === 'arrived' && to === 'ready') ||
+  (from === 'ready' && to === 'released') ||
   (from === 'released' && to === 'confirmed') ||
-  (['on_the_way', 'arrived'].includes(from) && to === 'cancelled') ||
-  (['on_the_way', 'arrived', 'released'].includes(from) && to === 'exception');
+  (['on_the_way', 'arrived', 'ready'].includes(from) && to === 'cancelled') ||
+  (['on_the_way', 'arrived', 'ready', 'released'].includes(from) && to === 'exception');
 
 export const isAuthorizedPicker = (pickerName: string, parentName: string, authorizedPickups: string[] = []): boolean =>
   pickerName.length > 0 && (pickerName === parentName || authorizedPickups.includes(pickerName));
@@ -39,5 +40,5 @@ export const selectOpenPickup = <T extends { id: string; organizationId: string;
 ): T | null => selectDatedPickup(entries, organizationId, studentId, sessionDate) ||
   (() => {
     const previous = selectDatedPickup(entries, organizationId, studentId, previousPickupDate(sessionDate));
-    return previous && ['on_the_way', 'arrived'].includes(previous.status) ? previous : null;
+    return previous && ['on_the_way', 'arrived', 'ready'].includes(previous.status) ? previous : null;
   })();

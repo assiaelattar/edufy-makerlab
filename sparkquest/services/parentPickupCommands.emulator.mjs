@@ -41,10 +41,10 @@ const link = (parentUid, studentId, status = 'active') =>
   admin.doc(`guardian_links/${parentUid}_${studentId}`).set({
     organizationId: 'org-sparkquest-pickup', parentUid, studentId, status, permissions: ['pickup']
   });
-const student = (studentId, parentUid) =>
+const student = (studentId, parentUid, learnerUid) =>
   admin.doc(`students/${studentId}`).set({
     organizationId: 'org-sparkquest-pickup', status: 'active', name: studentId,
-    parentName: 'Maya', authorizedPickups: ['Uncle Sam'], parentLoginInfo: { uid: parentUid }
+    parentName: 'Maya', authorizedPickups: ['Uncle Sam'], parentLoginInfo: { uid: parentUid }, loginInfo: { uid: learnerUid }
   });
 const cancelled = (actor, entryId, expected = 'on_the_way') =>
   advanceParentPickup(actor.db, 'org-sparkquest-pickup', entryId, actor.uid, expected, 'cancelled', 'Pickup plan changed.');
@@ -53,8 +53,9 @@ try {
   const primary = await client('sparkquest-primary', 'parent', 'Maya');
   const secondary = await client('sparkquest-secondary', 'parent', 'Uncle Sam');
   const staff = await client('sparkquest-staff', 'instructor');
+  const learner = await client('sparkquest-learner', 'student');
   for (const studentId of ['learner-sq-a', 'learner-sq-b', 'learner-sq-c']) {
-    await student(studentId, primary.uid);
+    await student(studentId, primary.uid, learner.uid);
     await link(primary.uid, studentId);
     await link(secondary.uid, studentId);
   }
@@ -65,12 +66,18 @@ try {
     collection(primary.db, 'pickup_queue'),
     where('organizationId', '==', 'org-sparkquest-pickup'),
     where('studentId', '==', 'learner-sq-a'),
-    where('status', 'in', ['waiting', 'on_the_way', 'arrived', 'released'])
+    where('status', 'in', ['waiting', 'on_the_way', 'arrived', 'ready', 'released'])
   );
   assert.equal((await getDocs(activeQuery)).size, 1, 'Parent can run the active-conflict guard query.');
   console.log('Adapter check: second guardian arrival.');
   await advanceParentPickup(secondary.db, 'org-sparkquest-pickup', firstId, secondary.uid, 'on_the_way', 'arrived');
   assert.equal((await getDoc(doc(primary.db, 'pickup_queue', firstId))).data()?.lastActorUid, secondary.uid);
+
+  const learnerReadyRef = doc(learner.db, 'pickup_queue', firstId);
+  const ready = writeBatch(learner.db);
+  ready.update(learnerReadyRef, { status: 'ready', readyAt: serverTimestamp(), updatedAt: serverTimestamp(), lastActorUid: learner.uid, lastEventId: 'ready' });
+  ready.set(doc(learnerReadyRef, 'events', 'ready'), { organizationId: 'org-sparkquest-pickup', studentId: 'learner-sq-a', pickerName: 'Uncle Sam', status: 'ready', at: serverTimestamp(), actorUid: learner.uid });
+  await ready.commit();
 
   const firstRef = doc(staff.db, 'pickup_queue', firstId);
   const release = writeBatch(staff.db);
@@ -115,7 +122,7 @@ try {
   const thirdId = await announceParentPickup(secondary.db, 'org-sparkquest-pickup', 'learner-sq-c', secondary.uid, 'Uncle Sam');
   await cancelled(primary, thirdId);
   assert.equal((await getDoc(doc(secondary.db, 'pickup_queue', thirdId))).data()?.parentUid, secondary.uid);
-  console.log('SparkQuest Firebase 12 parent Pickup adapter passed: atomic create/event, cross-guardian arrival/receipt/cancel, immutable initiator, revoked/inactive and spoof denial.');
+  console.log('SparkQuest Firebase 12 parent Pickup adapter passed: atomic create/event, cross-guardian arrival/receipt/cancel, learner-ready gate, immutable initiator, revoked/inactive and spoof denial.');
 } finally {
   await Promise.all(clients.map(deleteApp));
   await deleteAdmin(adminApp);

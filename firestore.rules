@@ -763,6 +763,11 @@ service cloud.firestore {
         isSameOrg(data.organizationId);
     }
 
+    function pickupLearner(data) {
+      return hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
+        currentRole() == 'student' && learnerLinkedToRequester(data.studentId, data.organizationId);
+    }
+
     function pickupReader(data) {
       return pickupStaff(data) ||
         (hasUserProfile() && currentUser().data.get('status', '') == 'active' &&
@@ -837,7 +842,10 @@ service cloud.firestore {
           (before.status == 'on_the_way' && after.status == 'arrived' &&
             changed.hasOnly(['status', 'arrivedAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
             after.arrivedAt == request.time && (pickupLinkedGuardian(after) || pickupStaff(after))) ||
-          (before.status == 'arrived' && after.status == 'released' &&
+          (before.status == 'arrived' && after.status == 'ready' &&
+            changed.hasOnly(['status', 'readyAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
+            after.readyAt == request.time && pickupLearner(after)) ||
+          (before.status == 'ready' && after.status == 'released' &&
             changed.hasOnly(['status', 'releasedAt', 'updatedAt', 'lastActorUid', 'lastEventId', 'verifiedPickerName', 'verificationMethod', 'verificationNote', 'verifiedByUid']) &&
             after.releasedAt == request.time && after.verifiedByUid == request.auth.uid &&
             after.verifiedPickerName == after.pickerName &&
@@ -848,12 +856,12 @@ service cloud.firestore {
             changed.hasOnly(['status', 'confirmedAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
             after.confirmedAt == request.time &&
             currentUser().data.get('name', '') == after.pickerName && pickupLinkedGuardian(after)) ||
-          (before.status in ['on_the_way', 'arrived'] && after.status == 'cancelled' &&
+          (before.status in ['on_the_way', 'arrived', 'ready'] && after.status == 'cancelled' &&
             changed.hasOnly(['status', 'cancelledAt', 'exceptionReason', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
             after.cancelledAt == request.time && after.exceptionReason is string &&
             after.exceptionReason.size() >= 8 && after.exceptionReason.size() <= 500 &&
             (pickupLinkedGuardian(after) || pickupStaff(after))) ||
-          (before.status in ['on_the_way', 'arrived', 'released'] && after.status == 'exception' &&
+          (before.status in ['on_the_way', 'arrived', 'ready', 'released'] && after.status == 'exception' &&
             changed.hasOnly(['status', 'exceptionAt', 'exceptionReason', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
             after.exceptionAt == request.time && after.exceptionReason is string &&
             after.exceptionReason.size() >= 8 && after.exceptionReason.size() <= 500 && pickupStaff(after))
@@ -870,7 +878,7 @@ service cloud.firestore {
       return request.auth != null &&
         request.resource.data.keys().hasOnly(['organizationId', 'studentId', 'pickerName', 'status', 'at', 'actorUid', 'verificationMethod', 'verificationNote', 'verifiedPickerName', 'exceptionReason']) &&
         request.resource.data.keys().hasAll(['organizationId', 'studentId', 'pickerName', 'status', 'at', 'actorUid']) &&
-        eventId in ['on_the_way', 'arrived', 'released', 'confirmed', 'cancelled', 'exception'] &&
+        eventId in ['on_the_way', 'arrived', 'ready', 'released', 'confirmed', 'cancelled', 'exception'] &&
         eventId == request.resource.data.status && after.status == eventId && after.lastEventId == eventId &&
         request.resource.data.at == request.time && request.resource.data.actorUid == request.auth.uid &&
         request.resource.data.organizationId == after.organizationId &&
@@ -884,6 +892,29 @@ service cloud.firestore {
         (eventId == 'released' || !request.resource.data.keys().hasAny(['verificationMethod', 'verificationNote', 'verifiedPickerName'])) &&
         (!(eventId in ['cancelled', 'exception']) || request.resource.data.exceptionReason == after.exceptionReason) &&
         (eventId in ['cancelled', 'exception'] || !request.resource.data.keys().hasAny(['exceptionReason']));
+    }
+
+    function pickupPrivateParticipant(entryId) {
+      let entryPath = /databases/$(database)/documents/pickup_queue/$(entryId);
+      let entry = get(entryPath).data;
+      return exists(entryPath) && (
+        pickupLearner(entry) ||
+        (request.auth.uid == entry.parentUid && pickupLinkedGuardian(entry))
+      );
+    }
+
+    function validPickupMessageCreate(entryId) {
+      let entry = get(/databases/$(database)/documents/pickup_queue/$(entryId)).data;
+      let data = request.resource.data;
+      return pickupPrivateParticipant(entryId) &&
+        entry.status in ['on_the_way', 'arrived', 'ready', 'released'] &&
+        data.keys().hasOnly(['organizationId', 'studentId', 'senderUid', 'senderRole', 'body', 'createdAt']) &&
+        data.keys().hasAll(['organizationId', 'studentId', 'senderUid', 'senderRole', 'body', 'createdAt']) &&
+        data.organizationId == entry.organizationId && data.studentId == entry.studentId &&
+        data.senderUid == request.auth.uid && data.senderRole == currentRole() &&
+        data.senderRole in ['parent', 'student'] &&
+        data.body is string && data.body.size() > 0 && data.body.size() <= 500 &&
+        data.createdAt == request.time;
     }
 
     // --- Identity and tenancy ---
@@ -1235,6 +1266,12 @@ service cloud.firestore {
       match /events/{eventId} {
         allow read: if resourceHasOrg() && pickupReader(resource.data);
         allow create: if validPickupEventCreate(entryId, eventId);
+        allow update, delete: if false;
+      }
+
+      match /messages/{messageId} {
+        allow read: if pickupPrivateParticipant(entryId);
+        allow create: if validPickupMessageCreate(entryId);
         allow update, delete: if false;
       }
     }

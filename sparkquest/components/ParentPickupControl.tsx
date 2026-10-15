@@ -6,6 +6,7 @@ import {
   Clock3,
   Loader2,
   MapPin,
+  PackageCheck,
   RefreshCw,
   ShieldCheck,
   UserCheck,
@@ -23,6 +24,7 @@ import type { FamilyPickupSummary, FamilySource } from '../domain/parentFamilyOp
 import type { FamilyChild } from '../hooks/useParentFamily';
 import { db } from '../services/firebase';
 import { advanceParentPickup, announceParentPickup } from '../services/parentPickupCommands';
+import { PickupPrivateNotes } from './PickupPrivateNotes';
 import './parent-pickup-control.css';
 
 type ParentAction = 'announce' | 'arrive' | 'cancel' | 'confirm';
@@ -52,12 +54,13 @@ interface Props {
 const steps = [
   { status: 'on_the_way', label: 'En route', icon: Car },
   { status: 'arrived', label: 'Sur place', icon: MapPin },
+  { status: 'ready', label: 'Enfant prêt', icon: PackageCheck },
   { status: 'released', label: 'Remise équipe', icon: ShieldCheck },
   { status: 'confirmed', label: 'Terminé', icon: CheckCircle2 },
 ] as const;
 
 const statusPosition = (status?: string) => steps.findIndex(step => step.status === status);
-const activeStatuses = ['waiting', 'on_the_way', 'arrived', 'released'];
+const activeStatuses = ['waiting', 'on_the_way', 'arrived', 'ready', 'released'];
 
 const friendlyError = (error: unknown) => {
   const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
@@ -244,6 +247,7 @@ export const ParentPickupControl: React.FC<Props> = ({
   const title = !entry ? `Préparer la sortie de ${child.name}`
     : entry.status === 'on_the_way' ? 'L’équipe vous attend'
       : entry.status === 'arrived' ? 'La personne autorisée est sur place'
+        : entry.status === 'ready' ? `${child.name} a terminé de ranger`
         : entry.status === 'released' ? `${child.name} a été remis par l’équipe`
           : entry.status === 'confirmed' ? 'Récupération terminée'
             : entry.status === 'cancelled' ? 'Sortie annulée'
@@ -286,6 +290,7 @@ export const ParentPickupControl: React.FC<Props> = ({
         </button>
       </>}
       {entry?.status === 'arrived' && <div className="sq-pickup-wait"><UserCheck size={22} /><div><strong>Merci d’attendre l’équipe d’accueil.</strong><p>L’équipe doit vérifier {entry.pickerName || 'la personne autorisée'} avant de remettre {child.name}.</p></div></div>}
+      {entry?.status === 'ready' && <div className="sq-pickup-wait is-released"><PackageCheck size={22} /><div><strong>{child.name} est prêt.</strong><p>Son projet et ses affaires sont rangés. L’équipe doit maintenant vérifier {entry.pickerName || 'la personne autorisée'} avant le départ.</p></div></div>}
       {entry?.status === 'released' && <>
         <div className="sq-pickup-wait is-released"><ShieldCheck size={22} /><div><strong>L’équipe a enregistré la remise physique.</strong><p>Confirmez uniquement lorsque {child.name} est bien avec la personne autorisée.</p></div></div>
         {canConfirmReceipt ? <button type="button" className="sq-pickup-primary" onClick={() => void perform('confirm')} disabled={pending !== null}>
@@ -295,7 +300,7 @@ export const ParentPickupControl: React.FC<Props> = ({
       {entry?.status === 'confirmed' && <div className="sq-pickup-complete"><CheckCircle2 size={26} /><div><strong>La remise d’aujourd’hui est terminée.</strong><p>La remise par l’équipe et la confirmation familiale restent dans l’historique.</p></div></div>}
       {(entry?.status === 'cancelled' || entry?.status === 'exception') && <div className="sq-pickup-wait"><AlertCircle size={22} /><div><strong>{entry.status === 'cancelled' ? 'Cette sortie a été annulée.' : 'Une vérification par l’équipe est nécessaire.'}</strong><p>Contactez l’académie avant tout départ avec {child.name}.</p></div></div>}
 
-      {entry && ['on_the_way', 'arrived'].includes(entry.status) && <div className="sq-pickup-cancel">
+      {entry && ['on_the_way', 'arrived', 'ready'].includes(entry.status) && <div className="sq-pickup-cancel">
         {!showCancel ? <button type="button" onClick={() => setShowCancel(true)}>Annuler cette sortie</button> : <>
           <label htmlFor={`sq-pickup-reason-${child.id}`}>Pourquoi cette sortie est-elle annulée ?</label>
           <textarea id={`sq-pickup-reason-${child.id}`} rows={2} minLength={8} maxLength={500} value={cancelReason} onChange={event => setCancelReason(event.target.value)} />
@@ -303,5 +308,14 @@ export const ParentPickupControl: React.FC<Props> = ({
         </>}
       </div>}
     </div>}
+    {entry && (previewMode || entry.parentUid === parentUid) && <PickupPrivateNotes
+      entryId={entry.id}
+      organizationId={organizationId}
+      studentId={child.id}
+      currentUid={parentUid}
+      role="parent"
+      closed={['confirmed', 'cancelled', 'exception'].includes(entry.status)}
+      previewMode={previewMode}
+    />}
   </section>;
 };

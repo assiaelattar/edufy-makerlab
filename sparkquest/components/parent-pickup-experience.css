@@ -29,11 +29,11 @@
 .pf-pickup-tracking-date { color:#617362; font-size:11px; font-weight:800; text-align:right; text-transform:capitalize; }
 .pf-pickup-status,.pf-pickup-no-status { display:flex; align-items:flex-start; gap:12px; border-radius:17px; padding:15px; background:#e9f2ff; }
 .pf-pickup-status.is-arrived { background:#eaf4dc; }
-.pf-pickup-status.is-released,.pf-pickup-status.is-confirmed { background:#e3f5d4; }
+.pf-pickup-status.is-ready,.pf-pickup-status.is-released,.pf-pickup-status.is-confirmed { background:#e3f5d4; }
 .pf-pickup-status.is-attention { background:#fff0df; }
 .pf-pickup-no-status { background:#f2f5ef; }
 .pf-pickup-status-icon,.pf-pickup-no-status-icon { display:grid; width:44px; height:44px; flex:none; place-items:center; border-radius:13px; background:#2448eb; color:#fff; }
-.pf-pickup-status.is-arrived .pf-pickup-status-icon,.pf-pickup-status.is-confirmed .pf-pickup-status-icon { background:#3d7a36; }
+.pf-pickup-status.is-arrived .pf-pickup-status-icon,.pf-pickup-status.is-ready .pf-pickup-status-icon,.pf-pickup-status.is-confirmed .pf-pickup-status-icon { background:#3d7a36; }
 .pf-pickup-status.is-attention .pf-pickup-status-icon { background:#ac623a; }
 .pf-pickup-no-status-icon { background:#dbe7d6; color:#3f6241; }
 .pf-pickup-status h3,.pf-pickup-no-status h3 { margin:2px 0 5px; font-family:'Manrope','Nunito',sans-serif; font-size:18px; font-weight:900; letter-spacing:-.04em; }

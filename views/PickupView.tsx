@@ -29,7 +29,7 @@ import {
 } from '../components/atlas/AtlasSurface';
 import './family-journey/education-family-journey-v1.css';
 
-type QueueFilter = 'all' | 'arrived' | 'incoming' | 'released';
+type QueueFilter = 'all' | 'arrived' | 'ready' | 'incoming' | 'released';
 
 interface QueueGroup {
     entry: PickupEntry;
@@ -37,7 +37,7 @@ interface QueueGroup {
     duplicateCount: number;
 }
 
-const ACTIVE_STATUSES = new Set<PickupEntry['status']>(['waiting', 'on_the_way', 'arrived', 'released']);
+const ACTIVE_STATUSES = new Set<PickupEntry['status']>(['waiting', 'on_the_way', 'arrived', 'ready', 'released']);
 const TERMINAL_STATUSES = new Set<PickupEntry['status']>(['confirmed', 'dismissed', 'cancelled', 'exception']);
 
 const getTimestampMillis = (value: unknown): number => {
@@ -52,8 +52,10 @@ const getLifecycleMillis = (entry: PickupEntry): number => {
         ? entry.confirmedAt
         : entry.status === 'released'
             ? entry.releasedAt
-            : entry.status === 'arrived'
-                ? entry.arrivedAt
+            : entry.status === 'ready'
+                ? entry.readyAt
+                : entry.status === 'arrived'
+                    ? entry.arrivedAt
                 : entry.notifiedAt;
 
     return getTimestampMillis(statusTimestamp) || getTimestampMillis(entry.createdAt);
@@ -70,6 +72,7 @@ const getStatusLabel = (status: PickupEntry['status']): string => {
         case 'waiting': return 'Waiting for arrival';
         case 'on_the_way': return 'On the way';
         case 'arrived': return 'At the gate';
+        case 'ready': return 'Learner ready';
         case 'released': return 'Released';
         case 'confirmed': return 'Pickup confirmed';
         case 'dismissed': return 'Dismissed';
@@ -142,14 +145,15 @@ export const PickupView = () => {
 
         return groups.sort((a, b) => {
             const priority: Record<PickupEntry['status'], number> = {
-                arrived: 0,
-                waiting: 1,
-                on_the_way: 1,
-                released: 2,
-                confirmed: 3,
-                dismissed: 3,
-                cancelled: 3,
-                exception: 3
+                ready: 0,
+                arrived: 1,
+                waiting: 2,
+                on_the_way: 2,
+                released: 3,
+                confirmed: 4,
+                dismissed: 4,
+                cancelled: 4,
+                exception: 4
             };
             const statusDifference = priority[a.entry.status] - priority[b.entry.status];
             if (statusDifference !== 0) return statusDifference;
@@ -172,9 +176,10 @@ export const PickupView = () => {
     }, [latestByStudent, organizationId, searchQuery, students]);
 
     const pickupSignals = useMemo(() => ({
-        active: queueGroups.filter(group => ['waiting', 'on_the_way', 'arrived'].includes(group.entry.status)).length,
+        active: queueGroups.filter(group => ['waiting', 'on_the_way', 'arrived', 'ready'].includes(group.entry.status)).length,
         onTheWay: queueGroups.filter(group => ['waiting', 'on_the_way'].includes(group.entry.status)).length,
         arrived: queueGroups.filter(group => group.entry.status === 'arrived').length,
+        ready: queueGroups.filter(group => group.entry.status === 'ready').length,
         released: queueGroups.filter(group => group.entry.status === 'released').length
     }), [queueGroups]);
 
@@ -185,6 +190,7 @@ export const PickupView = () => {
     }), [queueFilter, queueGroups]);
 
     const arrivedGroups = filteredGroups.filter(group => group.entry.status === 'arrived');
+    const readyGroups = filteredGroups.filter(group => group.entry.status === 'ready');
     const incomingGroups = filteredGroups.filter(group => ['waiting', 'on_the_way'].includes(group.entry.status));
     const releasedGroups = filteredGroups.filter(group => group.entry.status === 'released');
 
@@ -203,20 +209,23 @@ export const PickupView = () => {
 
     useEffect(() => {
         if (!isGatekeeper || !organizationId || document.visibilityState !== 'visible') return;
-        const latestArrival = queueGroups
-            .filter(group => group.entry.status === 'arrived')
+        const latestAction = queueGroups
+            .filter(group => ['arrived', 'ready'].includes(group.entry.status))
             .sort((a, b) => getLifecycleMillis(b.entry) - getLifecycleMillis(a.entry))[0]?.entry;
 
-        if (!latestArrival || Date.now() - getLifecycleMillis(latestArrival) > 120_000) return;
+        if (!latestAction || Date.now() - getLifecycleMillis(latestAction) > 120_000) return;
         const storageKey = `pickup:last-announced:${organizationId}`;
-        if (localStorage.getItem(storageKey) === latestArrival.id) return;
+        const announcementId = `${latestAction.id}:${latestAction.status}`;
+        if (localStorage.getItem(storageKey) === announcementId) return;
 
         if ('speechSynthesis' in window) {
-            const announcement = new SpeechSynthesisUtterance(`${latestArrival.studentName}'s pickup has arrived.`);
+            const announcement = new SpeechSynthesisUtterance(latestAction.status === 'ready'
+                ? `${latestAction.studentName} is packed and ready for pickup.`
+                : `${latestAction.studentName}'s pickup has arrived.`);
             announcement.rate = 1;
             window.speechSynthesis.speak(announcement);
         }
-        localStorage.setItem(storageKey, latestArrival.id);
+        localStorage.setItem(storageKey, announcementId);
     }, [isGatekeeper, organizationId, queueGroups]);
 
     const validateMutation = async (entry?: PickupEntry): Promise<boolean> => {
@@ -335,8 +344,8 @@ export const PickupView = () => {
     const releaseStudent = async (group: QueueGroup) => {
         if (!(await validateMutation(group.entry))) return;
         if (!userProfile?.uid) return;
-        if (group.entry.status !== 'arrived') {
-            await showAlert('Arrival required', `${group.entry.studentName} must be marked at the gate before release.`, 'warning');
+        if (group.entry.status !== 'ready') {
+            await showAlert('Learner is not ready', `${group.entry.studentName} must finish packing and choose “I’m ready” before release.`, 'warning');
             return;
         }
 
@@ -350,7 +359,7 @@ export const PickupView = () => {
         setPendingAction(`release:${group.entry.studentId}`);
         setFeedback(null);
         try {
-            await advancePickup(db!, group.entry.id, 'arrived', 'released', userProfile.uid, {
+            await advancePickup(db!, group.entry.id, 'ready', 'released', userProfile.uid, {
                 verificationMethod,
                 verificationNote: verificationNote.trim()
             });
@@ -370,6 +379,7 @@ export const PickupView = () => {
     const filterOptions: Array<{ id: QueueFilter; label: string; count: number }> = [
         { id: 'all', label: 'All active', count: queueGroups.length },
         { id: 'arrived', label: 'At gate', count: pickupSignals.arrived },
+        { id: 'ready', label: 'Learner ready', count: pickupSignals.ready },
         { id: 'incoming', label: 'Incoming', count: pickupSignals.onTheWay },
         { id: 'released', label: 'Released', count: pickupSignals.released }
     ];
@@ -409,10 +419,11 @@ export const PickupView = () => {
                         }
                     />
 
-                    <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                         <AtlasSignalCard label="Active queue" value={pickupSignals.active} detail="Awaiting safe handoff" icon={Car} tone="teal" onClick={() => setQueueFilter('all')} />
                         <AtlasSignalCard label="Incoming" value={pickupSignals.onTheWay} detail="Approaching the gate" icon={MapPin} tone="blue" onClick={() => setQueueFilter('incoming')} />
-                        <AtlasSignalCard label="At the gate" value={pickupSignals.arrived} detail="Release action required" icon={UserCheck} tone={pickupSignals.arrived > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('arrived')} />
+                        <AtlasSignalCard label="At the gate" value={pickupSignals.arrived} detail="Learner is packing" icon={UserCheck} tone={pickupSignals.arrived > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('arrived')} />
+                        <AtlasSignalCard label="Learner ready" value={pickupSignals.ready} detail="Verify and release" icon={ShieldCheck} tone={pickupSignals.ready > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('ready')} />
                         <AtlasSignalCard label="Released" value={pickupSignals.released} detail="Awaiting parent confirmation" icon={CheckCircle2} tone="emerald" onClick={() => setQueueFilter('released')} />
                     </div>
 
@@ -544,21 +555,21 @@ export const PickupView = () => {
                     <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 pt-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
                         <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-amber-300/25 bg-slate-900/70">
                             <div className="flex items-center justify-between border-b border-amber-300/20 bg-amber-300/[0.08] px-4 py-3">
-                                <h2 className="text-sm font-black uppercase tracking-wider text-amber-100">Ready for pickup</h2>
-                                <span className="font-mono text-xs text-amber-200">{pickupSignals.released}</span>
+                                <h2 className="text-sm font-black uppercase tracking-wider text-amber-100">Ready for staff release</h2>
+                                <span className="font-mono text-xs text-amber-200">{pickupSignals.ready}</span>
                             </div>
                             <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto p-4 xl:grid-cols-2">
-                                {queueGroups.filter(group => group.entry.status === 'released').map(group => (
+                                {queueGroups.filter(group => group.entry.status === 'ready').map(group => (
                                     <div key={group.entry.id} className="rounded-lg border border-amber-300/20 bg-slate-950 p-4">
                                         <div className="truncate text-2xl font-black text-white">{group.entry.studentName}</div>
                                         <div className="mt-2 flex items-center justify-between gap-3 text-sm text-slate-400">
-                                            <span className="truncate">Proceed to pickup point</span>
+                                            <span className="truncate">Packed and waiting inside</span>
                                             <span className="shrink-0 font-mono text-amber-200">{formatTime(group.entry)}</span>
                                         </div>
                                     </div>
                                 ))}
-                                {pickupSignals.released === 0 && (
-                                    <div className="col-span-full flex min-h-44 items-center justify-center text-sm font-bold text-slate-600">No students released yet.</div>
+                                {pickupSignals.ready === 0 && (
+                                    <div className="col-span-full flex min-h-44 items-center justify-center text-sm font-bold text-slate-600">No learners marked ready yet.</div>
                                 )}
                             </div>
                         </section>
@@ -596,20 +607,39 @@ export const PickupView = () => {
                     {arrivedGroups.length > 0 && (
                         <section className="space-y-4">
                             <AtlasSectionHeader
-                                title="At the gate"
-                                description="Verify the pickup contact before recording release."
+                                title="Parent at the gate"
+                                description="The learner is still packing and must choose “I’m ready” before staff release."
                                 icon={UserCheck}
-                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{arrivedGroups.length} action required</span>}
+                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{arrivedGroups.length} packing</span>}
+                            />
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                {arrivedGroups.map(group => <article key={group.entry.id} className="rounded-lg border border-amber-300/25 bg-slate-900 p-4">
+                                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-200">Waiting for learner</div>
+                                    <h3 className="mt-1 truncate text-base font-black text-white">{group.entry.studentName}</h3>
+                                    <p className="mt-1 truncate text-xs text-slate-400">{group.entry.pickerName || group.entry.parentName || 'Pickup contact'}</p>
+                                    <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-400">Parent arrived at {formatTime(group.entry)}. Release stays locked until the learner finishes tidying and marks ready.</p>
+                                </article>)}
+                            </div>
+                        </section>
+                    )}
+
+                    {readyGroups.length > 0 && (
+                        <section className="space-y-4">
+                            <AtlasSectionHeader
+                                title="Learners ready"
+                                description="The learner finished packing. Verify the pickup contact before recording departure."
+                                icon={ShieldCheck}
+                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{readyGroups.length} action required</span>}
                             />
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {arrivedGroups.map(group => {
+                                {readyGroups.map(group => {
                                     const isPending = pendingAction === `release:${group.entry.studentId}`;
                                     return (
                                         <article key={group.entry.id} className="rounded-lg border border-amber-300/25 bg-slate-900 p-4">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
                                                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                                                        <span className="rounded-md bg-amber-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-950">At gate</span>
+                                                        <span className="rounded-md bg-amber-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-950">Learner ready</span>
                                                         <span className="font-mono text-xs text-amber-200">{formatTime(group.entry)}</span>
                                                         {group.duplicateCount > 0 && <span className="text-[10px] font-bold text-slate-500">{group.duplicateCount + 1} records linked</span>}
                                                     </div>

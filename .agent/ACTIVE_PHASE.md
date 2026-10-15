@@ -1,6 +1,6 @@
-# Current phase override — Live pickup lifecycle release (2026-10-12)
+# Current phase override — Live pickup lifecycle release (updated 2026-10-15)
 
-The canonical pickup lifecycle is implemented and locally accepted across family, learner and staff roles. Parents select an active authorized picker and announce/arrive; learners receive live status; Edufy staff verify and release; only the selected picker confirms receipt. Each transition has an atomic immutable audit event. Both clients, Firestore rules and indexes are in the coordinated release scope explicitly requested by the user. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
+The canonical pickup lifecycle is implemented and locally accepted across family, learner and staff roles. Parents select an active authorized picker and announce/arrive; learners receive live status, exchange private notes with the initiating parent, pack and tidy, then mark ready; Edufy staff verify and release; only the selected picker confirms receipt. Each transition has an atomic immutable audit event. Both clients, Firestore rules and indexes are in the coordinated release scope explicitly requested by the user. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
 
 Release gate: promote the focused commit from the clean `origin/main` worktree, deploy Edufy through Hostinger, deploy the linked SparkQuest Vercel project, deploy Firestore rules/indexes, then verify public assets and remote SHA. No production family record is created by the release itself.
 

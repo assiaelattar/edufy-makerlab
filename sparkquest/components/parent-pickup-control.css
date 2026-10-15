@@ -7,7 +7,7 @@
 .sq-pickup-control-head p { margin: 0 0 3px; color: #bcd8f6; font-size: 9px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
 .sq-pickup-control-head h3 { margin: 0; font-size: clamp(19px,5vw,25px); font-weight: 900; letter-spacing: -.04em; line-height: 1.1; }
 .sq-pickup-control-head em { grid-column: 1/-1; width: fit-content; border: 1px solid #ffffff30; border-radius: 999px; padding: 5px 9px; background: #ffffff12; color: #eaf4ff; font-size: 10px; font-style: normal; font-weight: 900; }
-.sq-pickup-progress { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 0; margin: 0; padding: 16px 12px 11px; list-style: none; }
+.sq-pickup-progress { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 0; margin: 0; padding: 16px 8px 11px; list-style: none; }
 .sq-pickup-progress li { position: relative; display: grid; justify-items: center; gap: 5px; color: #91a0ad; text-align: center; }
 .sq-pickup-progress li::before { position: absolute; z-index: 0; top: 14px; right: 50%; left: -50%; height: 3px; background: #dce6ed; content: ''; }
 .sq-pickup-progress li:first-child::before { display: none; }

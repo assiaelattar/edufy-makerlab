@@ -1,5 +1,12 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Learner-ready pickup and private notes
+
+- Added the missing learner handoff step: after the selected picker arrives, the learner packs, tidies the space, and marks **I’m ready** while remaining inside.
+- Edufy now separates arrived learners who are still packing from learners ready for staff verification and release.
+- Added an append-only private note thread between the initiating parent and exact learner. Other guardians and staff cannot read it; messages close after the pickup is completed while history remains visible.
+- Completed the real local UI sequence across parent, learner and instructor accounts: on the way, arrived, private reminders/reply, learner ready, verified release, and parent receipt confirmation.
+
 ## 2026-10-15 — Keybank and Showcase student fixes
 
 - Keybank saves now use one operation ID in a transaction and render the returned canonical list. A repeated save cannot add a second record for that operation, and deleting a key targets only its ID.
@@ -55,7 +62,7 @@
 - Added a one-time, account-scoped invitation after the signed-in parent family loads. The 011Y sheet offers the browser install action when available, or clear home-screen instructions, and can be dismissed.
 - The sheet stays hidden in installed standalone mode. A development-only preview exercises the invitation without changing live family data.
 
-# 2026-10-12 — Connected pickup lifecycle
+## 2026-10-12 — Connected pickup lifecycle
 
 - Connected existing parent, authorized guardian, learner and Edufy staff accounts through one live pickup queue.
 - Added selected-picker announcement, arrival, staff verification/release, selected-picker receipt confirmation, cancellation and exception handling.

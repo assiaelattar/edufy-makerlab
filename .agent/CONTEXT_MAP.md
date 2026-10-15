@@ -4,7 +4,7 @@ Parent legacy login repair: read `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_
 
 # Pickup lifecycle
 
-Read `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`, `sparkquest/AGENT_CONTEXT.md`, decisions and known issues. Canonical files are `modules/pickup/domain/pickupLifecycle.ts`, `modules/pickup/services/pickupCommands.ts`, `sparkquest/services/parentPickupCommands.ts`, both pickup UIs, `firestore.rules` and `firestore.indexes.json`. Run the lifecycle smoke, parent-command and rule emulator suites only against explicit localhost demo emulators, then SparkQuest TypeScript and both production builds.
+Read `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`, `sparkquest/AGENT_CONTEXT.md`, decisions and known issues. Canonical files are `modules/pickup/domain/pickupLifecycle.ts`, `modules/pickup/services/pickupCommands.ts`, `sparkquest/services/{parentPickupCommands,studentPickupCommands}.ts`, `sparkquest/components/{ParentPickupControl,PickupSchedule,PickupPrivateNotes}.tsx`, `views/PickupView.tsx`, `firestore.rules` and `firestore.indexes.json`. Run the lifecycle smoke, parent-command and rule emulator suites only against explicit localhost demo emulators, then the full four-role local UI flow, SparkQuest TypeScript and both production builds.
 
 Protected step review: read `docs/sparkquest/REVIEW_SECURITY_PHASE_2.md`, both earlier review reports, SparkQuest context, decisions and known issues. Run the review, learner-pipeline and profile-assignment emulators only against explicit localhost demo services, all domain suites, scoped TypeScript, both builds and the write-free `?designPreview=reviewLoop` browser flow.
 

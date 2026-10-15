@@ -2,7 +2,7 @@ import { doc, getDoc, serverTimestamp, writeBatch, type Firestore } from 'fireba
 import {
   canAdvancePickup, isAuthorizedPicker, pickupEntryId, pickupSessionDate,
   type PickupStatus
-} from '../../modules/pickup/domain/pickupLifecycle';
+} from '../domain/pickupLifecycle';
 
 interface PickupStudent {
   organizationId?: string;

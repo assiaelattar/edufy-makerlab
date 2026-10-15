@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock, Loader2, MapPin, ShieldCheck, Truck, UserCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, Loader2, MapPin, PackageCheck, ShieldCheck, Truck, UserCheck } from 'lucide-react';
 import { collection, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import {
     isCanonicalPickupEntry,
@@ -10,6 +10,8 @@ import {
 } from '../domain/pickupLifecycle';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
+import { markStudentReady } from '../services/studentPickupCommands';
+import { PickupPrivateNotes } from './PickupPrivateNotes';
 import { SparkbookDialog } from './SparkbookDialog';
 
 interface PickupScheduleProps {
@@ -30,6 +32,7 @@ interface StudentPickupEntry {
 const progressSteps = [
     { status: 'on_the_way', label: 'On the way', icon: Truck },
     { status: 'arrived', label: 'At MakerLab', icon: MapPin },
+    { status: 'ready', label: 'I am ready', icon: PackageCheck },
     { status: 'released', label: 'Staff release', icon: ShieldCheck },
     { status: 'confirmed', label: 'Pickup complete', icon: CheckCircle2 },
 ] as const;
@@ -46,6 +49,8 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
     const [loadingStatus, setLoadingStatus] = useState(true);
     const [readError, setReadError] = useState<string | null>(null);
     const [pickup, setPickup] = useState<StudentPickupEntry | null>(null);
+    const [readyPending, setReadyPending] = useState(false);
+    const [readyError, setReadyError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isOpen || !studentId || !organizationId || !db) return;
@@ -108,6 +113,7 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
         switch (pickup?.status) {
             case 'on_the_way': return { title: 'Your pickup is on the way', copy: `${pickup.pickerName || 'Your authorized pickup person'} has started the trip.`, tone: 'orange' as const };
             case 'arrived': return { title: 'Your pickup is at MakerLab', copy: `${pickup.pickerName || 'Your authorized pickup person'} is waiting. Stay inside until a team member completes the check.`, tone: 'orange' as const };
+            case 'ready': return { title: 'You are ready to leave', copy: 'The team and your family can see that you packed your project and personal items.', tone: 'lime' as const };
             case 'released': return { title: 'Staff cleared your departure', copy: `A MakerLab team member verified ${pickup.pickerName || 'your authorized pickup person'}. Leave only with that person.`, tone: 'lime' as const };
             case 'confirmed': return { title: 'Pickup complete', copy: 'Your authorized pickup person confirmed the handoff.', tone: 'lime' as const };
             case 'cancelled': return { title: 'Pickup was cancelled', copy: 'Stay with the MakerLab team until a new pickup is arranged.', tone: 'orange' as const };
@@ -117,7 +123,20 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
     }, [pickup]);
 
     const position = statusPosition(pickup?.status);
-    const waitingForTeam = pickup?.status === 'arrived' || pickup?.status === 'exception';
+    const waitingForTeam = pickup?.status === 'arrived' || pickup?.status === 'ready' || pickup?.status === 'exception';
+
+    const confirmReady = async () => {
+        if (!db || !user?.uid || !pickup || pickup.status !== 'arrived') return;
+        setReadyPending(true);
+        setReadyError(null);
+        try {
+            await markStudentReady(db, organizationId, studentId, pickup.id, user.uid);
+        } catch (error) {
+            setReadyError(error instanceof Error ? error.message : 'Your ready status could not be saved. Ask a team member for help.');
+        } finally {
+            setReadyPending(false);
+        }
+    };
 
     return (
         <SparkbookDialog
@@ -155,6 +174,13 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
                         })}
                     </ol>}
 
+                    {pickup?.status === 'arrived' && <section className="sq-pickup-ready-action">
+                        <PackageCheck size={25} />
+                        <div><strong>Have you finished packing and tidying your space?</strong><p>Check your project, tools, jacket and personal items. Then tell the team you are ready.</p></div>
+                        <button type="button" onClick={() => void confirmReady()} disabled={readyPending}>{readyPending ? <Loader2 className="sq-spin" size={17} /> : <CheckCircle2 size={17} />} I packed everything — I’m ready</button>
+                    </section>}
+                    {readyError && <div className="sq-pickup-live is-exception" role="alert"><span><AlertCircle size={18} /> Ready status not saved</span><p>{readyError}</p></div>}
+
                     <section className={`sq-pickup-guidance${waitingForTeam ? ' is-attention' : ''}`}>
                         <ShieldCheck size={24} />
                         <div><strong>{pickup?.status === 'released' ? 'Leave only with the verified person.' : 'A team member completes every handoff.'}</strong><p>Never leave the academy because of a message or screen alone. Wait for a MakerLab team member to call you and complete the physical handoff.</p></div>
@@ -162,9 +188,19 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
 
                     <ol className="sq-pickup-steps">
                         <li><span>1</span>Pack your project and personal items.</li>
-                        <li><span>2</span>Wait inside at the meeting point shown above.</li>
-                        <li><span>3</span>Leave only after a MakerLab team member verifies the pickup person.</li>
+                        <li><span>2</span>Tap “I’m ready” only after your space is tidy.</li>
+                        <li><span>3</span>Wait inside at the meeting point shown above.</li>
+                        <li><span>4</span>Leave only after a MakerLab team member verifies the pickup person.</li>
                     </ol>
+
+                    {pickup && user?.uid && <PickupPrivateNotes
+                        entryId={pickup.id}
+                        organizationId={organizationId}
+                        studentId={studentId}
+                        currentUid={user.uid}
+                        role="student"
+                        closed={['confirmed', 'cancelled', 'exception'].includes(pickup.status)}
+                    />}
                 </>
             )}
         </SparkbookDialog>

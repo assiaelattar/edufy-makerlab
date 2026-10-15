@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Pickup lifecycle release acceptance
+
+- The corrected five-state handoff and private notes passed isolated Auth/Firestore emulators and the full local parent → learner → instructor → parent UI flow on 2026-10-15. Public operational use still requires the coordinated SparkQuest, Edufy and Firestore release plus one designated-family live acceptance.
+- Some intentionally denied emulator writes can reach Firestore's rule-expression ceiling after authorization has already failed. Valid lifecycle and private-message writes pass; preserve the guardian, learner, tenant and atomic-event checks when simplifying rules later.
+
 ## Keybank and Showcase release acceptance
 
 - The local emulator proves Keybank exact-ID behavior and Showcase password/ownership rules with synthetic records. A designated nonproduction learner account must still confirm the live UI, including wrong-password preservation and deletion of only its own disposable Showcase.

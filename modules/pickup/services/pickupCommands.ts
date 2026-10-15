@@ -56,6 +56,7 @@ export async function advancePickup(
   const update: Record<string, unknown> = { status: next, updatedAt: serverTimestamp(), lastActorUid: actorUid, lastEventId: next };
   const eventDetails: Record<string, unknown> = {};
   if (next === 'arrived') update.arrivedAt = serverTimestamp();
+  if (next === 'ready') update.readyAt = serverTimestamp();
   if (next === 'released') {
     if (!details.verificationMethod || !details.verificationNote?.trim() || details.verificationNote.trim().length < 8) {
       throw new Error('Record how the authorized picker was verified before release.');

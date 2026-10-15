@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { initializeApp as initializeClient, deleteApp } from 'firebase/app';
 import { getAuth, connectAuthEmulator, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator, collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator, addDoc, collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { initializeApp as initializeAdmin, deleteApp as deleteAdmin } from 'firebase-admin/app';
 import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 
@@ -117,6 +117,18 @@ try {
   await admin.doc(`users/${secondParent.uid}`).update({ status: 'active' });
   await writeTransition(secondParent, id, 'arrived', { arrivedAt: serverTimestamp() });
   assert.equal((await getDoc(entry)).data()?.lastActorUid, secondParent.uid, 'Arrival records the actual second guardian.');
+  await denied(writeTransition(instructor, id, 'released', { releasedAt: serverTimestamp(), verifiedByUid: instructor.uid, verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' }, { verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' }), 'Staff cannot release before learner ready');
+  await denied(writeTransition(parent, id, 'ready', { readyAt: serverTimestamp() }), 'Parent cannot mark learner ready');
+  await writeTransition(learner, id, 'ready', { readyAt: serverTimestamp() });
+  assert.equal((await getDoc(entry)).data()?.status, 'ready', 'Learner can mark ready after parent arrival.');
+
+  const messages = collection(parent.db, 'pickup_queue', id, 'messages');
+  const parentMessage = await addDoc(messages, { organizationId: 'org-pickup', studentId: 'learner-a', senderUid: parent.uid, senderRole: 'parent', body: 'Do not forget your jacket.', createdAt: serverTimestamp() });
+  await addDoc(collection(learner.db, 'pickup_queue', id, 'messages'), { organizationId: 'org-pickup', studentId: 'learner-a', senderUid: learner.uid, senderRole: 'student', body: 'Everything is packed.', createdAt: serverTimestamp() });
+  assert.equal((await getDocs(messages)).size, 2, 'Initiating parent and learner share the private pickup thread.');
+  await denied(addDoc(collection(secondParent.db, 'pickup_queue', id, 'messages'), { organizationId: 'org-pickup', studentId: 'learner-a', senderUid: secondParent.uid, senderRole: 'parent', body: 'I should not enter this thread.', createdAt: serverTimestamp() }), 'Non-initiating guardian private message');
+  await denied(getDocs(collection(instructor.db, 'pickup_queue', id, 'messages')), 'Staff private thread read');
+  await denied(updateDoc(doc(parent.db, 'pickup_queue', id, 'messages', parentMessage.id), { body: 'Changed later' }), 'Private message mutation');
   await denied(writeTransition(parent, id, 'released', { releasedAt: serverTimestamp(), verifiedByUid: parent.uid, verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' }, { verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' }), 'Parent release');
   await denied(writeTransition(instructor, id, 'released', { releasedAt: serverTimestamp(), verifiedByUid: instructor.uid, verifiedPickerName: 'Stranger', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched a stranger.' }, { verifiedPickerName: 'Stranger', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched a stranger.' }), 'Wrong verified picker');
   const releaseFields = { releasedAt: serverTimestamp(), verifiedByUid: instructor.uid, verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' };
@@ -139,6 +151,7 @@ try {
   assert.equal((await getDoc(entry)).data()?.lastActorUid, secondParent.uid, 'Receipt records the actual second guardian.');
   assert.equal((await getDoc(doc(parent.db, 'pickup_queue', id, 'events', 'confirmed'))).data()?.actorUid, secondParent.uid);
   assert.equal((await getDoc(doc(parent.db, 'pickup_queue', id, 'events', 'released'))).data()?.verificationMethod, 'photo_id');
+  await denied(addDoc(messages, { organizationId: 'org-pickup', studentId: 'learner-a', senderUid: parent.uid, senderRole: 'parent', body: 'Thread is closed.', createdAt: serverTimestamp() }), 'Message after confirmed handoff');
 
   await admin.doc('students/learner-b').set({ organizationId: 'org-pickup', status: 'active', name: 'Learner B', parentName: 'Maya', parentLoginInfo: { uid: parent.uid }, authorizedPickups: ['Uncle Sam'] });
   await admin.doc(`guardian_links/${parent.uid}_learner-b`).set({ organizationId: 'org-pickup', parentUid: parent.uid, studentId: 'learner-b', status: 'active', permissions: ['pickup'] });
@@ -159,15 +172,16 @@ try {
   assert.equal((await getDoc(doc(parent.db, 'pickup_queue', thirdId))).data()?.parentUid, secondParent.uid, 'Second guardian is the immutable initiator on their own request.');
   await writeTransition(parent, thirdId, 'cancelled', { cancelledAt: serverTimestamp(), exceptionReason: 'Pickup plan changed.' }, { exceptionReason: 'Pickup plan changed.' }, 'learner-c');
 
-  await admin.doc('students/learner-d').set({ organizationId: 'org-pickup', status: 'active', name: 'Learner D', parentName: 'Maya', parentLoginInfo: { uid: parent.uid }, authorizedPickups: ['Uncle Sam'] });
+  await admin.doc('students/learner-d').set({ organizationId: 'org-pickup', status: 'active', name: 'Learner D', parentName: 'Maya', parentLoginInfo: { uid: parent.uid }, loginInfo: { uid: learner.uid }, authorizedPickups: ['Uncle Sam'] });
   await admin.doc(`guardian_links/${parent.uid}_learner-d`).set({ organizationId: 'org-pickup', parentUid: parent.uid, studentId: 'learner-d', status: 'active', permissions: ['pickup'] });
   await admin.doc(`guardian_links/${secondParent.uid}_learner-d`).set({ organizationId: 'org-pickup', parentUid: secondParent.uid, studentId: 'learner-d', status: 'active', permissions: ['pickup'] });
   const fourthId = await announcePickup(parent.db, { id: 'learner-d', organizationId: 'org-pickup', name: 'Learner D', parentName: 'Maya', authorizedPickups: ['Uncle Sam'] }, parent.uid, 'Uncle Sam', new Date(), parent.uid);
   await advancePickup(secondParent.db, fourthId, 'on_the_way', 'arrived', secondParent.uid);
-  await advancePickup(instructor.db, fourthId, 'arrived', 'released', instructor.uid, { verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' });
+  await advancePickup(learner.db, fourthId, 'arrived', 'ready', learner.uid);
+  await advancePickup(instructor.db, fourthId, 'ready', 'released', instructor.uid, { verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' });
   await advancePickup(secondParent.db, fourthId, 'released', 'confirmed', secondParent.uid);
   assert.equal((await getDoc(doc(parent.db, 'pickup_queue', fourthId))).data()?.status, 'confirmed', 'Edufy command batch completes the cross-guardian handoff.');
-  console.log('Pickup Auth/Firestore emulator passed: both linked guardians, initiator spoof denial, inactive/revoked and staff-read denial, portfolio/alias-only denial, dated query, exact picker, ordered transitions, append-only events, and concurrent release.');
+  console.log('Pickup Auth/Firestore emulator passed: parent arrival, learner-ready gate, staff release, selected-picker receipt, private parent-learner notes, tenant/role denials, append-only events, and concurrent release.');
 } finally {
   await Promise.all(clients.map(deleteApp));
   await deleteAdmin(adminApp);

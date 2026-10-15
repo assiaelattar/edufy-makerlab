@@ -990,9 +990,10 @@ export interface PickupEntry {
   lastEventId?: string;
   pickerName?: string; // Who is actually coming (e.g. "Mom", "Uncle John")
   pickerRelation?: string;
-  status: 'waiting' | 'on_the_way' | 'arrived' | 'released' | 'confirmed' | 'dismissed' | 'cancelled' | 'exception';
+  status: 'waiting' | 'on_the_way' | 'arrived' | 'ready' | 'released' | 'confirmed' | 'dismissed' | 'cancelled' | 'exception';
   notifiedAt?: Timestamp; // When "On my way" was clicked
   arrivedAt?: Timestamp; // When "I'm Here" was clicked
+  readyAt?: Timestamp; // When the learner confirms packing and cleanup are complete
   releasedAt?: Timestamp; // When instructor released
   confirmedAt?: Timestamp; // When parent confirmed receipt
   cancelledAt?: Timestamp;

@@ -1,5 +1,11 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Learner readiness gates physical release
+
+Arrival means the selected picker is at MakerLab; it does not mean the learner may leave. The exact linked learner must first pack their project and personal items, tidy the space, and move the pickup to `ready`. Staff release is valid only from `ready`, after verifying the authorized picker. The learner remains inside until the staff handoff is recorded.
+
+Pickup notes use an append-only subcollection on the queue entry. Only the initiating parent and exact learner can read or add messages, each message is limited to 500 characters, and the thread becomes read-only after a terminal state. This keeps everyday reminders private without turning the staff pickup desk into a family chat reader.
+
 ## 2026-10-15 — Showcase deletion requires a recent password session
 
 Only a verified learner may delete their own `showcase-template` project. The client reauthenticates with the account password immediately before deletion; Firestore requires the password sign-in provider and an authentication age of at most five minutes. Learner updates preserve `templateId` so an assigned project cannot be relabeled for deletion. Kiosk and PIN sessions cannot perform this action. Keybank identity is its generated operation ID, not its label or username.

@@ -6,22 +6,25 @@ The pickup flow now connects the existing family, learner and Edufy staff accoun
 
 1. A verified parent selects an active authorized guardian for one linked learner and announces that person is on the way.
 2. The parent or the selected guardian marks arrival.
-3. The learner sees the selected pickup person and the live four-step handoff in SparkQuest, with explicit instructions to remain inside until a team member completes the physical release.
-4. An instructor, front desk operator, admin, owner or super admin opens **Pickup Status**, checks the selected person, records the verification method and optional note, then releases the learner.
-5. Only the selected guardian can confirm receipt. Every transition writes an immutable companion event in the same Firestore transaction.
+3. The learner sees the selected pickup person and the live five-step handoff in SparkQuest. After packing the project, personal items and tidying the space, the learner marks **I’m ready** and remains inside.
+4. The learner and initiating parent can exchange short private pickup notes such as reminders about a jacket. Staff and other guardians cannot read this thread.
+5. An instructor, front desk operator, admin, owner or super admin opens **Pickup Status**, sees the learner in the ready queue, checks the selected person, records the verification method and optional note, then releases the learner.
+6. Only the selected guardian can confirm receipt. Every transition writes an immutable companion event in the same Firestore transaction.
 
 No separate pickup account type is required. Staff who already work in Edufy receive the `pickup.view` permission through the instructor role; elevated administrative roles retain access. A future reception-only login can use a restricted custom role if the academy needs a kiosk or least-privilege desk account.
 
 ## Canonical contract
 
 - Queue identity: `{organizationId}_{studentId}_{sessionDate}_{source}`.
-- States: `on_the_way`, `arrived`, `released`, `confirmed`, `cancelled`, `exception`.
+- States: `on_the_way`, `arrived`, `ready`, `released`, `confirmed`, `cancelled`, `exception`.
 - Parent actions require an active guardian link and an active selected picker link for the same learner and organization.
+- Only the exact verified learner can move an arrived pickup to `ready`.
 - Staff release requires tenant membership and an instructor or elevated role.
 - Receipt confirmation requires an active pickup guardian whose verified profile name matches the selected picker name.
 - Each state transition must atomically create exactly one `pickup_events` document with the same transition and actor.
 - Queue records and event records are append-only for audit purposes; deletion is denied.
-- Only active `on_the_way` or `arrived` records can carry into the next operating day.
+- Private messages are append-only, limited to 500 characters, and available only to the initiating parent and exact learner. New messages close when the pickup reaches a terminal state; history remains visible.
+- Only active `on_the_way`, `arrived` or `ready` records can carry into the next operating day.
 
 ## Implementation
 
@@ -29,24 +32,29 @@ No separate pickup account type is required. Staff who already work in Edufy rec
 - `modules/pickup/services/pickupCommands.ts` — Edufy staff commands.
 - `views/PickupView.tsx` — live staff desk, verification and release.
 - `sparkquest/services/parentPickupCommands.ts` — parent/guardian commands.
+- `sparkquest/services/studentPickupCommands.ts` — learner-ready command.
 - `sparkquest/components/ParentPickupControl.tsx` — family pickup controls.
+- `sparkquest/components/PickupSchedule.tsx` — learner live status and ready action.
+- `sparkquest/components/PickupPrivateNotes.tsx` — private parent/learner notes.
 - `firestore.rules` — role, guardian, selected-picker and event integrity rules.
 - `firestore.indexes.json` — student/date and student/status queue indexes.
 
 ## Acceptance evidence
 
-An isolated `demo-pickup-live` Auth/Firestore run completed the actual role flow:
+On 2026-10-15 an isolated `demo-pickup-live` Auth/Firestore run completed the corrected actual role flow:
 
 - parent selected an authorized guardian and announced pickup;
 - parent marked arrival;
-- learner received the live notification;
+- learner received the arrival and a private parent reminder;
+- learner replied privately, packed and tidied, then marked ready;
+- Edufy moved the learner live into the **Learner ready** queue and kept release locked until that state;
 - staff recorded `known_person` verification and released the learner;
-- the initiating parent could not confirm receipt because another guardian was selected;
-- the selected guardian confirmed receipt;
+- the selected parent saw the release and confirmed receipt;
 - learner, parent, guardian and staff views updated live;
-- the final queue and its four event records retained the expected actor identities.
+- the final queue and its five event records retained the expected actor identities;
+- the private note history remained visible and became read-only after completion.
 
-The learner Pickup card was rechecked after the integrated test exposed its older generic pass. The placeholder QR/pass was removed. The live learner dialog now selects only the canonical current-day record or an eligible overnight arrival, shows the authorized pickup person and four-step progress, and displays safe fallback, cancellation and exception guidance. The completed synthetic handoff rendered correctly in the actual learner account.
+The learner Pickup card was rechecked after the integrated test exposed its older generic pass. The placeholder QR/pass was removed. The live learner dialog now selects only the canonical current-day record or an eligible overnight arrival, shows the authorized pickup person and five-step progress, and displays safe fallback, cancellation and exception guidance. The completed synthetic handoff rendered correctly in the actual learner account.
 
 The lifecycle smoke suite, parent command emulator suite, Firestore rule suites, SparkQuest TypeScript check, SparkQuest production build and integrated Edufy production build passed. Existing Firebase import, bundle size and Tailwind CDN build warnings remain unchanged.
 

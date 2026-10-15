@@ -1,4 +1,10 @@
-# Latest handoff — Edufy one-word legacy parent name follow-up
+# Latest handoff — Corrected pickup lifecycle ready for coordinated release
+
+On 2026-10-15 the missing learner-ready gate and private parent/learner notes were added to the connected pickup lifecycle. The complete isolated UI flow passed using distinct parent, learner and instructor sessions: parent on the way, parent arrived, private reminder, learner reply and ready status, staff identity verification and release, then parent receipt confirmation. Edufy's ready/released counters and all SparkQuest views updated live. Firestore keeps notes private to the initiating parent and exact learner, limits them to 500 characters, denies edits/deletes, and closes new messages after completion. The rules/emulator suites, lifecycle and parent-command smokes, TypeScript and both production builds are the release gates. No production deployment or family record change has occurred yet.
+
+---
+
+# Previous handoff — Edufy one-word legacy parent name follow-up
 
 On 2026-10-15, read-only inspection of the live Edufy learner profile found that a surname-only enrollment value could still be presented as a verified parent name. The focused follow-up treats that value as an unverified family label, requests the real parent's full name before replacement, and updates all siblings linked to the same legacy login. The existing family alias remains a suggestion for the new MakerLab login. The synthetic Auth/Firestore emulator passes the two-sibling correction, the earlier parent-access cases, password invalidation and tenant denials; the Edufy production build passes. No production family password or record was changed during this check. Coordinate this commit as a new Hostinger client plus Vercel API release, then perform authenticated acceptance with a designated parent.
 
