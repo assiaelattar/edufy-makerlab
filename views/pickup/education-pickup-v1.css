@@ -1,0 +1,85 @@
+.edu-pickup-v1__command {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 24px 26px;
+  border: 1px solid var(--edu-border);
+  border-radius: 26px;
+  color: var(--edu-ink);
+  background: linear-gradient(120deg, var(--edu-surface), var(--edu-brand-soft));
+  box-shadow: var(--edu-shadow-sm);
+}
+.edu-pickup-v1__command > div { min-width: 0; }
+.edu-pickup-v1__eyebrow { display: inline-flex; align-items: center; gap: 7px; color: var(--edu-brand); font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.edu-pickup-v1__command h1 { max-width: 760px; margin: 9px 0 7px; font-size: clamp(28px, 3vw, 42px); font-weight: 850; line-height: 1.03; letter-spacing: -.045em; }
+.edu-pickup-v1__command p { margin: 0; color: var(--edu-muted); font-size: 13px; }
+.edu-pickup-v1__command button,
+.edu-pickup-v1__focus button { display: inline-flex; min-height: 44px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border: 1px solid var(--edu-border); border-radius: 13px; color: var(--edu-ink); background: var(--edu-surface); font-size: 12px; font-weight: 800; }
+.edu-pickup-v1__command button:hover { border-color: var(--edu-brand); }
+.edu-pickup-v1 .edu-pickup-v1__legacy { border-color: var(--edu-danger) !important; color: var(--edu-ink) !important; background: var(--edu-warm) !important; }
+.edu-pickup-v1 .edu-pickup-v1__legacy :is(p,code,span) { color: var(--edu-muted) !important; }
+
+.edu-pickup-v1__signals .atlas-signal-card { min-width: 0; min-height: 112px; border: 1px solid var(--edu-border) !important; border-radius: 19px !important; color: var(--edu-ink) !important; background: var(--edu-surface) !important; box-shadow: var(--edu-shadow-sm); }
+.edu-pickup-v1__signals .atlas-signal-card:first-child { background: var(--edu-brand-soft) !important; }
+.edu-pickup-v1__signals .atlas-signal-card :is(p,span,svg) { color: inherit !important; }
+.edu-pickup-v1__signals .atlas-signal-card:hover { border-color: var(--edu-brand) !important; }
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__signals .atlas-signal-card { border-color: var(--edu-border) !important; color: var(--edu-ink) !important; background: var(--edu-surface) !important; }
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__signals .atlas-signal-card:first-child { background: var(--edu-brand-soft) !important; }
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__signals .atlas-signal-card :is(p,span,svg) { color: var(--edu-ink) !important; }
+
+.edu-pickup-v1__focus { display: grid; grid-template-columns: 46px minmax(0,1fr) auto; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--edu-border); border-radius: 20px; color: var(--edu-ink); background: var(--edu-surface); box-shadow: var(--edu-shadow-sm); }
+.edu-pickup-v1__focus-icon { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 14px; color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-pickup-v1__focus small { display: block; color: var(--edu-muted); font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.edu-pickup-v1__focus strong { display: block; margin-top: 3px; font-size: 17px; line-height: 1.2; }
+.edu-pickup-v1__focus p { margin: 4px 0 0; color: var(--edu-muted); font-size: 12px; }
+.edu-pickup-v1__focus button { border-color: var(--edu-brand); color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-pickup-v1__focus button:hover { background: var(--edu-brand-hover); }
+
+.edu-pickup-v1__live { scroll-margin-top: 18px; }
+.edu-pickup-v1__live > section:first-child { padding: 16px; border: 1px solid var(--edu-border); border-radius: 22px; background: var(--edu-surface); box-shadow: var(--edu-shadow-sm); }
+.edu-pickup-v1__live > section:first-child .grid { margin-top: 12px; }
+.edu-pickup-v1 .edu-pickup-v1__handoff,
+.edu-pickup-v1 .edu-pickup-v1__incoming,
+.edu-pickup-v1 .edu-pickup-v1__released,
+.edu-pickup-v1 .edu-pickup-v1__roster-card { border: 1px solid var(--edu-border) !important; border-radius: 18px !important; color: var(--edu-ink); background: var(--edu-surface) !important; box-shadow: none !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff { border-color: var(--edu-brand) !important; background: var(--edu-brand-soft) !important; }
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__handoff { border-color: var(--edu-brand) !important; background: var(--edu-brand-soft) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff :is(h3,.text-white),
+.edu-pickup-v1 .edu-pickup-v1__incoming :is(h3,.text-white),
+.edu-pickup-v1 .edu-pickup-v1__roster-card :is(h3,.text-white) { color: var(--edu-ink) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff :is(.text-slate-400,.text-slate-500),
+.edu-pickup-v1 .edu-pickup-v1__incoming :is(.text-slate-400,.text-slate-500),
+.edu-pickup-v1 .edu-pickup-v1__roster-card :is(.text-slate-400,.text-slate-500) { color: var(--edu-muted) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff form { border-color: var(--edu-border) !important; color: var(--edu-ink); background: var(--edu-surface) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff form :is(label,p) { color: var(--edu-ink) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff form :is(select,textarea) { border-color: var(--edu-border) !important; color: var(--edu-ink) !important; background: var(--edu-surface-muted) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff form button[type='submit'],
+.edu-pickup-v1 .edu-pickup-v1__roster-card button { color: var(--edu-on-brand) !important; background: var(--edu-brand) !important; }
+.edu-pickup-v1 .edu-pickup-v1__handoff form button[type='button'] { border-color: var(--edu-border) !important; color: var(--edu-ink) !important; background: var(--edu-surface) !important; }
+.edu-pickup-v1 .edu-pickup-v1__roster-card select { border-color: var(--edu-border) !important; color: var(--edu-ink) !important; background: var(--edu-surface-muted) !important; }
+.edu-pickup-v1 .edu-pickup-v1__roster-card > div:first-child { flex-wrap: wrap; }
+.edu-pickup-v1 .edu-pickup-v1__roster-card > div:first-child > span { max-width: 100%; white-space: normal; }
+.edu-pickup-v1 .edu-pickup-v1__status { border-color: var(--edu-border) !important; color: var(--edu-muted) !important; background: var(--edu-surface-muted) !important; }
+.edu-pickup-v1 .edu-pickup-v1__status:is([data-status='arrived'],[data-status='ready'],[data-status='on_the_way'],[data-status='waiting']) { border-color: var(--edu-brand) !important; color: var(--edu-brand) !important; background: var(--edu-brand-soft) !important; }
+.edu-pickup-v1 .edu-pickup-v1__status:is([data-status='released'],[data-status='confirmed']) { border-color: var(--edu-success) !important; color: var(--edu-success) !important; background: var(--edu-surface-muted) !important; }
+.edu-pickup-v1 .edu-pickup-v1__status:is([data-status='cancelled'],[data-status='exception']) { border-color: var(--edu-danger) !important; color: var(--edu-danger) !important; background: var(--edu-surface-muted) !important; }
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__roster-card .text-amber-200 { color: #8a431f !important; }
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__incoming .text-sky-200,
+body.education-ui-v1-active[data-edu-theme='light'] .edu-pickup-v1 .edu-pickup-v1__handoff :is(.text-teal-200,.text-amber-200) { color: var(--edu-brand) !important; }
+.edu-pickup-v1 > #pickup-daily-roster { padding-top: 16px; border-top: 1px solid var(--edu-border); scroll-margin-top: 18px; }
+
+@media (max-width: 700px) {
+  .edu-pickup-v1__command { display: block; padding: 20px; border-radius: 22px; }
+  .edu-pickup-v1__command button { width: 100%; margin-top: 17px; }
+  .edu-pickup-v1__focus { grid-template-columns: 42px minmax(0,1fr); padding: 14px; }
+  .edu-pickup-v1__focus-icon { width: 42px; height: 42px; }
+  .edu-pickup-v1__focus button { grid-column: 1 / -1; width: 100%; }
+  .edu-pickup-v1__signals { gap: 8px; }
+  .edu-pickup-v1__signals .atlas-signal-card { min-height: 103px; }
+  .edu-pickup-v1__signals .atlas-signal-card:first-child { grid-column: 1 / -1; }
+  .edu-pickup-v1 .edu-pickup-v1__roster-card > div:first-child > span { flex-shrink: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .edu-pickup-v1 * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

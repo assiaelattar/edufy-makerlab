@@ -38,6 +38,14 @@
     border: 0 !important;
     background: transparent !important;
 }
+.edu-programs-v1__focus { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--edu-border); border-radius: 21px; color: var(--edu-ink); background: var(--edu-surface); box-shadow: var(--edu-shadow-sm); }
+.edu-programs-v1__focus-icon { display: grid; width: 48px; height: 48px; place-items: center; border-radius: 15px; color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-programs-v1__focus small { display: block; color: var(--edu-muted); font-family: 'JetBrains Mono',monospace; font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.edu-programs-v1__focus strong { display: block; margin-top: 3px; font-size: 17px; line-height: 1.2; }
+.edu-programs-v1__focus p { margin: 3px 0 0; color: var(--edu-muted); font-size: 12px; }
+.edu-programs-v1__focus button { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border: 0; border-radius: 12px; color: var(--edu-on-brand); background: var(--edu-brand); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.edu-programs-v1__focus button:hover { background: var(--edu-brand-hover); }
+@media (max-width: 650px) { .edu-programs-v1__focus { grid-template-columns: 42px minmax(0,1fr); padding: 14px; } .edu-programs-v1__focus-icon { width: 42px; height: 42px; } .edu-programs-v1__focus button { grid-column: 1 / -1; width: 100%; } }
 .edu-programs-v1__summary > * { min-height: 82px; padding: 14px 16px !important; border: 1px solid var(--edu-border); border-radius: 18px; box-shadow: var(--edu-shadow-sm); }
 .edu-programs-v1__summary > :nth-child(1) { border-color: #cddd9e; background: var(--edu-brand-soft) !important; }
 .edu-programs-v1__summary > :nth-child(2) { background: var(--edu-surface) !important; }

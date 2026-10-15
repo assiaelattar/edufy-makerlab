@@ -668,6 +668,17 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
     });
   }, [programOperations, searchQuery, statusFilter]);
 
+  const portfolioFocus = programOperations.find(item => item.needsSetup)
+    || programOperations.filter(item => ['running', 'upcoming', 'evergreen'].includes(item.operationalState)).sort((a, b) => b.openLeads.length - a.openLeads.length).find(item => item.openLeads.length > 0)
+    || programOperations.find(item => ['running', 'upcoming', 'evergreen'].includes(item.operationalState) && item.emptyGroupCount > 0);
+  const focusLabel = portfolioFocus?.needsSetup
+    ? (!portfolioFocus.hasPricing ? 'Add a pricing plan' : 'Complete the class schedule')
+    : portfolioFocus?.openLeads.length
+      ? `Review ${portfolioFocus.openLeads.length} waiting ${portfolioFocus.openLeads.length === 1 ? 'family' : 'families'}`
+      : portfolioFocus?.emptyGroupCount
+        ? `Review ${portfolioFocus.emptyGroupCount} empty ${portfolioFocus.emptyGroupCount === 1 ? 'group' : 'groups'}`
+        : '';
+
   // Render Full Page Details if selected
   if (viewDetailProgramId) {
     return (
@@ -730,6 +741,20 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
           <span className="text-xs font-bold text-slate-500">View-only catalog access</span>
         )}
       />}
+
+      {showEducationProgramsV1 && (
+        <section className="edu-programs-v1__focus" aria-label="Next program action">
+          <span className="edu-programs-v1__focus-icon"><Layers3 size={20} /></span>
+          <div>
+            <small>Next portfolio action</small>
+            <strong>{portfolioFocus ? focusLabel : activePrograms.length ? 'Your active programs are ready' : programs.length ? 'No program is currently running' : 'Start with your first program'}</strong>
+            <p>{portfolioFocus ? portfolioFocus.program.name : activePrograms.length ? 'Open a program to review its roster and schedule.' : programs.length ? 'Review draft, paused, or archived offers in the full portfolio.' : 'Create a program to set its pricing, class schedule, and enrollment path.'}</p>
+          </div>
+          {portfolioFocus ? <button type="button" onClick={() => portfolioFocus.needsSetup && canEditPrograms ? openEditProgram(portfolioFocus.program) : setViewDetailProgramId(portfolioFocus.program.id)}>
+            {portfolioFocus.needsSetup && canEditPrograms ? 'Complete setup' : 'Open program'} <ChevronRight size={16} />
+          </button> : canCreatePrograms && programs.length === 0 ? <button type="button" onClick={openAddProgram}>Create program <ChevronRight size={16} /></button> : null}
+        </section>
+      )}
 
       <div className="edu-programs-v1__summary grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10">
         <button type="button" onClick={() => setStatusFilter('active')} className="bg-slate-950 px-3 py-3 text-left transition-colors hover:bg-white/[0.04] sm:px-4">

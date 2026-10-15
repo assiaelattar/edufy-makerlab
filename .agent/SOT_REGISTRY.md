@@ -1,5 +1,7 @@
 # Source-of-Truth Registry
 
+Education UI three-module focus: `views/ProgramsView.tsx` and `views/programs/education-programs-v1.css` own portfolio priority; `views/students/EducationStudentsOperationsV1.tsx` and its CSS own learner preview and theme behavior; `views/PickupView.tsx` and `views/pickup/education-pickup-v1.css` own the staff desk order and visual hierarchy. Shared theme tokens remain in `components/education-ui/education-ui-v1.css`. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
+
 Recipient quick access: `modules/sparkquest/domain/recipientAccessPolicy.js` defines staff/recipient identity checks; `api/app-bridge/sparkquest/share.js` issues five-minute codes; `api/app-bridge/sparkquest/exchange.js` consumes them; `views/student-details/RecipientQuickAccess.tsx` presents manual and one-click QR sharing. See `docs/sparkquest/RECIPIENT_QUICK_ACCESS_2026-10-15.md`.
 
 Daily Pickup roster and handoff contract: `modules/pickup/domain/dailyPickupRoster.ts` projects attendance-eligible enrollments into the current workshop-day roster; `views/PickupView.tsx` overlays `pickup_queue` live states for staff and lobby. `modules/pickup/domain/pickupLifecycle.ts` and `sparkquest/domain/pickupLifecycle.ts` are byte-identical transition mirrors. `firestore.rules` authorizes verified staff release from `arrived` or `ready`. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.

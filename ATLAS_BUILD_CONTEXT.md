@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Education UI priority modules
+
+Programs, Students and Pickup have a focused school-theme pass in the isolated local worktree. Program readiness and demand produce the next portfolio action; the learner roster retains direct profile navigation and adds a clear next-step preview; Pickup's live gate queue now precedes the daily roster. Existing tenant data, permissions and release commands are preserved. Root build, scoped TypeScript, Pickup domain smokes, Atlas context reader and diff check pass. Signed-in desktop/phone light/dark acceptance remains. Next module by daily operational importance: Classes and attendance, then Schedule. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
+
 ## 2026-10-15 — Tenant provisioning input repair
 
 The SaaS tenant form now supports an explicit custom-access path without a subscription, rejects empty access and duplicate/invalid slugs, and writes organization and admin profile atomically after account creation. Failed profile persistence attempts to remove the just-created Firebase Auth account. This focused client fix does not promote the separate multi-tenant rules, index, public-catalog, or legacy ownership migration. See `docs/releases/TENANT_PROVISION_REPAIR_2026-10-15.md`.

@@ -22,14 +22,14 @@ The school workspace opens only after authentication resolves an actual organiza
 | --- | --- | --- | --- |
 | Admin shell | One responsive school-workspace navigation plus closable workspace tabs | Compact production shell complete | One desktop workbar; mobile tabs removed; all permission and route callbacks are preserved |
 | Dashboard | Daily school command center with the next scheduled session, nearby timeline, and actual action queue before metrics | Two-theme local candidate | Existing selectors, derived data, actions, and dialogs are preserved; today's date follows the device's local calendar |
-| Students and families | Action-first operations desk with learner and household passports | Focused redesign implemented; awaiting user approval | Existing filters, search, records, bulk actions, family statements, and profile routes are preserved |
+| Students and families | Action-first operations desk with learner and household passports | Focused redesign plus school-theme and preview-flow pass; signed-in acceptance pending | Existing filters, search, records, bulk actions, family statements, and profile routes are preserved |
 | Student profile | Learner record, signals, access, and action timeline | Preview complete | Existing tabs, account actions, and record workflows are preserved |
 | Classes and attendance | Session-first school-day workspace | Focused redesign complete | Existing class, roster, attendance, and absence behavior is preserved |
 | Global schedule | Weekly planning and conflict workspace | Focused redesign complete | Existing event navigation and scheduling behavior is preserved |
-| Programs and workshops | Program operations, capacity, quality, and workshop pipeline | Programs focused redesign; workshops share the coherent baseline | Existing program, roster, quality, and follow-up actions are preserved |
+| Programs and workshops | Program operations, capacity, quality, and workshop pipeline | Programs focused redesign plus live portfolio priority; workshops share the coherent baseline | Existing program, roster, quality, and follow-up actions are preserved |
 | Finance and expenses | Collection, invoicing, verification, and reconciliation workspace | Finance focused redesign; expenses coherence pass complete | Existing finance permissions, records, forms, and exports are preserved |
 | Learning and portfolio | Learning lifecycle, evidence, portfolio, and review workspace | Coherent baseline complete; deep workflow redesign pending | Existing curriculum, portfolio, and review actions are preserved |
-| Family journey | Marketing, communications, enrollment forms, and pickup flow | Coherent baseline complete; deep workflow redesign pending | Existing CRM, messaging, form, and pickup actions are preserved |
+| Family journey | Marketing, communications, enrollment forms, and pickup flow | Pickup staff desk focused pass; other family-journey modules keep the coherent baseline | Existing CRM, messaging, form, and pickup actions are preserved |
 | Team operations | Team directory, staff attendance, and media library | Coherent baseline complete; deep workflow redesign pending | Existing staff, absence, project, privacy, and gallery behavior is preserved |
 | Resources | Toolkit and archive workspace | Coherent baseline complete; deep workflow redesign pending | Existing resource and archive actions are preserved |
 | Admin and platform | Settings, admin tools, Marketplace, and SaaS administration | Coherent baseline complete; deep workflow redesign pending | Existing tenant, entitlement, app, and platform controls are preserved |
@@ -58,12 +58,12 @@ The school workspace opens only after authentication resolves an actual organiza
 
 ## Delivery boundary
 
-The shell, Dashboard, Students, Student profile, Programs, Program details, and Finance have focused workflow redesigns. Every authenticated module now shares the same production shell, neutral KPI treatment, command surfaces and action hierarchy. Remaining modules must be described as having a coherent baseline—not a finished workflow redesign—until each receives the same task-level pass.
+The shell, Dashboard, Students, Student profile, Programs, Program details, Finance, and Pickup staff desk have focused workflow redesigns. Every authenticated module now shares the same production shell, neutral KPI treatment, command surfaces and action hierarchy. Remaining modules must be described as having a coherent baseline—not a finished workflow redesign—until each receives the same task-level pass. The current three-module priority and next-module order are recorded in `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
 
 ## Focused module contract
 
 - Students starts with real operational blockers instead of a generic directory: contact gaps, enrollment decisions, class placement, and duplicate review. Optional profile cleanup remains available as a separate smart view instead of inflating the urgent queue.
-- The smart roster keeps direct search, Program/Audience/Level/Day/Archived filters, active-filter feedback, reset, multi-select, parent linking, and all existing mutations. Selecting a learner updates a persistent operational passport rather than navigating away immediately.
+- The smart roster keeps direct search, Program/Audience/Level/Day/Archived filters, active-filter feedback, reset, multi-select, parent linking, and all existing mutations. The row opens the full learner profile; the explicit next-step preview selects the operational passport and brings it into view on narrow layouts.
 - Families is a first-class mode with household search, sibling context, expected/paid/balance signals, learner profile routes, and the existing statement workflow.
 - Student profiles keep actions, signals, learning, finance, attendance, portfolio, and access in one command center.
 - Programs starts with portfolio health and next actions; each program opens into readiness, schedule, roster, waiting list, finance, and sharing without returning to the legacy visual hierarchy.

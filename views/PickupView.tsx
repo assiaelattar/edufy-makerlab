@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import {
     Car,
     CheckCircle2,
+    ChevronRight,
     Clock,
     Loader2,
     LogOut,
@@ -30,6 +31,7 @@ import {
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
 import './family-journey/education-family-journey-v1.css';
+import './pickup/education-pickup-v1.css';
 
 type QueueFilter = 'all' | 'arrived' | 'ready' | 'incoming' | 'released';
 
@@ -337,7 +339,9 @@ export const PickupView = () => {
                 entries: groupsByStudent.get(studentId) || [currentEntry],
                 duplicateCount: 0
             };
-            if (['waiting', 'on_the_way'].includes(currentEntry.status)) {
+            if (currentEntry.status === 'waiting') {
+                setFeedback({ tone: 'warning', message: `${student.name} has an older waiting pickup record. Keep the learner with staff and reconcile that record before starting a new handoff.` });
+            } else if (currentEntry.status === 'on_the_way') {
                 const approved = await confirm({
                     title: 'Pickup already active',
                     message: `${student.name} is already ${getStatusLabel(currentEntry.status).toLowerCase()}. Mark the pickup as arrived instead of creating a duplicate?`,
@@ -429,7 +433,7 @@ export const PickupView = () => {
         const isPending = pendingAction === `release:${group.entry.studentId}`;
         const learnerReady = group.entry.status === 'ready';
         return (
-            <article key={group.entry.id} className="rounded-lg border border-amber-300/25 bg-slate-900 p-4">
+            <article key={group.entry.id} className="edu-pickup-v1__handoff rounded-lg border border-amber-300/25 bg-slate-900 p-4">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -473,7 +477,10 @@ export const PickupView = () => {
         <div className={`space-y-5 pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
             {!isDisplayMode && (
                 <>
-                    <AtlasCommandHeader
+                    {showEducationFamilyJourneyV1 ? <section className="edu-pickup-v1__command" aria-labelledby="pickup-command-title">
+                        <div><span className="edu-pickup-v1__eyebrow"><Car size={15} /> School day · live pickup</span><h1 id="pickup-command-title">A safe handoff, one learner at a time.</h1><p>{format(new Date(), 'EEEE, d MMMM')} · {dailyRosterRows.length} learners scheduled today</p></div>
+                        <button type="button" onClick={() => setIsDisplayMode(true)}><Monitor size={17} /> Lobby display</button>
+                    </section> : <AtlasCommandHeader
                         eyebrow="Live operations"
                         title="Pickup Desk"
                         description="Move each pickup safely from approaching, to gate arrival, to verified release."
@@ -490,20 +497,26 @@ export const PickupView = () => {
                                 </AtlasActionButton>
                             </>
                         }
-                    />
+                    />}
 
-                    <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-                        <AtlasSignalCard label="Scheduled today" value={dailyRosterRows.length} detail="From workshop enrollments" icon={Clock} tone="teal" />
-                        <AtlasSignalCard label="Incoming" value={pickupSignals.onTheWay} detail="Approaching the gate" icon={MapPin} tone="blue" onClick={() => setQueueFilter('incoming')} />
+                    {legacyActive.length > 0 && <section className="edu-pickup-v1__legacy rounded-xl border border-amber-300/35 bg-amber-300/10 p-4 text-amber-50" aria-label="Legacy pickup reconciliation" role="alert">
+                        <h2 className="text-sm font-black">{legacyActive.length} older pickup {legacyActive.length === 1 ? 'record needs' : 'records need'} reconciliation</h2>
+                        <p className="mt-1 text-xs leading-5 text-amber-100">These records have no validated dated session. Keep the learner with authorized staff, verify the real handoff independently, and reconcile the historical record through the academy’s reviewed process. Do not create a replacement while an older pickup remains open.</p>
+                        <ul className="mt-3 space-y-1 text-xs">{legacyActive.map(entry => <li key={entry.id} className="flex flex-wrap gap-x-2"><strong>{entry.studentName}</strong><span>{getStatusLabel(entry.status)}</span><code className="break-all text-amber-200">{entry.id}</code></li>)}</ul>
+                    </section>}
+
+                    <div className="edu-pickup-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-5">
                         <AtlasSignalCard label="At the gate" value={pickupSignals.arrived} detail="Verify and release" icon={UserCheck} tone={pickupSignals.arrived > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('arrived')} />
+                        <AtlasSignalCard label="Incoming" value={pickupSignals.onTheWay} detail="Approaching the gate" icon={MapPin} tone="blue" onClick={() => setQueueFilter('incoming')} />
+                        <AtlasSignalCard label="Scheduled today" value={dailyRosterRows.length} detail="From workshop enrollments" icon={Clock} tone="teal" />
                         <AtlasSignalCard label="Ready signal" value={pickupSignals.ready} detail="Optional learner update" icon={ShieldCheck} tone={pickupSignals.ready > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('ready')} />
                         <AtlasSignalCard label="Released" value={pickupSignals.released} detail="Awaiting parent confirmation" icon={CheckCircle2} tone="emerald" onClick={() => setQueueFilter('released')} />
                     </div>
 
-                    {legacyActive.length > 0 && <section className="rounded-xl border border-amber-300/35 bg-amber-300/10 p-4 text-amber-50" aria-label="Legacy pickup reconciliation" role="alert">
-                        <h2 className="text-sm font-black">{legacyActive.length} older pickup {legacyActive.length === 1 ? 'record needs' : 'records need'} reconciliation</h2>
-                        <p className="mt-1 text-xs leading-5 text-amber-100">These records have no validated dated session. Keep the learner with authorized staff, verify the real handoff independently, and reconcile the historical record through the academy’s reviewed process. Do not create a replacement while an older pickup remains open.</p>
-                        <ul className="mt-3 space-y-1 text-xs">{legacyActive.map(entry => <li key={entry.id} className="flex flex-wrap gap-x-2"><strong>{entry.studentName}</strong><span>{getStatusLabel(entry.status)}</span><code className="break-all text-amber-200">{entry.id}</code></li>)}</ul>
+                    {showEducationFamilyJourneyV1 && <section className="edu-pickup-v1__focus" aria-label="Current pickup priority">
+                        <span className="edu-pickup-v1__focus-icon"><ShieldCheck size={21} /></span>
+                        <div><small>Next safe handoff</small><strong>{pickupSignals.arrived + pickupSignals.ready > 0 ? `${pickupSignals.arrived + pickupSignals.ready} ${pickupSignals.arrived + pickupSignals.ready === 1 ? 'learner' : 'learners'} at the gate` : pickupSignals.onTheWay > 0 ? `${pickupSignals.onTheWay} ${pickupSignals.onTheWay === 1 ? 'family' : 'families'} on the way` : 'No immediate handoff'}</strong><p>{pickupSignals.arrived + pickupSignals.ready > 0 ? 'Confirm the authorized picker and record the release below.' : pickupSignals.onTheWay > 0 ? 'Watch for physical arrival before starting verification.' : 'Use the daily roster to record a new arrival.'}</p></div>
+                        <button type="button" onClick={() => { setQueueFilter('all'); window.requestAnimationFrame(() => document.getElementById(pickupSignals.active > 0 ? 'pickup-live-queue' : 'pickup-daily-roster')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' })); }}>{pickupSignals.active > 0 ? 'Open live queue' : 'View today’s list'} <ChevronRight size={16} /></button>
                     </section>}
 
                     <div className="relative z-20">
@@ -553,7 +566,7 @@ export const PickupView = () => {
                                                       <div className="mt-2 flex items-center gap-2">
                                                         {!isActive && pickerOptions.length > 0 && <select id={`staff-picker-${student.id}`} value={selectedPicker} onChange={event => setPickerSelections(current => ({ ...current, [student.id]: event.target.value }))} className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/20 bg-slate-900 px-2 text-xs text-white focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-300/30">{pickerOptions.map(name => <option key={name} value={name}>{name}</option>)}</select>}
                                                         {!isActive && pickerOptions.length === 0 && <span className="flex-1 text-xs text-amber-200">No authorized picker is listed.</span>}
-                                                        <button type="button" onClick={() => void addToQueue(student.id, selectedPicker)} disabled={pendingAction !== null || (!isActive && pickerOptions.length === 0)} className="min-h-10 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{isActive ? 'Review arrival' : 'Add arrival'}</button>
+                                                        <button type="button" onClick={() => void addToQueue(student.id, selectedPicker)} disabled={pendingAction !== null || (!isActive && pickerOptions.length === 0)} className="min-h-10 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{currentEntry?.status === 'waiting' ? 'Staff review' : isActive ? 'Review arrival' : 'Add arrival'}</button>
                                                       </div>
                                                     </div>
                                                 );
@@ -603,37 +616,7 @@ export const PickupView = () => {
                         </div>
                     )}
 
-                    <section className="space-y-4" aria-labelledby="pickup-daily-roster-title">
-                        <AtlasSectionHeader
-                            title="Today’s workshop pickup list"
-                            description="Every active learner scheduled today appears here before a parent starts pickup. Parent and staff updates change these statuses live."
-                            icon={Clock}
-                            meta={<span className="rounded-md bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">{dailyRosterRows.length} scheduled</span>}
-                        />
-                        {dailyRosterRows.length > 0 ? <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                            {dailyRosterRows.map(row => {
-                                const pickerOptions = Array.from(new Set([row.student.parentName, ...(row.student.authorizedPickups || [])].filter(Boolean) as string[]));
-                                const selectedPicker = pickerSelections[row.studentId] || pickerOptions[0] || '';
-                                const canRecordArrival = !row.entry || ['waiting', 'on_the_way'].includes(row.entry.status);
-                                const hasPickupAccount = Boolean(row.student.parentLoginInfo?.uid);
-                                return <article key={row.studentId} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <h3 className="truncate text-base font-black text-white">{row.studentName}</h3>
-                                            <p className="mt-1 text-xs leading-5 text-slate-400">{row.slots.map(slot => [slot.time, slot.programName, slot.groupName].filter(Boolean).join(' · ')).join(' / ')}</p>
-                                        </div>
-                                        <span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
-                                    </div>
-                                    {row.entry?.pickerName && <p className="mt-3 truncate text-xs text-slate-400">Pickup person: <strong className="text-slate-200">{row.entry.pickerName}</strong></p>}
-                                    {isGatekeeper && canRecordArrival && <div className="mt-3 flex items-center gap-2">
-                                        {pickerOptions.length > 0 ? <select aria-label={`Authorized picker for ${row.studentName}`} value={selectedPicker} onChange={event => setPickerSelections(current => ({ ...current, [row.studentId]: event.target.value }))} className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/20 bg-slate-950 px-2 text-xs text-white focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-300/30">{pickerOptions.map(name => <option key={name} value={name}>{name}</option>)}</select> : <span className="flex-1 text-xs text-amber-200">No authorized picker listed.</span>}
-                                        <button type="button" onClick={() => void addToQueue(row.studentId, selectedPicker)} disabled={pendingAction !== null || pickerOptions.length === 0 || !hasPickupAccount} className="min-h-10 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{row.entry ? 'Mark arrived' : 'Parent is here'}</button>
-                                    </div>}
-                                    {isGatekeeper && canRecordArrival && !hasPickupAccount && <p className="mt-2 text-[11px] text-amber-200">Link the family account before staff can start a pickup record. The learner stays visible on today’s list.</p>}
-                                </article>;
-                            })}
-                        </div> : <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-center text-sm text-slate-500">No active workshop enrollment is scheduled for {todayWeekday}.</div>}
-                    </section>
+
                 </>
             )}
 
@@ -688,7 +671,7 @@ export const PickupView = () => {
                     action={queueGroups.length > 0 ? <AtlasActionButton onClick={() => setQueueFilter('all')}>Show all active</AtlasActionButton> : undefined}
                 />
             ) : (
-                <div className="space-y-7">
+                <div id="pickup-live-queue" className="edu-pickup-v1__live space-y-7">
                     {handoffGroups.length > 0 && (
                         <section className="space-y-4">
                             <AtlasSectionHeader
@@ -710,7 +693,7 @@ export const PickupView = () => {
                                 {incomingGroups.map(group => {
                                     const isPending = pendingAction === `arrive:${group.entry.studentId}`;
                                     return (
-                                        <article key={group.entry.id} className="rounded-lg border border-sky-300/20 bg-slate-900/70 p-4">
+                                        <article key={group.entry.id} className="edu-pickup-v1__incoming rounded-lg border border-sky-300/20 bg-slate-900/70 p-4">
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
                                                     <div className="text-[10px] font-black uppercase tracking-wider text-sky-200">{getStatusLabel(group.entry.status)}</div>
@@ -718,7 +701,7 @@ export const PickupView = () => {
                                                     <p className="mt-1 truncate text-xs text-slate-500">{group.entry.pickerName || group.entry.parentName || 'Pickup contact'}</p>
                                                     <p className="mt-2 font-mono text-[11px] text-slate-500">Notified {formatTime(group.entry)}</p>
                                                 </div>
-                                                {isGatekeeper && (
+                                                {isGatekeeper && group.entry.status === 'on_the_way' && (
                                                     <button
                                                         type="button"
                                                         onClick={() => markStudentArrived(group)}
@@ -730,6 +713,7 @@ export const PickupView = () => {
                                                         {isPending ? <Loader2 size={17} className="animate-spin" /> : <MapPin size={17} />}
                                                     </button>
                                                 )}
+                                                {group.entry.status === 'waiting' && <span className="text-[11px] text-slate-500">Older record · staff review</span>}
                                             </div>
                                         </article>
                                     );
@@ -747,7 +731,7 @@ export const PickupView = () => {
                             />
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                 {releasedGroups.map(group => (
-                                    <article key={group.entry.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-slate-900/45 p-3">
+                                    <article key={group.entry.id} className="edu-pickup-v1__released flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-slate-900/45 p-3">
                                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-400/10 text-teal-200">
                                             <CheckCircle2 size={17} />
                                         </span>
@@ -761,6 +745,39 @@ export const PickupView = () => {
                         </section>
                     )}
                 </div>
+            )}
+            {!isDisplayMode && (
+                    <section id="pickup-daily-roster" className="space-y-4" aria-label="Today’s workshop pickup list">
+                        <AtlasSectionHeader
+                            title="Today’s workshop pickup list"
+                            description="Every active learner scheduled today appears here before a parent starts pickup. Parent and staff updates change these statuses live."
+                            icon={Clock}
+                            meta={<span className="rounded-md bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">{dailyRosterRows.length} scheduled</span>}
+                        />
+                        {dailyRosterRows.length > 0 ? <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {dailyRosterRows.map(row => {
+                                const pickerOptions = Array.from(new Set([row.student.parentName, ...(row.student.authorizedPickups || [])].filter(Boolean) as string[]));
+                                const selectedPicker = pickerSelections[row.studentId] || pickerOptions[0] || '';
+                                const canRecordArrival = !row.entry || row.entry.status === 'on_the_way';
+                                const hasPickupAccount = Boolean(row.student.parentLoginInfo?.uid);
+                                return <article key={row.studentId} className="edu-pickup-v1__roster-card rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h3 className="truncate text-base font-black text-white">{row.studentName}</h3>
+                                            <p className="mt-1 text-xs leading-5 text-slate-400">{row.slots.map(slot => [slot.time, slot.programName, slot.groupName].filter(Boolean).join(' · ')).join(' / ')}</p>
+                                        </div>
+                                        <span data-status={row.entry?.status || 'scheduled'} className={`edu-pickup-v1__status shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
+                                    </div>
+                                    {row.entry?.pickerName && <p className="mt-3 truncate text-xs text-slate-400">Pickup person: <strong className="text-slate-200">{row.entry.pickerName}</strong></p>}
+                                    {isGatekeeper && canRecordArrival && <div className="mt-3 flex items-center gap-2">
+                                        {pickerOptions.length > 0 ? <select aria-label={`Authorized picker for ${row.studentName}`} value={selectedPicker} onChange={event => setPickerSelections(current => ({ ...current, [row.studentId]: event.target.value }))} className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/20 bg-slate-950 px-2 text-xs text-white focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-300/30">{pickerOptions.map(name => <option key={name} value={name}>{name}</option>)}</select> : <span className="flex-1 text-xs text-amber-200">No authorized picker listed.</span>}
+                                        <button type="button" onClick={() => void addToQueue(row.studentId, selectedPicker)} disabled={pendingAction !== null || pickerOptions.length === 0 || !hasPickupAccount} className="min-h-10 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{row.entry ? 'Mark arrived' : 'Parent is here'}</button>
+                                    </div>}
+                                    {isGatekeeper && canRecordArrival && !hasPickupAccount && <p className="mt-2 text-[11px] text-amber-200">Link the family account before staff can start a pickup record. The learner stays visible on today’s list.</p>}
+                                </article>;
+                            })}
+                        </div> : <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-center text-sm text-slate-500">No active workshop enrollment is scheduled for {todayWeekday}.</div>}
+                    </section>
             )}
         </div>
     );

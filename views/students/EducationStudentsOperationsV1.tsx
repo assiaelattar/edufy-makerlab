@@ -207,9 +207,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
 
   const visibleStudents = smartView === 'attention' ? attentionStudents : filteredStudents;
   const selectedStudent = visibleStudents.find(student => student.id === selectedStudentId)
-    || filteredStudents.find(student => student.id === selectedStudentId)
     || visibleStudents[0]
-    || filteredStudents[0]
     || null;
   const selectedFamily = parentAccounts.find(parent => parent.phone === selectedFamilyPhone)
     || parentAccounts[0]
@@ -251,6 +249,13 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
     setDirectoryFilter(view === 'attention' ? 'all' : view);
     setSelectedIds([]);
     setSelectedStudentId('');
+  };
+
+  const previewStudent = (studentId: string) => {
+    setSelectedStudentId(studentId);
+    if (window.matchMedia('(max-width: 800px)').matches) {
+      window.requestAnimationFrame(() => document.getElementById('student-ops-passport')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }));
+    }
   };
 
   const selectedIssues = selectedStudent
@@ -399,14 +404,14 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                         <span className="edu-student-ops__student-copy"><strong>{student.name}</strong><span>{firstIssue}{activeEnrollments[0]?.programName ? ` · ${activeEnrollments[0].programName}` : ''}</span></span>
                         <span className="edu-student-ops__row-action">Open profile<ChevronRight size={15} /></span>
                       </button>
-                      <button type="button" className="edu-student-ops__row-preview" aria-label={`Preview ${student.name}'s next action`} aria-pressed={isSelected} onClick={() => setSelectedStudentId(student.id)} title="Preview next action"><Eye size={17} /></button>
+                      <button type="button" className="edu-student-ops__row-preview" aria-label={`Preview ${student.name}'s next action`} aria-pressed={isSelected} onClick={() => previewStudent(student.id)} title="Preview next action"><Eye size={17} /><span>Next step</span></button>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            <aside className="edu-student-ops__passport" aria-label="Selected student operational passport">
+            <aside id="student-ops-passport" className="edu-student-ops__passport" aria-label="Selected student operational passport">
               {selectedStudent ? (
                 <>
                   <div className="edu-student-ops__passport-top">

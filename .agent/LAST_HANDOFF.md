@@ -1,4 +1,10 @@
-# Latest handoff — Edufy school-day themes release candidate
+# Latest handoff — Programs, Students, Pickup focus
+
+On 2026-10-15 the school-theme worktree gained a task-level pass across the first three requested modules. Programs presents its next action from real readiness, waiting families and empty groups. Students retains direct profile navigation while making passport preview explicit and consistent with the active worklist; its scoped surfaces now follow both school themes. Pickup moves the live verification queue before the full roster, adds a current handoff focus, and treats older `waiting` records as staff review rather than an invalid arrival action. No lifecycle transition, data selector, permission, API or Firebase rule was changed. Production build, scoped TypeScript, two Pickup domain smokes, Atlas context reader and whitespace check pass. Signed-in phone acceptance is pending; local review is at `http://192.168.11.105:5202/` on the same Wi-Fi (current Wi-Fi IP; it may change). No push or deployment. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
+
+---
+
+# Previous handoff — Edufy school-day themes
 
 On 2026-10-15, an isolated Edufy worktree at `agent/edufy-school-theme-20261015` gained a light-default, navy/cobalt school workspace and a tenant-persisted dark option. The dashboard leads with the real day schedule and direct actions before metrics. Follow-up `Continue` work now focuses the next scheduled session (or the latest/first when appropriate), keeps the dayline near that session, describes the action queue from its actual entries instead of an unrelated alert count, and uses the device's local calendar day for classes and workshops. Leaving Admin clears its document-level theme. The Education shell and existing module bridges share the two theme token sets; light-only legacy compatibility rules no longer overwrite dark screens. No permissions, API, or Firebase rules changed. The production build passes. A write-free synthetic visual fixture confirmed light/dark rendering, 390px horizontal fit, and scrolling, then was removed. Signed-in real-data review on desktop and phone is still needed before release. Repository-wide TypeScript has existing errors outside the changed TSX files; scoped diagnostics are tracked in this handoff. No Git push or deployment occurred.
 
