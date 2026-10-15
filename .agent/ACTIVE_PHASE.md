@@ -1,4 +1,10 @@
-# Current phase override — Daily Pickup roster correction and coordinated release (updated 2026-10-15)
+# Current phase override — Parent and learner quick access (2026-10-15)
+
+Build staff-issued, single-use SparkQuest links and QR codes for verified parents and learners from the Edufy learner profile, retaining reusable manual login QR cards. Preserve exact UID, tenant and guardian links, parent relationship verification, current password entry, and Showcase password reauthentication. Release and real-account acceptance are separate gates. See `docs/sparkquest/RECIPIENT_QUICK_ACCESS_2026-10-15.md`.
+
+---
+
+# Previous phase override — Daily Pickup roster correction and coordinated release (updated 2026-10-15)
 
 Pickup now projects every active learner scheduled for the current weekday from canonical enrollments and group times, keeping the learner visible in Edufy and the lobby before a parent starts the audited queue. Live queue states overlay that roster. The learner-ready action is optional; verified staff release is valid from `arrived` or `ready`. Domain smoke, SparkQuest TypeScript, both builds and Firebase 10/12 Auth/Firestore emulator suites pass. Release Edufy, SparkQuest and Firestore rules together, then verify both public clients and the deployed rule behavior. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
 

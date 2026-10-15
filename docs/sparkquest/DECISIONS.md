@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Separate reusable login QR from one-click session QR
+
+A reusable card opens the role-specific login page and shows the recorded ID but contains no password. One-click access uses a staff-issued five-minute opaque code, stored only as a hash, bound to the exact parent or learner UID and tenant, and consumed once by SparkQuest. Parent issuance requires current exact guardian evidence. Staff issuance is audited by UID and does not mutate the recipient password. The existing password flow remains available; one-click student access cannot authorize Showcase deletion without fresh password reauthentication.
+
 ## 2026-10-15 — Workshop schedule drives the daily Pickup roster
 
 The staff desk and lobby derive the day’s learner list from active, attendance-eligible enrollments whose group schedule matches the current weekday. A scheduled row is a read-only projection until a parent or staff member starts the audited pickup record; no synthetic `scheduled` queue document is created. Parent and staff transitions then overlay the row through the existing live Pickup subscription.

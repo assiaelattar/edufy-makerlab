@@ -1,4 +1,10 @@
-# Current task boundary — Release the daily Pickup roster correction
+# Current task boundary — Local quick-access build and verification
+
+Complete the Edufy parent/learner manual and one-click link/QR UI, the trusted recipient issue endpoint, and recipient branch of the existing SparkQuest one-time exchange. Prove exact staff/tenant/recipient link checks, replay and expiry policy, and both application builds. Stop after reporting the local build and release requirements; do not alter production family records or deploy without coordinated acceptance.
+
+---
+
+# Previous task boundary — Release the daily Pickup roster correction
 
 Promote the focused daily roster, optional learner-ready transition, matching Firestore rules and parent/learner copy as one coordinated production release. Verify GitHub main, Hostinger Edufy, Vercel SparkQuest and deployed Firestore rules. Do not create synthetic scheduled queue records or production family test data. Preserve authorized-picker verification, exact tenant and guardian links, selected-picker receipt, atomic events and private notes.
 

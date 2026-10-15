@@ -10,7 +10,11 @@ Edufy's staff parent access flow now distinguishes an old enrollment contact add
 
 Last updated: 2026-10-01
 
-## Latest loop — SparkQuest instructor learner workspace Phase 1
+## Latest loop — Parent and learner quick access (2026-10-15)
+
+The Edufy learner profile now offers reusable manual SparkQuest sign-in QR cards and staff-issued five-minute, single-use one-click links/QRs for verified parents and learners. The trusted API binds each hashed code to an exact Firebase UID, role, tenant, learner and issuer; SparkQuest revalidates and atomically consumes it through the existing exchange. Parent guardian links, student one-to-one identity, passwords, and Showcase deletion safeguards remain intact. Local policy and existing launch smokes, SparkQuest TypeScript, and both app builds pass. No production credentials, data, rules, indexes, or deployment changed. See `docs/sparkquest/RECIPIENT_QUICK_ACCESS_2026-10-15.md`.
+
+## Previous loop — SparkQuest instructor learner workspace Phase 1
 
 Local-only continuation: canonical learner directory, saved current/previous-year builds and step progress, all-year pending proof access, shared eligible-mission projection and newest-first decisions with direct history links. Profile assignment confirms one learner, waits for persistence and preserves selection on failure. Additive `targetAudience.additionalStudents` retains primary audiences; fresh editor/class dispatch transactions preserve concurrent additions. Directory/catalog/enrollment failures are explicit unknown states. Strong blue/green/amber surfaces are scoped to the desk/dialog and reuse existing instructor/dialog primitives.
 

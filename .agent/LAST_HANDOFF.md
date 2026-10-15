@@ -1,4 +1,10 @@
-# Latest handoff — Daily Pickup roster and optional learner signal
+# Latest handoff — Parent and learner one-click SparkQuest access
+
+On 2026-10-15 the clean `origin/main` worktree gained staff-issued, five-minute, single-use SparkQuest links and QR codes for exact verified parent or learner accounts. The Edufy student profile also displays printable reusable manual-login QR cards. Issuance checks staff/tenant/module/account identity; parent delivery requires current exact guardian evidence. Exchange rechecks issuer and recipient before atomic consumption; Firebase custom tokens stay in the API response, never the URL. Manual passwords and Showcase password reauthentication remain available. Local policy smoke (17 assertions), existing launch smoke (28 assertions), SparkQuest TypeScript, API imports, and both production builds pass. Root repository-wide TypeScript still reports existing `App.tsx`/`maker-pro` errors, with no new quick-access diagnostics. No production account or data changed; no deployment occurred. See `docs/sparkquest/RECIPIENT_QUICK_ACCESS_2026-10-15.md`.
+
+---
+
+# Previous handoff — Daily Pickup roster and optional learner signal
 
 On 2026-10-15 Edufy Pickup was corrected to display every active learner scheduled for the day from canonical enrollment/group schedules, including before a parent starts pickup. The desk and lobby overlay live queue status on that roster. Firestore and both lifecycle mirrors now permit verified staff release from `arrived` or `ready`; the learner-ready button remains a helpful optional signal. Daily-roster/lifecycle smokes, SparkQuest TypeScript, both builds, and Firebase 10/12 Auth/Firestore suites pass. The focused client/rules release and public verification are the remaining steps.
 

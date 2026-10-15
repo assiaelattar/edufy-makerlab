@@ -1,6 +1,6 @@
 const defaultProductionOrigins = ['https://sparkquest-makerlab.vercel.app'];
 const defaultLocalOrigins = ['http://127.0.0.1:5174', 'http://localhost:5174'];
-const defaultEdufyOrigins = ['https://edufy-makerlab.vercel.app'];
+const defaultEdufyOrigins = ['https://edufy-makerlab.vercel.app', 'https://edufy.makerlab.academy'];
 const defaultLocalEdufyOrigins = ['http://127.0.0.1:5173', 'http://localhost:5173'];
 
 const configuredOrigins = () => String(process.env.SPARKQUEST_ALLOWED_ORIGINS || '')
@@ -33,9 +33,12 @@ export const applyEdufyCors = (req, res) => {
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);
+  const parentAccessOrigins = String(process.env.EDUFY_PARENT_ACCESS_ALLOWED_ORIGINS || '')
+    .split(',').map(value => value.trim()).filter(Boolean);
   const allowed = new Set([
     ...defaultEdufyOrigins,
     ...configured,
+    ...parentAccessOrigins,
     ...(process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production' ? [] : defaultLocalEdufyOrigins),
   ]);
   if (origin && allowed.has(origin)) {

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Modal } from '../../components/Modal';
 import { useConfirm } from '../../context/ConfirmContext';
 import { getParentDirectory, manageParentAccess, type ParentAccessResult, type ParentDirectoryAccount } from '../../services/parentAccess';
+import { RecipientQuickAccess } from './RecipientQuickAccess';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
@@ -207,6 +208,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-slate-400">Choose a channel to open a ready message. Review the recipient before sending.</p>
+            <RecipientQuickAccess student={student} role="student" />
             <button
               disabled
               title="Secure password reset requires the server-side account administration service"
@@ -332,6 +334,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. The previous password stops working and the learner’s work stays linked to this login.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="edu-parent-access-action edu-parent-access-action--whatsapp flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-bold"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
+              <RecipientQuickAccess student={student} role="parent" />
             </div>
           ) : (
             <div className="text-center py-4">

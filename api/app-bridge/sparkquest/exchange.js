@@ -9,6 +9,8 @@ import {
   validateSparkQuestLaunchSession,
 } from '../../../modules/sparkquest/domain/sparkquestLaunchPolicy.js';
 import { applySparkQuestCors } from '../_lib/cors.js';
+import { assertRecipientIssuer } from '../../../modules/sparkquest/domain/recipientAccessPolicy.js';
+import { loadRecipientAccess } from '../_lib/recipientAccess.js';
 import {
   loadLinkedStudents,
   loadProject,
@@ -31,8 +33,6 @@ export default async function handler(req, res) {
     if (!isValidLaunchCode(launchCode)) {
       throw new SparkQuestLaunchError('LAUNCH_CODE_INVALID', 'The SparkQuest launch link is invalid.', 400);
     }
-    requireAppBridgeWriteAccess();
-
     const db = getDb();
     const codeHash = hashLaunchCode(launchCode);
     const sessionRef = db.collection('app_launch_sessions').doc(codeHash);
@@ -42,6 +42,47 @@ export default async function handler(req, res) {
     }
 
     const session = validateSparkQuestLaunchSession(initialSnapshot.data(), { origin: requestOrigin });
+
+    if (session.purpose === 'recipient') {
+      if (!['parent', 'student'].includes(session.actorRole) || !session.issuedByUid || !session.studentId || session.projectId) {
+        throw new SparkQuestLaunchError('RECIPIENT_SESSION_INVALID', 'This sign-in link is invalid.', 401);
+      }
+      const [organizationSnapshot, issuerSnapshot, issuerAuth] = await Promise.all([
+        db.doc(`organizations/${session.organizationId}`).get(),
+        db.doc(`users/${session.issuedByUid}`).get(),
+        getAuth(getFirebaseAdminApp()).getUser(session.issuedByUid).catch(() => null),
+      ]);
+      if (!issuerAuth || issuerAuth.disabled) {
+        throw new SparkQuestLaunchError('RECIPIENT_ISSUER_REVOKED', 'The staff account that issued this link is no longer active.');
+      }
+      const { access, student } = await loadRecipientAccess(db, {
+        studentId: session.studentId, organizationId: session.organizationId,
+        role: session.actorRole, expectedUid: session.actorUid,
+      });
+      assertRecipientIssuer({
+        actor: issuerSnapshot.exists ? { id: issuerSnapshot.id, ...issuerSnapshot.data() } : null,
+        organization: organizationSnapshot.exists ? { id: organizationSnapshot.id, ...organizationSnapshot.data() } : null,
+        organizationId: session.organizationId, student,
+      });
+      await db.runTransaction(async transaction => {
+        const freshSnapshot = await transaction.get(sessionRef);
+        if (!freshSnapshot.exists) throw new SparkQuestLaunchError('LAUNCH_NOT_FOUND', 'The SparkQuest launch link is invalid or expired.', 401);
+        const fresh = validateSparkQuestLaunchSession(freshSnapshot.data(), { origin: requestOrigin });
+        if (fresh.purpose !== 'recipient' || fresh.actorUid !== access.actorUid || fresh.actorRole !== access.actorRole ||
+            fresh.organizationId !== access.organizationId || fresh.studentId !== student.id || fresh.issuedByUid !== session.issuedByUid) {
+          throw new SparkQuestLaunchError('RECIPIENT_SESSION_CHANGED', 'This sign-in link changed. Request a new link.', 401);
+        }
+        transaction.update(sessionRef, { status: 'consumed', consumedAt: serverTimestamp() });
+      });
+      const customToken = await getAuth(getFirebaseAdminApp()).createCustomToken(
+        access.actorUid, buildSparkQuestCustomClaims(access, codeHash)
+      );
+      return sendBridgeJson(res, 200, { ok: true, customToken, projectId: null, organizationId: access.organizationId });
+    }
+    if (session.purpose && session.purpose !== 'recipient') {
+      throw new SparkQuestLaunchError('LAUNCH_PURPOSE_INVALID', 'This SparkQuest launch link is invalid.', 401);
+    }
+    requireAppBridgeWriteAccess();
 
     const [userSnapshot, organizationSnapshot, project] = await Promise.all([
       db.doc(`users/${session.actorUid}`).get(),

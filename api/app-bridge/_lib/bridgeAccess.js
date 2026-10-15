@@ -48,7 +48,7 @@ export async function requireEdufyBridgeUser(req) {
 
   let decoded;
   try {
-    decoded = await getAuth(getFirebaseAdminApp()).verifyIdToken(idToken);
+    decoded = await getAuth(getFirebaseAdminApp()).verifyIdToken(idToken, true);
   } catch {
     throw new SparkQuestLaunchError('EDUFY_AUTH_REQUIRED', 'The Edufy session is invalid or expired.', 401);
   }

@@ -1,5 +1,12 @@
 # SparkQuest Known Issues
 
+## Parent and learner quick access release gate
+
+- The local quick-access UI and API need coordinated Edufy Hostinger plus Vercel API release from the same commit. Verify both configured Edufy issue and SparkQuest exchange origins before use.
+- A designated parent with multiple linked children and a designated learner need physical-device one-click/QR acceptance after release. Do not create or rotate a real family password merely for this check.
+- A printed one-click QR expires after five minutes and one use. Print the manual login QR for a card that must remain usable later.
+- Root repository-wide TypeScript currently fails in unrelated `App.tsx` and `maker-pro/` files. Both production builds pass, and no new quick-access file appears in those diagnostics.
+
 ## Parent Pickup visual acceptance
 
 - Synthetic phone and desktop preview covers the parent actions and note views. A designated signed-in parent and learner should still check the live handoff on a physical phone before operational use for a real departure.
