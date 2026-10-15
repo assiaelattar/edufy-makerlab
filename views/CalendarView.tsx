@@ -54,7 +54,7 @@ export const CalendarView = () => {
     const firstCoverageGap = sortedEvents.find(event => !event.instructorId && `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm'))
         || sortedEvents.find(event => !event.instructorId);
     const nextSession = sortedEvents.find(event => `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm')) || sortedEvents[0];
-    const assignableTeam = useMemo(() => teamMembers.filter(member => ['instructor', 'admin', 'admission_officer'].includes(member.role)), [teamMembers]);
+    const assignableTeam = useMemo(() => teamMembers.filter((member): member is typeof member & { uid: string } => Boolean(member.uid) && ['instructor', 'admin', 'admission_officer'].includes(member.role)), [teamMembers]);
 
     // --- 3. Render Helpers ---
     const getEventsForDay = (date: Date) => {
@@ -88,8 +88,13 @@ export const CalendarView = () => {
             await showAlert('Permission required', 'You can review this schedule, but only attendance managers can synchronize sessions.', 'warning');
             return;
         }
+        const firestore = db;
+        if (!firestore) {
+            await showAlert('Schedule unavailable', 'The school data connection is unavailable. Retry when it reconnects.', 'warning');
+            return;
+        }
         setIsGenerating(true);
-        const batch = writeBatch(db);
+        const batch = writeBatch(firestore);
         let additions = 0;
 
         try {
@@ -119,7 +124,7 @@ export const CalendarView = () => {
                             // Does this session already exist?
                             const exists = classSessions.some(c => c.groupId === group.id && c.date === dateStr);
                             if (!exists) {
-                                const newRef = doc(collection(db, 'class_sessions'));
+                                const newRef = doc(collection(firestore, 'class_sessions'));
                                 batch.set(newRef, {
                                     organizationId: currentOrganization.id,
                                     date: dateStr || '',
@@ -156,7 +161,7 @@ export const CalendarView = () => {
                     debugWorkshopsFound++;
                     const exists = classSessions.some(c => c.workshopSlotId === slot.id);
                     if (!exists) {
-                        const newRef = doc(collection(db, 'class_sessions'));
+                        const newRef = doc(collection(firestore, 'class_sessions'));
                         batch.set(newRef, {
                             organizationId: currentOrganization.id,
                             date: slot?.date || '',
@@ -204,6 +209,10 @@ export const CalendarView = () => {
         }
         if (!can('attendance.manage')) {
             await showAlert('Permission required', 'Only attendance managers can change instructor coverage.', 'warning');
+            return;
+        }
+        if (!db) {
+            await showAlert('Schedule unavailable', 'The school data connection is unavailable. Retry when it reconnects.', 'warning');
             return;
         }
         if (assignModalSession.instructorId === instructorId) {
