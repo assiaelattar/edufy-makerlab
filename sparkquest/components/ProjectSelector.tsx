@@ -34,6 +34,8 @@ import { LearnerWorkbench, LearnerInstructorUpdates, LearnerMissionBoard } from 
 import { LearnerJourneyNav, type LearnerJourneyView } from './LearnerJourneyNav';
 import { ResourceLibrary } from './ResourceLibrary';
 import { isVerifiedOwnedProject, projectLane, readWorkbenchPin, rememberWorkbenchPin, selectWorkbench, workbenchStorageKey } from '../domain/learnerWorkbench';
+import { canDeleteOwnedShowcase, supportsPasswordReauthentication } from '../domain/showcaseDeletion';
+import { reauthenticateForShowcaseDeletion } from '../services/showcaseDeletion';
 
 const ProjectDetailsEnhanced = React.lazy(() => import('./ProjectDetailsEnhanced').then(module => ({ default: module.ProjectDetailsEnhanced })));
 
@@ -119,6 +121,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     const [deleteCandidate, setDeleteCandidate] = useState<StudentProject | null>(null);
     const [deletingProject, setDeletingProject] = useState(false);
     const [deleteError, setDeleteError] = useState('');
+    const [deletePassword, setDeletePassword] = useState('');
 
     // Debug: Log role and desktop mode
     useEffect(() => {
@@ -557,22 +560,47 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
     };
 
     const handleDeleteProject = async () => {
-        if (!deleteCandidate || deletingProject || !db) return;
+        if (!deleteCandidate || deletingProject || !db || !authUser) return;
         const organizationId = authProfile?.organizationId || studentProfileData?.organizationId;
-        if (!isVerifiedOwnedProject(deleteCandidate, organizationId || '', verifiedStudentOwnerIds) ||
-            !['free-build-template', 'showcase-template'].includes(deleteCandidate.templateId || '') ||
-            projectAcademicYear(deleteCandidate) !== activeAcademicYear) { setDeleteError('Only your current-year personal projects can be deleted here.'); return; }
+        if (role !== 'student' || !canDeleteOwnedShowcase(deleteCandidate, organizationId || '', verifiedStudentOwnerIds)) {
+            setDeleteError('Only a Showcase that belongs to your learner account can be deleted here.');
+            return;
+        }
+        if (!supportsPasswordReauthentication(authUser)) {
+            setDeleteError('This session cannot confirm your account password. Sign out of classroom or PIN mode, then sign in with your learner email and password.');
+            return;
+        }
+        if (!deletePassword) {
+            setDeleteError('Enter your learner account password to continue.');
+            return;
+        }
         setDeletingProject(true);
         setDeleteError('');
         try {
+            await reauthenticateForShowcaseDeletion(authUser, deletePassword);
+            setDeletePassword('');
             await deleteDoc(doc(db, 'student_projects', deleteCandidate.id));
             setProjects(prev => prev.filter(p => p.id !== deleteCandidate.id));
             setDeleteCandidate(null);
             playSound('trash');
         } catch (error: any) {
-            console.error("Failed to delete project:", error);
-            setDeleteError('The project could not be deleted. Your saved work is unchanged. Check your connection or ask an instructor.');
-        } finally { setDeletingProject(false); }
+            const code = String(error?.code || error?.message || '');
+            setDeleteError(code.includes('wrong-password') || code.includes('invalid-credential')
+                ? 'That password did not match your learner account. Try again.'
+                : code.includes('too-many-requests')
+                    ? 'Too many password attempts. Wait a moment, then sign in again.'
+                    : 'The Showcase could not be deleted. Your saved work is unchanged. Sign in again or ask an instructor.');
+        } finally {
+            setDeletePassword('');
+            setDeletingProject(false);
+        }
+    };
+
+    const closeDeleteDialog = () => {
+        if (deletingProject) return;
+        setDeleteCandidate(null);
+        setDeletePassword('');
+        setDeleteError('');
     };
 
     const handleCreateNamedProject = async () => {
@@ -792,7 +820,7 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                     </LearnerJourneyNav>
                     {journeyView === 'today' && <LearnerWorkbench projects={projects} academicYear={activeAcademicYear} stationLabels={stationLabels} lastOpenedId={lastOpenedId}
                         onContinue={continueProject} onPreview={previewProject}
-                        onDelete={project => { setDeleteError(''); setDeleteCandidate(project); }}
+                        onDelete={project => { setDeleteError(''); setDeletePassword(''); setDeleteCandidate(project); }}
                         onDiscoverMissions={() => changeJourneyView('missions')}
                         onFieldLog={() => setIsPortfolioOpen(true)} />}
                     {journeyView === 'mentor' && <><LearnerInstructorUpdates projects={projects} academicYear={activeAcademicYear}
@@ -915,8 +943,9 @@ const ProjectSelectorContent: React.FC<ProjectSelectorProps> = ({ studentId, onS
                 )
             }
             {/* MODALS & ALERTS */}
-            <SparkbookDialog isOpen={Boolean(deleteCandidate)} onClose={() => { if (!deletingProject) setDeleteCandidate(null); }} title="Delete this personal project?" eyebrow="Project options" tone="rose" size="sm" footer={<div className="sq-alert-actions"><button type="button" className="sq-action sq-action--quiet" disabled={deletingProject} onClick={() => setDeleteCandidate(null)}>Keep project</button><button type="button" className="sq-action sq-action--danger" disabled={deletingProject} onClick={() => void handleDeleteProject()}>{deletingProject ? 'Deleting…' : 'Delete project'}</button></div>}>
-                <p>“{deleteCandidate?.title}” and its project record will be permanently removed. This cannot be undone. Uploaded files are not removed by this action.</p>
+            <SparkbookDialog isOpen={Boolean(deleteCandidate)} onClose={closeDeleteDialog} title="Delete this Showcase?" eyebrow="Showcase security" tone="rose" size="sm" footer={<div className="sq-alert-actions"><button type="button" className="sq-action sq-action--quiet" disabled={deletingProject} onClick={closeDeleteDialog}>Keep Showcase</button><button type="button" className="sq-action sq-action--danger" disabled={deletingProject || !deletePassword || !supportsPasswordReauthentication(authUser)} onClick={() => void handleDeleteProject()}>{deletingProject ? 'Confirming…' : 'Confirm and delete'}</button></div>}>
+                <p>“{deleteCandidate?.title}” and its project record will be permanently removed. Assigned missions cannot be deleted here. Uploaded files are not removed by this action.</p>
+                {supportsPasswordReauthentication(authUser) ? <label className="sq-showcase-delete-password"><span>Learner account password</span><input type="password" value={deletePassword} disabled={deletingProject} autoComplete="current-password" onChange={event => setDeletePassword(event.target.value)} placeholder="Enter your password" /></label> : <p role="alert">Password confirmation is unavailable in this classroom or PIN session. Sign out, then sign in with your learner email and password.</p>}
                 {deleteError && <p role="alert">{deleteError}</p>}
             </SparkbookDialog>
             <ModernAlert

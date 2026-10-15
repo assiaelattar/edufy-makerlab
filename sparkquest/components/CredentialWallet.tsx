@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Eye, EyeOff, KeyRound, Plus, Save, Trash2, X } from 'lucide-react';
-import { arrayRemove, arrayUnion, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
 import { Credential } from '../types';
+import { removeCredentialById, saveCredentialById, uniqueCredentialsById } from '../domain/credentialCabinet';
+import { deleteCredential, saveCredential } from '../services/credentialCabinet';
 
 interface CredentialWalletProps {
     isOpen: boolean;
@@ -36,6 +38,7 @@ export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onCl
     const [isAdding, setIsAdding] = useState(false);
     const [newCred, setNewCred] = useState<Partial<Credential>>({ service: highlightService || 'Tinkercad', label: 'My account' });
     const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
+    const saveOperationId = useRef<string | null>(null);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -57,11 +60,12 @@ export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onCl
     }, [userProfile, user, isOpen, highlightService, previewMode]);
 
     const sortAndSetCredentials = (creds: Credential[]) => {
+        const unique = uniqueCredentialsById(creds);
         if (!highlightService) {
-            setCredentials(creds);
+            setCredentials(unique);
             return;
         }
-        setCredentials([...creds].sort((a, b) => {
+        setCredentials([...unique].sort((a, b) => {
             const aMatch = a.service.toLowerCase() === highlightService.toLowerCase();
             const bMatch = b.service.toLowerCase() === highlightService.toLowerCase();
             return aMatch === bMatch ? 0 : aMatch ? -1 : 1;
@@ -75,9 +79,11 @@ export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onCl
     };
 
     const handleSave = async () => {
-        if (!newCred.username) return;
+        if (!newCred.username?.trim() || saveOperationId.current) return;
+        const operationId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        saveOperationId.current = operationId;
         const credential: Credential = {
-            id: Date.now().toString(),
+            id: operationId,
             service: newCred.service || 'Custom',
             label: newCred.label || 'Account',
             username: newCred.username,
@@ -85,18 +91,22 @@ export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onCl
             url: newCred.url || '',
         };
         if (previewMode) {
-            setCredentials(previous => [...previous, credential]);
+            setCredentials(previous => saveCredentialById(previous, credential));
             setIsAdding(false);
             setNewCred({ service: 'Tinkercad', label: 'My account' });
             setNotice('Preview key added to this session only.');
+            saveOperationId.current = null;
             return;
         }
-        if (!user || !db) return;
+        if (!user || !db) {
+            saveOperationId.current = null;
+            return;
+        }
         setLoading(true);
         setNotice(null);
         try {
-            await updateDoc(doc(db, 'users', user.uid), { credentials: arrayUnion(credential) });
-            setCredentials(previous => [...previous, credential]);
+            const next = await saveCredential(db, user.uid, credential);
+            sortAndSetCredentials(next);
             setIsAdding(false);
             setNewCred({ service: 'Tinkercad', label: 'My account' });
             setNotice('Key saved to your cabinet.');
@@ -105,20 +115,21 @@ export const CredentialWallet: React.FC<CredentialWalletProps> = ({ isOpen, onCl
             setNotice('This key could not be saved. Check your connection and try again.');
         } finally {
             setLoading(false);
+            saveOperationId.current = null;
         }
     };
 
     const handleDelete = async (credential: Credential) => {
         if (previewMode) {
-            setCredentials(previous => previous.filter(item => item.id !== credential.id));
+            setCredentials(previous => removeCredentialById(previous, credential.id));
             setPendingDelete(null);
             setNotice('Preview key removed.');
             return;
         }
         if (!user || !db) return;
         try {
-            await updateDoc(doc(db, 'users', user.uid), { credentials: arrayRemove(credential) });
-            setCredentials(previous => previous.filter(item => item.id !== credential.id));
+            const next = await deleteCredential(db, user.uid, credential.id);
+            sortAndSetCredentials(next);
             setPendingDelete(null);
             setNotice('Key removed from your cabinet.');
         } catch (deleteError) {

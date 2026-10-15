@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Showcase deletion requires a recent password session
+
+Only a verified learner may delete their own `showcase-template` project. The client reauthenticates with the account password immediately before deletion; Firestore requires the password sign-in provider and an authentication age of at most five minutes. Learner updates preserve `templateId` so an assigned project cannot be relabeled for deletion. Kiosk and PIN sessions cannot perform this action. Keybank identity is its generated operation ID, not its label or username.
+
 ## 2026-10-15 — Parent contact email is not login authority
 
 The parent login is the exact Firebase Auth UID plus academy-issued login ID. An enrollment contact email is not proof of a working SparkQuest account. Staff must verify the real parent and the family links before issuing a replacement. A password card is recreated by rotating the password; plaintext is not stored for later display.

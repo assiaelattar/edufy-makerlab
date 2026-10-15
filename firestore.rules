@@ -93,6 +93,14 @@ service cloud.firestore {
       return isElevatedUser() && canReadTenantDoc();
     }
 
+    function hasRecentPasswordAuthentication() {
+      let authenticationAgeSeconds = request.time.toMillis() / 1000 - request.auth.token.auth_time;
+      return isSignedIn() &&
+        request.auth.token.firebase.sign_in_provider == 'password' &&
+        authenticationAgeSeconds >= 0 &&
+        authenticationAgeSeconds <= 300;
+    }
+
     // Keep the production compatibility bridge for the four legacy MakerLab
     // mission templates narrow and auditable. Once claimed, normal tenant
     // rules govern every later write.
@@ -533,6 +541,7 @@ service cloud.firestore {
 
     function learnerPreservesProjectReviewTruth() {
       return projectReviewFieldsAreUnchanged() &&
+        request.resource.data.get('templateId', '') == resource.data.get('templateId', '') &&
         resource.data.get('status', '') != 'published' &&
         request.resource.data.get('status', '') != 'published' &&
         (
@@ -599,6 +608,16 @@ service cloud.firestore {
           ? (canUpdateOwnStudentProject() || canMigrateOwnLegacyStudentProject())
           : canUpdateTenantStudentProject()
       );
+    }
+
+    function canDeleteOwnShowcaseProject() {
+      return hasUserProfile() &&
+        currentRole() == 'student' &&
+        resourceHasOrg() &&
+        resource.data.organizationId == currentOrgId() &&
+        resource.data.get('templateId', '') == 'showcase-template' &&
+        learnerLinkedToRequester(resource.data.studentId, resource.data.organizationId) &&
+        hasRecentPasswordAuthentication();
     }
 
     function validOwnUserCreate(userId) {
@@ -928,7 +947,7 @@ service cloud.firestore {
         ));
       allow create: if canCreateStudentProject();
       allow update: if canUpdateStudentProject();
-      allow delete: if canDeleteTenantDoc();
+      allow delete: if canDeleteTenantDoc() || canDeleteOwnShowcaseProject();
     }
 
     match /process_templates/{workflowId} {

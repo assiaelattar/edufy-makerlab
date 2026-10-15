@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Keybank and Showcase student fixes
+
+- Keybank saves now use one operation ID in a transaction and render the returned canonical list. A repeated save cannot add a second record for that operation, and deleting a key targets only its ID.
+- Learners may delete only their own Showcase template projects after password reauthentication. Assigned missions and free builds have no learner delete action; matching Firestore rules enforce the restriction.
+- The isolated `origin/main` candidate passed 14 smoke assertions, SparkQuest TypeScript and production build, and localhost Auth/Firestore deletion and ownership checks. Designated nonproduction live acceptance remains open.
+
 ## 2026-10-15 — Edufy parent account repair
 
 - Follow-up: surname-only enrollment records now request a verified full parent name before a new academy login is issued; all learners linked to that old family UID receive the corrected name.

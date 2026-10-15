@@ -1,5 +1,10 @@
 # SparkQuest Known Issues
 
+## Keybank and Showcase release acceptance
+
+- The local emulator proves Keybank exact-ID behavior and Showcase password/ownership rules with synthetic records. A designated nonproduction learner account must still confirm the live UI, including wrong-password preservation and deletion of only its own disposable Showcase.
+- Showcase deletion removes the project document; uploaded files are not removed by this action. Sessions without an email/password provider are asked to sign in with the learner email and password.
+
 ## Parent access acceptance after the 2026-10-15 Edufy hotfix
 
 - A real affected family still needs staff to verify the parent identity and confirm the intended linked learners before replacing its login. The synthetic emulator proves the transaction and denials, but does not substitute for a live family sign-in.
