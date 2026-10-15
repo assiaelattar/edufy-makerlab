@@ -19,7 +19,7 @@ import {
   previousPickupDate,
   selectOpenPickup,
   type PickupStatus,
-} from '../../modules/pickup/domain/pickupLifecycle';
+} from '../domain/pickupLifecycle';
 import type { FamilyPickupSummary, FamilySource } from '../domain/parentFamilyOperations';
 import type { FamilyChild } from '../hooks/useParentFamily';
 import { db } from '../services/firebase';
