@@ -1,4 +1,10 @@
-# Latest handoff — Classes, attendance, schedule focus
+# Latest handoff — Edufy sign-in loading
+
+On 2026-10-16 the school workspace startup gate was reduced from fourteen role-dependent Firestore snapshots to academy settings, students, programs and enrollments. Other module listeners begin after those first records; add-on request status loads separately from required entitlement checks. An eight-second wait no longer offers a reload unless an actual error occurs. The existing role, tenant and required-read failure gates remain. Build and scoped TypeScript validation are recorded in `docs/education/KNOWN_ISSUES.md`; designated signed-in phone/desktop timing and data acceptance remain pending. No production data or rules changed.
+
+---
+
+# Previous handoff — Classes, attendance, schedule focus
 
 On 2026-10-15 the next school-day phase added live priorities ahead of metrics: today's class groups and attendance, remaining attendance marks, and instructor coverage gaps. Class dates use the local day, attendance understands French and English weekday labels, and only attendance managers see assignment/sync controls. Light and dark surfaces stay within the school palette. The build, weekday smoke, scoped TypeScript and diff check pass. A designated staff account must still check real data and actions on desktop and phone. No push, deployment, rule or production data change. See `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`.
 

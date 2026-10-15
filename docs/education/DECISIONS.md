@@ -1,5 +1,12 @@
 # Education UI decisions
 
+## 2026-10-16 — Startup readiness
+
+- Keep the first successful Firestore snapshots for settings, students, programs and enrollments as the school workspace gate. A successful empty collection is valid.
+- Subscribe to other module collections after this gate; their live snapshots continue updating the open workspace.
+- Keep plan, catalog and organization entitlement checks before showing modules. Add-on request status can hydrate afterward.
+- A long wait alone is not a failed connection. Offer a page reload only when an actual auth or required-data error is reported.
+
 ## 2026-10-15 — School-day operational priority
 
 - Follow Programs, Students and Pickup with Classes, attendance and Schedule as one school-day phase. Use existing live selectors and the local device date.

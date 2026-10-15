@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { arrayRemove, arrayUnion, collection, doc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { db } from '../services/firebase';
@@ -37,33 +37,46 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [moduleFlags, setModuleFlags] = useState<Record<string, boolean>>({});
     const [installedApps, setInstalledApps] = useState<string[]>([]);
     const [requestedAddOnIds, setRequestedAddOnIds] = useState<string[]>([]);
+    const loadIdRef = useRef(0);
 
     const loadAccess = useCallback(async () => {
+        const loadId = ++loadIdRef.current;
         setModuleFlags(currentOrganization?.modules || {});
         setInstalledApps(currentOrganization?.installedApps || []);
+        setRequestedAddOnIds([]);
 
         if (!db || !currentOrganization) {
             setCurrentPlan(null);
             setCatalogPolicies([]);
-            setRequestedAddOnIds([]);
+            setLoading(false);
             return;
         }
 
         setLoading(true);
+        // Add-on requests affect their own badge, not which modules are usable.
+        // Do not keep the entire school workspace waiting for this collection.
+        void getDocs(collection(db, 'organizations', currentOrganization.id, 'addonRequests'))
+            .then(requestSnapshot => {
+                if (loadIdRef.current !== loadId) return;
+                setRequestedAddOnIds(Array.from(new Set(requestSnapshot.docs
+                    .map(requestDoc => requestDoc.data())
+                    .filter(request => request.status === 'requested' && typeof request.itemId === 'string')
+                    .map(request => request.itemId as string))));
+            })
+            .catch(error => console.warn('Unable to load Atlas add-on requests.', error));
         try {
-            const [planResult, catalogResult, organizationResult, requestResult] = await Promise.allSettled([
+            const [planResult, catalogResult, organizationResult] = await Promise.allSettled([
                 currentOrganization.subscription?.planId
                     ? getDoc(doc(db, 'subscriptionPlans', currentOrganization.subscription.planId))
                     : Promise.resolve(null),
                 getDocs(collection(db, 'moduleCatalog')),
-                getDoc(doc(db, 'organizations', currentOrganization.id)),
-                getDocs(collection(db, 'organizations', currentOrganization.id, 'addonRequests'))
+                getDoc(doc(db, 'organizations', currentOrganization.id))
             ]);
+            if (loadIdRef.current !== loadId) return;
 
             const planSnapshot = planResult.status === 'fulfilled' ? planResult.value : null;
             const catalogSnapshot = catalogResult.status === 'fulfilled' ? catalogResult.value : null;
             const organizationSnapshot = organizationResult.status === 'fulfilled' ? organizationResult.value : null;
-            const requestSnapshot = requestResult.status === 'fulfilled' ? requestResult.value : null;
 
             setCurrentPlan(planSnapshot?.exists()
                 ? ({ id: planSnapshot.id, ...planSnapshot.data() } as SubscriptionPlan)
@@ -78,22 +91,16 @@ export const ModuleProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 setInstalledApps(organizationData.installedApps || []);
             }
 
-            setRequestedAddOnIds(requestSnapshot
-                ? Array.from(new Set(requestSnapshot.docs
-                    .map(requestDoc => requestDoc.data())
-                    .filter(request => request.status === 'requested' && typeof request.itemId === 'string')
-                    .map(request => request.itemId as string)))
-                : []);
-
-            if (planResult.status === 'rejected' || catalogResult.status === 'rejected' || organizationResult.status === 'rejected' || requestResult.status === 'rejected') {
+            if (planResult.status === 'rejected' || catalogResult.status === 'rejected' || organizationResult.status === 'rejected') {
                 console.warn('Some Atlas entitlement sources were unavailable; available access data was preserved.');
             }
         } catch (error) {
+            if (loadIdRef.current !== loadId) return;
             console.warn('Atlas entitlements loaded with local defaults.', error);
             setCurrentPlan(null);
             setCatalogPolicies([]);
         } finally {
-            setLoading(false);
+            if (loadIdRef.current === loadId) setLoading(false);
         }
     }, [currentOrganization]);
 

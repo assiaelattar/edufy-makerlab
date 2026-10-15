@@ -277,17 +277,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    const adminWorkspace = ['admin', 'owner', 'super_admin'].includes(userProfile?.role || '');
-    const learningWorkspace = ['student', 'instructor'].includes(userProfile?.role || '');
+    // Open the workspace once the records that define its primary school view
+    // are ready. Module collections continue to hydrate from their listeners.
     const required = new Set([
-      'settings', 'students', 'programs', 'enrollments',
-      ...(learningWorkspace ? ['student_projects'] : []),
-      ...(adminWorkspace ? ['payments', 'expenses', 'expense_templates', 'workshop_templates', 'workshop_slots', 'bookings', 'attendance', 'tasks', 'leads', 'student_projects'] : [])
+      'settings', 'students', 'programs', 'enrollments'
     ]);
     let failed = false;
+    let disposed = false;
+    let optionalTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubs: Array<() => void> = [];
     const markReady = (name: string) => {
-      required.delete(name);
-      if (!failed && required.size === 0) setLoading(false);
+      if (!required.delete(name) || failed || required.size !== 0) return;
+      setLoading(false);
+      // Give the first screen its school records before subscribing to data
+      // used only by other modules.
+      optionalTimer = setTimeout(() => {
+        if (!disposed) unsubs.push(...subscribeOptional());
+      }, 0);
     };
     const failRequired = (name: string, error: unknown) => {
       console.error(`Unable to load ${name} for the academy workspace:`, error);
@@ -319,9 +325,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       failRequired('settings', error);
     });
 
-    const unsubs = [
+    unsubs.push(
       settingsUnsub,
-      onSnapshot(query(collection(firestore, 'class_sessions'), where('organizationId', '==', orgId)), (q) => setClassSessions(q.docs.map(d => ({ id: d.id, ...d.data() } as ClassSession)))),
       onSnapshot(query(collection(firestore, 'students'), where('organizationId', '==', orgId)), (snap) => {
           setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
           markReady('students');
@@ -333,7 +338,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       onSnapshot(query(collection(firestore, 'enrollments'), where('organizationId', '==', orgId)), (snap) => {
           setEnrollments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enrollment)));
           markReady('enrollments');
-      }, error => failRequired('enrollments', error)),
+      }, error => failRequired('enrollments', error))
+    );
+
+    function subscribeOptional() {
+      return [
+      onSnapshot(query(collection(firestore, 'class_sessions'), where('organizationId', '==', orgId)), (q) => setClassSessions(q.docs.map(d => ({ id: d.id, ...d.data() } as ClassSession)))),
       onSnapshot(query(collection(firestore, 'payments'), where('organizationId', '==', orgId)), (snap) => {
         const sortedPayments = snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -399,9 +409,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Hardware & Pickup
       onSnapshot(query(collection(firestore, 'assets'), where('organizationId', '==', orgId)), (snap) => setAssets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Asset)))),
       onSnapshot(query(collection(firestore, 'pickup_queue'), where('organizationId', '==', orgId)), (snap) => setPickupQueue(snap.docs.map(d => ({ id: d.id, ...d.data() } as PickupEntry)))),
-    ];
+      ];
+    }
 
-    return () => unsubs.forEach(u => u());
+    return () => {
+      disposed = true;
+      if (optionalTimer) clearTimeout(optionalTimer);
+      unsubs.forEach(u => u());
+    };
   }, [currentOrganization, userProfile?.role]);
 
   // Separate effect for Notifications based on userProfile

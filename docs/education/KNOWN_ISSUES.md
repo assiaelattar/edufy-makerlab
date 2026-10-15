@@ -1,5 +1,9 @@
 # Education UI known issues
 
+## 2026-10-16 — Sign-in acceptance
+
+The startup change passes the production build. The repository-wide TypeScript check still reports 634 existing diagnostic lines and none in the three changed TSX files. A designated signed-in staff session is still needed to measure phone/desktop startup time and confirm that the first school view has its student, program and enrollment records. Finance, workshop and other module totals may fill in immediately after the workspace opens. No production account or record was changed during code verification.
+
 ## School-day signed-in review
 
 Classes, attendance and Schedule need a designated staff account on desktop and phone to verify real tenant day labels, coverage counts, theme contrast and narrow-screen scrolling. Assignment and attendance writes were not run against production records for visual QA. The local candidate remains unreleased.

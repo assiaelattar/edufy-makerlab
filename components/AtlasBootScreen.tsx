@@ -60,14 +60,18 @@ export const AtlasBootScreen = ({
                     <span />
                 </div>}
 
-                {(error || isTakingLonger) && (
+                {error && (
                     <div className="atlas-boot-recovery">
-                        {!error && <p>Check your connection, then try again.</p>}
                         <button type="button" onClick={() => window.location.reload()}>
                             <RefreshCw size={14} aria-hidden="true" />
                             Retry
                         </button>
                         {error && onSignOut && <button type="button" onClick={onSignOut}>Sign out</button>}
+                    </div>
+                )}
+                {!error && isTakingLonger && (
+                    <div className="atlas-boot-recovery">
+                        <p>Your academy data is still loading. Keep this page open.</p>
                     </div>
                 )}
             </div>
