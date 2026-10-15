@@ -570,7 +570,7 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
     const todaySchedule = useMemo(() => {
         const today = new Date();
         const dayName = today.toLocaleDateString('en-US', { weekday: 'long' });
-        const dateStr = today.toISOString().split('T')[0];
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
         // A. Regular Classes
         const classes = enrollments
@@ -881,7 +881,6 @@ const AdminDashboard = ({ onRecordPayment }: { onRecordPayment: (studentId?: str
                 todayAttendanceRate={todayAttendanceRate}
                 todaySchedule={todaySchedule}
                 financialStats={financialStats}
-                totalActiveAlerts={totalActiveAlerts}
                 checksToDeposit={checksToDeposit}
                 pendingTransfers={pendingTransfers}
                 myTasks={myTasks}

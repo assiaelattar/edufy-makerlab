@@ -3,10 +3,14 @@ import { RefreshCw } from 'lucide-react';
 
 type AtlasBootScreenProps = {
     message?: string;
+    error?: string | null;
+    onSignOut?: () => void;
 };
 
 export const AtlasBootScreen = ({
-    message = 'Preparing your academy workspace'
+    message = 'Preparing your academy workspace',
+    error,
+    onSignOut
 }: AtlasBootScreenProps) => {
     const [isTakingLonger, setIsTakingLonger] = useState(false);
 
@@ -16,7 +20,7 @@ export const AtlasBootScreen = ({
     }, []);
 
     return (
-        <div className="atlas-boot-screen" role="status" aria-live="polite" aria-label={message}>
+        <div className="atlas-boot-screen" role={error ? 'alert' : 'status'} aria-live="polite" aria-label={error || message}>
             <div className="atlas-boot-grid" aria-hidden="true" />
 
             <div className="atlas-boot-content">
@@ -44,25 +48,26 @@ export const AtlasBootScreen = ({
                     <span className="atlas-boot-brand__edition">Academy OS</span>
                 </div>
 
-                <div className="atlas-boot-status" aria-hidden="true">
-                    <span className="atlas-boot-status__pulse" />
-                    <span>{isTakingLonger ? 'Still connecting to your workspace' : message}</span>
+                <div className="atlas-boot-status">
+                    {!error && <span className="atlas-boot-status__pulse" aria-hidden="true" />}
+                    <span>{error || (isTakingLonger ? 'Still connecting to your workspace' : message)}</span>
                 </div>
 
-                <div className="atlas-boot-progress" aria-hidden="true">
+                {!error && <div className="atlas-boot-progress" aria-hidden="true">
                     <span />
                     <span />
                     <span />
                     <span />
-                </div>
+                </div>}
 
-                {isTakingLonger && (
+                {(error || isTakingLonger) && (
                     <div className="atlas-boot-recovery">
-                        <p>Check your connection, then try again.</p>
+                        {!error && <p>Check your connection, then try again.</p>}
                         <button type="button" onClick={() => window.location.reload()}>
                             <RefreshCw size={14} aria-hidden="true" />
                             Retry
                         </button>
+                        {error && onSignOut && <button type="button" onClick={onSignOut}>Sign out</button>}
                     </div>
                 )}
             </div>

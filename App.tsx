@@ -109,9 +109,9 @@ const StudentNavigation = ({ currentView, navigateTo }: { currentView: string, n
 }
 
 const AppContent = () => {
-    const { currentView, navigateTo, viewParams, loading: appLoading, settings, students, programs, enrollments, payments, leads, t } = useAppContext();
-    const { user, signOut, can, loading: authLoading, userProfile, createSecondaryUser, currentOrganization, isSuperAdmin } = useAuth();
-    const { isModuleEnabled, getEntitlement } = useModuleContext();
+    const { currentView, navigateTo, viewParams, loading: appLoading, workspaceError, settings, students, programs, enrollments, payments, leads, t } = useAppContext();
+    const { user, signOut, can, loading: authLoading, rolesReady, roleDefinition, authError, userProfile, createSecondaryUser, currentOrganization, isSuperAdmin } = useAuth();
+    const { isModuleEnabled, getEntitlement, loading: modulesLoading } = useModuleContext();
     const { requestPermission } = useNotifications();
     const { alert: showAlert, confirm } = useConfirm();
     // Education UI is the authenticated production default. Keep a query-only
@@ -1202,7 +1202,13 @@ const AppContent = () => {
     const isParentPortalRoute = locationPath === '/parent-portal' || locationHash === '#parent';
     if (isParentPortalRoute && (!user || (userProfile && userProfile.role !== 'parent'))) return <ParentLoginView />;
 
-    if (authLoading || appLoading || (user && !userProfile)) {
+    if (!authLoading && authError) {
+        return <AtlasBootScreen error={authError} onSignOut={user ? () => void signOut() : undefined} />;
+    }
+    if (!authLoading && user && workspaceError) {
+        return <AtlasBootScreen error={workspaceError} onSignOut={() => void signOut()} />;
+    }
+    if (authLoading || appLoading || (user && (modulesLoading || !userProfile || !rolesReady || roleDefinition?.id !== userProfile.role))) {
         const loadingMessage = authLoading
             ? 'Securing your Atlas session'
             : user && !userProfile
@@ -1811,17 +1817,20 @@ const AppContent = () => {
     );
 };
 
+const ScopedAppProvider = () => {
+    const { user, currentOrganization } = useAuth();
+    return <AppProvider key={`${user?.uid || 'guest'}:${currentOrganization?.id || 'unassigned'}`}>
+        <ThemeProvider><AppContent /></ThemeProvider>
+    </AppProvider>;
+};
+
 const App = () => {
     return (
         <AuthProvider>
             <ModuleProvider>
                 <ConfirmProvider>
                     <NotificationProvider>
-                        <AppProvider>
-                            <ThemeProvider>
-                                <AppContent />
-                            </ThemeProvider>
-                        </AppProvider>
+                        <ScopedAppProvider />
                     </NotificationProvider>
                 </ConfirmProvider>
             </ModuleProvider>

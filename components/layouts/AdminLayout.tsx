@@ -188,6 +188,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         document.documentElement.dataset.atlasTheme = theme;
         document.documentElement.style.colorScheme = theme;
         document.body.dataset.eduTheme = theme;
+        return () => {
+            delete document.documentElement.dataset.atlasTheme;
+            document.documentElement.style.removeProperty('color-scheme');
+            delete document.body.dataset.eduTheme;
+        };
     }, [theme]);
 
     useEffect(() => {

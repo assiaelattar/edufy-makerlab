@@ -77,7 +77,6 @@ export interface EducationDashboardV1Props {
         maxRevenue: number;
         totalRevenue: number;
     };
-    totalActiveAlerts: number;
     checksToDeposit: number;
     pendingTransfers: number;
     myTasks: DashboardTask[];
@@ -150,7 +149,6 @@ export const EducationDashboardV1 = ({
     todayAttendanceRate,
     todaySchedule,
     financialStats,
-    totalActiveAlerts,
     checksToDeposit,
     pendingTransfers,
     myTasks,
@@ -218,9 +216,25 @@ export const EducationDashboardV1 = ({
     }, [actionAlerts, checksToDeposit, myTasks, pendingTransfers]);
 
     const operationsReadiness = Math.round((actionHealth + alertHealth + dataQualityScore + (todaySchedule.length > 0 ? todayAttendanceRate : 100)) / 4);
-    const schedulePreview = todaySchedule.slice(0, 5);
-    const hasSchoolDay = schedulePreview.length > 0;
-    const firstSession = schedulePreview[0];
+    const hasSchoolDay = todaySchedule.length > 0;
+    const now = new Date();
+    const currentMinute = now.getHours() * 60 + now.getMinutes();
+    const sessionMinutes = (time: string) => {
+        const match = time.match(/(?:^|\s)(\d{1,2})[:hH](\d{2})(?:\b|\s)/);
+        if (!match) return null;
+        const hour = Number(match[1]);
+        const minute = Number(match[2]);
+        return hour < 24 && minute < 60 ? hour * 60 + minute : null;
+    };
+    const nextSessionIndex = todaySchedule.findIndex(item => {
+        const minutes = sessionMinutes(item.time);
+        return minutes !== null && minutes >= currentMinute;
+    });
+    const lastTimedSessionIndex = todaySchedule.reduce((lastIndex, item, index) => sessionMinutes(item.time) !== null ? index : lastIndex, -1);
+    const focusIndex = nextSessionIndex >= 0 ? nextSessionIndex : Math.max(lastTimedSessionIndex, 0);
+    const focusSession = todaySchedule[focusIndex];
+    const schedulePreview = todaySchedule.slice(Math.max(0, focusIndex - 1), Math.max(0, focusIndex - 1) + 5);
+    const focusLabel = nextSessionIndex >= 0 ? 'Up next' : lastTimedSessionIndex >= 0 ? 'Latest on the timetable' : 'First on the timetable';
 
     return (
         <div className="edu-v1 edu-dashboard-v1" data-testid="education-dashboard-v1">
@@ -239,8 +253,8 @@ export const EducationDashboardV1 = ({
                     </div>
                     <h1>{greeting}, {firstName}.</h1>
                     <p>{hasSchoolDay
-                        ? `${academyName} has ${todaySchedule.length} ${todaySchedule.length === 1 ? 'session' : 'sessions'} today. ${totalActiveAlerts > 0 ? `${totalActiveAlerts} follow-ups need attention.` : 'Nothing urgent is waiting.'}`
-                        : `${academyName} has a clear schedule today. Use the time to close open follow-ups and prepare the next school day.`}
+                        ? `${academyName} has ${todaySchedule.length} ${todaySchedule.length === 1 ? 'session' : 'sessions'} today. ${priorityActions.length > 0 ? 'Your action queue is ready below.' : 'Your action queue is clear.'}`
+                        : `${academyName} has a clear schedule today. ${priorityActions.length > 0 ? 'Use the time to close the actions below and prepare the next school day.' : 'Use the time to prepare the next school day.'}`}
                     </p>
                 </div>
                 <div className="edu-dashboard-v1__quick-actions" aria-label="Dashboard quick actions">
@@ -255,18 +269,18 @@ export const EducationDashboardV1 = ({
                     <EducationSectionHeader
                         eyebrow="The school day"
                         title="Where learners and staff need to be"
-                        description={firstSession ? `${todaySchedule.length} ${todaySchedule.length === 1 ? 'session' : 'sessions'} on today’s timetable. Open the right working view directly from the dayline.` : 'No class or workshop is scheduled for today.'}
+                        description={focusSession ? `${todaySchedule.length} ${todaySchedule.length === 1 ? 'session' : 'sessions'} on today’s timetable. Open the right working view directly from the dayline.` : 'No class or workshop is scheduled for today.'}
                         action={<EducationButton variant="secondary" icon={ClipboardCheck} onClick={() => navigateTo('attendance')}>Open attendance</EducationButton>}
                     />
 
                     {hasSchoolDay ? (
                         <>
                         <div className="edu-dashboard-v1__day-focus">
-                            <span>First on the timetable <b>·</b> {firstSession.time || 'Time to confirm'}</span>
-                            <strong>{firstSession.title}</strong>
-                            <p>{firstSession.count} {firstSession.count === 1 ? 'learner' : 'learners'} scheduled{firstSession.capacity ? ` · ${firstSession.capacity} places available` : ''}</p>
-                            <button type="button" onClick={() => navigateTo(firstSession.type === 'workshop' ? 'workshops' : 'attendance')}>
-                                {firstSession.type === 'workshop' ? 'Open workshop' : 'Open attendance'} <ArrowRight size={16} aria-hidden="true" />
+                            <span>{focusLabel} <b>·</b> {focusSession.time || 'Time to confirm'}</span>
+                            <strong>{focusSession.title}</strong>
+                            <p>{focusSession.count} {focusSession.count === 1 ? 'learner' : 'learners'} scheduled{focusSession.capacity ? ` · ${focusSession.capacity} total places` : ''}</p>
+                            <button type="button" onClick={() => navigateTo(focusSession.type === 'workshop' ? 'workshops' : 'attendance')}>
+                                {focusSession.type === 'workshop' ? 'Open workshop' : 'Open attendance'} <ArrowRight size={16} aria-hidden="true" />
                             </button>
                         </div>
                         <div className="edu-dashboard-v1__dayline">
@@ -299,7 +313,7 @@ export const EducationDashboardV1 = ({
                 <EducationSurface className="edu-dashboard-v1__priorities">
                     <EducationSectionHeader
                         eyebrow="Your attention"
-                        title={priorityActions.length > 0 ? `${totalActiveAlerts} open follow-ups` : 'You’re caught up'}
+                        title={priorityActions.length > 0 ? 'Your next actions' : 'You’re caught up'}
                         description="Only work that can move forward from here appears in this queue."
                     />
                     <div className="edu-dashboard-v1__priority-list">

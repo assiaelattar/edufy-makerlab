@@ -62,6 +62,7 @@ interface AppContextType {
 
   settings: AppSettings;
   loading: boolean;
+  workspaceError: string | null;
   language: 'en' | 'fr';
   t: (key: string) => string;
 
@@ -167,6 +168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   // Navigation State
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
@@ -215,17 +217,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    if (!db) { setLoading(false); return; }
+    setLoading(true);
+    setWorkspaceError(null);
+    if (!db) {
+      setWorkspaceError('The data connection is unavailable. Check your connection and try again.');
+      setLoading(false);
+      return;
+    }
 
     // START SAAS TRANSFORMATION
     if (!currentOrganization) {
-      // Stop loading if no organization is resolved yet
       setLoading(false);
       return;
     }
     const orgId = currentOrganization.id;
     const firestore = db;
     // END SAAS LOGIC
+
+    // The public demo has a virtual account and no authenticated Firestore
+    // session; keep its existing lightweight preview behavior separate.
+    if (userProfile?.uid === 'demo-admin-id') {
+      setLoading(false);
+      return;
+    }
 
     // Parent accounts use the dedicated family data loader. Never hydrate the
     // organization-wide operational context in a parent browser session.
@@ -258,27 +272,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLoading(false);
       }, error => {
         console.error('Unable to load family workspace settings:', error);
-        setSettings(DEFAULT_SETTINGS);
+        setWorkspaceError('We could not load your academy settings. Check your connection and try again.');
         setLoading(false);
       });
     }
 
-    // We wait for the SETTINGS to load specifically before unblocking the UI to ensure branding is correct.
-    let isSettingsLoaded = false;
-    let pendingCores = 5; // students, programs, enrollments, payments, expenses
-    const fallbackTimeout = setTimeout(() => {
+    const adminWorkspace = ['admin', 'owner', 'super_admin'].includes(userProfile?.role || '');
+    const learningWorkspace = ['student', 'instructor'].includes(userProfile?.role || '');
+    const required = new Set([
+      'settings', 'students', 'programs', 'enrollments',
+      ...(learningWorkspace ? ['student_projects'] : []),
+      ...(adminWorkspace ? ['payments', 'expenses', 'expense_templates', 'workshop_templates', 'workshop_slots', 'bookings', 'attendance', 'tasks', 'leads', 'student_projects'] : [])
+    ]);
+    let failed = false;
+    const markReady = (name: string) => {
+      required.delete(name);
+      if (!failed && required.size === 0) setLoading(false);
+    };
+    const failRequired = (name: string, error: unknown) => {
+      console.error(`Unable to load ${name} for the academy workspace:`, error);
+      if (required.has(name)) {
+        failed = true;
+        const label = name.replace(/_/g, ' ');
+        const code = (error as { code?: string })?.code;
+        setWorkspaceError(code === 'permission-denied' || code === 'failed-precondition'
+          ? `Your account cannot load ${label} for this academy. Contact your administrator.`
+          : `We could not load ${label} for this academy. Check your connection and try again.`);
         setLoading(false);
-    }, 2500); // Failsafe unblock after 2.5s maximum
-
-    const checkLoadingGate = () => {
-        if (isSettingsLoaded && pendingCores <= 0) {
-            clearTimeout(fallbackTimeout);
-            setLoading(false);
-        }
+      }
     };
 
     const settingsUnsub = onSnapshot(doc(firestore, 'organizations', orgId, 'settings', 'global'), (docSnap) => {
-      isSettingsLoaded = true;
       if (docSnap.exists()) {
         const savedData = docSnap.data() as AppSettings;
         const mergedSettings = {
@@ -290,12 +314,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else {
         setSettings(DEFAULT_SETTINGS);
       }
-      checkLoadingGate();
+      markReady('settings');
     }, (error) => {
-      console.error("Error fetching settings:", error);
-      setSettings(DEFAULT_SETTINGS);
-      isSettingsLoaded = true;
-      checkLoadingGate();
+      failRequired('settings', error);
     });
 
     const unsubs = [
@@ -303,44 +324,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       onSnapshot(query(collection(firestore, 'class_sessions'), where('organizationId', '==', orgId)), (q) => setClassSessions(q.docs.map(d => ({ id: d.id, ...d.data() } as ClassSession)))),
       onSnapshot(query(collection(firestore, 'students'), where('organizationId', '==', orgId)), (snap) => {
           setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student)));
-          pendingCores--; checkLoadingGate();
-      }),
+          markReady('students');
+      }, error => failRequired('students', error)),
       onSnapshot(query(collection(firestore, 'programs'), where('organizationId', '==', orgId)), (snap) => { 
           setPrograms(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program)));
-          pendingCores--; checkLoadingGate();
-      }),
+          markReady('programs');
+      }, error => failRequired('programs', error)),
       onSnapshot(query(collection(firestore, 'enrollments'), where('organizationId', '==', orgId)), (snap) => {
           setEnrollments(snap.docs.map(d => ({ id: d.id, ...d.data() } as Enrollment)));
-          pendingCores--; checkLoadingGate();
-      }),
+          markReady('enrollments');
+      }, error => failRequired('enrollments', error)),
       onSnapshot(query(collection(firestore, 'payments'), where('organizationId', '==', orgId)), (snap) => {
         const sortedPayments = snap.docs.map(d => ({ id: d.id, ...d.data() } as Payment))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setPayments(sortedPayments);
-        pendingCores--; checkLoadingGate();
-      }),
+        markReady('payments');
+      }, error => failRequired('payments', error)),
       onSnapshot(query(collection(firestore, 'expenses'), where('organizationId', '==', orgId)), (snap) => {
         const sortedExpenses = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense))
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setExpenses(sortedExpenses);
-        pendingCores--; checkLoadingGate();
-      }),
-      onSnapshot(query(collection(firestore, 'expense_templates'), where('organizationId', '==', orgId)), (snap) => setExpenseTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpenseTemplate)))),
+        markReady('expenses');
+      }, error => failRequired('expenses', error)),
+      onSnapshot(query(collection(firestore, 'expense_templates'), where('organizationId', '==', orgId)), (snap) => { setExpenseTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpenseTemplate))); markReady('expense_templates'); }, error => failRequired('expense_templates', error)),
 
       // Workshop Listeners
-      onSnapshot(query(collection(firestore, 'workshop_templates'), where('organizationId', '==', orgId)), (snap) => setWorkshopTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopTemplate)))),
-      onSnapshot(query(collection(firestore, 'workshop_slots'), where('organizationId', '==', orgId)), (snap) => setWorkshopSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopSlot)))),
-      onSnapshot(query(collection(firestore, 'bookings'), where('organizationId', '==', orgId), orderBy('bookedAt', 'desc')), (snap) => setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking)))),
+      onSnapshot(query(collection(firestore, 'workshop_templates'), where('organizationId', '==', orgId)), (snap) => { setWorkshopTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopTemplate))); markReady('workshop_templates'); }, error => failRequired('workshop_templates', error)),
+      onSnapshot(query(collection(firestore, 'workshop_slots'), where('organizationId', '==', orgId)), (snap) => { setWorkshopSlots(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopSlot))); markReady('workshop_slots'); }, error => failRequired('workshop_slots', error)),
+      onSnapshot(query(collection(firestore, 'bookings'), where('organizationId', '==', orgId), orderBy('bookedAt', 'desc')), (snap) => { setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() } as Booking))); markReady('bookings'); }, error => failRequired('bookings', error)),
       onSnapshot(query(collection(firestore, 'workshop_evaluations'), where('organizationId', '==', orgId), orderBy('createdAt', 'desc')), (snap) => setWorkshopEvaluations(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopEvaluation)))),
 
       // Attendance
-      onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), (snap) => setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord)))),
+      onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), (snap) => { setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord))); markReady('attendance'); }, error => failRequired('attendance', error)),
       onSnapshot(query(collection(firestore, 'staff_attendance'), where('organizationId', '==', orgId)), (snap) => setStaffAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as StaffAttendanceRecord)))),
 
       // Team Listeners
       // Users are global but UserProfile has organizationId. We filter users by org.
       onSnapshot(query(collection(firestore, 'users'), where('organizationId', '==', orgId)), (snap) => setTeamMembers(snap.docs.map(d => ({ ...d.data(), uid: d.id } as UserProfile)))),
-      onSnapshot(query(collection(firestore, 'tasks'), where('organizationId', '==', orgId)), (snap) => setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)))),
+      onSnapshot(query(collection(firestore, 'tasks'), where('organizationId', '==', orgId)), (snap) => { setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task))); markReady('tasks'); }, error => failRequired('tasks', error)),
       onSnapshot(query(collection(firestore, 'projects'), where('organizationId', '==', orgId)), (snap) => setProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as Project)))),
       onSnapshot(query(collection(firestore, 'messages'), where('organizationId', '==', orgId), orderBy('createdAt', 'desc'), limit(50)), (snap) => {
         const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ChatMessage));
@@ -350,12 +371,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Marketing Listeners
       onSnapshot(query(collection(firestore, 'marketing_posts'), where('organizationId', '==', orgId)), (snap) => setMarketingPosts(snap.docs.map(d => ({ id: d.id, ...d.data() } as MarketingPost)))),
       onSnapshot(query(collection(firestore, 'campaigns'), where('organizationId', '==', orgId)), (snap) => setCampaigns(snap.docs.map(d => ({ id: d.id, ...d.data() } as Campaign)))),
-      onSnapshot(query(collection(firestore, 'leads'), where('organizationId', '==', orgId)), (snap) => setLeads(snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead)))),
+      onSnapshot(query(collection(firestore, 'leads'), where('organizationId', '==', orgId)), (snap) => { setLeads(snap.docs.map(d => ({ id: d.id, ...d.data() } as Lead))); markReady('leads'); }, error => failRequired('leads', error)),
 
       // Learning Listeners
       // Project Templates might be SHARED (Tenant Zero) vs PRIVATE. For now, strict isolation.
       onSnapshot(query(collection(firestore, 'project_templates'), where('organizationId', '==', orgId)), (snap) => setProjectTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectTemplate)))),
-      onSnapshot(query(collection(firestore, 'student_projects'), where('organizationId', '==', orgId)), (snap) => setStudentProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentProject)))),
+      onSnapshot(query(collection(firestore, 'student_projects'), where('organizationId', '==', orgId)), (snap) => { setStudentProjects(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentProject))); markReady('student_projects'); }, error => failRequired('student_projects', error)),
 
       // Setup Factory Listeners
       onSnapshot(query(collection(firestore, 'process_templates'), where('organizationId', '==', orgId)), (snap) => setProcessTemplates(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProcessTemplate)))),
@@ -426,7 +447,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       processTemplates, stations, badges,
       toolLinks, archiveLinks, galleryItems, assets, pickupQueue,
       notifications, unreadNotificationsCount, markAsRead, markAllAsRead, sendNotification,
-      settings, loading, language: settings.language || 'en', t,
+      settings, loading, workspaceError, language: settings.language || 'en', t,
       currentView, viewParams, navigateTo
     }}>
       {children}

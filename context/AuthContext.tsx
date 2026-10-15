@@ -17,6 +17,7 @@ interface AuthContextType {
   switchOrganization: (organizationId: string) => Promise<boolean>;
 
   loading: boolean;
+  rolesReady: boolean;
   roles: RoleDefinition[];
   signOut: () => Promise<void>;
   can: (permission: string) => boolean;
@@ -147,44 +148,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
   const [roleDefinition, setRoleDefinition] = useState<RoleDefinition | null>(null);
   const [roles, setRoles] = useState<RoleDefinition[]>(DEFAULT_ROLES);
+  const [roleSourcesReady, setRoleSourcesReady] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [platformBootstrapComplete, setPlatformBootstrapComplete] = useState(false);
 
   // Ref to track demo mode status across closures/effects to prevent auto-logout
   const isDemoMode = useRef(false);
+  const authRequestId = useRef(0);
 
   // 1. Merge platform role defaults with organization-specific overrides.
   useEffect(() => {
     if (!db || !user || !auth?.currentUser) {
       setRoles(DEFAULT_ROLES);
+      setRoleSourcesReady(false);
       return;
     }
     const firestore = db;
     let platformRoles = DEFAULT_ROLES;
     let tenantOverrides: RoleDefinition[] = [];
+    let platformReady = false;
+    let tenantReady = !currentOrganization?.id;
+    setRoleSourcesReady(false);
 
     const publishMergedRoles = () => {
       const baseRoles = DEFAULT_ROLES.map(defaultRole => platformRoles.find(role => role.id === defaultRole.id) || defaultRole);
       const customRoles = platformRoles.filter(role => !baseRoles.some(baseRole => baseRole.id === role.id));
       setRoles([...baseRoles, ...customRoles].map(baseRole => tenantOverrides.find(role => role.id === baseRole.id) || baseRole));
+      if (platformReady && tenantReady) setRoleSourcesReady(true);
     };
 
     const platformUnsubscribe = onSnapshot(collection(firestore, 'roles'), (snap) => {
       platformRoles = snap.empty ? DEFAULT_ROLES : snap.docs.map(roleDoc => ({ ...roleDoc.data(), id: roleDoc.id } as RoleDefinition));
+      platformReady = true;
       publishMergedRoles();
     }, (error) => {
       console.error('Unable to sync platform role definitions:', error);
       platformRoles = DEFAULT_ROLES;
+      platformReady = true;
       publishMergedRoles();
     });
 
     const tenantUnsubscribe = currentOrganization?.id
       ? onSnapshot(collection(firestore, 'organizations', currentOrganization.id, 'roles'), (snap) => {
           tenantOverrides = snap.docs.map(roleDoc => ({ ...roleDoc.data(), id: roleDoc.id } as RoleDefinition));
+          tenantReady = true;
           publishMergedRoles();
         }, (error) => {
           console.error('Unable to sync organization role overrides:', error);
           tenantOverrides = [];
+          tenantReady = true;
           publishMergedRoles();
         })
       : () => undefined;
@@ -218,17 +231,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const firestore = db; // Capture strictly typed reference
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      const requestId = ++authRequestId.current;
+      setLoading(true);
+      setSessionError(null);
       if (firebaseUser) {
         isDemoMode.current = false;
-
-        // Check if we already have this user loaded to avoid flicker
-        if (user?.uid === firebaseUser.uid) {
-          setLoading(false);
-          return;
-        }
-
+        setUserProfile(null);
+        setRoleDefinition(null);
+        setCurrentOrganization(null);
         setUser(firebaseUser);
 
+        try {
         // Fetch Profile
         let profileData: UserProfile | null = null;
 
@@ -299,13 +312,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
+        if (authRequestId.current !== requestId) return;
         setUserProfile(profileData);
+        setRoleDefinition(DEFAULT_ROLES.find(role => role.id === profileData?.role) || null);
 
         // 3. Fetch Organization
         if (profileData && profileData.organizationId) {
           const orgSnap = await getDoc(doc(firestore, 'organizations', profileData.organizationId));
+          if (authRequestId.current !== requestId) return;
           if (orgSnap.exists()) {
-            setCurrentOrganization(orgSnap.data() as Organization);
+            setCurrentOrganization({ ...orgSnap.data(), id: orgSnap.id } as Organization);
+          } else {
+            setSessionError('The academy assigned to this account could not be found. Contact your administrator.');
           }
         } else if (profileData?.role === 'admin' && !profileData.organizationId) {
           // BACKWARDS COMPATIBILITY FOR EXISTING ADMIN
@@ -314,26 +332,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             // 1. Try to fetch the tenant zero org
             const orgSnap = await getDoc(doc(firestore, 'organizations', 'makerlab-academy'));
+            if (authRequestId.current !== requestId) return;
             if (orgSnap.exists()) {
-              setCurrentOrganization(orgSnap.data() as Organization);
+              setCurrentOrganization({ ...orgSnap.data(), id: orgSnap.id } as Organization);
             } else {
-              // 2. Fallback: Create a virtual org object so the app loads
-              // This allows the admin to reach Settings > Migration
-              console.warn("Tenant Zero not found. Using virtual fallback.");
-              setCurrentOrganization({
-                id: 'makerlab-academy',
-                name: 'Makerlab Academy',
-                slug: 'makerlab-academy',
-                ownerEmail: profileData?.email || '',
-                modules: { activeModules: ['erp', 'makerPro'] },
-                subscription: { status: 'active', planId: 'legacy' },
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-              } as any);
+              setSessionError('The academy assigned to this account could not be found. Contact your administrator.');
             }
           } catch (err) {
             console.error("Failed to recover legacy session", err);
+            setSessionError('We could not verify your academy. Check your connection and try again.');
           }
+        }
+        } catch (error) {
+          if (authRequestId.current !== requestId) return;
+          console.error('Unable to complete Edufy sign-in:', error);
+          setUserProfile(null);
+          setCurrentOrganization(null);
+          setSessionError('We could not complete sign-in. Check your connection and try again.');
         }
       } else {
         // Only clear if we aren't in manual demo mode
@@ -341,14 +356,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setUserProfile(null);
           setRoleDefinition(null);
+          setCurrentOrganization(null);
         }
       }
 
+      if (authRequestId.current === requestId) setLoading(false);
+    }, error => {
+      console.error('Unable to restore Edufy authentication:', error);
+      setSessionError('We could not restore your session. Check your connection and try again.');
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [roles]);
+    return () => { authRequestId.current++; unsubscribe(); };
+  }, []);
 
   // Update role definition when roles state changes or user profile changes
   useEffect(() => {
@@ -377,6 +397,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginAsDemo = async () => {
     setLoading(true);
+    setSessionError(null);
     isDemoMode.current = true;
 
     // Simulate User
@@ -624,9 +645,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Calculated Properties for PrivateRoute
-  const isAuthorized = !!userProfile && userProfile.status === 'active' && !!roleDefinition;
+  const rolesReady = userProfile?.uid === 'demo-admin-id' || roleSourcesReady;
+  const isAuthorized = !!userProfile && userProfile.status === 'active' && !!roleDefinition && rolesReady;
   const userRole = userProfile?.role || null;
-  const authError = !userProfile ? 'Profile not found' : userProfile.status !== 'active' ? 'Account inactive' : !roleDefinition ? 'Role not defined' : null;
+  const authError = sessionError || (!user ? null : !userProfile ? 'Profile not found' : userProfile.status !== 'active' ? 'Account inactive' : !currentOrganization ? 'This account is waiting for an academy assignment.' : rolesReady && !roles.some(role => role.id === userProfile.role) ? 'Role not defined' : null);
 
   const isPlatformBootstrapAdmin = !platformBootstrapComplete
     && userProfile?.uid !== 'demo-admin-id'
@@ -636,7 +658,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{
-      user, userProfile, roleDefinition, loading, roles, signOut, can, loginAsDemo, switchRole, impersonateUser, createSecondaryUser,
+      user, userProfile, roleDefinition, loading, rolesReady, roles, signOut, can, loginAsDemo, switchRole, impersonateUser, createSecondaryUser,
       switchOrganization, isAuthorized, authError, userRole, currentOrganization, isSuperAdmin, isPlatformBootstrapAdmin
     }}>
       {children}
