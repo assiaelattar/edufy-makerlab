@@ -1,6 +1,12 @@
-# Latest handoff — Learner Pickup truth and phone access
+# Latest handoff — Edufy student profile quick-access render fix
 
-On 2026-10-15 a focused local SparkQuest candidate removed the fixed “3:00 PM” and “Main Entrance” from the learner Pickup dialog. It derives a dated workshop end time from active tenant-scoped enrollments/program schedules, shows missing information honestly, and hides stale facts during cancelled/exception states. Pickup is now a primary mobile destination and a journey-header action; live status alerts open the same detail screen. The optional ready signal and staff physical handoff remain unchanged. At 390px, the cancelled preview shows only the live cancellation and stay-with-team guidance, and navigation shows Pickup. SparkQuest TypeScript, both production builds and scoped smokes pass. This work is in the isolated learner Pickup branch; no push, deployment, Firestore rule or production-data change was made. A signed-in student on a physical phone remains the acceptance check.
+On 2026-10-15 the live Hostinger bundle gained the quick-access component but opening a student profile crashed with `Cannot read properties of null (reading 'expiresAt')`. The component rendered modal children with `mode=null` and a fallback manual URL, which evaluated the one-click expiry branch even while the modal was closed. The focused fix supplies a link only for an explicitly chosen mode and guards the expiry copy with a real quick-link object. A parent/learner initial-render smoke passes. Publish this client fix separately from API or Firebase changes and verify the Hostinger student page after deployment.
+
+---
+
+# Previous handoff — Learner Pickup truth and phone access
+
+On 2026-10-15 a focused local SparkQuest candidate removed the fixed “3:00 PM” and “Main Entrance” from the learner Pickup dialog. It derives a dated workshop end time from active tenant-scoped enrollments/program schedules, shows missing information honestly, and hides stale facts during cancelled/exception states. Pickup is now a primary mobile destination and a journey-header action; live status alerts open the same detail screen. The optional ready signal and staff physical handoff remain unchanged. At 390px, the cancelled preview shows only the live cancellation and stay-with-team guidance, and navigation shows Pickup. SparkQuest TypeScript, both production builds and scoped smokes pass. This work was published in `710c49a`; a signed-in student on a physical phone remains the acceptance check.
 
 ---
 

@@ -1,5 +1,9 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Render recipient links only after selection
+
+The Edufy learner profile keeps the recipient quick-link state empty until staff selects manual sign-in or issues a one-click link. Link URL, QR and expiry details render only for that selected mode and available link, so opening a learner record never reads an absent one-click session.
+
 ## 2026-10-15 — Separate reusable login QR from one-click session QR
 
 A reusable card opens the role-specific login page and shows the recorded ID but contains no password. One-click access uses a staff-issued five-minute opaque code, stored only as a hash, bound to the exact parent or learner UID and tenant, and consumed once by SparkQuest. Parent issuance requires current exact guardian evidence. Staff issuance is audited by UID and does not mutate the recipient password. The existing password flow remains available; one-click student access cannot authorize Showcase deletion without fresh password reauthentication.

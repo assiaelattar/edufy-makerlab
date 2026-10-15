@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Edufy recipient quick-access render repair
+
+Opening a student profile on the newly updated Hostinger client exposed a null `expiresAt` read in the closed quick-access modal. The component now renders link and expiry details only after the matching access mode has a link. Parent and learner initial-render smoke passes; production build and public verification are the release gates. The issue did not require API, credentials, rules, indexes, or production data changes.
+
 ## 2026-10-15 — Daily Pickup roster and optional learner signal
 
 Edufy Pickup now derives the current-day roster from active attendance-eligible enrollments and group schedules, then overlays live parent/staff queue state in the desk and lobby. Staff can complete the verified handoff from `arrived` or `ready`; the learner-ready action remains available but does not block release. Daily-roster/lifecycle smokes, SparkQuest TypeScript, both production builds and Firebase 10/12 Auth/Firestore suites pass. The coordinated Edufy, SparkQuest and Firestore release is authorized and pending promotion/verification.

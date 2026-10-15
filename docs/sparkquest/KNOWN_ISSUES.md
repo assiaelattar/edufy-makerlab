@@ -1,5 +1,9 @@
 # SparkQuest Known Issues
 
+## Recipient quick-access live acceptance
+
+- The initial Edufy profile-render crash is fixed locally and covered by a parent/learner render smoke. After release, verify the Hostinger student profile displays both QR controls and a designated linked parent can receive and consume a one-use link. No real parent password is needed for this smoke.
+
 ## Parent and learner quick access release gate
 
 - The local quick-access UI and API need coordinated Edufy Hostinger plus Vercel API release from the same commit. Verify both configured Edufy issue and SparkQuest exchange origins before use.

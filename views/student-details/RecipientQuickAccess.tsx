@@ -22,8 +22,8 @@ export const RecipientQuickAccess: React.FC<{ student: Student; role: 'parent' |
   const qrRef = useRef<HTMLDivElement>(null);
   const account = role === 'parent' ? student.parentLoginInfo : student.loginInfo;
   const manualUrl = new URL(role === 'parent' ? '?role=parent#login' : '#login', config.sparkQuestUrl).toString();
-  const link = mode === 'quick' ? quickLink?.launchUrl : manualUrl;
-  const expired = mode === 'quick' && quickLink && clock >= new Date(quickLink.expiresAt).getTime();
+  const link = mode === 'quick' ? quickLink?.launchUrl : mode === 'manual' ? manualUrl : null;
+  const expired = mode === 'quick' && !!quickLink && clock >= new Date(quickLink.expiresAt).getTime();
   const canIssue = ['super_admin', 'owner', 'admin'].includes(userProfile?.role || '') &&
     !!currentOrganization?.id && currentOrganization.id === student.organizationId && !!account?.uid;
 
@@ -128,7 +128,7 @@ export const RecipientQuickAccess: React.FC<{ student: Student; role: 'parent' |
           <div ref={qrRef} className="mx-auto w-fit rounded-xl bg-white p-4"><QRCodeSVG value={link} size={196} level="M" /></div>
           <p className="break-all rounded-lg bg-slate-900 p-3 font-mono text-xs select-all">{link}</p>
           {mode === 'manual' ? <p>Reusable QR. Login ID: <strong className="select-all">{account.email}</strong>. The recipient enters their existing password.</p>
-            : <p>Single-use link, expires {new Date(quickLink!.expiresAt).toLocaleTimeString()}. Share it only with the verified recipient. After it is used or expires, create a new one.</p>}
+            : quickLink && <p>Single-use link, expires {new Date(quickLink.expiresAt).toLocaleTimeString()}. Share it only with the verified recipient. After it is used or expires, create a new one.</p>}
           {expired && <p className="text-amber-200">This link has expired. Create a new one.</p>}
           {expired && <button type="button" onClick={createQuickLink} disabled={!verified || busy} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 font-bold text-slate-950 disabled:opacity-50">{busy && <Loader2 size={16} className="animate-spin" />}Create new one-click link</button>}
           <div className="grid grid-cols-2 gap-2">

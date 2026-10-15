@@ -1,5 +1,10 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Edufy student profile quick-access render fix
+
+- Fixed a crash when staff opened a learner profile before selecting a manual or one-click QR mode. The unopened access card no longer reads an absent link's `expiresAt`.
+- Added a render smoke that checks the parent and learner quick-access controls appear before any link is issued.
+
 ## 2026-10-15 — Learner Pickup truth and mobile access
 
 - Replaced the learner Pickup dialog's fixed time and entrance with the dated workshop timetable from the learner's active Edufy enrollments and program schedule. Missing end times and handoff points are stated plainly.
