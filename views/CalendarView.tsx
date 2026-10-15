@@ -11,6 +11,7 @@ import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard
 import './school-day/education-school-day-v1.css';
 import { Modal } from '../components/Modal';
 import { getProgramOperationalState } from '../utils/programLifecycle';
+import { getSchoolWeekdayIndex } from '../utils/schoolSchedule';
 
 const addMinutesToTime = (time: string, minutesToAdd: number) => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -49,6 +50,10 @@ export const CalendarView = () => {
         unassigned: events.filter(event => !event.instructorId).length,
         workshops: events.filter(event => event.type === 'workshop_trial').length
     }), [events]);
+    const sortedEvents = useMemo(() => [...events].sort((first, second) => `${first.date} ${first.startTime}`.localeCompare(`${second.date} ${second.startTime}`)), [events]);
+    const firstCoverageGap = sortedEvents.find(event => !event.instructorId && `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm'))
+        || sortedEvents.find(event => !event.instructorId);
+    const nextSession = sortedEvents.find(event => `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm')) || sortedEvents[0];
     const assignableTeam = useMemo(() => teamMembers.filter(member => ['instructor', 'admin', 'admission_officer'].includes(member.role)), [teamMembers]);
 
     // --- 3. Render Helpers ---
@@ -97,13 +102,7 @@ export const CalendarView = () => {
             programs.forEach(program => {
                 program.grades.forEach(grade => {
                     grade.groups.forEach(group => {
-                        const englishDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                        const frenchDays = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-                        
-                        let dayIndex = englishDays.indexOf(group.day);
-                        if (dayIndex === -1) {
-                            dayIndex = frenchDays.findIndex(d => d.toLowerCase() === group.day?.toLowerCase());
-                        }
+                        const dayIndex = getSchoolWeekdayIndex(group.day);
                         
                         if (dayIndex === -1) {
                             invalidGroups++;
@@ -258,7 +257,7 @@ export const CalendarView = () => {
                 }
                 actions={
                     <>
-                    <button
+                    {can('attendance.manage') && <button
                         type="button"
                         onClick={handleSyncWeek}
                         disabled={isGenerating}
@@ -267,7 +266,7 @@ export const CalendarView = () => {
                     >
                         <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
                         Sync Week
-                    </button>
+                    </button>}
                     
                     <div className="flex min-h-10 items-center rounded-lg border border-white/10 bg-slate-900 p-1">
                         <button type="button" onClick={() => setCurrentDate(subWeeks(currentDate, 1))} className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white" title="Previous week" aria-label="Previous week"><ChevronLeft size={18} /></button>
@@ -279,6 +278,18 @@ export const CalendarView = () => {
                     </>
                 }
             />
+
+            {showEducationSchoolDayV1 && <div className="edu-school-day-v1__focus" role="region" aria-label="Schedule priority">
+                <div className="edu-school-day-v1__focus-copy">
+                    <span className="edu-school-day-v1__eyebrow">Selected week</span>
+                    <h2>{firstCoverageGap ? `${calendarSignals.unassigned} ${calendarSignals.unassigned === 1 ? 'session needs' : 'sessions need'} coverage` : nextSession ? 'Instructor coverage is set' : 'No sessions in this week'}</h2>
+                    <p>{firstCoverageGap ? `${firstCoverageGap.date} · ${firstCoverageGap.startTime} · ${firstCoverageGap.title}` : nextSession ? `Next: ${nextSession.date} · ${nextSession.startTime} · ${nextSession.title}` : can('attendance.manage') ? 'Synchronize the week to create sessions from active groups and workshops.' : 'No class or workshop sessions are available for this week.'}</p>
+                </div>
+                <div className="edu-school-day-v1__focus-actions">
+                    {(firstCoverageGap || nextSession) && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => setAssignModalSession((firstCoverageGap || nextSession)!)}>{firstCoverageGap && can('attendance.manage') ? 'Assign instructor' : 'Review session'} <ChevronRight size={16} /></button>}
+                    {!nextSession && can('attendance.manage') && <button type="button" className="edu-school-day-v1__focus-primary" onClick={handleSyncWeek} disabled={isGenerating}>Sync week</button>}
+                </div>
+            </div>}
 
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <AtlasSignalCard label="Week sessions" value={calendarSignals.sessions} detail="Classes and workshops" icon={CalendarIcon} tone="teal" />
@@ -340,14 +351,14 @@ export const CalendarView = () => {
                 </div>
             </div>
 
-            <Modal isOpen={Boolean(assignModalSession)} onClose={() => !isAssigning && setAssignModalSession(null)} title="Assign instructor">
+            <Modal isOpen={Boolean(assignModalSession)} onClose={() => !isAssigning && setAssignModalSession(null)} title={can('attendance.manage') ? 'Assign instructor' : 'Session details'}>
                 {assignModalSession && (
                     <div className="space-y-4">
                         <div className="rounded-lg border border-white/10 bg-slate-950 p-4 text-sm text-slate-300">
                             <div className="font-black text-white">{assignModalSession.title}</div>
                             <div className="mt-1 font-mono text-xs text-slate-400">{assignModalSession.date} · {assignModalSession.startTime} - {assignModalSession.endTime}</div>
                         </div>
-                        <div>
+                        {can('attendance.manage') && <div>
                             <p className="mb-3 text-xs font-bold uppercase text-slate-500">Available instructors</p>
                             {assignableTeam.length === 0 ? (
                                 <AtlasEmptyState title="No instructors available" description="Add an instructor or administrator to the team before assigning coverage." icon={Users} />
@@ -366,12 +377,13 @@ export const CalendarView = () => {
                                 ))}
                             </div>
                             )}
-                        </div>
-                        <div className="flex justify-end border-t border-white/10 pt-4">
+                        </div>}
+                        {!can('attendance.manage') && <p className="text-sm text-slate-400">Instructor: {assignModalSession.instructorName || 'Unassigned'}</p>}
+                        {can('attendance.manage') && <div className="flex justify-end border-t border-white/10 pt-4">
                             <AtlasActionButton variant={assignModalSession.instructorId ? 'danger' : 'secondary'} disabled={isAssigning || !assignModalSession.instructorId} onClick={() => handleAssignInstructor('')}>
                                 {isAssigning ? 'Saving...' : 'Remove assignment'}
                             </AtlasActionButton>
-                        </div>
+                        </div>}
                     </div>
                 )}
             </Modal>

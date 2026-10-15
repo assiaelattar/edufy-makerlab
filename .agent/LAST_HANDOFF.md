@@ -1,4 +1,10 @@
-# Latest handoff — Programs, Students, Pickup focus
+# Latest handoff — Classes, attendance, schedule focus
+
+On 2026-10-15 the next school-day phase added live priorities ahead of metrics: today's class groups and attendance, remaining attendance marks, and instructor coverage gaps. Class dates use the local day, attendance understands French and English weekday labels, and only attendance managers see assignment/sync controls. Light and dark surfaces stay within the school palette. The build, weekday smoke, scoped TypeScript and diff check pass. A designated staff account must still check real data and actions on desktop and phone. No push, deployment, rule or production data change. See `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`.
+
+---
+
+# Previous handoff — Programs, Students, Pickup focus
 
 On 2026-10-15 the school-theme worktree gained a task-level pass across the first three requested modules. Programs presents its next action from real readiness, waiting families and empty groups. Students retains direct profile navigation while making passport preview explicit and consistent with the active worklist; its scoped surfaces now follow both school themes. Pickup moves the live verification queue before the full roster, adds a current handoff focus, and treats older `waiting` records as staff review rather than an invalid arrival action. No lifecycle transition, data selector, permission, API or Firebase rule was changed. Production build, scoped TypeScript, two Pickup domain smokes, Atlas context reader and whitespace check pass. Signed-in phone acceptance is pending; local review is at `http://192.168.11.105:5202/` on the same Wi-Fi (current Wi-Fi IP; it may change). No push or deployment. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
 

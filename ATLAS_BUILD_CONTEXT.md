@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Education UI school-day operations
+
+Classes, attendance and weekly schedule now surface the next real operator action before aggregate metrics. The class and attendance day share local date and English/French schedule matching. Schedule coverage points to an actual unassigned session; sync/assignment remain attendance-manager actions. Shared data and permission layers are unchanged. Build, weekday smoke, scoped TypeScript and diff check pass. Signed-in staff acceptance remains. See `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`.
+
 ## 2026-10-15 — Education UI priority modules
 
 Programs, Students and Pickup have a focused school-theme pass in the isolated local worktree. Program readiness and demand produce the next portfolio action; the learner roster retains direct profile navigation and adds a clear next-step preview; Pickup's live gate queue now precedes the daily roster. Existing tenant data, permissions and release commands are preserved. Root build, scoped TypeScript, Pickup domain smokes, Atlas context reader and diff check pass. Signed-in desktop/phone light/dark acceptance remains. Next module by daily operational importance: Classes and attendance, then Schedule. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.

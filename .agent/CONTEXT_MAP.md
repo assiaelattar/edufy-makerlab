@@ -1,5 +1,7 @@
 # Context Map
 
+Education UI Classes, attendance and schedule focus: read `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`, `EDUCATION_UI_SYSTEM_MAP.md`, the three view owners, `utils/schoolSchedule.ts`, `utils/membershipLifecycle.ts`, and `views/school-day/education-school-day-v1.css`. Keep class/attendance records and instructor assignment writes under their current selectors and permissions. Signed-in light/dark phone review remains pending.
+
 Education UI Programs, Students, Pickup focus: read `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`, `docs/education/DECISIONS.md`, `docs/education/KNOWN_ISSUES.md`, `EDUCATION_UI_SYSTEM_MAP.md`, the three view owners and their scoped CSS. Keep existing selectors, permissions and Pickup lifecycle commands. Signed-in light/dark phone acceptance remains pending.
 
 Parent legacy login repair: read `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`, `docs/parent/CREDENTIALS_PHASE_3_2026-10-10.md`, `api/parent-access/index.js`, `services/parentAccess.ts`, the Student Details parent access components, and the synthetic emulator. Release through the registered Edufy app only; Vercel trusted API and Hostinger static client are distinct deployment targets.

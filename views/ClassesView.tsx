@@ -11,6 +11,8 @@ import { hasPrintableLearnerAccess, printGroupAccessCards } from '../utils/group
 import { Enrollment, Student } from '../types';
 import { getProgramOperationalState } from '../utils/programLifecycle';
 import { isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
+import { format } from 'date-fns';
+import { getSchoolWeekdayIndex } from '../utils/schoolSchedule';
 import './school-day/education-school-day-v1.css';
 
 export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, gradeId: string, groupId: string) => void }) => {
@@ -29,10 +31,14 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
    }, [groupKey]);
    const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
-   const today = new Date().toISOString().slice(0, 10);
+   const today = format(new Date(), 'yyyy-MM-dd');
    const allPrograms = useMemo(() => programs.filter(program => ['running', 'upcoming', 'evergreen'].includes(getProgramOperationalState(program, today)) && program.grades?.length > 0), [programs, today]);
    const totalGroups = useMemo(() => allPrograms.reduce((total, program) => total + program.grades.reduce((sum, grade) => sum + grade.groups.length, 0), 0), [allPrograms]);
    const activeEnrollments = useMemo(() => enrollments.filter(enrollment => enrollment.status === 'active').length, [enrollments]);
+   const todaysGroups = useMemo(() => allPrograms.filter(program => ['running', 'evergreen'].includes(getProgramOperationalState(program, today))).flatMap(program => program.grades.flatMap(grade => grade.groups
+      .filter(group => getSchoolWeekdayIndex(group.day) === new Date().getDay())
+      .map(group => ({ program, grade, group }))))
+      .sort((first, second) => first.group.time.localeCompare(second.group.time)), [allPrograms, today]);
 
    if (classId) {
       const program = programs.find(item => item.id === classId.pId);
@@ -238,6 +244,18 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-classes-v1' : undefined}>
          <AtlasCommandHeader eyebrow="Academic operations" title="Classes & schedule" description="Move from program structure to the live roster without losing context." icon={School} badges={<span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2.5 py-1 text-[10px] font-bold text-teal-200">{totalGroups} groups</span>} actions={<AtlasActionButton icon={CalendarCheck} onClick={() => navigateTo('schedule')}>Weekly schedule</AtlasActionButton>} />
 
+         {showEducationSchoolDayV1 && <section className="edu-school-day-v1__focus" aria-label="Today's class action">
+            <div className="edu-school-day-v1__focus-copy">
+               <span className="edu-school-day-v1__eyebrow">Today’s classes</span>
+               <h2>{todaysGroups.length > 0 ? `${todaysGroups.length} ${todaysGroups.length === 1 ? 'group' : 'groups'} scheduled` : 'No groups scheduled today'}</h2>
+               <p>{todaysGroups.length > 0 ? todaysGroups.slice(0, 3).map(({ group }) => `${group.time} ${group.name}`).join(' · ') : 'Browse the weekly schedule or open a class roster below.'}</p>
+            </div>
+            <div className="edu-school-day-v1__focus-actions">
+               {todaysGroups.length > 0 && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => navigateTo('attendance')}>Take attendance <ChevronRight size={16} /></button>}
+               <button type="button" className="edu-school-day-v1__focus-secondary" onClick={() => todaysGroups.length > 0 ? navigateTo('classes', { classId: { pId: todaysGroups[0].program.id, gId: todaysGroups[0].grade.id, grpId: todaysGroups[0].group.id } }) : navigateTo('schedule')}>{todaysGroups.length > 0 ? 'Open first roster' : 'Open schedule'}</button>
+            </div>
+         </section>}
+
          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <AtlasSignalCard label="Programs" value={allPrograms.length} detail="With scheduled groups" icon={Layers3} tone="teal" />
             <AtlasSignalCard label="Groups" value={totalGroups} detail="Available class rosters" icon={School} tone="blue" />
@@ -262,7 +280,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                      <AtlasSectionHeader title={program.name} description="Choose a group to open its working roster." icon={Layers3} meta={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold text-slate-400">{program.grades.reduce((total, grade) => total + grade.groups.length, 0)} groups</span>} />
                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                         {program.grades.flatMap(grade => grade.groups.map(group => {
-                           const count = enrollments.filter(enrollment => enrollment.status === 'active' && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id)).length;
+                           const count = enrollments.filter(enrollment => isEnrollmentEligibleForAttendance(enrollment, program, today) && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id)).length;
                            return (
                               <button type="button" key={group.id} onClick={() => navigateTo('classes', { classId: { pId: program.id, gId: grade.id, grpId: group.id } })} className="group min-h-[176px] rounded-lg border border-white/10 bg-slate-900/70 p-4 text-left transition-colors hover:border-teal-300/35 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
                                  <div className="flex items-start justify-between gap-3"><div><span className="text-[10px] font-black uppercase text-teal-300">{grade.name}</span><h4 className="mt-1 text-base font-black text-white">{group.name}</h4></div><ChevronRight size={18} className="text-slate-600 transition-colors group-hover:text-teal-300" /></div>

@@ -10,6 +10,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
 import { findMembershipRenewalsDue, isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
+import { getScheduledSlotForWeekday } from '../utils/schoolSchedule';
 
 export const AbsenceView = () => {
     const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
@@ -27,6 +28,7 @@ export const AbsenceView = () => {
     const dayOfWeek = useMemo(() => {
         return format(parseISO(selectedDate), 'EEEE');
     }, [selectedDate]);
+    const selectedWeekday = parseISO(selectedDate).getDay();
 
     const currentTimeMinutes = useMemo(() => {
         const now = new Date();
@@ -54,32 +56,34 @@ export const AbsenceView = () => {
             const student = students.find(item => item.id === enrollment.studentId);
             if (!student || student.status === 'inactive') return false;
 
-            const mainHasClass = enrollment.groupTime?.includes(dayOfWeek);
-            const secondaryHasClass = enrollment.secondGroupTime?.includes(dayOfWeek);
+            const mainHasClass = getScheduledSlotForWeekday(enrollment.groupTime, selectedWeekday) !== null;
+            const secondaryHasClass = getScheduledSlotForWeekday(enrollment.secondGroupTime, selectedWeekday) !== null;
 
             return mainHasClass || secondaryHasClass;
         }).flatMap(enrollment => {
             const slots = [];
 
-            if (enrollment.groupTime?.includes(dayOfWeek)) {
+            const mainSlot = getScheduledSlotForWeekday(enrollment.groupTime, selectedWeekday);
+            if (mainSlot !== null) {
                 slots.push({
                     ...enrollment,
-                    displayTime: enrollment.groupTime.replace(dayOfWeek, '').trim(),
+                    displayTime: mainSlot,
                     displayGroup: enrollment.groupName || ''
                 });
             }
 
-            if (enrollment.secondGroupTime?.includes(dayOfWeek)) {
+            const secondarySlot = getScheduledSlotForWeekday(enrollment.secondGroupTime, selectedWeekday);
+            if (secondarySlot !== null) {
                 slots.push({
                     ...enrollment,
-                    displayTime: enrollment.secondGroupTime.replace(dayOfWeek, '').trim(),
+                    displayTime: secondarySlot,
                     displayGroup: enrollment.secondGroupName || ''
                 });
             }
 
             return slots;
         });
-    }, [enrollments, students, programById, selectedDate, dayOfWeek]);
+    }, [enrollments, students, programById, selectedDate, selectedWeekday]);
 
     const scheduledStudents = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();
@@ -264,6 +268,7 @@ export const AbsenceView = () => {
 
         return { total: allScheduledStudents.length, present, absent, late, excused, unmarked };
     }, [allScheduledStudents, attendanceRecords, selectedDate]);
+    const sessionCount = new Set(allScheduledStudents.map(student => student.displayTime)).size;
 
     const uniqueGroups = useMemo(() => {
         const groups = new Set<string>();
@@ -313,8 +318,20 @@ export const AbsenceView = () => {
                 )}
             />
 
+            {showEducationSchoolDayV1 && <div className="edu-school-day-v1__focus" role="region" aria-label="Attendance priority">
+                <div className="edu-school-day-v1__focus-copy">
+                    <span className="edu-school-day-v1__eyebrow">{isFutureDate ? 'Schedule preview' : isToday ? 'Today’s priority' : 'Selected day'}</span>
+                    <h2>{dailyStats.total === 0 ? 'No students scheduled' : dailyStats.unmarked === 0 ? 'Attendance complete' : `${dailyStats.unmarked} ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`}</h2>
+                    <p>{dailyStats.total === 0 ? `No eligible enrollments on ${dayOfWeek}.` : `${dailyStats.total} scheduled across ${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}.${isFutureDate ? ' Marks unlock on the session date.' : ''}`}</p>
+                </div>
+                <div className="edu-school-day-v1__focus-actions">
+                    {dailyStats.total > 0 && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => { setSearchQuery(''); setSelectedGroup('All'); document.getElementById('edu-attendance-roster')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{isFutureDate ? 'Review roster' : dailyStats.unmarked > 0 ? 'Finish attendance' : 'Review attendance'} <ChevronRight size={16} /></button>}
+                    {dailyStats.total === 0 && <button type="button" className="edu-school-day-v1__focus-secondary" onClick={() => navigateTo('classes')}>Open classes</button>}
+                </div>
+            </div>}
+
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <AtlasSignalCard label="Scheduled" value={dailyStats.total} detail={`${studentsByTime.length} session${studentsByTime.length === 1 ? '' : 's'}`} icon={Users} tone="slate" />
+                <AtlasSignalCard label="Scheduled" value={dailyStats.total} detail={`${sessionCount} session${sessionCount === 1 ? '' : 's'}`} icon={Users} tone="slate" />
                 <AtlasSignalCard label="Marked present" value={dailyStats.present} detail={`${dailyStats.unmarked} awaiting a mark`} icon={CheckCircle2} tone="teal" />
                 <AtlasSignalCard label="Late" value={dailyStats.late} detail="Needs follow-up" icon={AlertCircle} tone="amber" />
                 <AtlasSignalCard label="Absent" value={dailyStats.absent} detail={`${dailyStats.excused} excused`} icon={XCircle} tone="red" />
@@ -367,7 +384,7 @@ export const AbsenceView = () => {
                 </div>
             </AtlasToolbar>
 
-            <section className="space-y-4">
+            <section id="edu-attendance-roster" className="space-y-4 scroll-mt-5">
                 <AtlasSectionHeader title="Session roster" description={`${dayOfWeek}, ${selectedDate} · ${dailyStats.unmarked} attendance ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`} icon={Calendar} />
                 {isFutureDate && (
                     <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">

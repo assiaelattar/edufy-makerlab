@@ -1,5 +1,7 @@
 # Source-of-Truth Registry
 
+Education UI school-day focus: `views/ClassesView.tsx`, `views/AbsenceView.tsx`, and `views/CalendarView.tsx` own the daily class, attendance and weekly coverage flows; `utils/schoolSchedule.ts` normalizes English/French weekday labels; `views/school-day/education-school-day-v1.css` owns scoped light/dark presentation. Eligibility remains in `utils/membershipLifecycle.ts`, and schedule writes retain their existing permission boundary. See `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`.
+
 Education UI three-module focus: `views/ProgramsView.tsx` and `views/programs/education-programs-v1.css` own portfolio priority; `views/students/EducationStudentsOperationsV1.tsx` and its CSS own learner preview and theme behavior; `views/PickupView.tsx` and `views/pickup/education-pickup-v1.css` own the staff desk order and visual hierarchy. Shared theme tokens remain in `components/education-ui/education-ui-v1.css`. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
 
 Recipient quick access: `modules/sparkquest/domain/recipientAccessPolicy.js` defines staff/recipient identity checks; `api/app-bridge/sparkquest/share.js` issues five-minute codes; `api/app-bridge/sparkquest/exchange.js` consumes them; `views/student-details/RecipientQuickAccess.tsx` presents manual and one-click QR sharing. See `docs/sparkquest/RECIPIENT_QUICK_ACCESS_2026-10-15.md`.

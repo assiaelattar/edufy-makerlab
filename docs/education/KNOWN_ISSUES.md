@@ -1,5 +1,9 @@
 # Education UI known issues
 
+## School-day signed-in review
+
+Classes, attendance and Schedule need a designated staff account on desktop and phone to verify real tenant day labels, coverage counts, theme contrast and narrow-screen scrolling. Assignment and attendance writes were not run against production records for visual QA. The local candidate remains unreleased.
+
 ## Signed-in acceptance
 
 This worktree has no designated school credentials. A staff account must check Programs, Students and Pickup with real tenant data in both themes on desktop and phone. The local server is available on the same Wi-Fi, but its IP address can change. No pickup release should be executed solely for visual review.
