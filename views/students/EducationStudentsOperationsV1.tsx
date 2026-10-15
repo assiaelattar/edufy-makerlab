@@ -26,7 +26,7 @@ import type { StudentDirectoryFilter } from '../../components/students/StudentDi
 import type { AdmissionProjection } from '../../modules/admissions/domain';
 import { EducationAdmissionsReadOnlyV1 } from '../../modules/admissions/ui/EducationAdmissionsReadOnlyV1';
 import { formatCurrency } from '../../utils/helpers';
-import { STUDENT_DIRECTORY_ISSUE_LABELS } from '../../utils/studentIdentity';
+import { STUDENT_DIRECTORY_ISSUE_LABELS, type StudentDuplicateGroup } from '../../utils/studentIdentity';
 import './education-students-operations-v1.css';
 
 type ViewMode = 'students' | 'parents';
@@ -60,7 +60,7 @@ type Props = {
   filteredStudents: any[];
   parentAccounts: ParentAccount[];
   parentLedger: { totalBalance: number; familiesWithBalance: number };
-  directoryHealth: { records: Map<string, { issues: Array<keyof typeof STUDENT_DIRECTORY_ISSUE_LABELS> }> };
+  directoryHealth: { records: Map<string, { issues: Array<keyof typeof STUDENT_DIRECTORY_ISSUE_LABELS> }>; duplicateGroups: StudentDuplicateGroup[] };
   directorySummary: DirectorySummary;
   stats: { total: number; active: number; inactive: number; newThisMonth: number; enrolled: number; dataHealth: number };
   viewMode: ViewMode;
@@ -89,7 +89,8 @@ type Props = {
   toggleSelectAll: () => void;
   can: (permission: string) => boolean;
   onAddStudent: () => void;
-  onEditStudent: (student: any) => void;
+  onEditStudent: (student: any, field?: 'name' | 'parentName' | 'parentPhone' | 'birthDate' | 'school') => void;
+  onEditEnrollment: (studentId: string, enrollmentId: string) => void;
   onQuickEnroll: (studentId?: string) => void;
   onViewProfile: (studentId: string) => void;
   onToggleStudentStatus: (student: any) => void;
@@ -162,6 +163,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   can,
   onAddStudent,
   onEditStudent,
+  onEditEnrollment,
   onQuickEnroll,
   onViewProfile,
   onToggleStudentStatus,
@@ -171,6 +173,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   const [smartView, setSmartView] = useState<SmartView>('all');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [showDuplicateReview, setShowDuplicateReview] = useState(false);
   const [selectedFamilyPhone, setSelectedFamilyPhone] = useState<string>('');
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(viewMode);
 
@@ -261,17 +264,30 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
     0,
   );
   const selectedPrimaryEnrollment = selectedEnrollments[0];
+  const selectedUnassignedEnrollment = selectedEnrollments.find(enrollment => !enrollment.groupId && !enrollment.groupName);
+  const selectedDuplicateGroups = selectedStudent
+    ? directoryHealth.duplicateGroups.filter(group => group.studentIds.includes(selectedStudent.id))
+    : [];
+
+  useEffect(() => { setShowDuplicateReview(false); }, [selectedStudent?.id]);
 
   const nextAction = useMemo(() => {
     if (!selectedStudent) return null;
-    if (selectedStudent.status === 'inactive') return { label: 'Reactivate this learner', action: () => onToggleStudentStatus(selectedStudent), button: 'Reactivate' };
-    if (selectedIssues.includes('missing_contact')) return { label: 'Add the missing family contact', action: () => onEditStudent(selectedStudent), button: 'Fix contact' };
-    if (selectedIssues.includes('no_enrollment')) return { label: 'Choose a program and enroll', action: () => onQuickEnroll(selectedStudent.id), button: 'Enroll now' };
-    if (selectedIssues.includes('unassigned_group')) return { label: 'Place this learner in a class', action: () => onQuickEnroll(selectedStudent.id), button: 'Choose class' };
-    if (selectedIssues.includes('possible_duplicate')) return { label: 'Review the possible duplicate', action: () => onViewProfile(selectedStudent.id), button: 'Review' };
-    if (selectedIssues.includes('missing_profile')) return { label: 'Complete the learner profile', action: () => onEditStudent(selectedStudent), button: 'Complete' };
+    const missingField = !selectedStudent.parentName ? 'parentName' : !selectedStudent.birthDate ? 'birthDate' : 'school';
+    const missingLabel = missingField === 'parentName' ? 'parent name' : missingField === 'birthDate' ? 'date of birth' : 'school';
+    const profileAction = { label: `Add the missing ${missingLabel}`, action: () => onEditStudent(selectedStudent, missingField), button: `Add ${missingLabel}` };
+    const duplicateAction = { label: 'Compare the matching records', action: () => setShowDuplicateReview(true), button: 'Compare records' };
+    if (selectedStudent.status === 'inactive' && can('students.delete')) return { label: 'Reactivate this learner', action: () => onToggleStudentStatus(selectedStudent), button: 'Reactivate' };
+    if (smartView === 'duplicates' && selectedIssues.includes('possible_duplicate')) return duplicateAction;
+    if (smartView === 'profile' && selectedIssues.includes('missing_profile') && can('students.edit')) return profileAction;
+    if (smartView === 'placement' && selectedIssues.includes('unassigned_group') && selectedUnassignedEnrollment && can('students.enroll')) return { label: 'Place this learner in a class', action: () => onEditEnrollment(selectedStudent.id, selectedUnassignedEnrollment.id), button: 'Choose class' };
+    if (selectedIssues.includes('missing_contact') && can('students.edit')) return { label: 'Add the missing family phone', action: () => onEditStudent(selectedStudent, 'parentPhone'), button: 'Add phone' };
+    if (selectedIssues.includes('no_enrollment') && can('students.enroll')) return { label: 'Choose a program and enroll', action: () => onQuickEnroll(selectedStudent.id), button: 'Enroll now' };
+    if (selectedIssues.includes('unassigned_group') && selectedUnassignedEnrollment && can('students.enroll')) return { label: 'Place this learner in a class', action: () => onEditEnrollment(selectedStudent.id, selectedUnassignedEnrollment.id), button: 'Choose class' };
+    if (selectedIssues.includes('possible_duplicate')) return duplicateAction;
+    if (selectedIssues.includes('missing_profile') && can('students.edit')) return profileAction;
     return { label: 'Review the complete learner record', action: () => onViewProfile(selectedStudent.id), button: 'Open profile' };
-  }, [selectedStudent, selectedIssues, onEditStudent, onQuickEnroll, onToggleStudentStatus, onViewProfile]);
+  }, [selectedStudent, selectedIssues, selectedUnassignedEnrollment, smartView, can, onEditStudent, onEditEnrollment, onQuickEnroll, onToggleStudentStatus, onViewProfile]);
 
   const readinessSteps = selectedStudent ? [
     { label: 'Contact', ready: !selectedIssues.includes('missing_contact') },
@@ -378,11 +394,12 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                   return (
                     <div key={student.id} className="edu-student-ops__student-row" data-selected={isSelected}>
                       <label className="edu-student-ops__row-check" onClick={event => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${student.name}`} checked={selectedIds.includes(student.id)} onChange={() => setSelectedIds(current => current.includes(student.id) ? current.filter(id => id !== student.id) : [...current, student.id])} /></label>
-                      <button type="button" className="edu-student-ops__student-main" aria-pressed={isSelected} onClick={() => setSelectedStudentId(student.id)}>
+                      <button type="button" className="edu-student-ops__student-main" onClick={() => onViewProfile(student.id)} aria-label={`Open ${student.name}'s profile`}>
                         <span className="edu-student-ops__avatar">{getInitials(student.name)}</span>
                         <span className="edu-student-ops__student-copy"><strong>{student.name}</strong><span>{firstIssue}{activeEnrollments[0]?.programName ? ` · ${activeEnrollments[0].programName}` : ''}</span></span>
-                        <span className="edu-student-ops__row-action">{issues.includes('missing_contact') ? 'Fix contact' : issues.includes('no_enrollment') ? 'Enroll' : issues.includes('unassigned_group') ? 'Choose class' : issues.includes('possible_duplicate') ? 'Review' : issues.length ? 'Complete' : 'Ready'}<ChevronRight size={15} /></span>
+                        <span className="edu-student-ops__row-action">Open profile<ChevronRight size={15} /></span>
                       </button>
+                      <button type="button" className="edu-student-ops__row-preview" aria-label={`Preview ${student.name}'s next action`} aria-pressed={isSelected} onClick={() => setSelectedStudentId(student.id)} title="Preview next action"><Eye size={17} /></button>
                     </div>
                   );
                 })}
@@ -398,6 +415,15 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                   </div>
                   <div className="edu-student-ops__passport-body">
                     {nextAction && <div className="edu-student-ops__next-action"><span><Sparkles size={17} /></span><div><small>Next best action</small><strong>{nextAction.label}</strong></div><button type="button" onClick={nextAction.action}>{nextAction.button}</button></div>}
+                    {showDuplicateReview && selectedDuplicateGroups.length > 0 && <div className="edu-student-ops__duplicate-review" aria-label="Possible duplicate records">
+                      <div className="edu-student-ops__duplicate-heading"><strong>Compare matching records</strong><button type="button" onClick={() => setShowDuplicateReview(false)} aria-label="Close comparison"><X size={16} /></button></div>
+                      <p>Check the family and learner details before changing either record.</p>
+                      {[...new Set(selectedDuplicateGroups.flatMap(group => group.studentIds))].map(id => {
+                        const candidate = students.find(student => student.id === id);
+                        if (!candidate) return null;
+                        return <div key={id} className="edu-student-ops__duplicate-record"><div><strong>{candidate.name}</strong><span>{candidate.birthDate || 'Birth date missing'} · {candidate.parentName || 'Parent missing'}</span><span>{candidate.parentPhone || candidate.email || 'Contact missing'}</span></div><button type="button" onClick={() => onViewProfile(id)}>Open profile</button></div>;
+                      })}
+                    </div>}
 
                     <div className="edu-student-ops__facts">
                       <div><small>Family contact</small><strong>{selectedStudent.parentName || 'Not recorded'}</strong><span>{selectedStudent.parentPhone || selectedStudent.email || 'Contact needed'}</span></div>

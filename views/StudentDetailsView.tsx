@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
@@ -64,8 +64,39 @@ export const StudentDetailsView = ({
     const [activeTab, setActiveTab] = useState('Academics');
     const [isEditingStudent, setIsEditingStudent] = useState(false);
     const [editFormData, setEditFormData] = useState<Record<string, any>>({});
+    const [focusedEditField, setFocusedEditField] = useState<string | null>(null);
+    const openedRouteIntent = useRef<string | null>(null);
     const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const showEducationStudentDetailsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+
+    useEffect(() => {
+        if (!student || isStudentRole) return;
+        if (viewParams.studentEditField) {
+            const intent = `${student.id}:edit:${viewParams.studentEditField}`;
+            if (openedRouteIntent.current === intent) return;
+            openedRouteIntent.current = intent;
+            setEditFormData({
+                name: student.name,
+                birthDate: student.birthDate,
+                parentName: student.parentName,
+                parentPhone: student.parentPhone,
+                email: student.email,
+                address: student.address,
+                school: student.school,
+                medicalInfo: student.medicalInfo,
+            });
+            setFocusedEditField(viewParams.studentEditField);
+            setIsEditingStudent(true);
+        } else if (viewParams.studentEnrollmentId) {
+            const intent = `${student.id}:enrollment:${viewParams.studentEnrollmentId}`;
+            if (openedRouteIntent.current === intent) return;
+            const enrollment = enrollments.find(item => item.id === viewParams.studentEnrollmentId && item.studentId === student.id);
+            if (!enrollment) return;
+            openedRouteIntent.current = intent;
+            setActiveTab('Academics');
+            setEditEnrollment(enrollment);
+        }
+    }, [student, isStudentRole, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments]);
 
     const badgeTone: Record<string, string> = {
         blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
@@ -96,6 +127,7 @@ export const StudentDetailsView = ({
     );
 
     const handleEditClick = () => {
+        setFocusedEditField(null);
         setEditFormData({
             name: student.name,
             birthDate: student.birthDate,
@@ -707,7 +739,10 @@ export const StudentDetailsView = ({
         <div className={`flex flex-col gap-5 pb-8 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-details-v1' : ''}`} data-testid={showEducationStudentDetailsV1 ? 'education-student-details-v1' : undefined}>
             {showEducationStudentDetailsV1 ? (
                 <section className="edu-student-details-v1__hero" aria-labelledby="education-student-name">
-                    <button type="button" className="edu-student-details-v1__back" onClick={() => navigateTo('students')} aria-label="Back to students"><ArrowLeft size={18} /></button>
+                    <div className="edu-student-details-v1__leading-actions">
+                        <button type="button" className="edu-student-details-v1__back" onClick={() => navigateTo('students')} aria-label="Back to students"><ArrowLeft size={18} /></button>
+                        <button type="button" className="edu-student-details-v1__student-view" onClick={() => setViewMode('student_preview')}><Eye size={17} />Student view</button>
+                    </div>
                     <div className="edu-student-details-v1__identity">
                         <div className="edu-student-details-v1__avatar" aria-hidden="true">{student.name.charAt(0)}</div>
                         <div className="min-w-0">
@@ -721,7 +756,6 @@ export const StudentDetailsView = ({
                         </div>
                     </div>
                     <div className="edu-student-details-v1__actions">
-                        <button type="button" onClick={() => setViewMode('student_preview')}><Eye size={17} />Student view</button>
                         <button type="button" onClick={openSchedulePrint}><Printer size={17} />Schedule</button>
                         <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>
                         <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>
@@ -926,6 +960,7 @@ export const StudentDetailsView = ({
                                 <select
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.groupId || ''}
+                                    autoFocus={Boolean(viewParams.studentEnrollmentId)}
                                     onChange={(e) => {
                                         const program = programs.find(p => p.id === editEnrollment.programId);
                                         if (!program) return;
@@ -1115,6 +1150,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Full Name</label>
                             <input
                                 type="text"
+                                autoFocus={focusedEditField === 'name'}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editFormData.name || ''}
                                 onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
@@ -1125,6 +1161,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Date of Birth</label>
                             <input
                                 type="date"
+                                autoFocus={focusedEditField === 'birthDate'}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editFormData.birthDate || ''}
                                 onChange={e => setEditFormData({ ...editFormData, birthDate: e.target.value })}
@@ -1134,6 +1171,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Parent Name</label>
                             <input
                                 type="text"
+                                autoFocus={focusedEditField === 'parentName'}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editFormData.parentName || ''}
                                 onChange={e => setEditFormData({ ...editFormData, parentName: e.target.value })}
@@ -1143,6 +1181,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Parent Phone</label>
                             <input
                                 type="text"
+                                autoFocus={focusedEditField === 'parentPhone'}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editFormData.parentPhone || ''}
                                 onChange={e => setEditFormData({ ...editFormData, parentPhone: e.target.value })}
@@ -1166,6 +1205,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">School</label>
                             <input
                                 type="text"
+                                autoFocus={focusedEditField === 'school'}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editFormData.school || ''}
                                 onChange={e => setEditFormData({ ...editFormData, school: e.target.value })}

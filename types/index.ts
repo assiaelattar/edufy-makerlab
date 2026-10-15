@@ -1130,6 +1130,8 @@ export interface ViewParams {
   programId?: string; // NEW
   classId?: { pId: string, gId: string, grpId: string };
   studentId?: string;
+  studentEditField?: 'name' | 'parentName' | 'parentPhone' | 'birthDate' | 'school';
+  studentEnrollmentId?: string;
   projectId?: string; // Add projectId here
   activityId?: { type: 'payment' | 'enrollment' | 'booking', id: string };
   filter?: string;

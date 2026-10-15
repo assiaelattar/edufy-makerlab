@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Students roster and profile UX
+
+The smart roster learner row now opens its profile, while an eye button previews its operational passport. Missing contact/profile, class placement, and enrollment actions route to the relevant existing editor; possible duplicates open a read-only comparison. Student view moved to the left side of the profile hero. Blue/green layered styling is scoped to Students. The production build passed. The next step is Hostinger release verification, then authenticated desktop/phone acceptance; audited duplicate merge and the module-wide visual audit are separate work. See `docs/students/`.
+
 ## 2026-10-15 — Edufy recipient quick-access render repair
 
 Opening a student profile on the newly updated Hostinger client exposed a null `expiresAt` read in the closed quick-access modal. The component now renders link and expiry details only after the matching access mode has a link. Parent and learner initial-render smoke passes; production build and public verification are the release gates. The issue did not require API, credentials, rules, indexes, or production data changes.

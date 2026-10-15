@@ -1226,7 +1226,7 @@ const AppContent = () => {
 
         switch (currentView) {
             case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
-            case 'students': return <StudentsView onAddStudent={() => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setIsEnrollmentModalOpen(true); }} onEditStudent={(s) => navigateTo('student-details', { studentId: s.id })} onQuickEnroll={(id) => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(id || null); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
+            case 'students': return <StudentsView onAddStudent={() => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setIsEnrollmentModalOpen(true); }} onEditStudent={(s, field) => navigateTo('student-details', { studentId: s.id, studentEditField: field || 'name' })} onEditEnrollment={(studentId, enrollmentId) => navigateTo('student-details', { studentId, studentEnrollmentId: enrollmentId })} onQuickEnroll={(id) => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(id || null); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
             case 'classes': return <ClassesView onEnroll={handleEnrollFromGroup} />;
             case 'programs': return <ProgramsView onEnrollLead={handleEnrollLead} />;
             case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;

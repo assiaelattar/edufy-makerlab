@@ -1,4 +1,10 @@
-# Latest handoff — Edufy student profile quick-access render fix
+# Latest handoff — Edufy Students navigation and action UX
+
+On 2026-10-15, the Students smart roster gained direct profile navigation on the learner row and a separate eye control for the operational passport. The passport's action now opens the missing profile field, existing enrollment's class editor, enrollment wizard, or a read-only exact-record comparison. Student view is on the left of the profile hero. Roster and profile colors use scoped blue/green layers, leaving shared tokens and other modules intact. The registered Edufy production build passed. Release to Hostinger through `origin/main`, verify live bundle delivery, and use a designated staff account for desktop/phone data-specific acceptance. See `docs/students/{CHANGELOG,DECISIONS,KNOWN_ISSUES}.md`.
+
+---
+
+# Previous handoff — Edufy student profile quick-access render fix
 
 On 2026-10-15 the live Hostinger bundle gained the quick-access component but opening a student profile crashed with `Cannot read properties of null (reading 'expiresAt')`. The component rendered modal children with `mode=null` and a fallback manual URL, which evaluated the one-click expiry branch even while the modal was closed. The focused fix supplies a link only for an explicitly chosen mode and guards the expiry copy with a real quick-link object. A parent/learner initial-render smoke passes. Publish this client fix separately from API or Firebase changes and verify the Hostinger student page after deployment.
 

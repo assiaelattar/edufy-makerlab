@@ -19,11 +19,13 @@ import './students/education-students-v1.css';
 export const StudentsView = ({
     onAddStudent,
     onEditStudent,
+    onEditEnrollment,
     onQuickEnroll,
     onViewProfile
 }: {
     onAddStudent: () => void,
-    onEditStudent: (s: any) => void,
+    onEditStudent: (s: any, field?: 'name' | 'parentName' | 'parentPhone' | 'birthDate' | 'school') => void,
+    onEditEnrollment: (studentId: string, enrollmentId: string) => void,
     onQuickEnroll: (id?: string) => void,
     onViewProfile: (id: string) => void
 }) => {
@@ -470,6 +472,7 @@ export const StudentsView = ({
                     can={can}
                     onAddStudent={onAddStudent}
                     onEditStudent={onEditStudent}
+                    onEditEnrollment={onEditEnrollment}
                     onQuickEnroll={onQuickEnroll}
                     onViewProfile={onViewProfile}
                     onToggleStudentStatus={toggleStudentStatus}

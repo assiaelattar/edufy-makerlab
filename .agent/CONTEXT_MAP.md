@@ -27,6 +27,7 @@ Learner workbench/desktop Phase 1: read `docs/sparkquest/LEARNER_WORKSPACE_PHASE
 | Current lead/booking types | `types/index.ts` |
 | Current CRM | `views/MarketingView.tsx`, `views/marketing/*` |
 | Students preview | `views/StudentsView.tsx`, `views/students/EducationStudentsOperationsV1.tsx` |
+| Students navigation and design | `docs/students/CHANGELOG.md`, `docs/students/DECISIONS.md`, `docs/students/KNOWN_ISSUES.md`, `views/StudentDetailsView.tsx` |
 | Workshop integration | `views/WorkshopsView.tsx`, `views/dashboard/WorkshopActionCenter.tsx` |
 | Enrollment integration | `App.tsx`, `views/PublicEnrollmentView.tsx` |
 | StemQuest membership and attendance | `docs/programs/STEMQUEST_MEMBERSHIP_ATTENDANCE.md`, `utils/membershipLifecycle.ts`, `utils/programLifecycle.ts`, `views/AbsenceView.tsx`, `components/programs/ProgramSetupWizard.tsx` |

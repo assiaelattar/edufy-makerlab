@@ -12,11 +12,11 @@
     gap: 28px;
     overflow: hidden;
     padding: 34px;
-    border: 1px solid #d9ded6;
+    border: 1px solid #ccdee5;
     border-radius: 30px;
     background:
-        radial-gradient(circle at 79% 2%, rgba(255,255,255,.74) 0 16%, transparent 16.5%),
-        linear-gradient(132deg, #eff4e9 0%, #e5ecdf 100%);
+        radial-gradient(circle at 79% 2%, rgba(255,255,255,.6) 0 16%, transparent 16.5%),
+        linear-gradient(125deg, #d9f3e7 0%, #e1eff7 56%, #eaf1fc 100%);
     box-shadow: var(--edu-shadow-sm);
 }
 
@@ -31,42 +31,43 @@
     content: '';
 }
 
+.edu-student-details-v1__leading-actions { position: absolute; z-index: 2; top: 22px; left: 22px; display: flex; align-items: center; gap: 9px; }
 .edu-student-details-v1__back {
-    position: absolute;
-    z-index: 2;
-    top: 22px;
-    right: 22px;
+    position: relative;
     display: grid;
     width: 44px;
     height: 44px;
     place-items: center;
-    border: 1px solid #d3d9cf;
+    border: 1px solid #c4dce3;
     border-radius: 14px;
     color: var(--edu-ink);
-    background: rgba(255,255,255,.76);
+    background: rgba(249,253,253,.86);
 }
+.edu-student-details-v1__student-view { display: inline-flex; min-height: 44px; align-items: center; gap: 8px; padding: 0 15px; border: 1px solid #9ecbd0; border-radius: 14px; color: #10243a; background: #d9f3ec; font-size: 12px; font-weight: 800; }
+.edu-student-details-v1__leading-actions button:focus-visible,
+.edu-student-details-v1__actions button:focus-visible { outline: 3px solid #267b88; outline-offset: 2px; }
 
 .edu-student-details-v1__identity,
 .edu-student-details-v1__actions { position: relative; z-index: 1; }
 .edu-student-details-v1__identity { display: flex; min-width: 0; align-items: center; gap: 20px; }
-.edu-student-details-v1__avatar { display: grid; width: 86px; height: 86px; flex: 0 0 86px; place-items: center; border: 6px solid rgba(255,255,255,.8); border-radius: 25px; color: var(--edu-ink); background: var(--edu-brand); box-shadow: 0 18px 40px rgba(75,93,48,.16); font-size: 31px; font-weight: 850; }
+.edu-student-details-v1__avatar { display: grid; width: 86px; height: 86px; flex: 0 0 86px; place-items: center; border: 6px solid rgba(255,255,255,.8); border-radius: 25px; color: #10243a; background: #a5e6d0; box-shadow: 0 18px 40px rgba(30,96,103,.16); font-size: 31px; font-weight: 850; }
 .edu-student-details-v1__eyebrow { display: flex; align-items: center; gap: 7px; color: #697066; font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .edu-student-details-v1__title-line { display: flex; min-width: 0; align-items: center; gap: 12px; margin-top: 9px; }
 .edu-student-details-v1__title-line h2 { overflow: hidden; margin: 0; color: var(--edu-ink); font-size: clamp(32px, 4vw, 54px); font-weight: 850; letter-spacing: -.06em; line-height: .98; text-overflow: ellipsis; white-space: nowrap; }
-.edu-student-details-v1__title-line > span { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #bcd777; border-radius: 99px; color: #315918; background: var(--edu-brand-soft); font-size: 9px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.edu-student-details-v1__title-line > span { flex: 0 0 auto; padding: 5px 9px; border: 1px solid #a0d5c3; border-radius: 99px; color: #145244; background: #def5ea; font-size: 9px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
 .edu-student-details-v1__title-line > span[data-status='inactive'] { border-color: #efc0b5; color: #8b382d; background: #fff0ec; }
 .edu-student-details-v1__identity p { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--edu-muted); font-size: 13px; }
 .edu-student-details-v1__identity p i { width: 3px; height: 3px; border-radius: 50%; background: #a2a79e; }
 .edu-student-details-v1__membership { display: inline-flex; margin-top: 10px; padding: 5px 8px; border-radius: 8px; color: #74421f; background: var(--edu-warm); font-size: 10px; font-weight: 750; }
 
-.edu-student-details-v1__actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.edu-student-details-v1__actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
 .edu-student-details-v1__actions button { display: flex; min-height: 49px; align-items: center; justify-content: center; gap: 8px; padding: 0 13px; border: 1px solid #d7dcd3; border-radius: 15px; color: var(--edu-ink); background: rgba(255,255,255,.86); font-size: 12px; font-weight: 800; }
-.edu-student-details-v1__actions .edu-student-details-v1__edit { border-color: var(--edu-brand); background: var(--edu-brand); }
+.edu-student-details-v1__actions .edu-student-details-v1__edit { border-color: #9ed8c8; background: #bdecdc; }
 
-.edu-student-details-v1__signals > .atlas-signal-card { min-height: 132px; padding: 18px !important; border: 1px solid var(--edu-border) !important; border-radius: 22px !important; color: var(--edu-ink) !important; background: #fff !important; box-shadow: var(--edu-shadow-sm) !important; }
-.edu-student-details-v1__signals > .atlas-signal-card:first-child { border-color: var(--edu-brand) !important; background: var(--edu-brand) !important; }
+.edu-student-details-v1__signals > .atlas-signal-card { min-height: 132px; padding: 18px !important; border: 1px solid #d5e3e9 !important; border-radius: 22px !important; color: var(--edu-ink) !important; background: #f6fbfc !important; box-shadow: var(--edu-shadow-sm) !important; }
+.edu-student-details-v1__signals > .atlas-signal-card:first-child { border-color: #a6ddcd !important; background: #cef0df !important; }
 .edu-student-details-v1__signals > .atlas-signal-card:nth-child(2) { background: var(--edu-warm) !important; }
-.edu-student-details-v1__signals > .atlas-signal-card:nth-child(3) { color: #fff !important; background: var(--edu-ink) !important; }
+.edu-student-details-v1__signals > .atlas-signal-card:nth-child(3) { color: #fff !important; background: linear-gradient(135deg, #10243a, #17566c) !important; }
 .edu-student-details-v1__signals > .atlas-signal-card:nth-child(4) { background: var(--edu-lilac) !important; }
 .edu-student-details-v1__signals .atlas-text-strong,
 .edu-student-details-v1__signals .atlas-signal-detail,
@@ -79,15 +80,15 @@
 .edu-student-details-v1__contact svg { color: #758264 !important; }
 .edu-student-details-v1__contact span:last-child { color: inherit; }
 
-.edu-student-details-v1__tabs { padding: 6px !important; border: 1px solid var(--edu-border) !important; border-radius: 17px !important; background: rgba(255,255,255,.88) !important; box-shadow: var(--edu-shadow-sm); }
+.edu-student-details-v1__tabs { padding: 6px !important; border: 1px solid #d5e3e9 !important; border-radius: 17px !important; background: #eef6f8 !important; box-shadow: var(--edu-shadow-sm); }
 .edu-student-details-v1__tabs button { min-height: 46px; border-radius: 12px !important; color: var(--edu-muted) !important; }
 .edu-student-details-v1__tabs button:hover { color: var(--edu-ink) !important; background: #f1f3ef !important; }
-.edu-student-details-v1__tabs button[aria-selected='true'] { color: var(--edu-ink) !important; background: var(--edu-brand) !important; }
+.edu-student-details-v1__tabs button[aria-selected='true'] { color: #10243a !important; background: #bdecdc !important; }
 .edu-student-details-v1__tabs button span { color: inherit !important; background: rgba(17,17,17,.07) !important; }
 
 .edu-student-details-v1__panel > div,
 .edu-student-details-v1__panel > section,
-.edu-student-details-v1__panel section { border-color: var(--edu-border) !important; border-radius: 22px !important; color: var(--edu-ink) !important; background: #fff !important; box-shadow: var(--edu-shadow-sm); }
+.edu-student-details-v1__panel section { border-color: #d5e3e9 !important; border-radius: 22px !important; color: var(--edu-ink) !important; background: #f9fcfd !important; box-shadow: var(--edu-shadow-sm); }
 .edu-student-details-v1__panel [class*='border-white'],
 .edu-student-details-v1__panel [class*='border-slate'] { border-color: #e3e7e0 !important; }
 .edu-student-details-v1__panel [class*='divide-white'] > :not([hidden]) ~ :not([hidden]),
@@ -139,13 +140,13 @@
 
 @media (max-width: 1024px) {
     .edu-student-details-v1__hero { grid-template-columns: 1fr; padding-top: 72px; }
-    .edu-student-details-v1__actions { grid-template-columns: repeat(4, minmax(0,1fr)); }
+    .edu-student-details-v1__actions { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }
 
 @media (max-width: 700px) {
     .edu-student-details-v1 { gap: 14px; }
     .edu-student-details-v1__hero { min-height: 0; gap: 22px; padding: 68px 18px 20px; border-radius: 24px; }
-    .edu-student-details-v1__back { top: 16px; right: 16px; }
+    .edu-student-details-v1__leading-actions { top: 16px; left: 16px; }
     .edu-student-details-v1__identity { align-items: flex-start; gap: 13px; }
     .edu-student-details-v1__avatar { width: 58px; height: 58px; flex-basis: 58px; border-width: 4px; border-radius: 18px; font-size: 23px; }
     .edu-student-details-v1__title-line { align-items: flex-start; flex-direction: column; gap: 8px; }
