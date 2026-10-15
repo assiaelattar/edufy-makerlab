@@ -1,4 +1,10 @@
-# Current task boundary — Parent access acceptance after real-family sign-in
+# Current task boundary — Edufy legacy parent name release
+
+Release the focused one-word surname correction after the original parent-access hotfix. The Admin Student page now requests a verified full parent name when an older enrollment record contains only a family name; replacing the old login updates all linked siblings. The Auth/Firestore emulator and Edufy build pass. Keep Hostinger client and Vercel API on the same commit, preserve unrelated worktrees, and do not rotate a real family password merely to test. Authenticated acceptance with a designated account remains open. See `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`.
+
+---
+
+# Previous task boundary — Parent access acceptance after real-family sign-in
 
 The designated operator verified the parent relationship, issued a one-time password in local Edufy, and confirmed the real parent home opens in local SparkQuest. The trusted Vercel API is live; GitHub main is `91038cf`. Edufy Hostinger still serves an older client bundle. Keep the exact UID/tenant/guardian evidence gates, read-only family journey and direct staff sharing. For later sharing, reissue a new password; do not persist or reveal the previous password. Next release work is to verify Hostinger's client update and separately coordinate the SparkQuest public client. See `.agent/LAST_HANDOFF.md`.
 

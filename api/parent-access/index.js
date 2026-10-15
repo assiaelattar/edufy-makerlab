@@ -57,6 +57,10 @@ const verifiedNameCandidate = value => {
   const name = cleanName(value);
   return /^(parent|guardian)$/i.test(name) || /\s+family$/i.test(name) ? '' : name;
 };
+const replacementNameCandidate = value => {
+  const name = verifiedNameCandidate(value);
+  return /\S+\s+\S+/.test(name) ? name : '';
+};
 const exactParentEmail = value => {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!/^p\.[^@\s]{1,80}@makerlab\.academy$/.test(email)) {
@@ -109,10 +113,10 @@ const replaceableFamily = ({ profile, authUser, recorded, uidStudents, links, le
       (authUser.customClaims?.role && authUser.customClaims.role !== 'parent'))) ||
     (profile.exists && (profileData.role !== 'parent' || profileData.organizationId !== organizationId ||
       (profileData.email && profileData.email.toLowerCase() !== email.toLowerCase()) ||
-      (verifiedNameCandidate(profileData.name) && verifiedNameCandidate(profileData.name) !== verifiedName)))) return false;
+      (replacementNameCandidate(profileData.name) && replacementNameCandidate(profileData.name) !== verifiedName)))) return false;
   if (recorded.docs.some(item => item.data().organizationId !== organizationId ||
     item.data().parentLoginInfo?.uid !== uid || item.data().parentLoginInfo?.email?.toLowerCase() !== email.toLowerCase() ||
-    (verifiedNameCandidate(item.data().parentName) && verifiedNameCandidate(item.data().parentName) !== verifiedName))) return false;
+    (replacementNameCandidate(item.data().parentName) && replacementNameCandidate(item.data().parentName) !== verifiedName))) return false;
   if (uidStudents.docs.some(item => item.data().organizationId !== organizationId || !familyIds.has(item.id))) return false;
   return !links.docs.some(item => item.data().status === 'active' &&
     (item.data().organizationId !== organizationId || !familyIds.has(item.data().studentId) ||
@@ -407,7 +411,7 @@ export default async function handler(req, res) {
       const oldUid = student.parentLoginInfo?.uid;
       const oldEmail = student.parentLoginInfo?.email;
       const confirmedParentName = typeof parentName === 'string' ? parentName.trim().replace(/\s+/g, ' ') : '';
-      if (confirmedParentName.length < 2 || (verifiedNameCandidate(recordedParentName) && confirmedParentName !== recordedParentName) || !oldUid || !oldEmail) {
+      if (!replacementNameCandidate(confirmedParentName) || (replacementNameCandidate(recordedParentName) && confirmedParentName !== recordedParentName) || !oldUid || !oldEmail) {
         return response(res, 409, { ok: false, error: 'Refresh the learner and verify the recorded parent before repairing access.' });
       }
       const oldProfileRef = db.doc(`users/${oldUid}`);
@@ -439,7 +443,7 @@ export default async function handler(req, res) {
           if (!currentStudent.exists || currentStudent.data().organizationId !== organizationId ||
             currentStudent.data().parentLoginInfo?.uid !== oldUid ||
             currentStudent.data().parentLoginInfo?.email?.toLowerCase() !== oldEmail.toLowerCase() ||
-            (verifiedNameCandidate(currentStudent.data().parentName) && cleanName(currentStudent.data().parentName) !== confirmedParentName) ||
+            (replacementNameCandidate(currentStudent.data().parentName) && cleanName(currentStudent.data().parentName) !== confirmedParentName) ||
             !currentProfile.exists || !staffRoles.has(currentProfile.data().role) ||
             currentProfile.data().status !== 'active' || (currentProfile.data().organizationId !== organizationId &&
               !(currentProfile.data().role === 'super_admin' && currentProfile.data().organizationId === 'atlas-platform')) ||
@@ -456,7 +460,7 @@ export default async function handler(req, res) {
           transaction.update(studentRef, {
             parentLoginInfo: { uid: issued.uid, email: issued.email },
             parentUids: [...new Set([...(Array.isArray(currentStudent.data().parentUids) ? currentStudent.data().parentUids : []).filter(uid => uid !== oldUid), issued.uid])],
-            ...(!verifiedNameCandidate(currentStudent.data().parentName) ? { parentName: confirmedParentName } : {})
+            ...(!replacementNameCandidate(currentStudent.data().parentName) ? { parentName: confirmedParentName } : {})
           });
           for (const subjectId of guardianSubjects({ id: student.id, ...currentStudent.data() })) {
             transaction.create(db.doc(`guardian_links/${issued.uid}_${subjectId}`), {
@@ -475,7 +479,7 @@ export default async function handler(req, res) {
       const oldUid = student.parentLoginInfo?.uid;
       const oldEmail = student.parentLoginInfo?.email;
       const confirmedParentName = typeof parentName === 'string' ? parentName.trim().replace(/\s+/g, ' ') : '';
-      if (confirmedParentName.length < 2 || (verifiedNameCandidate(recordedParentName) && confirmedParentName !== recordedParentName)) {
+      if (!replacementNameCandidate(confirmedParentName) || (replacementNameCandidate(recordedParentName) && confirmedParentName !== recordedParentName)) {
         return response(res, 400, { ok: false, error: 'Enter and verify the real parent name before replacing a login.' });
       }
       if (typeof oldUid !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(oldUid) ||
@@ -526,7 +530,7 @@ export default async function handler(req, res) {
             const data = item.data();
             const parentUids = [...new Set([...(Array.isArray(data.parentUids) ? data.parentUids : []).filter(uid => uid !== oldUid), issued.uid])];
             transaction.update(item.ref, { parentLoginInfo: { uid: issued.uid, email: issued.email }, parentUids,
-              ...(!verifiedNameCandidate(data.parentName) ? { parentName: confirmedParentName } : {}) });
+              ...(!replacementNameCandidate(data.parentName) ? { parentName: confirmedParentName } : {}) });
             for (const subjectId of guardianSubjects({ id: item.id, ...data })) {
               transaction.set(db.doc(`guardian_links/${issued.uid}_${subjectId}`), {
                 organizationId, parentUid: issued.uid, studentId: item.id, subjectId,

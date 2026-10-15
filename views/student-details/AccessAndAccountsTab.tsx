@@ -28,7 +28,7 @@ const familyFromStudent = (name: string, loginEmail = '') => {
   const family = parts.find(part => normalized(part) === normalized(alias)) || parts[parts.length - 1];
   return family && normalized(family) ? { label: `${family.toUpperCase()} family`, alias: family } : { label: '', alias: '' };
 };
-const recordedRealParentName = (name?: string) => name?.trim() && !/^(parent|guardian)$/i.test(name.trim()) && !/\s+family$/i.test(name.trim()) ? name.trim() : '';
+const recordedRealParentName = (name?: string) => name?.trim() && /\S+\s+\S+/.test(name.trim()) && !/\s+family$/i.test(name.trim()) ? name.trim() : '';
 const parentAliasFromName = (name: string) => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return parts[parts.length - 1] || '';
@@ -62,7 +62,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const [directoryError, setDirectoryError] = useState('');
   const [reuseParentUid, setReuseParentUid] = useState('');
   const suggestedFamily = familyFromStudent(student.name, student.parentLoginInfo?.email);
-  const [aliasBasis, setAliasBasis] = useState(parentAliasFromName(recordedRealParentName(student.parentName)));
+  const [aliasBasis, setAliasBasis] = useState(parentAliasFromName(recordedRealParentName(student.parentName)) || suggestedFamily.alias);
   const [aliasManuallyEdited, setAliasManuallyEdited] = useState(false);
   const [relationshipVerified, setRelationshipVerified] = useState(false);
   const [verifiedParentName, setVerifiedParentName] = useState(recordedRealParentName(student.parentName));
@@ -75,7 +75,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
 
   useEffect(() => {
     setReuseParentUid('');
-    setAliasBasis(parentAliasFromName(recordedRealParentName(student.parentName)));
+    setAliasBasis(parentAliasFromName(recordedRealParentName(student.parentName)) || familyFromStudent(student.name, student.parentLoginInfo?.email).alias);
     setAliasManuallyEdited(false);
     setRelationshipVerified(false);
     setVerifiedParentName(recordedRealParentName(student.parentName));
@@ -301,7 +301,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                   setRelationshipVerified(false);
                   setPasswordNameRequired(false);
                   setVerifiedParentName(recordedRealParentName(student.parentName));
-                  if (!/^p\.[^@\s]+@makerlab\.academy$/i.test(student.parentLoginInfo?.email || '')) {
+                  if (!recordedRealParentName(student.parentName) || !/^p\.[^@\s]+@makerlab\.academy$/i.test(student.parentLoginInfo?.email || '')) {
                     setIsParentChoiceModalOpen(true);
                   } else {
                     setIsPasswordModalOpen(true);

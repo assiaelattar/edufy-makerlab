@@ -249,6 +249,25 @@ assert.equal((await adminAuth.getUser(oldEmailAuth.uid)).disabled, true);
 assert.equal((await db.doc(`users/${oldEmailAuth.uid}`).get()).data().status, 'inactive');
 await signInWithEmailAndPassword(clientAuth, externalAuthReplacement.body.email, externalAuthReplacement.body.password);
 
+// A surname-only enrollment field is not proof of the parent's full name.
+const surnameOnly = await adminAuth.createUser({ email: 'p.surname@makerlab.academy', password: 'Old-surname-password-123' });
+await Promise.all([
+  db.doc(`users/${surnameOnly.uid}`).set({ uid: surnameOnly.uid, organizationId: 'org-a', role: 'parent', status: 'active', name: 'Surname', email: surnameOnly.email }),
+  db.doc('students/surname-child-1').set({ organizationId: 'org-a', name: 'Child Surname One', parentName: 'Surname', parentLoginInfo: { uid: surnameOnly.uid, email: surnameOnly.email }, parentUids: [surnameOnly.uid] }),
+  db.doc('students/surname-child-2').set({ organizationId: 'org-a', name: 'Child Surname Two', parentName: 'Surname', parentLoginInfo: { uid: surnameOnly.uid, email: surnameOnly.email }, parentUids: [surnameOnly.uid] })
+]);
+const surnameRequest = { action: 'replace', studentId: 'surname-child-1', organizationId: 'org-a', parentName: 'Verified Surname', aliasBasis: 'Surname', relationshipVerified: true };
+assert.equal((await invoke(staffToken, { ...surnameRequest, parentName: 'Surname' })).statusCode, 400);
+const surnameReplacement = await invoke(staffToken, surnameRequest);
+assert.equal(surnameReplacement.statusCode, 200, JSON.stringify(surnameReplacement.body?.error));
+assert.equal(surnameReplacement.body.linkedLearnerCount, 2);
+for (const id of ['surname-child-1', 'surname-child-2']) {
+  const child = (await db.doc(`students/${id}`).get()).data();
+  assert.equal(child.parentName, 'Verified Surname');
+  assert.equal(child.parentLoginInfo.email, surnameReplacement.body.email);
+}
+assert.equal((await adminAuth.getUser(surnameOnly.uid)).disabled, true);
+
 await db.doc('students/platform-mislink-child').set({ organizationId: 'org-a', name: 'Platform mislink',
   parentLoginInfo: { uid: platformAdmin.uid, email: platformAdmin.email }, parentUids: [platformAdmin.uid] });
 const platformMislink = { action: 'replace', studentId: 'platform-mislink-child', organizationId: 'org-a',

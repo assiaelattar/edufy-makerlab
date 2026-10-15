@@ -2,6 +2,7 @@
 
 ## 2026-10-15 — Edufy parent account repair
 
+- Follow-up: surname-only enrollment records now request a verified full parent name before a new academy login is issued; all learners linked to that old family UID receive the corrected name.
 - Edufy now creates a new SparkQuest family login when a recorded enrollment contact email or orphan account cannot be used as a login.
 - Verified staff can reissue and display a new password; the prior password stops working. Existing linked learner work remains connected to the family account.
 - This change is in the Edufy account-management API and interface; the SparkQuest parent portal remains on its existing reader.

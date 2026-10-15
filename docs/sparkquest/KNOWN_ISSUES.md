@@ -3,6 +3,7 @@
 ## Parent access acceptance after the 2026-10-15 Edufy hotfix
 
 - A real affected family still needs staff to verify the parent identity and confirm the intended linked learners before replacing its login. The synthetic emulator proves the transaction and denials, but does not substitute for a live family sign-in.
+- The one-word legacy-name correction is a follow-up release. Until its Hostinger client and Vercel API versions match, the live form may still show a surname as if it were a verified parent name.
 - The trusted Edufy Vercel API and Hostinger client have separate release states. A GitHub push alone does not confirm that both live surfaces serve this hotfix.
 
 ## Stale tabs during a SparkQuest deployment

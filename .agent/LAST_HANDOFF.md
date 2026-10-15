@@ -1,4 +1,10 @@
-# Latest handoff — SparkQuest student maker journey
+# Latest handoff — Edufy one-word legacy parent name follow-up
+
+On 2026-10-15, read-only inspection of the live Edufy learner profile found that a surname-only enrollment value could still be presented as a verified parent name. The focused follow-up treats that value as an unverified family label, requests the real parent's full name before replacement, and updates all siblings linked to the same legacy login. The existing family alias remains a suggestion for the new MakerLab login. The synthetic Auth/Firestore emulator passes the two-sibling correction, the earlier parent-access cases, password invalidation and tenant denials; the Edufy production build passes. No production family password or record was changed during this check. Coordinate this commit as a new Hostinger client plus Vercel API release, then perform authenticated acceptance with a designated parent.
+
+---
+
+# Previous handoff — SparkQuest student maker journey
 
 On 2026-10-12 the learner session gained focused My build, Explore, and Mentor stops over the existing workbench, mission library, project editor, and review actions. The parent portal's existing 011Y component now gives contextual learner guidance, and saved project briefs show one color-coded plan step at a time without jumping away from the clicked area. Narrow-screen ongoing builds and mission cards use snap-aligned rails. No learner records, permissions, rules, identity, or review contracts changed. Local 360px/390px browser checks covered the three stops, project brief, and next-step control. SparkQuest TypeScript, standalone and root production builds, URL/identity/Phase 2 smokes, mirrored-file hashes, and diff checks passed. Focused code commit `6853c5f` reached GitHub `main`; Vercel deployment `dpl_DAQ3mpz2FjXuQ1EJnLU3R6wRha9b` is Ready and aliased to `https://sparkquest-makerlab.vercel.app/` (HTTP 200). A designated student account and physical phone should still confirm exact assignments, evidence, and editor continuation. Details: `docs/sparkquest/STUDENT_JOURNEY_2026-10-12.md`.
 
