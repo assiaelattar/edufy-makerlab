@@ -7,7 +7,7 @@
 
 ## Pickup lifecycle release acceptance
 
-- The corrected five-state handoff and private notes passed isolated Auth/Firestore emulators and the full local parent → learner → instructor → parent UI flow on 2026-10-15. Public operational use still requires the coordinated SparkQuest, Edufy and Firestore release plus one designated-family live acceptance.
+- The daily roster projection and optional learner-ready transition passed domain checks, both production builds, and isolated Firebase 10/12 Auth/Firestore suites on 2026-10-15. A designated workshop day should still confirm the live enrollment roster, lobby display and one direct `arrived → released` handoff after the coordinated release.
 - Some intentionally denied emulator writes can reach Firestore's rule-expression ceiling after authorization has already failed. Valid lifecycle and private-message writes pass; preserve the guardian, learner, tenant and atomic-event checks when simplifying rules later.
 
 ## Keybank and Showcase release acceptance

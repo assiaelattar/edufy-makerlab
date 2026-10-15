@@ -1,4 +1,10 @@
-# Current phase override — Live pickup lifecycle release (updated 2026-10-15)
+# Current phase override — Daily Pickup roster correction and coordinated release (updated 2026-10-15)
+
+Pickup now projects every active learner scheduled for the current weekday from canonical enrollments and group times, keeping the learner visible in Edufy and the lobby before a parent starts the audited queue. Live queue states overlay that roster. The learner-ready action is optional; verified staff release is valid from `arrived` or `ready`. Domain smoke, SparkQuest TypeScript, both builds and Firebase 10/12 Auth/Firestore emulator suites pass. Release Edufy, SparkQuest and Firestore rules together, then verify both public clients and the deployed rule behavior. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
+
+---
+
+# Previous phase override — Live pickup lifecycle release (updated 2026-10-15)
 
 The canonical pickup lifecycle is implemented and locally accepted across family, learner and staff roles. Parents select an active authorized picker and announce/arrive; learners receive live status, exchange private notes with the initiating parent, pack and tidy, then mark ready; Edufy staff verify and release; only the selected picker confirms receipt. Each transition has an atomic immutable audit event. Both clients, Firestore rules and indexes are in the coordinated release scope explicitly requested by the user. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
 

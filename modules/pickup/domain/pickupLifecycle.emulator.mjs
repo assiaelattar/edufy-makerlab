@@ -117,10 +117,7 @@ try {
   await admin.doc(`users/${secondParent.uid}`).update({ status: 'active' });
   await writeTransition(secondParent, id, 'arrived', { arrivedAt: serverTimestamp() });
   assert.equal((await getDoc(entry)).data()?.lastActorUid, secondParent.uid, 'Arrival records the actual second guardian.');
-  await denied(writeTransition(instructor, id, 'released', { releasedAt: serverTimestamp(), verifiedByUid: instructor.uid, verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' }, { verifiedPickerName: 'Uncle Sam', verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' }), 'Staff cannot release before learner ready');
   await denied(writeTransition(parent, id, 'ready', { readyAt: serverTimestamp() }), 'Parent cannot mark learner ready');
-  await writeTransition(learner, id, 'ready', { readyAt: serverTimestamp() });
-  assert.equal((await getDoc(entry)).data()?.status, 'ready', 'Learner can mark ready after parent arrival.');
 
   const messages = collection(parent.db, 'pickup_queue', id, 'messages');
   const parentMessage = await addDoc(messages, { organizationId: 'org-pickup', studentId: 'learner-a', senderUid: parent.uid, senderRole: 'parent', body: 'Do not forget your jacket.', createdAt: serverTimestamp() });
@@ -181,7 +178,7 @@ try {
   await advancePickup(instructor.db, fourthId, 'ready', 'released', instructor.uid, { verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' });
   await advancePickup(secondParent.db, fourthId, 'released', 'confirmed', secondParent.uid);
   assert.equal((await getDoc(doc(parent.db, 'pickup_queue', fourthId))).data()?.status, 'confirmed', 'Edufy command batch completes the cross-guardian handoff.');
-  console.log('Pickup Auth/Firestore emulator passed: parent arrival, learner-ready gate, staff release, selected-picker receipt, private parent-learner notes, tenant/role denials, append-only events, and concurrent release.');
+  console.log('Pickup Auth/Firestore emulator passed: parent arrival, optional learner-ready signal, direct verified staff release, selected-picker receipt, private parent-learner notes, tenant/role denials, append-only events, and concurrent release.');
 } finally {
   await Promise.all(clients.map(deleteApp));
   await deleteAdmin(adminApp);

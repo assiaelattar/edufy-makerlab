@@ -1,5 +1,11 @@
 # SparkQuest changelog
 
+## 2026-10-15 — Daily Pickup roster and optional learner signal
+
+- Edufy Pickup now projects every active learner scheduled for today from the canonical workshop enrollment and group-time data, before any family action creates a queue record.
+- The Pickup desk and lobby show each scheduled learner’s live family/staff status throughout the workshop day.
+- Staff may complete a verified release from `arrived` or `ready`; the learner’s **I’m ready** action remains available as a helpful optional signal.
+
 ## 2026-10-15 — Focused parent Pickup journey
 
 - Put the live departure status, selected picker and next parent action at the top of Pickup.

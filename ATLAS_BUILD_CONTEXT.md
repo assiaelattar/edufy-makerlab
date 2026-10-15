@@ -1,5 +1,9 @@
 # Atlas Build Context
 
+## 2026-10-15 — Daily Pickup roster and optional learner signal
+
+Edufy Pickup now derives the current-day roster from active attendance-eligible enrollments and group schedules, then overlays live parent/staff queue state in the desk and lobby. Staff can complete the verified handoff from `arrived` or `ready`; the learner-ready action remains available but does not block release. Daily-roster/lifecycle smokes, SparkQuest TypeScript, both production builds and Firebase 10/12 Auth/Firestore suites pass. The coordinated Edufy, SparkQuest and Firestore release is authorized and pending promotion/verification.
+
 ## 2026-10-15 — Parent access legacy login repair
 
 Edufy's staff parent access flow now distinguishes an old enrollment contact address from a working SparkQuest login. Verified staff can issue a new academy login for a consistent legacy family pointer even when its old Auth user or parent profile is absent; platform super admins can manage an existing target organization. The display action issues a fresh password after verification and invalidates the old one. Synthetic family/tenant emulator and the registered Edufy build are the release checks. See `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`. Resume the paused multi-tenant ownership audit after this hotfix release; the separate 297 missing-tenant-ID inventory must not be silently backfilled.

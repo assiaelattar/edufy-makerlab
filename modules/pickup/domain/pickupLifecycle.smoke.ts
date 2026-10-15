@@ -12,7 +12,7 @@ assert.equal(canAdvancePickup('on_the_way', 'arrived'), true);
 assert.equal(canAdvancePickup('arrived', 'ready'), true);
 assert.equal(canAdvancePickup('ready', 'released'), true);
 assert.equal(canAdvancePickup('released', 'confirmed'), true);
-assert.equal(canAdvancePickup('arrived', 'released'), false);
+assert.equal(canAdvancePickup('arrived', 'released'), true);
 assert.equal(canAdvancePickup('on_the_way', 'released'), false);
 assert.equal(canAdvancePickup('released', 'arrived'), false);
 assert.equal(canAdvancePickup('confirmed', 'on_the_way'), false);

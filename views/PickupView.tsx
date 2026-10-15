@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
 import {
     Car,
     CheckCircle2,
@@ -18,7 +19,8 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { PickupEntry } from '../types';
 import { advancePickup, announcePickup } from '../modules/pickup/services/pickupCommands';
-import { isAuthorizedPicker, isCanonicalPickupEntry } from '../modules/pickup/domain/pickupLifecycle';
+import { isAuthorizedPicker, isCanonicalPickupEntry, pickupSessionDate } from '../modules/pickup/domain/pickupLifecycle';
+import { projectDailyPickupRoster } from '../modules/pickup/domain/dailyPickupRoster';
 import {
     AtlasActionButton,
     AtlasCommandHeader,
@@ -82,9 +84,20 @@ const getStatusLabel = (status: PickupEntry['status']): string => {
     }
 };
 
+const getRosterStatusLabel = (status?: PickupEntry['status']): string => status ? getStatusLabel(status) : 'Scheduled today';
+
+const getRosterStatusClass = (status?: PickupEntry['status']): string => {
+    if (status === 'confirmed') return 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200';
+    if (status === 'released') return 'border-teal-300/25 bg-teal-300/10 text-teal-200';
+    if (status === 'arrived' || status === 'ready') return 'border-amber-300/25 bg-amber-300/10 text-amber-200';
+    if (status === 'on_the_way' || status === 'waiting') return 'border-sky-300/25 bg-sky-300/10 text-sky-200';
+    if (status === 'cancelled' || status === 'exception') return 'border-rose-300/25 bg-rose-300/10 text-rose-200';
+    return 'border-white/10 bg-white/[0.04] text-slate-300';
+};
+
 export const PickupView = () => {
     const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { pickupQueue, students } = useAppContext();
+    const { pickupQueue, students, enrollments, programs } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
 
@@ -101,6 +114,8 @@ export const PickupView = () => {
     const [verificationNote, setVerificationNote] = useState('');
     const [verificationConfirmed, setVerificationConfirmed] = useState(false);
     const [displayTime, setDisplayTime] = useState(() => new Date());
+    const todaySessionDate = pickupSessionDate();
+    const todayWeekday = format(new Date(), 'EEEE');
 
     const tenantQueue = useMemo(
         () => organizationId ? pickupQueue.filter(entry => entry.organizationId === organizationId) : [],
@@ -128,6 +143,31 @@ export const PickupView = () => {
         });
         return latest;
     }, [groupsByStudent]);
+
+    const todayEntryByStudent = useMemo(() => {
+        const latest = new Map<string, PickupEntry>();
+        tenantQueue
+            .filter(entry => entry.sessionDate === todaySessionDate && isCanonicalPickupEntry(entry))
+            .forEach(entry => {
+                const current = latest.get(entry.studentId);
+                if (!current || getLifecycleMillis(entry) >= getLifecycleMillis(current)) latest.set(entry.studentId, entry);
+            });
+        return latest;
+    }, [tenantQueue, todaySessionDate]);
+
+    const dailyRoster = useMemo(() => organizationId ? projectDailyPickupRoster({
+        organizationId,
+        sessionDate: todaySessionDate,
+        weekday: todayWeekday,
+        enrollments,
+        students,
+        programs,
+    }) : [], [enrollments, organizationId, programs, students, todaySessionDate, todayWeekday]);
+
+    const dailyRosterRows = useMemo(() => dailyRoster.map(item => ({
+        ...item,
+        entry: todayEntryByStudent.get(item.studentId),
+    })), [dailyRoster, todayEntryByStudent]);
 
     const queueGroups = useMemo<QueueGroup[]>(() => {
         const groups: QueueGroup[] = [];
@@ -193,6 +233,7 @@ export const PickupView = () => {
     const readyGroups = filteredGroups.filter(group => group.entry.status === 'ready');
     const incomingGroups = filteredGroups.filter(group => ['waiting', 'on_the_way'].includes(group.entry.status));
     const releasedGroups = filteredGroups.filter(group => group.entry.status === 'released');
+    const handoffGroups = [...readyGroups, ...arrivedGroups];
 
     useEffect(() => {
         if (!isDisplayMode) return;
@@ -344,8 +385,8 @@ export const PickupView = () => {
     const releaseStudent = async (group: QueueGroup) => {
         if (!(await validateMutation(group.entry))) return;
         if (!userProfile?.uid) return;
-        if (group.entry.status !== 'ready') {
-            await showAlert('Learner is not ready', `${group.entry.studentName} must finish packing and choose “I’m ready” before release.`, 'warning');
+        if (!['arrived', 'ready'].includes(group.entry.status)) {
+            await showAlert('Parent has not arrived', `${group.entry.studentName} can be released only after the authorized pickup person is physically at the gate.`, 'warning');
             return;
         }
 
@@ -359,7 +400,7 @@ export const PickupView = () => {
         setPendingAction(`release:${group.entry.studentId}`);
         setFeedback(null);
         try {
-            await advancePickup(db!, group.entry.id, 'ready', 'released', userProfile.uid, {
+            await advancePickup(db!, group.entry.id, group.entry.status as 'arrived' | 'ready', 'released', userProfile.uid, {
                 verificationMethod,
                 verificationNote: verificationNote.trim()
             });
@@ -383,6 +424,38 @@ export const PickupView = () => {
         { id: 'incoming', label: 'Incoming', count: pickupSignals.onTheWay },
         { id: 'released', label: 'Released', count: pickupSignals.released }
     ];
+
+    const renderHandoffCard = (group: QueueGroup) => {
+        const isPending = pendingAction === `release:${group.entry.studentId}`;
+        const learnerReady = group.entry.status === 'ready';
+        return (
+            <article key={group.entry.id} className="rounded-lg border border-amber-300/25 bg-slate-900 p-4">
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${learnerReady ? 'bg-amber-300 text-slate-950' : 'border border-teal-300/25 bg-teal-300/10 text-teal-200'}`}>{learnerReady ? 'Learner ready · optional signal' : 'Parent at gate'}</span>
+                            <span className="font-mono text-xs text-amber-200">{formatTime(group.entry)}</span>
+                            {group.duplicateCount > 0 && <span className="text-[10px] font-bold text-slate-500">{group.duplicateCount + 1} records linked</span>}
+                        </div>
+                        <h3 className="truncate text-xl font-black text-white">{group.entry.studentName}</h3>
+                        <p className="mt-1 flex items-center gap-2 truncate text-sm text-slate-400"><UserCheck size={14} className="shrink-0" />{group.entry.pickerName || group.entry.parentName || 'Pickup contact not listed'}</p>
+                        {!learnerReady && <p className="mt-2 text-xs leading-5 text-slate-400">The learner-ready button is optional. Staff may verify the authorized picker and complete the handoff now.</p>}
+                    </div>
+                </div>
+                {isGatekeeper ? (
+                    verificationEntryId === group.entry.id ? <form className="mt-4 space-y-3 rounded-xl border border-teal-300/30 bg-slate-950/60 p-3" onSubmit={event => { event.preventDefault(); void releaseStudent(group); }}>
+                        <p className="text-xs font-bold text-teal-200">Match the person in front of you to the authorized picker: {group.entry.pickerName}</p>
+                        <label htmlFor={`pickup-method-${group.entry.id}`} className="block text-xs font-bold text-slate-200">How was their identity checked?</label>
+                        <select id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')} className="min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30"><option value="photo_id">Photo ID</option><option value="known_person">Known person</option></select>
+                        <label htmlFor={`pickup-note-${group.entry.id}`} className="block text-xs font-bold text-slate-200">Verification note</label>
+                        <textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} minLength={8} maxLength={500} required rows={2} placeholder="Record what you checked; do not enter an ID number." className="w-full rounded-lg border border-white/20 bg-slate-900 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30" />
+                        <label className="flex items-start gap-2 text-xs leading-5 text-slate-200"><input type="checkbox" checked={verificationConfirmed} onChange={event => setVerificationConfirmed(event.target.checked)} required className="mt-1 accent-teal-400" /><span>I verified this person against the authorized picker list and am handing over {group.entry.studentName}.</span></label>
+                        <div className="flex gap-2"><button type="submit" disabled={pendingAction !== null || verificationNote.trim().length < 8 || !verificationConfirmed} className="min-h-11 flex-1 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{isPending ? 'Recording…' : 'Record verified release'}</button><button type="button" onClick={() => setVerificationEntryId(null)} className="min-h-11 rounded-lg border border-white/20 px-3 text-xs font-bold text-slate-200 focus-visible:ring-2 focus-visible:ring-white">Cancel</button></div>
+                    </form> : <AtlasActionButton icon={CheckCircle2} variant="primary" className="mt-4 w-full" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}>Verify picker and release</AtlasActionButton>
+                ) : <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500">Authorized pickup staff must complete release.</div>}
+            </article>
+        );
+    };
 
     if (!organizationId) {
         return (
@@ -420,10 +493,10 @@ export const PickupView = () => {
                     />
 
                     <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-                        <AtlasSignalCard label="Active queue" value={pickupSignals.active} detail="Awaiting safe handoff" icon={Car} tone="teal" onClick={() => setQueueFilter('all')} />
+                        <AtlasSignalCard label="Scheduled today" value={dailyRosterRows.length} detail="From workshop enrollments" icon={Clock} tone="teal" />
                         <AtlasSignalCard label="Incoming" value={pickupSignals.onTheWay} detail="Approaching the gate" icon={MapPin} tone="blue" onClick={() => setQueueFilter('incoming')} />
-                        <AtlasSignalCard label="At the gate" value={pickupSignals.arrived} detail="Learner is packing" icon={UserCheck} tone={pickupSignals.arrived > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('arrived')} />
-                        <AtlasSignalCard label="Learner ready" value={pickupSignals.ready} detail="Verify and release" icon={ShieldCheck} tone={pickupSignals.ready > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('ready')} />
+                        <AtlasSignalCard label="At the gate" value={pickupSignals.arrived} detail="Verify and release" icon={UserCheck} tone={pickupSignals.arrived > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('arrived')} />
+                        <AtlasSignalCard label="Ready signal" value={pickupSignals.ready} detail="Optional learner update" icon={ShieldCheck} tone={pickupSignals.ready > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('ready')} />
                         <AtlasSignalCard label="Released" value={pickupSignals.released} detail="Awaiting parent confirmation" icon={CheckCircle2} tone="emerald" onClick={() => setQueueFilter('released')} />
                     </div>
 
@@ -529,6 +602,38 @@ export const PickupView = () => {
                             </button>
                         </div>
                     )}
+
+                    <section className="space-y-4" aria-labelledby="pickup-daily-roster-title">
+                        <AtlasSectionHeader
+                            title="Today’s workshop pickup list"
+                            description="Every active learner scheduled today appears here before a parent starts pickup. Parent and staff updates change these statuses live."
+                            icon={Clock}
+                            meta={<span className="rounded-md bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">{dailyRosterRows.length} scheduled</span>}
+                        />
+                        {dailyRosterRows.length > 0 ? <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            {dailyRosterRows.map(row => {
+                                const pickerOptions = Array.from(new Set([row.student.parentName, ...(row.student.authorizedPickups || [])].filter(Boolean) as string[]));
+                                const selectedPicker = pickerSelections[row.studentId] || pickerOptions[0] || '';
+                                const canRecordArrival = !row.entry || ['waiting', 'on_the_way'].includes(row.entry.status);
+                                const hasPickupAccount = Boolean(row.student.parentLoginInfo?.uid);
+                                return <article key={row.studentId} className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <h3 className="truncate text-base font-black text-white">{row.studentName}</h3>
+                                            <p className="mt-1 text-xs leading-5 text-slate-400">{row.slots.map(slot => [slot.time, slot.programName, slot.groupName].filter(Boolean).join(' · ')).join(' / ')}</p>
+                                        </div>
+                                        <span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
+                                    </div>
+                                    {row.entry?.pickerName && <p className="mt-3 truncate text-xs text-slate-400">Pickup person: <strong className="text-slate-200">{row.entry.pickerName}</strong></p>}
+                                    {isGatekeeper && canRecordArrival && <div className="mt-3 flex items-center gap-2">
+                                        {pickerOptions.length > 0 ? <select aria-label={`Authorized picker for ${row.studentName}`} value={selectedPicker} onChange={event => setPickerSelections(current => ({ ...current, [row.studentId]: event.target.value }))} className="min-h-10 min-w-0 flex-1 rounded-lg border border-white/20 bg-slate-950 px-2 text-xs text-white focus:border-teal-300 focus:outline-none focus:ring-2 focus:ring-teal-300/30">{pickerOptions.map(name => <option key={name} value={name}>{name}</option>)}</select> : <span className="flex-1 text-xs text-amber-200">No authorized picker listed.</span>}
+                                        <button type="button" onClick={() => void addToQueue(row.studentId, selectedPicker)} disabled={pendingAction !== null || pickerOptions.length === 0 || !hasPickupAccount} className="min-h-10 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{row.entry ? 'Mark arrived' : 'Parent is here'}</button>
+                                    </div>}
+                                    {isGatekeeper && canRecordArrival && !hasPickupAccount && <p className="mt-2 text-[11px] text-amber-200">Link the family account before staff can start a pickup record. The learner stays visible on today’s list.</p>}
+                                </article>;
+                            })}
+                        </div> : <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-center text-sm text-slate-500">No active workshop enrollment is scheduled for {todayWeekday}.</div>}
+                    </section>
                 </>
             )}
 
@@ -552,43 +657,23 @@ export const PickupView = () => {
                         </div>
                     </header>
 
-                    <main className="grid min-h-0 flex-1 grid-cols-1 gap-4 pt-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.75fr)]">
-                        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-amber-300/25 bg-slate-900/70">
-                            <div className="flex items-center justify-between border-b border-amber-300/20 bg-amber-300/[0.08] px-4 py-3">
-                                <h2 className="text-sm font-black uppercase tracking-wider text-amber-100">Ready for staff release</h2>
-                                <span className="font-mono text-xs text-amber-200">{pickupSignals.ready}</span>
+                    <main className="min-h-0 flex-1 pt-4">
+                        <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-teal-300/20 bg-slate-900/70">
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/20 bg-teal-400/[0.07] px-4 py-3">
+                                <div><h2 className="text-sm font-black uppercase tracking-wider text-teal-100">Today’s workshop pickup list</h2><p className="mt-1 text-xs text-slate-400">Scheduled learners stay visible all day; status changes update live.</p></div>
+                                <span className="font-mono text-xs text-teal-200">{dailyRosterRows.length} scheduled</span>
                             </div>
-                            <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto p-4 xl:grid-cols-2">
-                                {queueGroups.filter(group => group.entry.status === 'ready').map(group => (
-                                    <div key={group.entry.id} className="rounded-lg border border-amber-300/20 bg-slate-950 p-4">
-                                        <div className="truncate text-2xl font-black text-white">{group.entry.studentName}</div>
-                                        <div className="mt-2 flex items-center justify-between gap-3 text-sm text-slate-400">
-                                            <span className="truncate">Packed and waiting inside</span>
-                                            <span className="shrink-0 font-mono text-amber-200">{formatTime(group.entry)}</span>
+                            <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto p-4 md:grid-cols-2 xl:grid-cols-3">
+                                {dailyRosterRows.map(row => (
+                                    <article key={row.studentId} className="rounded-xl border border-white/10 bg-slate-950 p-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0"><h3 className="truncate text-xl font-black text-white">{row.studentName}</h3><p className="mt-1 truncate text-xs text-slate-400">{row.slots.map(slot => [slot.time, slot.programName, slot.groupName].filter(Boolean).join(' · ')).join(' / ')}</p></div>
+                                            <span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
                                         </div>
-                                    </div>
+                                        {row.entry?.pickerName && <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400"><span className="truncate">{row.entry.pickerName}</span><span className="shrink-0 font-mono text-slate-500">{formatTime(row.entry)}</span></div>}
+                                    </article>
                                 ))}
-                                {pickupSignals.ready === 0 && (
-                                    <div className="col-span-full flex min-h-44 items-center justify-center text-sm font-bold text-slate-600">No learners marked ready yet.</div>
-                                )}
-                            </div>
-                        </section>
-
-                        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-teal-300/20 bg-slate-900/70">
-                            <div className="flex items-center justify-between border-b border-teal-300/20 bg-teal-400/[0.07] px-4 py-3">
-                                <h2 className="text-sm font-black uppercase tracking-wider text-teal-100">Parents at gate</h2>
-                                <span className="font-mono text-xs text-teal-200">{pickupSignals.arrived}</span>
-                            </div>
-                            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-                                {queueGroups.filter(group => group.entry.status === 'arrived').map(group => (
-                                    <div key={group.entry.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950 px-3 py-3">
-                                        <span className="min-w-0 truncate text-lg font-bold text-white">{group.entry.studentName}</span>
-                                        <span className="shrink-0 font-mono text-xs text-teal-200">{formatTime(group.entry)}</span>
-                                    </div>
-                                ))}
-                                {pickupSignals.arrived === 0 && (
-                                    <div className="flex min-h-36 items-center justify-center text-center text-sm text-slate-600">No parents waiting at the gate.</div>
-                                )}
+                                {dailyRosterRows.length === 0 && <div className="col-span-full flex min-h-48 items-center justify-center text-center text-sm font-bold text-slate-600">No active workshop enrollment is scheduled for {todayWeekday}.</div>}
                             </div>
                         </section>
                     </main>
@@ -604,70 +689,16 @@ export const PickupView = () => {
                 />
             ) : (
                 <div className="space-y-7">
-                    {arrivedGroups.length > 0 && (
+                    {handoffGroups.length > 0 && (
                         <section className="space-y-4">
                             <AtlasSectionHeader
-                                title="Parent at the gate"
-                                description="The learner is still packing and must choose “I’m ready” before staff release."
-                                icon={UserCheck}
-                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{arrivedGroups.length} packing</span>}
-                            />
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                                {arrivedGroups.map(group => <article key={group.entry.id} className="rounded-lg border border-amber-300/25 bg-slate-900 p-4">
-                                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-200">Waiting for learner</div>
-                                    <h3 className="mt-1 truncate text-base font-black text-white">{group.entry.studentName}</h3>
-                                    <p className="mt-1 truncate text-xs text-slate-400">{group.entry.pickerName || group.entry.parentName || 'Pickup contact'}</p>
-                                    <p className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-400">Parent arrived at {formatTime(group.entry)}. Release stays locked until the learner finishes tidying and marks ready.</p>
-                                </article>)}
-                            </div>
-                        </section>
-                    )}
-
-                    {readyGroups.length > 0 && (
-                        <section className="space-y-4">
-                            <AtlasSectionHeader
-                                title="Learners ready"
-                                description="The learner finished packing. Verify the pickup contact before recording departure."
+                                title="At the gate — verify and release"
+                                description="Staff can complete the verified handoff as soon as the parent is present. The learner-ready update is helpful but optional."
                                 icon={ShieldCheck}
-                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{readyGroups.length} action required</span>}
+                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{handoffGroups.length} action required</span>}
                             />
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                {readyGroups.map(group => {
-                                    const isPending = pendingAction === `release:${group.entry.studentId}`;
-                                    return (
-                                        <article key={group.entry.id} className="rounded-lg border border-amber-300/25 bg-slate-900 p-4">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                                                        <span className="rounded-md bg-amber-300 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-slate-950">Learner ready</span>
-                                                        <span className="font-mono text-xs text-amber-200">{formatTime(group.entry)}</span>
-                                                        {group.duplicateCount > 0 && <span className="text-[10px] font-bold text-slate-500">{group.duplicateCount + 1} records linked</span>}
-                                                    </div>
-                                                    <h3 className="truncate text-xl font-black text-white">{group.entry.studentName}</h3>
-                                                    <p className="mt-1 flex items-center gap-2 truncate text-sm text-slate-400">
-                                                        <UserCheck size={14} className="shrink-0" />
-                                                        {group.entry.pickerName || group.entry.parentName || 'Pickup contact not listed'}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {isGatekeeper ? (
-                                                verificationEntryId === group.entry.id ? <form className="mt-4 space-y-3 rounded-xl border border-teal-300/30 bg-slate-950/60 p-3" onSubmit={event => { event.preventDefault(); void releaseStudent(group); }}>
-                                                    <p className="text-xs font-bold text-teal-200">Match the person in front of you to the authorized picker: {group.entry.pickerName}</p>
-                                                    <label htmlFor={`pickup-method-${group.entry.id}`} className="block text-xs font-bold text-slate-200">How was their identity checked?</label>
-                                                    <select id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')} className="min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30">
-                                                        <option value="photo_id">Photo ID</option><option value="known_person">Known person</option>
-                                                    </select>
-                                                    <label htmlFor={`pickup-note-${group.entry.id}`} className="block text-xs font-bold text-slate-200">Verification note</label>
-                                                    <textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} minLength={8} maxLength={500} required rows={2} placeholder="Record what you checked; do not enter an ID number." className="w-full rounded-lg border border-white/20 bg-slate-900 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30" />
-                                                    <label className="flex items-start gap-2 text-xs leading-5 text-slate-200"><input type="checkbox" checked={verificationConfirmed} onChange={event => setVerificationConfirmed(event.target.checked)} required className="mt-1 accent-teal-400" /><span>I verified this person against the authorized picker list and am handing over {group.entry.studentName}.</span></label>
-                                                    <div className="flex gap-2"><button type="submit" disabled={pendingAction !== null || verificationNote.trim().length < 8 || !verificationConfirmed} className="min-h-11 flex-1 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{isPending ? 'Recording…' : 'Record verified release'}</button><button type="button" onClick={() => setVerificationEntryId(null)} className="min-h-11 rounded-lg border border-white/20 px-3 text-xs font-bold text-slate-200 focus-visible:ring-2 focus-visible:ring-white">Cancel</button></div>
-                                                </form> : <AtlasActionButton icon={CheckCircle2} variant="primary" className="mt-4 w-full" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}>Verify picker</AtlasActionButton>
-                                            ) : (
-                                                <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500">Authorized pickup staff must complete release.</div>
-                                            )}
-                                        </article>
-                                    );
-                                })}
+                                {handoffGroups.map(renderHandoffCard)}
                             </div>
                         </section>
                     )}

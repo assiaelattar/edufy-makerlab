@@ -845,7 +845,7 @@ service cloud.firestore {
           (before.status == 'arrived' && after.status == 'ready' &&
             changed.hasOnly(['status', 'readyAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
             after.readyAt == request.time && pickupLearner(after)) ||
-          (before.status == 'ready' && after.status == 'released' &&
+          (before.status in ['arrived', 'ready'] && after.status == 'released' &&
             changed.hasOnly(['status', 'releasedAt', 'updatedAt', 'lastActorUid', 'lastEventId', 'verifiedPickerName', 'verificationMethod', 'verificationNote', 'verifiedByUid']) &&
             after.releasedAt == request.time && after.verifiedByUid == request.auth.uid &&
             after.verifiedPickerName == after.pickerName &&

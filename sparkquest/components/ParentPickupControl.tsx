@@ -58,7 +58,7 @@ interface Props {
 const steps = [
   { status: 'on_the_way', label: 'En route', icon: Car },
   { status: 'arrived', label: 'Sur place', icon: MapPin },
-  { status: 'ready', label: 'Enfant prêt', icon: PackageCheck },
+  { status: 'ready', label: 'Enfant prêt (facultatif)', icon: PackageCheck },
   { status: 'released', label: 'Remise équipe', icon: ShieldCheck },
   { status: 'confirmed', label: 'Terminé', icon: CheckCircle2 },
 ] as const;
@@ -276,7 +276,7 @@ export const ParentPickupControl: React.FC<Props> = ({
   return <section className="sq-pickup-control" aria-labelledby="sq-pickup-control-title">
     <div className="sq-pickup-control-head">
       <span><Car size={22} /></span>
-      <div><p>{previousDay ? 'SORTIE OUVERTE DEPUIS LA VEILLE' : `AUJOURD’HUI · ${entry?.sessionDate || sessionDate}`}</p><h3 id="sq-pickup-control-title">{title}</h3><small>{!entry ? 'Choisissez la personne autorisée avant de prévenir MakerLab.' : entry.status === 'on_the_way' ? `${entry.pickerName || 'La personne autorisée'} est en route. Signalez son arrivée quand elle est sur place.` : entry.status === 'arrived' ? `${firstName} prépare ses affaires. Restez sur place pendant la vérification.` : entry.status === 'ready' ? `L’équipe va vérifier ${entry.pickerName || 'la personne autorisée'} avant la remise.` : entry.status === 'released' ? 'La remise a été enregistrée. La personne sélectionnée confirme la réception.' : entry.status === 'confirmed' ? 'La sortie est terminée. À bientôt pour le prochain atelier !' : 'Contactez MakerLab avant tout départ.'}</small></div>
+      <div><p>{previousDay ? 'SORTIE OUVERTE DEPUIS LA VEILLE' : `AUJOURD’HUI · ${entry?.sessionDate || sessionDate}`}</p><h3 id="sq-pickup-control-title">{title}</h3><small>{!entry ? 'Choisissez la personne autorisée avant de prévenir MakerLab.' : entry.status === 'on_the_way' ? `${entry.pickerName || 'La personne autorisée'} est en route. Signalez son arrivée quand elle est sur place.` : entry.status === 'arrived' ? `${firstName} prépare ses affaires. L’équipe peut vérifier la remise dès maintenant; le signal « prêt » de l’enfant est facultatif.` : entry.status === 'ready' ? `L’équipe va vérifier ${entry.pickerName || 'la personne autorisée'} avant la remise.` : entry.status === 'released' ? 'La remise a été enregistrée. La personne sélectionnée confirme la réception.' : entry.status === 'confirmed' ? 'La sortie est terminée. À bientôt pour le prochain atelier !' : 'Contactez MakerLab avant tout départ.'}</small></div>
       {entry?.pickerName && <em>Récupération : {entry.pickerName}</em>}
     </div>
 

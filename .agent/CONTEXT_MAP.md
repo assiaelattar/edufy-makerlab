@@ -40,3 +40,11 @@ Learner workbench/desktop Phase 1: read `docs/sparkquest/LEARNER_WORKSPACE_PHASE
 ## Finance service catalogue
 
 Read `components/finance/AGENT_CONTEXT.md`, `docs/finance/SERVICE_CATALOGUE_PHASE_1.md`, `docs/finance/DECISIONS.md`, `docs/finance/KNOWN_ISSUES.md`, and `docs/finance/CHANGELOG.md` for service work. Tests are `components/finance/serviceCatalogue.{smoke.ts,emulator.ts,browser.smoke.mjs}`; local bundle runner is `scripts/test-service-catalogue.mjs`.
+# Pickup daily roster correction
+
+- Product and acceptance: `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`
+- Daily schedule projection: `modules/pickup/domain/dailyPickupRoster.ts`
+- Staff/lobby UI: `views/PickupView.tsx`
+- Mirrored client contracts: `modules/pickup/domain/pickupLifecycle.ts`, `sparkquest/domain/pickupLifecycle.ts`
+- Security authority: `firestore.rules`
+- Learner and family surfaces: `sparkquest/components/PickupSchedule.tsx`, `sparkquest/components/ParentPickupControl.tsx`

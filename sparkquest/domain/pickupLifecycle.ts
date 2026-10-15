@@ -22,7 +22,7 @@ export const previousPickupDate = (sessionDate: string): string => {
 export const canAdvancePickup = (from: PickupStatus, to: PickupStatus): boolean =>
   (from === 'on_the_way' && to === 'arrived') ||
   (from === 'arrived' && to === 'ready') ||
-  (from === 'ready' && to === 'released') ||
+  (['arrived', 'ready'].includes(from) && to === 'released') ||
   (from === 'released' && to === 'confirmed') ||
   (['on_the_way', 'arrived', 'ready'].includes(from) && to === 'cancelled') ||
   (['on_the_way', 'arrived', 'ready', 'released'].includes(from) && to === 'exception');

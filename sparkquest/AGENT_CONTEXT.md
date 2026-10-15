@@ -62,3 +62,6 @@ npm.cmd run build
 ```
 
 For the learner pipeline, also run `domain/studentPipeline.emulator.mjs` through isolated Auth/Firestore/Storage emulators. Also build the Edufy root before release, test the login at phone and tablet widths, and confirm zero horizontal overflow.
+# 2026-10-15 Pickup roster correction
+
+Edufy now derives the daily Pickup lobby from active workshop enrollments and group schedules, so scheduled learners appear before a parent action. Queue snapshots overlay live statuses on those rows. Learner `ready` remains available but is optional; staff may perform the verified release from `arrived` or `ready`. Preserve the mirrored pickup lifecycle files, authorized-picker verification, atomic events, selected-picker receipt and private parent/learner note boundary.

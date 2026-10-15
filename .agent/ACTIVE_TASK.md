@@ -1,4 +1,10 @@
-# Current task boundary — Coordinated pickup production release
+# Current task boundary — Release the daily Pickup roster correction
+
+Promote the focused daily roster, optional learner-ready transition, matching Firestore rules and parent/learner copy as one coordinated production release. Verify GitHub main, Hostinger Edufy, Vercel SparkQuest and deployed Firestore rules. Do not create synthetic scheduled queue records or production family test data. Preserve authorized-picker verification, exact tenant and guardian links, selected-picker receipt, atomic events and private notes.
+
+---
+
+# Previous task boundary — Coordinated pickup production release
 
 Release the locally accepted five-step pickup lifecycle as one coordinated client and Firestore change. Preserve exact tenant and guardian links, learner-only readiness, selected-picker-only receipt, staff verification evidence, immutable initiator identity, atomic transition events, append-only audit records and the initiating-parent ↔ exact-learner private note boundary. Verify both public clients and the deployed Firestore configuration after promotion. No separate pickup account is required; use existing family accounts and authorized Edufy staff roles. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
 

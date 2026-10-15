@@ -1,12 +1,18 @@
 # SparkQuest Decisions
 
+## 2026-10-15 — Workshop schedule drives the daily Pickup roster
+
+The staff desk and lobby derive the day’s learner list from active, attendance-eligible enrollments whose group schedule matches the current weekday. A scheduled row is a read-only projection until a parent or staff member starts the audited pickup record; no synthetic `scheduled` queue document is created. Parent and staff transitions then overlay the row through the existing live Pickup subscription.
+
+Learner readiness is an optional operational signal. After the selected pickup person is marked `arrived`, authorized staff may verify that person and record `released` directly. The learner may still move `arrived` to `ready` after packing and tidying. Staff identity verification, authorized-picker checks, selected-picker receipt, tenant boundaries and atomic audit events remain required.
+
 ## 2026-10-15 — One immediate parent Pickup action
 
 The Pickup screen leads with the live record and the only parent action appropriate to its state. The workshop calendar is secondary; the full lifecycle and cancellation stay behind disclosures. A separate notes view keeps a private reminder from competing with the handoff decision. The view change does not authorize a new actor or transition: Firestore and command contracts remain the authority.
 
-## 2026-10-15 — Learner readiness gates physical release
+## 2026-10-15 — Learner readiness signal and physical release
 
-Arrival means the selected picker is at MakerLab; it does not mean the learner may leave. The exact linked learner must first pack their project and personal items, tidy the space, and move the pickup to `ready`. Staff release is valid only from `ready`, after verifying the authorized picker. The learner remains inside until the staff handoff is recorded.
+Arrival means the selected picker is at MakerLab; it does not mean the learner may leave. The exact linked learner can signal `ready` after packing and tidying, but this signal does not gate the operation. Staff release is valid from `arrived` or `ready` after verifying the authorized picker. The learner remains inside until the staff handoff is recorded.
 
 Pickup notes use an append-only subcollection on the queue entry. Only the initiating parent and exact learner can read or add messages, each message is limited to 500 characters, and the thread becomes read-only after a terminal state. This keeps everyday reminders private without turning the staff pickup desk into a family chat reader.
 

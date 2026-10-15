@@ -1,5 +1,7 @@
 # Source-of-Truth Registry
 
+Daily Pickup roster and handoff contract: `modules/pickup/domain/dailyPickupRoster.ts` projects attendance-eligible enrollments into the current workshop-day roster; `views/PickupView.tsx` overlays `pickup_queue` live states for staff and lobby. `modules/pickup/domain/pickupLifecycle.ts` and `sparkquest/domain/pickupLifecycle.ts` are byte-identical transition mirrors. `firestore.rules` authorizes verified staff release from `arrived` or `ready`. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
+
 Parent account provisioning and historical link repair: `api/parent-access/index.js` (staff/tenant authority, Auth and family transactions), `views/student-details/AccessAndAccountsTab.tsx` and `views/StudentDetailsView.tsx` (verified staff flow and ephemeral credentials card), `modules/parent-access/parentAccess.emulator.mjs` (synthetic proof). See `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`.
 
 Student maker journey: `sparkquest/components/LearnerJourneyNav.tsx`, `learner-journey.css`, `LearnerWorkbench.tsx`, `ProjectSelector.tsx`, `StudentMissionDetails.tsx`, `StudentWizard.tsx`, and `studio-build-experience.css` compose the focused learner stops, saved-step focus, and contextual build/editor guide over existing canonical project selectors and actions. `ParentO11Y.tsx` remains the shared mascot renderer. See `docs/sparkquest/STUDENT_JOURNEY_2026-10-12.md`.

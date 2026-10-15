@@ -32,7 +32,7 @@ interface StudentPickupEntry {
 const progressSteps = [
     { status: 'on_the_way', label: 'On the way', icon: Truck },
     { status: 'arrived', label: 'At MakerLab', icon: MapPin },
-    { status: 'ready', label: 'I am ready', icon: PackageCheck },
+    { status: 'ready', label: 'Ready signal (optional)', icon: PackageCheck },
     { status: 'released', label: 'Staff release', icon: ShieldCheck },
     { status: 'confirmed', label: 'Pickup complete', icon: CheckCircle2 },
 ] as const;
@@ -112,7 +112,7 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
     const presentation = useMemo(() => {
         switch (pickup?.status) {
             case 'on_the_way': return { title: 'Your pickup is on the way', copy: `${pickup.pickerName || 'Your authorized pickup person'} has started the trip.`, tone: 'orange' as const };
-            case 'arrived': return { title: 'Your pickup is at MakerLab', copy: `${pickup.pickerName || 'Your authorized pickup person'} is waiting. Stay inside until a team member completes the check.`, tone: 'orange' as const };
+            case 'arrived': return { title: 'Your pickup is at MakerLab', copy: `${pickup.pickerName || 'Your authorized pickup person'} is waiting. You may tell the team when you are packed, but staff can complete pickup even if you forget.`, tone: 'orange' as const };
             case 'ready': return { title: 'You are ready to leave', copy: 'The team and your family can see that you packed your project and personal items.', tone: 'lime' as const };
             case 'released': return { title: 'Staff cleared your departure', copy: `A MakerLab team member verified ${pickup.pickerName || 'your authorized pickup person'}. Leave only with that person.`, tone: 'lime' as const };
             case 'confirmed': return { title: 'Pickup complete', copy: 'Your authorized pickup person confirmed the handoff.', tone: 'lime' as const };
@@ -176,7 +176,7 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
 
                     {pickup?.status === 'arrived' && <section className="sq-pickup-ready-action">
                         <PackageCheck size={25} />
-                        <div><strong>Have you finished packing and tidying your space?</strong><p>Check your project, tools, jacket and personal items. Then tell the team you are ready.</p></div>
+                        <div><strong>Optional: tell the team when you are packed.</strong><p>Check your project, tools, jacket and personal items. Pickup will not be blocked if you forget this button.</p></div>
                         <button type="button" onClick={() => void confirmReady()} disabled={readyPending}>{readyPending ? <Loader2 className="sq-spin" size={17} /> : <CheckCircle2 size={17} />} I packed everything — I’m ready</button>
                     </section>}
                     {readyError && <div className="sq-pickup-live is-exception" role="alert"><span><AlertCircle size={18} /> Ready status not saved</span><p>{readyError}</p></div>}
@@ -188,7 +188,7 @@ export const PickupSchedule: React.FC<PickupScheduleProps> = ({ isOpen, onClose 
 
                     <ol className="sq-pickup-steps">
                         <li><span>1</span>Pack your project and personal items.</li>
-                        <li><span>2</span>Tap “I’m ready” only after your space is tidy.</li>
+                        <li><span>2</span>If you want, tap “I’m ready” after your space is tidy.</li>
                         <li><span>3</span>Wait inside at the meeting point shown above.</li>
                         <li><span>4</span>Leave only after a MakerLab team member verifies the pickup person.</li>
                     </ol>

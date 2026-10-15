@@ -1,4 +1,10 @@
-# Latest handoff — Parent Pickup focus pass
+# Latest handoff — Daily Pickup roster and optional learner signal
+
+On 2026-10-15 Edufy Pickup was corrected to display every active learner scheduled for the day from canonical enrollment/group schedules, including before a parent starts pickup. The desk and lobby overlay live queue status on that roster. Firestore and both lifecycle mirrors now permit verified staff release from `arrived` or `ready`; the learner-ready button remains a helpful optional signal. Daily-roster/lifecycle smokes, SparkQuest TypeScript, both builds, and Firebase 10/12 Auth/Firestore suites pass. The focused client/rules release and public verification are the remaining steps.
+
+---
+
+# Previous handoff — Parent Pickup focus pass
 
 On 2026-10-15 the parent Pickup destination was reorganized around the current status and next parent action, followed by a compact next-workshop card. Private notes now have a focused view, while process explanation, cancellation and planning/security details are disclosed on demand. The existing lifecycle, selected-picker check and private-message rules were not changed. Browser checks at 390px/1280px covered announce, cancellation disclosure, notes, arrival and overflow; phone previews covered ready, released, confirmed/read-only and another initiating guardian without note access. SparkQuest TypeScript, standalone/root builds and scoped smokes pass. Focused code commit `76c067d` reached GitHub `main`; Vercel deployment `dpl_8sJ5NhXxFxZJ2UYMMi1ZpFUPTAif` is Ready and aliased to `https://sparkquest-makerlab.vercel.app/`, where the new parent bundle returns JavaScript 200. The signed-in family flow on a physical phone remains the acceptance check. See `docs/sparkquest/PARENT_PICKUP_FOCUS_2026-10-15.md`.
 

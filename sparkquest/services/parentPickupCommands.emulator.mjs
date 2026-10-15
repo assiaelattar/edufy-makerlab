@@ -73,12 +73,6 @@ try {
   await advanceParentPickup(secondary.db, 'org-sparkquest-pickup', firstId, secondary.uid, 'on_the_way', 'arrived');
   assert.equal((await getDoc(doc(primary.db, 'pickup_queue', firstId))).data()?.lastActorUid, secondary.uid);
 
-  const learnerReadyRef = doc(learner.db, 'pickup_queue', firstId);
-  const ready = writeBatch(learner.db);
-  ready.update(learnerReadyRef, { status: 'ready', readyAt: serverTimestamp(), updatedAt: serverTimestamp(), lastActorUid: learner.uid, lastEventId: 'ready' });
-  ready.set(doc(learnerReadyRef, 'events', 'ready'), { organizationId: 'org-sparkquest-pickup', studentId: 'learner-sq-a', pickerName: 'Uncle Sam', status: 'ready', at: serverTimestamp(), actorUid: learner.uid });
-  await ready.commit();
-
   const firstRef = doc(staff.db, 'pickup_queue', firstId);
   const release = writeBatch(staff.db);
   release.update(firstRef, {
@@ -122,7 +116,7 @@ try {
   const thirdId = await announceParentPickup(secondary.db, 'org-sparkquest-pickup', 'learner-sq-c', secondary.uid, 'Uncle Sam');
   await cancelled(primary, thirdId);
   assert.equal((await getDoc(doc(secondary.db, 'pickup_queue', thirdId))).data()?.parentUid, secondary.uid);
-  console.log('SparkQuest Firebase 12 parent Pickup adapter passed: atomic create/event, cross-guardian arrival/receipt/cancel, learner-ready gate, immutable initiator, revoked/inactive and spoof denial.');
+  console.log('SparkQuest Firebase 12 parent Pickup adapter passed: atomic create/event, cross-guardian arrival/direct staff release/receipt/cancel, optional learner-ready signal, immutable initiator, revoked/inactive and spoof denial.');
 } finally {
   await Promise.all(clients.map(deleteApp));
   await deleteAdmin(adminApp);
