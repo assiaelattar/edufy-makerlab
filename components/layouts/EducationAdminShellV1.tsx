@@ -27,9 +27,11 @@ import { NotificationDropdown } from '../NotificationDropdown';
 import { Logo } from '../Logo';
 import { AtlasWorkspaceTabs, type AtlasWorkspaceTab } from '../atlas/AtlasWorkspaceTabs';
 import '../education-ui/education-ui-v1.css';
+import '../education-ui/education-system-v1.css';
 import '../education-ui/education-module-compat-v1.css';
 import './education-admin-shell-v1.css';
 import './education-school-themes.css';
+import './education-navigation-system-v1.css';
 
 type Density = 'comfortable' | 'compact';
 
@@ -160,7 +162,7 @@ export const EducationAdminShellV1 = ({
         <div className="edu-v1 edu-shell-v1" data-edu-density={density} data-edu-theme={theme} data-testid="education-admin-shell-v1">
             {isMobileMenuOpen && <button type="button" className="edu-shell-v1__scrim" aria-label="Close navigation" onClick={closeMenu} />}
 
-            <aside className="edu-shell-v1__sidebar" data-open={isMobileMenuOpen} data-compact={isSidebarCompact} aria-label="Main navigation">
+            <aside data-edu-system="1" className="edu-shell-v1__sidebar" data-open={isMobileMenuOpen} data-compact={isSidebarCompact} aria-label="Main navigation">
                 <div className="edu-shell-v1__drawer">
                     <div className="edu-shell-v1__drawer-head">
                         <div className="edu-shell-v1__brand-lockup">
@@ -272,7 +274,7 @@ export const EducationAdminShellV1 = ({
             </aside>
 
             <main className="edu-shell-v1__main">
-                <header className="edu-shell-v1__topbar">
+                <header data-edu-system="1" className="edu-shell-v1__topbar" aria-label="Workspace navigation">
                     <div className="edu-shell-v1__title-row">
                         <div className="edu-shell-v1__title">
                             <button type="button" className="edu-shell-v1__mobile-menu" aria-label="Open navigation" onClick={() => setIsMobileMenuOpen(true)}><Menu size={21} /></button>
@@ -301,7 +303,7 @@ export const EducationAdminShellV1 = ({
                 </div>
             </main>
 
-            <nav className="edu-shell-v1__mobile-nav" aria-label="Quick navigation">
+            <nav data-edu-system="1" className="edu-shell-v1__mobile-nav" aria-label="Quick navigation">
                 {railModules.slice(0, 4).map(module => {
                     const Icon = module.icon;
                     const active = currentView === module.id;

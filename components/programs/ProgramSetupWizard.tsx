@@ -737,8 +737,8 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
   ].filter(Boolean);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit program setup' : 'Create a program'} size="xl">
-      <div className="min-h-[34rem]">
+    <Modal designSystem isOpen={isOpen} onClose={onClose} title={isEditing ? 'Edit program setup' : 'Create a program'} size="xl">
+      <div className="program-setup-wizard min-h-[34rem]">
         <div className="mb-5 flex gap-2 overflow-x-auto border-b border-white/10 pb-3 lg:hidden">
           {visibleSteps.map(item => {
             const Icon = item.icon;

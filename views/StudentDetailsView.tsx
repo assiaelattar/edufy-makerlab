@@ -1,3 +1,4 @@
+import { StudentDetailsForm } from '../components/students/StudentDetailsForm';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -63,6 +64,9 @@ export const StudentDetailsView = ({
     const [confirmModal, setConfirmModal] = useState<any>({ isOpen: false, title: '', message: '', type: 'danger', isLoading: false, action: async () => { } });
     const [activeTab, setActiveTab] = useState('Academics');
     const [isEditingStudent, setIsEditingStudent] = useState(false);
+    const [isSavingStudent, setIsSavingStudent] = useState(false);
+    const [studentSaveError, setStudentSaveError] = useState('');
+    useEffect(() => { if (isEditingStudent) setStudentSaveError(''); }, [isEditingStudent]);
     const [editFormData, setEditFormData] = useState<Record<string, any>>({});
     const [focusedEditField, setFocusedEditField] = useState<string | null>(null);
     const openedRouteIntent = useRef<string | null>(null);
@@ -143,7 +147,9 @@ export const StudentDetailsView = ({
 
     const handleSaveStudent = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || !student.id) return;
+        if (!db || !student.id || isSavingStudent) return;
+        setIsSavingStudent(true);
+        setStudentSaveError('');
         try {
             // Remove undefined values to prevent Firestore errors
             const cleanData: any = {};
@@ -159,7 +165,10 @@ export const StudentDetailsView = ({
             await showAlert('Student updated', 'Student details were saved successfully.', 'success');
         } catch (err: any) {
             console.error("Error updating student:", err);
+            setStudentSaveError('Student details were not saved. Your changes are still here. Please try again.');
             await showAlert('Could not update student', 'Student details were not saved. Please try again.', 'danger');
+        } finally {
+            setIsSavingStudent(false);
         }
     };
 
@@ -1143,111 +1152,8 @@ export const StudentDetailsView = ({
             </Modal>
 
             {/* EDIT STUDENT MODAL */}
-            <Modal isOpen={isEditingStudent} onClose={() => setIsEditingStudent(false)} title="Edit Student Details">
-                <form onSubmit={handleSaveStudent} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Full Name</label>
-                            <input
-                                type="text"
-                                autoFocus={focusedEditField === 'name'}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                                value={editFormData.name || ''}
-                                onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Date of Birth</label>
-                            <input
-                                type="date"
-                                autoFocus={focusedEditField === 'birthDate'}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                                value={editFormData.birthDate || ''}
-                                onChange={e => setEditFormData({ ...editFormData, birthDate: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Parent Name</label>
-                            <input
-                                type="text"
-                                autoFocus={focusedEditField === 'parentName'}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                                value={editFormData.parentName || ''}
-                                onChange={e => setEditFormData({ ...editFormData, parentName: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Parent Phone</label>
-                            <input
-                                type="text"
-                                autoFocus={focusedEditField === 'parentPhone'}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                                value={editFormData.parentPhone || ''}
-                                onChange={e => setEditFormData({ ...editFormData, parentPhone: e.target.value })}
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Email (Optional)</label>
-                        <input
-                            type="email"
-                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                            value={editFormData.email || ''}
-                            onChange={e => setEditFormData({ ...editFormData, email: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">School</label>
-                            <input
-                                type="text"
-                                autoFocus={focusedEditField === 'school'}
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                                value={editFormData.school || ''}
-                                onChange={e => setEditFormData({ ...editFormData, school: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-400 mb-1">Address</label>
-                            <input
-                                type="text"
-                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
-                                value={editFormData.address || ''}
-                                onChange={e => setEditFormData({ ...editFormData, address: e.target.value })}
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Medical Info / Allergies</label>
-                        <textarea
-                            className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24"
-                            value={editFormData.medicalInfo || ''}
-                            onChange={e => setEditFormData({ ...editFormData, medicalInfo: e.target.value })}
-                            placeholder="e.g. Peanut allergy, Asthma..."
-                        />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4">
-                        <button
-                            type="button"
-                            onClick={() => setIsEditingStudent(false)}
-                            className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="min-h-10 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 font-bold text-slate-950 transition-colors hover:bg-teal-400"
-                        >
-                            Save Changes
-                        </button>
-                    </div>
-                </form>
+            <Modal designSystem size="lg" isOpen={isEditingStudent} onClose={() => { if (!isSavingStudent) setIsEditingStudent(false); }} title="Edit student details">
+                <StudentDetailsForm value={editFormData} onChange={setEditFormData} onSubmit={handleSaveStudent} onCancel={() => setIsEditingStudent(false)} busy={isSavingStudent} error={studentSaveError} focusedField={focusedEditField || 'name'} />
             </Modal>
         </div >
     );

@@ -1,0 +1,84 @@
+/* Programs working surfaces. The shared Design System owns palette and controls;
+   this file owns module layout, density and legacy class mapping only. */
+[data-edu-system="1"] [role="tabpanel"] { min-width:0; color:var(--ds-ink); background:transparent!important; }
+[data-edu-system="1"] [role="tabpanel"] > div { background:transparent!important; box-shadow:none!important; }
+[data-edu-system="1"] [role="tabpanel"] :is(section,article,details) {
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom-width:4px!important;
+  border-radius:18px!important;
+  box-shadow:none!important;
+}
+[data-edu-system="1"] [role="tabpanel"] :is([class*="border-white"],[class*="divide-white"] > *,[class*="divide-slate"] > *) { border-color:var(--ds-border)!important; }
+[data-edu-system="1"] [role="tabpanel"] :is(h3,.text-white,.text-slate-200,.text-slate-300) { color:var(--ds-ink)!important; }
+[data-edu-system="1"] [role="tabpanel"] :is(.text-slate-400,.text-slate-500,.text-slate-600) { color:var(--ds-muted)!important; }
+[data-edu-system="1"] [role="tabpanel"] :is(input,select,textarea) {
+  min-height:46px;
+  max-width:100%;
+  padding:10px 12px;
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-radius:12px!important;
+}
+[data-edu-system="1"] [role="tabpanel"] .atlas-action { min-height:44px; border-radius:var(--ds-radius-control)!important; font-weight:900; }
+[data-edu-system="1"] [role="tabpanel"] [data-atlas-variant="primary"] { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border:2px solid var(--ds-blue-edge)!important; border-bottom-width:4px!important; }
+[data-edu-system="1"] [role="tabpanel"] [data-atlas-variant="secondary"] { color:var(--ds-ink)!important; background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-bottom-width:4px!important; }
+[data-edu-system="1"] [role="tabpanel"] [data-atlas-variant="quiet"] { color:var(--ds-blue-ink)!important; background:transparent!important; }
+[data-edu-system="1"] [role="tabpanel"] [data-atlas-variant="danger"] { color:var(--ds-red-ink)!important; background:var(--ds-red-soft)!important; border-color:var(--ds-red-edge)!important; }
+
+[data-edu-system="1"] .program-attention { padding:14px 16px!important; color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; border:1px solid var(--ds-orange-edge)!important; border-radius:14px!important; }
+[data-edu-system="1"] .program-attention :is(p,svg) { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] .program-roster-tools { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; padding:18px; background:var(--ds-surface); border:2px solid var(--ds-border); border-radius:18px; }
+[data-edu-system="1"] .program-roster-tools label { display:flex; flex-direction:column; gap:6px; min-width:0; color:var(--ds-muted); font-size:12px; font-weight:800; }
+[data-edu-system="1"] .program-roster-search { flex:1 1 260px; }
+[data-edu-system="1"] .program-roster-results { display:flex; flex-wrap:wrap; justify-content:space-between; width:100%; gap:8px; color:var(--ds-muted); font-size:12px; }
+[data-edu-system="1"] .program-roster-results [role="status"] { color:var(--ds-ink); font-weight:800; }
+[data-edu-system="1"] span[data-placement="unplaced"] { display:inline-flex; align-items:center; gap:7px; color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] span[data-placement="unplaced"]::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--ds-orange); }
+
+[data-edu-system="1"] [role="tabpanel"] table { width:100%; border-collapse:collapse; font-size:14px; }
+[data-edu-system="1"] [role="tabpanel"] table thead { color:var(--ds-muted)!important; background:var(--ds-subtle)!important; font-size:11px; letter-spacing:.05em; }
+[data-edu-system="1"] [role="tabpanel"] table :is(th,td) { padding:16px; border-bottom:1px solid var(--ds-border); }
+[data-edu-system="1"] [role="tabpanel"] table tbody tr { background:var(--ds-surface)!important; }
+[data-edu-system="1"] [role="tabpanel"] table tbody tr:hover { background:var(--ds-subtle)!important; }
+[data-edu-system="1"] [data-program-tab="financials"] .atlas-signal-card { background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-bottom-width:4px!important; border-radius:18px; }
+[data-edu-system="1"] [data-program-tab="financials"] .atlas-signal-icon-well { color:var(--ds-blue-ink)!important; background:var(--ds-blue-soft)!important; border-radius:12px; }
+[data-edu-system="1"] [data-program-tab="financials"] [data-atlas-tone="amber"] .atlas-signal-icon-well { color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; }
+[data-edu-system="1"] [data-program-tab="resources"] .font-mono { white-space:normal; overflow-wrap:anywhere; color:var(--ds-blue-ink)!important; font-size:12px; }
+[data-edu-system="1"] [data-program-tab="operations"] .atlas-accent-well { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; border-color:var(--ds-purple-edge)!important; border-radius:12px; }
+
+/* Portal dialogs opt into the same system with Modal designSystem. */
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog :is(input:not([type="checkbox"]):not([type="radio"]),select,textarea) {
+  min-height:46px;
+  max-width:100%;
+  padding:10px 12px;
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-radius:12px!important;
+}
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog :is(.text-white,.text-slate-100,.text-slate-200,.text-slate-300) { color:var(--ds-ink)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog :is(.text-slate-400,.text-slate-500,.text-slate-600) { color:var(--ds-muted)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog :is([class*="bg-slate-"],footer) { background:var(--ds-surface)!important; border-color:var(--ds-border)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog [aria-current="step"] { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; border-color:var(--ds-purple)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog input[type="checkbox"] { accent-color:var(--ds-green); }
+[data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog footer { padding-top:16px; border-top:2px solid var(--ds-border)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard label:has(input:checked),
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form label:has(input:checked),
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [role="checkbox"][aria-checked="true"],
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard button[aria-pressed="true"] { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; border-color:var(--ds-purple)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard label:has(input:checked) > span:first-of-type { color:var(--ds-on-color)!important; background:var(--ds-purple)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [role="checkbox"][aria-checked="true"] > span:first-child { color:var(--ds-on-color)!important; background:var(--ds-purple)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard button[aria-pressed="true"] > span:first-child { color:var(--ds-on-color)!important; background:var(--ds-purple)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard :is(footer,.program-dialog-footer) button:last-child,
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form button[type="submit"] { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border:2px solid var(--ds-blue-edge)!important; border-bottom-width:4px!important; border-radius:var(--ds-radius-control)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard .text-teal-300,
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form .text-teal-300 { color:var(--ds-purple-ink)!important; }
+
+@media(max-width:700px) {
+  [data-edu-system="1"] .program-roster-tools { padding:14px; }
+  [data-edu-system="1"] .program-roster-tools label { flex:1 1 100%; }
+  [data-edu-system="1"] [data-program-tab="resources"] section { padding:16px; }
+}

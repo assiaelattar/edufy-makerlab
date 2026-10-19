@@ -1,0 +1,107 @@
+/* Focused school workflow treatment for Learning and Portfolio. */
+.edu-learning-v1 .learning-flightdeck__hero {
+    gap: 20px;
+    padding: clamp(20px, 3vw, 32px) !important;
+    border-color: var(--edu-border) !important;
+    background: linear-gradient(125deg, var(--edu-brand-soft), var(--edu-surface)) !important;
+}
+.edu-learning-v1 .learning-flightdeck__hero::after { display: none; }
+.edu-learning-v1 .learning-flightdeck__kicker { margin-bottom: 12px; color: var(--edu-brand); }
+.edu-learning-v1 .learning-flightdeck__intro h2 { max-width: 670px; font-size: clamp(32px, 4vw, 49px); line-height: 1.04; }
+.edu-learning-v1 .learning-flightdeck__intro p { margin-top: 10px; }
+.edu-learning-v1 .learning-flightdeck__create { align-self: start; border-color: var(--edu-brand) !important; color: var(--edu-on-brand) !important; background: var(--edu-brand) !important; box-shadow: none; }
+.edu-learning-v1 .learning-flightdeck__create:hover { background: var(--edu-brand-hover) !important; }
+.edu-learning-v1 .learning-flightdeck__priority {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    min-width: 0;
+    padding: 18px 20px;
+    border: 1px solid var(--edu-border);
+    border-left: 4px solid var(--edu-brand);
+    border-radius: 17px;
+    color: var(--edu-ink);
+    background: var(--edu-surface);
+}
+.edu-learning-v1 .learning-flightdeck__priority > div { min-width: 0; }
+.edu-learning-v1 .learning-flightdeck__priority-label,
+.edu-portfolio-v1__focus > div > span { color: var(--edu-brand); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.edu-learning-v1 .learning-flightdeck__priority h3,
+.edu-portfolio-v1__focus h2 { margin: 4px 0 3px; color: var(--edu-ink); font-size: clamp(20px, 2vw, 27px); font-weight: 800; letter-spacing: -.035em; line-height: 1.18; }
+.edu-learning-v1 .learning-flightdeck__priority p,
+.edu-portfolio-v1__focus p { margin: 0; color: var(--edu-muted); font-size: 13px; line-height: 1.5; }
+.edu-learning-v1 .learning-flightdeck__priority button,
+.edu-portfolio-v1__focus button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 1px solid var(--edu-brand);
+    border-radius: 12px;
+    color: var(--edu-on-brand);
+    background: var(--edu-brand);
+    font-size: 12px;
+    font-weight: 800;
+}
+.edu-learning-v1 .learning-flightdeck__priority button:hover,
+.edu-portfolio-v1__focus button:hover { background: var(--edu-brand-hover); }
+.edu-learning-v1 .learning-flightdeck__priority button:focus-visible,
+.edu-portfolio-v1__focus button:focus-visible { outline: 3px solid var(--edu-brand); outline-offset: 3px; }
+.edu-learning-v1 .learning-flightdeck__signals { margin-top: 0; border: 1px solid var(--edu-border) !important; border-radius: 17px; background: var(--edu-surface-muted) !important; }
+.edu-learning-v1 .learning-flightdeck__signals button { padding: 14px !important; border-color: var(--edu-border); background: transparent !important; }
+.edu-learning-v1 .learning-flightdeck__signals button:first-child { border-left: 0; }
+.edu-learning-v1 .learning-flightdeck__signals strong { font-size: 23px; }
+.edu-learning-v1 .learning-flightdeck__signals button[data-attention='true'] strong { color: var(--edu-brand); }
+.edu-learning-v1 .learning-route button.is-active { color: var(--edu-ink) !important; background: var(--edu-brand-soft) !important; }
+.edu-learning-v1 .learning-route button:not(.is-active) { background: transparent !important; }
+.edu-learning-v1 .learning-route button.is-active::after { background: var(--edu-brand); }
+.edu-learning-v1 .learning-route button.is-active small { color: var(--edu-brand); }
+
+.edu-portfolio-v1__focus {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 20px 22px;
+    border: 1px solid var(--edu-border);
+    border-left: 4px solid var(--edu-brand);
+    border-radius: 21px;
+    color: var(--edu-ink);
+    background: linear-gradient(115deg, var(--edu-brand-soft), var(--edu-surface));
+    box-shadow: var(--edu-shadow-sm);
+}
+.edu-portfolio-v1__focus > div { min-width: 0; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(n) { border-color: var(--edu-border) !important; color: var(--edu-ink) !important; background: var(--edu-surface) !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(2) { background: var(--edu-brand-soft) !important; }
+.edu-portfolio-v1 > .grid .atlas-signal-card:nth-child(3) * { color: inherit !important; }
+.edu-portfolio-v1 > section:not(.edu-portfolio-v1__focus) [class*='text-white'],
+.edu-portfolio-v1 #portfolio-published h3[class*='text-white'] { color: var(--edu-ink) !important; }
+.edu-portfolio-v1 > section:not(.edu-portfolio-v1__focus) [class*='text-slate-5'],
+.edu-portfolio-v1 #portfolio-published [class*='text-slate-5'] { color: var(--edu-muted) !important; }
+.edu-portfolio-v1 #portfolio-published article,
+.edu-portfolio-v1 > .grid:last-child > section:last-child .grid > div { border-color: var(--edu-border) !important; background: var(--edu-surface-muted) !important; }
+.edu-portfolio-v1 #portfolio-published { scroll-margin-top: 20px; }
+.edu-portfolio-v1 #portfolio-published article h3 { color: var(--edu-ink) !important; }
+.edu-portfolio-v1 > .grid:last-child > section:last-child .grid > div [class*='text-white'] { color: var(--edu-ink) !important; }
+
+@media (max-width: 700px) {
+    .edu-learning-v1 .learning-flightdeck__hero { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 20px !important; }
+    .edu-learning-v1 .learning-flightdeck__intro h2 { font-size: clamp(29px, 8.4vw, 36px); }
+    .edu-learning-v1 .learning-flightdeck__intro { order: 1; }
+    .edu-learning-v1 .learning-flightdeck__create { order: 3; width: 100%; }
+    .edu-learning-v1 .learning-flightdeck__signals { order: 4; }
+    .edu-learning-v1 .learning-flightdeck__priority { order: 2; }
+    .edu-learning-v1 .learning-flightdeck__priority,
+    .edu-portfolio-v1__focus { align-items: stretch; flex-direction: column; padding: 18px; }
+    .edu-learning-v1 .learning-flightdeck__priority button,
+    .edu-portfolio-v1__focus button { width: 100%; }
+    .edu-learning-v1 .learning-flightdeck__signals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .edu-learning-v1 .learning-flightdeck__signals button:last-child { grid-column: 1 / -1; }
+    .edu-learning-v1 .learning-route { display: flex; max-width: 100%; overflow-x: auto; scroll-snap-type: x proximity; }
+    .edu-learning-v1 .learning-route button { min-width: 120px; flex: 0 0 auto; scroll-snap-align: start; }
+}

@@ -12,7 +12,11 @@ import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { WorkshopReportModal } from '../components/WorkshopReportModal';
 import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, getWorkshopShareVersion, normalizeWorkshopDays, normalizeWorkshopImageUrl, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
 import { findBookingPhoneCandidateLeadIds, resolveBookingAdmissionLead } from '../modules/admissions/domain';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
+import '../components/education-ui/education-system-v1.css';
 import './programs/education-programs-v1.css';
+import './programs/education-workshops-focus.css';
+import './programs/education-workshops-playful.css';
 
 interface WorkshopEnrollmentPrefill {
     childName: string;
@@ -25,9 +29,14 @@ interface WorkshopEnrollmentPrefill {
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: WorkshopEnrollmentPrefill) => void }) => {
     const { workshopTemplates, workshopSlots, bookings, leads } = useAppContext();
-    const { currentOrganization, can } = useAuth();
+    const { currentOrganization, can, user } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
-    const [activeTab, setActiveTab] = useState<'calendar' | 'templates'>('calendar');
+    const workspaceScope = `workshops:${currentOrganization?.id || 'none'}:${user?.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
+    const [activeTab, setActiveTab] = useWorkspaceViewState<'calendar' | 'followup' | 'templates'>(workspaceScope, 'activeTab', 'calendar');
+
+    const [workspaceSearch, setWorkspaceSearch] = useWorkspaceViewState(workspaceScope, 'workspaceSearch', '');
+    const [historySearch, setHistorySearch] = useState('');
 
     // --- Calendar State ---
     const [viewDate, setViewDate] = useState(new Date()); // Tracks the month being viewed
@@ -276,7 +285,8 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     };
 
     const handleStatusUpdate = async (bookingId: string, newStatus: Booking['status']) => {
-        if (!db || !currentOrganization || savingBookingIds.includes(bookingId) || !can('workshops.manage')) return;
+        const firestore = db;
+        if (!firestore || !currentOrganization || savingBookingIds.includes(bookingId) || !can('workshops.manage')) return;
         const booking = bookings.find(item => item.id === bookingId);
         if (!booking || booking.organizationId !== currentOrganization.id) {
             await showAlert('Booking unavailable', 'This booking is not available in the active organization.', 'warning');
@@ -295,8 +305,8 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
         setSavingBookingIds(ids => [...ids, bookingId]);
         try {
-            await runTransaction(db, async transaction => {
-                const bookingRef = doc(db, 'bookings', bookingId);
+            await runTransaction(firestore, async transaction => {
+                const bookingRef = doc(firestore, 'bookings', bookingId);
                 const bookingSnapshot = await transaction.get(bookingRef);
                 if (!bookingSnapshot.exists()) throw new Error('Booking no longer exists.');
                 const bookingData = bookingSnapshot.data() as Booking;
@@ -308,7 +318,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 let slotUpdate: { ref: ReturnType<typeof doc>; bookedCount: number; status: 'available' | 'full' | 'cancelled' } | null = null;
 
                 if ((releasesSeat || restoresSeat) && bookingData.workshopSlotId) {
-                    const slotRef = doc(db, 'workshop_slots', bookingData.workshopSlotId);
+                    const slotRef = doc(firestore, 'workshop_slots', bookingData.workshopSlotId);
                     const slotSnapshot = await transaction.get(slotRef);
                     if (slotSnapshot.exists()) {
                         const slotData = slotSnapshot.data() as { organizationId?: string; bookedCount?: number; capacity?: number; status?: 'available' | 'full' | 'cancelled' };
@@ -483,6 +493,10 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         return bookings.filter(b => slotIds.includes(b.workshopSlotId)).sort((a, b) => b.bookedAt?.toMillis() - a.bookedAt?.toMillis());
     }, [viewingBookingsTemplateId, workshopSlots, bookings]);
 
+    const searchText = workspaceSearch.trim().toLocaleLowerCase();
+    const visibleTemplates = workshopTemplates.filter(template => `${template.title} ${template.description}`.toLocaleLowerCase().includes(searchText));
+    const visibleHistory = templateBookings.filter(booking => `${booking.kidName} ${booking.parentName} ${booking.phoneNumber}`.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase()));
+
     // --- Calendar Logic ---
     const monthStart = useMemo(() => new Date(viewDate.getFullYear(), viewDate.getMonth(), 1), [viewDate]);
 
@@ -491,6 +505,19 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         // Start from beginning of the view month
         return getGeneratedSlots(workshopTemplates, workshopSlots, monthStart, 45);
     }, [workshopTemplates, workshopSlots, monthStart]);
+
+    const followUpBookings = useMemo(() => bookings
+        .filter(booking => booking.organizationId === currentOrganization?.id && booking.status === 'attended' && booking.followUpStatus !== 'not_interested' && booking.followUpStatus !== 'converted')
+        .sort((first, second) => (first.statusUpdatedAt?.toMillis() || first.bookedAt?.toMillis() || 0) - (second.statusUpdatedAt?.toMillis() || second.bookedAt?.toMillis() || 0)), [bookings, currentOrganization?.id]);
+    const visibleFollowUps = followUpBookings.filter(booking => `${booking.kidName} ${booking.parentName} ${booking.phoneNumber}`.toLocaleLowerCase().includes(searchText));
+    const nextWorkshopSlot = virtualSlots.find(slot => slot.dateStr >= toLocalDateKey(new Date()) && slot.status !== 'cancelled') || null;
+    const openWorkshopSlot = (slot: VirtualSlot) => {
+        const slotDate = new Date(`${slot.dateStr}T12:00:00`);
+        setViewDate(slotDate);
+        setSelectedDate(slotDate);
+        setExpandedSlotUniqueId(`${slot.workshopTemplateId}-${slot.dateStr}-${slot.startTime}`);
+        setActiveTab('calendar');
+    };
 
     const getSlotBookings = (slot: VirtualSlot) => {
         if (!slot.slotId) return [];
@@ -538,44 +565,82 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
 
     const workshopSignals = useMemo(() => {
         const monthBookedSpots = virtualSlots.reduce((sum, slot) => sum + slot.bookedCount, 0);
-        const attendedBookings = bookings.filter(booking => booking.status === 'attended').length;
+        const attendedBookings = followUpBookings.length;
         const openCapacity = virtualSlots.reduce((sum, slot) => sum + Math.max(0, slot.capacity - slot.bookedCount), 0);
         const activeTemplates = workshopTemplates.filter(template => template.isActive !== false).length;
 
         return { monthBookedSpots, attendedBookings, openCapacity, activeTemplates };
-    }, [virtualSlots, bookings, workshopTemplates]);
+    }, [virtualSlots, followUpBookings, workshopTemplates]);
 
     return (
-        <div className={`space-y-6 pb-24 md:pb-8 h-full flex flex-col ${showEducationProgramsV1 ? 'edu-v1 edu-workshops-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-workshops-v1' : undefined}>
+        <div className={`space-y-6 pb-24 md:pb-8 h-full flex flex-col ${showEducationProgramsV1 ? 'edu-v1 edu-workshops-v1' : ''}`} data-edu-system={showEducationProgramsV1 ? '1' : undefined} data-testid={showEducationProgramsV1 ? 'education-workshops-v1' : undefined}>
             {/* Header */}
             <AtlasCommandHeader
                 eyebrow="Experience ops"
-                title="Workshop Manager"
-                description="Schedule events, manage capacity, convert high-intent visitors, and keep public booking links aligned with the tenant."
+                title="Workshops"
+                description="Plan sessions, welcome families and follow each learner’s next step."
                 icon={CalendarCheck}
                 badges={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>}
                 actions={
                     <div className="flex rounded-lg border border-white/10 bg-white/[0.04] p-1" role="tablist" aria-label="Workshop workspace">
-                    <button role="tab" aria-selected={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'calendar' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <button role="tab" aria-selected={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setWorkspaceSearch(''); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'calendar' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
                         <CalendarIcon size={16} /> Calendar
                     </button>
-                    <button role="tab" aria-selected={activeTab === 'templates'} onClick={() => setActiveTab('templates')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'templates' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                    {showEducationProgramsV1 && <button role="tab" aria-selected={activeTab === 'followup'} onClick={() => { setActiveTab('followup'); setWorkspaceSearch(''); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'followup' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                        <UserCheck size={16} /> Follow-up {followUpBookings.length > 0 && <span className="edu-workshops-v1__tab-count">{followUpBookings.length}</span>}
+                    </button>}
+                    <button role="tab" aria-selected={activeTab === 'templates'} onClick={() => { setActiveTab('templates'); setWorkspaceSearch(''); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'templates' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
                         <List size={16} /> Templates
                     </button>
                     </div>
                 }
             />
 
+            {showEducationProgramsV1 && <section className="edu-workshops-v1__focus" aria-label="Workshop priority">
+                <div>
+                    <span className="edu-workshops-v1__eyebrow">Workshop priority</span>
+                    <h2>{followUpBookings.length > 0 ? `${followUpBookings.length} ${followUpBookings.length === 1 ? 'family' : 'families'} ready for follow-up` : nextWorkshopSlot ? `Next: ${nextWorkshopSlot.templateTitle}` : 'Plan the next workshop'}</h2>
+                    <p>{followUpBookings.length > 0 ? 'Start with families who attended. Review their recorded booking before contacting or enrolling.' : nextWorkshopSlot ? `${nextWorkshopSlot.dateStr} · ${nextWorkshopSlot.startTime} · ${nextWorkshopSlot.bookedCount} reserved of ${nextWorkshopSlot.capacity} places` : 'No upcoming workshop appears in the selected calendar window.'}</p>
+                </div>
+                <div className="edu-workshops-v1__focus-actions">
+                    {followUpBookings.length > 0 && <button type="button" className="edu-workshops-v1__focus-primary" onClick={() => { setActiveTab('followup'); setWorkspaceSearch(''); }}>Open follow-up <ChevronRight size={16} /></button>}
+                    {nextWorkshopSlot && <button type="button" className={followUpBookings.length > 0 ? 'edu-workshops-v1__focus-secondary' : 'edu-workshops-v1__focus-primary'} onClick={() => openWorkshopSlot(nextWorkshopSlot)}>Open next session</button>}
+                    {!nextWorkshopSlot && followUpBookings.length === 0 && <button type="button" className="edu-workshops-v1__focus-secondary" onClick={() => { setActiveTab('templates'); setWorkspaceSearch(''); }}>Review workshops</button>}
+                </div>
+            </section>}
+
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                 <AtlasSignalCard label="Active Templates" value={workshopSignals.activeTemplates} icon={LayoutGrid} tone="teal" detail="Public booking offers" />
-                <AtlasSignalCard label="Month Events" value={virtualSlots.length} icon={CalendarIcon} tone="blue" detail="Generated schedule slots" />
+                <AtlasSignalCard label="Schedule slots" value={virtualSlots.length} icon={CalendarIcon} tone="blue" detail="Current calendar window" />
                 <AtlasSignalCard label="Booked Spots" value={workshopSignals.monthBookedSpots} icon={Users} tone="amber" detail={`${workshopSignals.openCapacity} seats still open`} />
                 <AtlasSignalCard label="Attended" value={workshopSignals.attendedBookings} icon={UserCheck} tone="emerald" detail="Ready for follow-up" />
             </div>
 
+            {activeTab !== 'calendar' && <div className="edu-workshops-v1__searchbar"><label><span>{activeTab === 'templates' ? 'Find a workshop' : 'Find a family'}</span><input type="search" value={workspaceSearch} onChange={event => setWorkspaceSearch(event.target.value)} placeholder={activeTab === 'templates' ? 'Title or description' : 'Learner, parent or phone'} /></label><span role="status">{activeTab === 'templates' ? visibleTemplates.length : visibleFollowUps.length} shown</span>{workspaceSearch && <button type="button" onClick={() => setWorkspaceSearch('')}>Clear search</button>}</div>}
+
+            {showEducationProgramsV1 && activeTab === 'followup' && <section className="edu-workshops-v1__followup" aria-label="Workshop family follow-up">
+                <header><div><span className="edu-workshops-v1__eyebrow">After the workshop</span><h2>Families to contact</h2><p>Attended bookings with no closed follow-up. Contact and enrollment use the existing verified actions.</p></div><strong>{followUpBookings.length} open</strong></header>
+                {followUpBookings.length === 0 ? <div className="edu-workshops-v1__followup-empty"><UserCheck size={24} /><strong>Follow-up is clear</strong><p>New attended bookings will appear here. Review the calendar for upcoming sessions.</p><button type="button" onClick={() => { setActiveTab('calendar'); setWorkspaceSearch(''); }}>Open calendar</button></div> : <div className="edu-workshops-v1__followup-list">{visibleFollowUps.length === 0 && <p role="status">No family matches this search. Clear the search to see all follow-ups.</p>}
+                    {visibleFollowUps.map(booking => {
+                        const slot = workshopSlots.find(item => item.id === booking.workshopSlotId && item.organizationId === currentOrganization?.id);
+                        const template = workshopTemplates.find(item => item.id === booking.workshopTemplateId && item.organizationId === currentOrganization?.id);
+                        const title = slot?.title || template?.title || 'Workshop';
+                        return <article key={booking.id}>
+                            <div className="edu-workshops-v1__followup-date"><CalendarIcon size={15} /><span>{slot?.date || 'Date unavailable'}</span><small>{slot?.startTime || ''}</small></div>
+                            <div className="edu-workshops-v1__followup-person"><strong>{booking.kidName}</strong><span>{booking.parentName} · {title}</span><small>{booking.followUpStatus === 'feedback_received' ? 'Feedback recorded' : 'Attended · follow-up open'}</small></div>
+                            {can('workshops.manage') && <div className="edu-workshops-v1__followup-actions">
+                                <button type="button" onClick={() => void openWhatsApp(booking.phoneNumber, booking.parentName)}><MessageCircle size={15} />Contact</button>
+                                <button type="button" onClick={() => void handleConvertToStudent(booking)}><UserCheck size={15} />Start enrollment</button>
+                                <button type="button" onClick={() => void handlePushToCRM(booking, title)}><Magnet size={15} />Send to CRM</button>
+                            </div>}
+                        </article>;
+                    })}
+                </div>}
+            </section>}
+
             {/* CALENDAR TAB */}
             {activeTab === 'calendar' && (
-                <div className="flex flex-col gap-6 h-full min-h-[600px]">
+                <div className="edu-workshops-v1__calendar-layout">
 
                     {/* Calendar Grid - Full width on mobile, left sidebar on desktop */}
                     <div className="flex flex-col gap-6">
@@ -584,9 +649,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                             <div className="flex justify-between items-center mb-4 md:mb-6">
                                 <h3 className="text-base md:text-lg font-bold text-white">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
                                 <div className="flex gap-1">
-                                    <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronLeft size={20} /></button>
-                                    <button onClick={() => setViewDate(new Date())} className="px-2 md:px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white transition-colors">Today</button>
-                                    <button onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
+                                    <button aria-label="Previous month" onClick={() => changeMonth(-1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronLeft size={20} /></button>
+                                    <button onClick={() => { const today = new Date(); setViewDate(today); setSelectedDate(today); setExpandedSlotUniqueId(null); }} className="px-2 md:px-3 py-1 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-white transition-colors">Today</button>
+                                    <button aria-label="Next month" onClick={() => changeMonth(1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"><ChevronRight size={20} /></button>
                                 </div>
                             </div>
 
@@ -594,7 +659,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                             <div className="grid grid-cols-7 gap-1 md:gap-2 text-center mb-2">
                                 {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d} className="text-[10px] md:text-xs font-bold text-slate-500 py-2">{d}</div>)}
                             </div>
-                            <div className="grid grid-cols-7 gap-1 md:gap-2">
+                            <div className="edu-workshops-v1__calendar-days grid grid-cols-7 gap-1 md:gap-2">
                                 {calendarGrid.map((date, i) => {
                                     if (!date) return <div key={i} className="aspect-square"></div>;
                                     const isSelected = date.toDateString() === selectedDate.toDateString();
@@ -604,8 +669,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                     return (
                                         <button
                                             key={i}
+                                            aria-label={date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                                            aria-current={isToday ? 'date' : undefined}
                                             onClick={() => setSelectedDate(date)}
-                                            aria-label={date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                                             aria-pressed={isSelected}
                                             className={`aspect-square rounded-lg flex flex-col items-center justify-center relative border transition-colors duration-150 group
                                                 ${isSelected ? 'border-teal-300/50 bg-teal-500 text-slate-950' : 'bg-slate-950 text-slate-300 hover:bg-slate-800 border-slate-800'}
@@ -622,21 +688,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                             </div>
                         </div>
 
-                        {/* Quick Stats for Month */}
-                        <div className="grid grid-cols-2 gap-3 md:gap-4">
-                            <div
-                                className="bg-slate-900 border border-slate-800 rounded-lg p-3 md:p-4"
-                            >
-                                <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold mb-1">Total Events</div>
-                                <div className="text-xl md:text-2xl font-bold text-white">{virtualSlots.length}</div>
-                            </div>
-                            <div
-                                className="bg-slate-900 border border-slate-800 rounded-lg p-3 md:p-4"
-                            >
-                                <div className="text-slate-500 text-[10px] md:text-xs uppercase font-bold mb-1">Booked Spots</div>
-                                <div className="text-xl md:text-2xl font-bold text-teal-300">{virtualSlots.reduce((a, b) => a + b.bookedCount, 0)}</div>
-                            </div>
-                        </div>
+                        {/* Quick Stats for Calendar Window */}
                     </div>
 
                     {/* Daily Agenda - Now visible on mobile */}
@@ -649,7 +701,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                 <p className="text-slate-500 text-xs md:text-sm mt-1">{selectedDaySlots.length} events scheduled</p>
                             </div>
                             {can('workshops.manage') && (
-                                <button onClick={handleCreateNew} className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-colors">
+                                <button aria-label="New workshop" onClick={handleCreateNew} className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition-colors">
                                     <Plus size={16} /> <span className="hidden md:inline">New workshop</span>
                                 </button>
                             )}
@@ -757,7 +809,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                             <select
                                                                 value={booking.status}
                                                                 onChange={(e) => handleStatusUpdate(booking.id, e.target.value as Booking['status'])}
-                                                                disabled={savingBookingIds.includes(booking.id) || booking.status === 'converted'}
+                                                                disabled={!can('workshops.manage') || savingBookingIds.includes(booking.id) || booking.status === 'converted'}
                                                                 className={`bg-slate-900 text-[10px] font-bold uppercase rounded px-2 py-1 border border-slate-800 outline-none cursor-pointer ${booking.status === 'confirmed' ? 'text-emerald-400' :
                                                                     booking.status === 'attended' ? 'text-blue-400' :
                                                                         'text-slate-500'
@@ -814,8 +866,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                         </button>
                     )}
 
-                    {workshopTemplates.map(template => (
-                        <div key={template.id} className="group relative flex min-h-[360px] flex-col overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900 shadow-[0_18px_45px_rgba(2,8,23,0.16)] transition-all hover:-translate-y-0.5 hover:border-teal-300/30">
+                    {visibleTemplates.length === 0 && <p role="status" className="edu-workshops-v1__empty">{workspaceSearch ? 'No workshop matches this search.' : 'No workshop templates yet. Create a workshop to plan your first session.'}</p>}
+                    {visibleTemplates.map(template => (
+                        <div key={template.id} className="edu-workshops-v1__template group relative flex min-h-[360px] flex-col overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900 shadow-[0_18px_45px_rgba(2,8,23,0.16)] transition-all hover:-translate-y-0.5 hover:border-teal-300/30">
                             <div className="relative aspect-[1.91/1] overflow-hidden border-b border-slate-800 bg-slate-950">
                                 <img
                                     src={getWorkshopOgImageUrl(template.imageUrl)}
@@ -834,7 +887,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                     <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Social invitation</p>
                                     <h3 className="mt-1 truncate text-lg font-black tracking-[-0.025em] text-white" title={template.title}>{template.title}</h3>
                                 </div>
-                                <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex gap-1 opacity-100">
                                     <button onClick={() => openBookingPreview(template)} disabled={template.isActive === false} className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-400 hover:border-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-35" title={template.isActive !== false ? 'Open parent booking page' : 'Activate before previewing'}><ExternalLink size={14} /></button>
                                     {can('workshops.manage') && (
                                         <>
@@ -845,7 +898,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                 </div>
                             </div>
 
-                            <button type="button" className="p-5 flex-1 cursor-pointer text-left" onClick={() => setViewingBookingsTemplateId(template.id)}>
+                            <button type="button" className="p-5 flex-1 cursor-pointer text-left" onClick={() => { setHistorySearch(''); setViewingBookingsTemplateId(template.id); }}>
                                 <p className="text-sm text-slate-400 line-clamp-3 mb-4">{template.description}</p>
                                 <div className="space-y-2 text-sm text-slate-300">
                                     <div className="flex items-center gap-3"><Clock size={16} className="text-slate-500" /> {template.duration} mins</div>
@@ -857,7 +910,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                             </button>
 
                             <div className="grid grid-cols-[1fr_auto] gap-2 border-t border-slate-800 bg-slate-950 p-3">
-                                <button onClick={() => void shareWorkshopOnWhatsApp(template)} disabled={template.isActive === false} className="flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 text-xs font-black text-[#07140b] transition-colors hover:bg-[#4ADF7F] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500">
+                                <button onClick={() => void shareWorkshopOnWhatsApp(template)} disabled={template.isActive === false} className="edu-workshops-v1__share flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 text-xs font-black text-[#07140b] transition-colors hover:bg-[#4ADF7F] disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500">
                                     {template.isActive !== false ? <MessageCircle size={15} /> : <PauseCircle size={15} />} {template.isActive !== false ? 'Share on WhatsApp' : 'Booking paused'}
                                 </button>
                                 <button onClick={() => void copyLink(template)} disabled={template.isActive === false} aria-label={copiedTemplateId === template.id ? 'Booking link copied' : 'Copy booking link'} title={copiedTemplateId === template.id ? 'Copied' : 'Copy booking link'} className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-300 transition-colors hover:border-teal-300/50 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-35">
@@ -870,22 +923,22 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             )}
 
             {/* Template Modal */}
-            <Modal isOpen={isTemplateModalOpen} onClose={() => !isSavingTemplate && setIsTemplateModalOpen(false)} title={editingTemplateId ? 'Edit workshop template' : 'Create workshop template'} size="lg">
-                <form onSubmit={handleSaveTemplate} className="space-y-6">
+            <Modal designSystem={showEducationProgramsV1} isOpen={isTemplateModalOpen} onClose={() => !isSavingTemplate && setIsTemplateModalOpen(false)} title={editingTemplateId ? 'Edit workshop template' : 'Create workshop template'} size="lg">
+                <form onSubmit={handleSaveTemplate} className="edu-workshops-v1__template-form space-y-6">
                     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
                         <div className="space-y-5">
                             <div>
-                                <label className="mb-1.5 block text-xs font-bold text-slate-300">Workshop title</label>
-                                <input required className="w-full border p-3 text-white" value={templateForm.title} onChange={e => setTemplateForm({ ...templateForm, title: e.target.value })} placeholder="e.g. Build your first robot" />
+                                <label htmlFor="workshop-title" className="mb-1.5 block text-xs font-bold text-slate-300">Workshop title</label>
+                                <input id="workshop-title" required className="w-full border p-3 text-white" value={templateForm.title} onChange={e => setTemplateForm({ ...templateForm, title: e.target.value })} placeholder="e.g. Build your first robot" />
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-xs font-bold text-slate-300">Invitation description</label>
-                                <textarea required className="h-28 w-full resize-none border p-3 text-white" value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="Tell parents what their child will make, learn, and take home." />
+                                <label htmlFor="workshop-description" className="mb-1.5 block text-xs font-bold text-slate-300">Invitation description</label>
+                                <textarea id="workshop-description" required className="h-28 w-full resize-none border p-3 text-white" value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="Tell parents what their child will make, learn, and take home." />
                                 <p className="mt-1.5 text-[11px] leading-5 text-slate-500">This text appears on the booking page and inside the WhatsApp invitation.</p>
                             </div>
                             <div>
-                                <label className="mb-1.5 block text-xs font-bold text-slate-300">Social preview image</label>
-                                <input type="url" className="w-full border p-3 text-white" value={templateForm.imageUrl || ''} onChange={e => setTemplateForm({ ...templateForm, imageUrl: e.target.value })} placeholder="https://example.com/workshop-cover.jpg" />
+                                <label htmlFor="workshop-image" className="mb-1.5 block text-xs font-bold text-slate-300">Social preview image</label>
+                                <input id="workshop-image" type="url" className="w-full border p-3 text-white" value={templateForm.imageUrl || ''} onChange={e => setTemplateForm({ ...templateForm, imageUrl: e.target.value })} placeholder="https://example.com/workshop-cover.jpg" />
                                 <p className="mt-1.5 text-[11px] leading-5 text-slate-500">Use a public landscape image. Edufy uses the MakerLab workshop cover when this is empty.</p>
                             </div>
                         </div>
@@ -912,9 +965,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                     </div>
 
                     <div className="grid gap-4 sm:grid-cols-3">
-                        <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Duration</label><div className="relative"><input type="number" required min={15} max={480} step={5} className="w-full border p-3 pr-14 text-white" value={templateForm.duration} onChange={e => setTemplateForm({ ...templateForm, duration: Number(e.target.value) })} /><span className="pointer-events-none absolute right-3 top-3.5 text-xs text-slate-500">min</span></div></div>
-                        <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Places per session</label><input type="number" required min={1} max={200} step={1} className="w-full border p-3 text-white" value={templateForm.capacityPerSlot} onChange={e => setTemplateForm({ ...templateForm, capacityPerSlot: Number(e.target.value) })} /></div>
-                        <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Booking for</label><select className="w-full border p-3 text-white" value={templateForm.targetAudience} onChange={e => setTemplateForm({ ...templateForm, targetAudience: e.target.value as WorkshopTemplate['targetAudience'] })}><option value="Child">A child (by parent)</option><option value="School">A school</option><option value="Teacher">A teacher</option><option value="Professional">A professional</option></select></div>
+                        <div><label htmlFor="workshop-duration" className="mb-1.5 block text-xs font-bold text-slate-300">Duration</label><div className="relative"><input id="workshop-duration" type="number" required min={15} max={480} step={5} className="w-full border p-3 pr-14 text-white" value={templateForm.duration} onChange={e => setTemplateForm({ ...templateForm, duration: Number(e.target.value) })} /><span className="pointer-events-none absolute right-3 top-3.5 text-xs text-slate-500">min</span></div></div>
+                        <div><label htmlFor="workshop-capacity" className="mb-1.5 block text-xs font-bold text-slate-300">Places per session</label><input id="workshop-capacity" type="number" required min={1} max={200} step={1} className="w-full border p-3 text-white" value={templateForm.capacityPerSlot} onChange={e => setTemplateForm({ ...templateForm, capacityPerSlot: Number(e.target.value) })} /></div>
+                        <div><label htmlFor="workshop-audience" className="mb-1.5 block text-xs font-bold text-slate-300">Booking for</label><select id="workshop-audience" className="w-full border p-3 text-white" value={templateForm.targetAudience} onChange={e => setTemplateForm({ ...templateForm, targetAudience: e.target.value as WorkshopTemplate['targetAudience'] })}><option value="Child">A child (by parent)</option><option value="School">A school</option><option value="Teacher">A teacher</option><option value="Professional">A professional</option></select></div>
                     </div>
 
                     <fieldset>
@@ -949,15 +1002,15 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                     );
                                 })}
                             </div>
-                            <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Start time</label><input type="time" required className="w-full border p-3 text-white sm:max-w-xs" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
+                            <div><label htmlFor="workshop-start-time" className="mb-1.5 block text-xs font-bold text-slate-300">Start time</label><input id="workshop-start-time" type="time" required className="w-full border p-3 text-white sm:max-w-xs" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
                             {normalizeWorkshopDays(templateForm.recurrencePattern?.days).length > 0 && <p className="rounded-xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-xs leading-5 text-slate-300">{getWorkshopScheduleLabel({ recurrenceType: 'weekly', recurrencePattern: templateForm.recurrencePattern || {} })}</p>}
                         </fieldset>
                     )}
 
                     {templateForm.recurrenceType === 'one-time' && (
                         <div className="grid gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:grid-cols-2 sm:p-5">
-                            <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Workshop date</label><input type="date" required min={toLocalDateKey(new Date())} className="w-full border p-3 text-white" value={templateForm.recurrencePattern?.date} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, date: e.target.value } })} />{templateForm.recurrencePattern?.date && <p className="mt-1.5 text-xs font-semibold text-teal-300">{formatWorkshopDate(templateForm.recurrencePattern.date)}</p>}</div>
-                            <div><label className="mb-1.5 block text-xs font-bold text-slate-300">Start time</label><input type="time" required className="w-full border p-3 text-white" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
+                            <div><label htmlFor="workshop-date" className="mb-1.5 block text-xs font-bold text-slate-300">Workshop date</label><input id="workshop-date" type="date" required min={toLocalDateKey(new Date())} className="w-full border p-3 text-white" value={templateForm.recurrencePattern?.date} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, date: e.target.value } })} />{templateForm.recurrencePattern?.date && <p className="mt-1.5 text-xs font-semibold text-teal-300">{formatWorkshopDate(templateForm.recurrencePattern.date)}</p>}</div>
+                            <div><label htmlFor="workshop-start-time" className="mb-1.5 block text-xs font-bold text-slate-300">Start time</label><input id="workshop-start-time" type="time" required className="w-full border p-3 text-white" value={templateForm.recurrencePattern?.time} onChange={e => setTemplateForm({ ...templateForm, recurrencePattern: { ...templateForm.recurrencePattern, time: e.target.value } })} /></div>
                         </div>
                     )}
 
@@ -976,13 +1029,15 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             </Modal>
 
             {/* View Bookings Modal */}
-            <Modal isOpen={!!viewingBookingsTemplateId} onClose={() => setViewingBookingsTemplateId(null)} title="Workshop History">
-                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar">
+            <Modal designSystem={showEducationProgramsV1} isOpen={!!viewingBookingsTemplateId} onClose={() => setViewingBookingsTemplateId(null)} title="Workshop History">
+                <div className="edu-workshops-v1__history space-y-4">
+                    <label className="edu-workshops-v1__history-search">Find a booking<input type="search" value={historySearch} onChange={event => setHistorySearch(event.target.value)} placeholder="Learner, parent or phone" /></label>
+                    {templateBookings.length > 0 && visibleHistory.length === 0 && <p role="status">No booking matches this search.</p>}
                     {templateBookings.length === 0 ? (
                         <div className="text-center py-8 text-slate-500">No bookings found for this workshop.</div>
                     ) : (
                         <div className="space-y-3">
-                            {templateBookings.map(b => {
+                            {visibleHistory.map(b => {
                                 const slot = workshopSlots.find(s => s.id === b.workshopSlotId);
                                 return (
                                     <div key={b.id} className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex justify-between items-center">

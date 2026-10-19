@@ -92,7 +92,7 @@ export const StepReviewModal: React.FC<StepReviewModalProps> = ({
 
     return (
         <>
-            <Modal isOpen={isOpen} onClose={onClose} title="">
+            <Modal designSystem isOpen={isOpen} onClose={onClose} title="Review project step">
                 <div className="max-w-3xl space-y-5 text-slate-200">
                     {/* Header */}
                     <div>

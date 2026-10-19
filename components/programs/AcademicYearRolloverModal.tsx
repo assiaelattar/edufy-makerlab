@@ -151,11 +151,11 @@ export const AcademicYearRolloverModal = ({
   const safeClose = isSaving ? () => undefined : onClose;
 
   return (
-    <Modal isOpen={isOpen} onClose={safeClose} title="Prepare a new academic year" size="lg">
+    <Modal designSystem isOpen={isOpen} onClose={safeClose} title="Prepare a new academic year" size="lg">
       <form
         id={formId}
         onSubmit={handleSubmit}
-        className="space-y-4"
+        className="program-rollover-form space-y-4"
         aria-busy={isSaving}
         noValidate
       >
@@ -349,7 +349,7 @@ export const AcademicYearRolloverModal = ({
           </div>
         </div>
 
-        <div className="sticky -bottom-5 z-10 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-white/10 bg-[#0F1B2D]/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+        <div className="program-dialog-footer sticky -bottom-5 z-10 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-white/10 bg-[#0F1B2D]/95 px-5 py-4 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <p className="text-center text-xs text-slate-500 sm:text-left">
             {selectedCount > 0 ? `${selectedCount} setup${selectedCount === 1 ? '' : 's'} ready to prepare` : 'Choose the setups to carry forward'}
           </p>

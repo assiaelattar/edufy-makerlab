@@ -1,0 +1,63 @@
+/* Pulse Classes: an itinerary for today and a compact group directory. */
+.edu-classes-pulse .atlas-command-header { min-height:0; padding:0 !important; }
+body .edu-v1.edu-classes-pulse .atlas-command-header[data-edu-density='compact'] h2 { font-size:32px !important; font-weight:750; }
+.edu-classes-pulse .atlas-command-header__icon { display:none !important; }
+.edu-classes-pulse :is(button,input):focus-visible { outline:3px solid var(--edu-brand); outline-offset:3px; }
+.edu-classes-pulse .atlas-action { min-height:44px; }
+.edu-classes-pulse .pulse-classes-today { border:1px solid var(--edu-border); border-radius:18px; background:var(--edu-surface); overflow:hidden; }
+.pulse-classes-section-title { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 20px; }
+.pulse-classes-section-title span { color:var(--edu-muted); font-size:11px; }
+.pulse-classes-section-title h2 { color:var(--edu-ink); font-size:18px; font-weight:750; letter-spacing:-.03em; }
+.pulse-classes-section-title b { color:var(--edu-muted); font-size:12px; font-weight:500; }
+.pulse-classes-timeline { padding:0 20px 8px; }
+.pulse-classes-timeline button { display:grid; grid-template-columns:80px minmax(0,1fr) auto; width:100%; align-items:center; gap:16px; padding:14px 0; border-top:1px solid var(--edu-border); color:var(--edu-ink); text-align:left; }
+.pulse-classes-timeline time { align-self:stretch; display:flex; align-items:center; border-right:2px solid var(--edu-brand-soft); font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:600; }
+.pulse-classes-timeline strong,.pulse-classes-timeline small { display:block; }
+.pulse-classes-timeline strong { font-size:15px; font-weight:700; }
+.pulse-classes-timeline small { margin-top:3px; color:var(--edu-muted); font-size:12px; }
+.pulse-classes-open { display:flex; gap:8px; align-items:center; color:var(--edu-info); font-size:12px; }
+.pulse-classes-timeline button:hover { background:var(--edu-surface-muted); }
+.edu-classes-pulse .pulse-classes-facts { display:flex; flex-wrap:wrap; gap:12px 32px; padding:14px 0; border-block:1px solid var(--edu-border); }
+.pulse-classes-facts > div { display:flex; gap:8px; align-items:baseline; }
+.pulse-classes-facts dt { font-size:12px; color:var(--edu-muted); }
+.pulse-classes-facts dd { color:var(--edu-ink); font-weight:700; font-size:14px; }
+.edu-classes-pulse .pulse-classes-directory { border:1px solid var(--edu-border); border-radius:18px; padding:18px 20px 4px; background:var(--edu-surface); }
+.edu-classes-pulse .pulse-classes-directory .atlas-section-header { border:0; padding-bottom:0; }
+.edu-classes-pulse .pulse-classes-directory .atlas-section-header p { display:none; }
+.edu-classes-pulse .pulse-classes-groups { display:flex; flex-direction:column; gap:0; }
+.edu-classes-pulse .pulse-classes-group { display:grid; grid-template-columns:minmax(0,1fr) minmax(150px,.75fr) auto; align-items:center; gap:20px; min-height:88px; padding:14px 0; border:0; border-top:1px solid var(--edu-border); border-radius:0; }
+.edu-classes-pulse .pulse-classes-group > div:nth-child(2) { display:flex; flex-wrap:wrap; gap:8px 16px; margin:0; font-size:12px; }
+.edu-classes-pulse .pulse-classes-group > div:nth-child(2) > div { margin:0; }
+.edu-classes-pulse .pulse-classes-group > div:first-child > svg { display:none; }
+.edu-classes-pulse .pulse-classes-group > div:last-child { margin:0; padding:0; border:0; gap:12px; }
+.edu-classes-pulse .pulse-classes-group > div:last-child > span:first-child { display:none; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .pulse-classes-group { background:var(--edu-surface) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .pulse-classes-group:hover { background:var(--edu-surface-muted) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .atlas-toolbar { background:transparent !important; padding:0 !important; border:0 !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .atlas-toolbar button { color:var(--edu-muted) !important; background:var(--edu-surface) !important; border-color:var(--edu-border) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .atlas-toolbar button[aria-pressed='true'] { color:var(--edu-info) !important; background:var(--edu-brand-soft) !important; border-color:var(--edu-brand) !important; }
+.edu-classes-pulse .atlas-toolbar input { min-height:44px; }
+.edu-classes-pulse .edu-classes-v1__mobile-roster { display:none; }
+@media(max-width:800px) {
+ .edu-classes-pulse .atlas-command-header__actions { gap:8px; }
+ .pulse-classes-timeline { padding-inline:14px; }
+ .pulse-classes-section-title { padding:14px; }
+ .pulse-classes-timeline button { grid-template-columns:62px minmax(0,1fr); gap:12px; }
+ .pulse-classes-timeline time { font-size:14px; }
+ .pulse-classes-open { grid-column:2; font-size:11px; }
+ .edu-classes-pulse .pulse-classes-directory { padding:14px 14px 2px; }
+ .edu-classes-pulse .pulse-classes-group { grid-template-columns:minmax(0,1fr) auto; gap:10px; }
+ .edu-classes-pulse .pulse-classes-group > div:nth-child(2) { grid-row:2; grid-column:1 / -1; }
+ .edu-classes-pulse .pulse-classes-group > div:last-child { grid-row:1; grid-column:2; }
+ .edu-classes-pulse .pulse-classes-facts { gap:10px 18px; }
+ .edu-classes-pulse .edu-classes-v1__mobile-roster { display:grid; }
+ .edu-classes-pulse section > .overflow-x-auto { display:none; }
+}
+
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .pulse-classes-group > div:last-child > span { color:var(--edu-muted) !important; background:var(--edu-surface-muted) !important; border-color:var(--edu-border) !important; }
+
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .atlas-action { border-radius:10px !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .atlas-toolbar input { color:var(--edu-ink) !important; background:var(--edu-surface-muted) !important; border-color:var(--edu-border) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .pulse-classes-group > div:first-child span { color:var(--edu-muted) !important; }
+
+.edu-classes-pulse .atlas-toolbar input::placeholder { color:var(--edu-muted) !important; opacity:1; }

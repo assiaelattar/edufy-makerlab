@@ -4,6 +4,7 @@ import { LucideIcon } from 'lucide-react';
 type AtlasTone = 'teal' | 'amber' | 'blue' | 'red' | 'emerald' | 'slate';
 
 interface AtlasCommandHeaderProps {
+    density?: 'default' | 'compact';
     eyebrow: string;
     title: string;
     description?: string;
@@ -13,6 +14,7 @@ interface AtlasCommandHeaderProps {
 }
 
 export const AtlasCommandHeader = ({
+    density = 'default',
     eyebrow,
     title,
     description,
@@ -20,7 +22,7 @@ export const AtlasCommandHeader = ({
     badges,
     actions
 }: AtlasCommandHeaderProps) => (
-    <div className="atlas-command-header atlas-surface-raised relative overflow-hidden border atlas-panel-border">
+    <div data-edu-density={density} className="atlas-command-header atlas-surface-raised relative overflow-hidden border atlas-panel-border">
         <div className="atlas-command-header__signal" aria-hidden="true" />
         <div className="atlas-command-header__body flex flex-col gap-5 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-start gap-4">

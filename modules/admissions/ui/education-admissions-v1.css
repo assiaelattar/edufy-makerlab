@@ -13,6 +13,15 @@
   container-type: inline-size;
 }
 
+/* The family decision leads; counts remain supporting context. */
+.edu-admissions-v1__priority { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 24px; border: 1px solid var(--edu-border); border-radius: 22px; color: var(--edu-ink); background: linear-gradient(110deg, var(--edu-brand-soft), var(--edu-surface) 72%); box-shadow: var(--edu-shadow-sm); }
+.edu-admissions-v1__priority > div { min-width: 0; }
+.edu-admissions-v1__priority-label { color: var(--edu-brand); font-size: 10px; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.edu-admissions-v1__priority h2 { margin: 5px 0 0; color: var(--edu-ink); font-size: clamp(20px, 2vw, 28px); font-weight: 850; letter-spacing: -.035em; line-height: 1.13; }
+.edu-admissions-v1__priority p { margin: 7px 0 0; color: var(--edu-muted); font-size: 12px; line-height: 1.55; }
+.edu-admissions-v1__priority button { display: inline-flex; min-height: 44px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; border: 0; border-radius: 12px; color: var(--edu-on-brand); background: var(--edu-brand); font-size: 12px; font-weight: 800; }
+.edu-admissions-v1__priority button:focus-visible { outline: 3px solid var(--edu-brand); outline-offset: 3px; }
+
 .edu-admissions-v1 button,
 .edu-admissions-v1 input { font: inherit; }
 
@@ -423,4 +432,78 @@
   .edu-admissions-v1 *,
   .edu-admissions-v1 *::before,
   .edu-admissions-v1 *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+
+/* School themes: neutral record surfaces, one blue action, warm only for repair. */
+.edu-admissions-v1__status-line { margin-top: 14px; background: var(--edu-border); }
+.edu-admissions-v1__status-line > div,
+.edu-admissions-v1__status-line > p { background: var(--edu-surface); }
+.edu-admissions-v1__status-line > p { color: var(--edu-muted); }
+.edu-admissions-v1__status-line > div[data-attention='true'] { background: var(--edu-surface-muted); }
+.edu-admissions-v1__view-tabs { border-color: var(--edu-border); background: var(--edu-surface); }
+.edu-admissions-v1__view-tabs button b,
+.edu-admissions-v1__queue-head > b,
+.edu-admissions-v1__search button { color: var(--edu-ink); background: var(--edu-surface-muted); }
+.edu-admissions-v1__view-tabs button[aria-selected='true'],
+.edu-admissions-v1__stage-grid button[aria-pressed='true'] { color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-admissions-v1__view-tabs button[aria-selected='true'] b,
+.edu-admissions-v1__stage-grid button[aria-pressed='true'] b { color: var(--edu-ink); background: var(--edu-surface); }
+.edu-admissions-v1__queue,
+.edu-admissions-v1__passport { border-color: var(--edu-border); color: var(--edu-ink); background: var(--edu-surface); }
+.edu-admissions-v1__queue-head > div > span { color: var(--edu-brand); }
+.edu-admissions-v1__honesty-note { border-color: var(--edu-border); color: var(--edu-ink); background: var(--edu-brand-soft); }
+.edu-admissions-v1__honesty-note span { color: var(--edu-muted); }
+.edu-admissions-v1__search { border-color: var(--edu-border); background: var(--edu-surface); }
+.edu-admissions-v1__search:focus-within { border-color: var(--edu-brand); box-shadow: 0 0 0 3px var(--edu-brand-soft); }
+.edu-admissions-v1__search input::placeholder { color: var(--edu-subtle); }
+.edu-admissions-v1__stage-grid button,
+.edu-admissions-v1__all-controls :is(select, button),
+.edu-admissions-v1__review-filter button,
+.edu-admissions-v1__case { border-color: var(--edu-border); color: var(--edu-ink); background: var(--edu-surface-muted); }
+.edu-admissions-v1__case[data-selected='true'] { border-color: var(--edu-brand); color: var(--edu-ink); background: var(--edu-brand-soft); }
+.edu-admissions-v1__case:hover { border-color: var(--edu-brand); }
+.edu-admissions-v1__case[data-selected='true'] :is(.edu-admissions-v1__case-copy small, .edu-admissions-v1__case-copy em, .edu-admissions-v1__case-state small) { color: var(--edu-muted); }
+.edu-admissions-v1__case-state b,
+.edu-admissions-v1__case[data-selected='true'] .edu-admissions-v1__case-state b { color: var(--edu-brand); background: var(--edu-surface); }
+.edu-admissions-v1__avatar { color: var(--edu-brand); background: var(--edu-surface-strong); }
+.edu-admissions-v1__passport-top { color: var(--edu-ink); background: var(--edu-brand-soft); }
+.edu-admissions-v1__passport-top::after { opacity: .28; background: var(--edu-brand); }
+.edu-admissions-v1__passport-top > span,
+.edu-admissions-v1__passport-top p { color: var(--edu-muted); }
+.edu-admissions-v1__passport-top i,
+.edu-admissions-v1__passport-top > b { color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-admissions-v1__passport-top > b[data-repair='true'] { color: #172441; }
+.edu-admissions-v1__next-action { background: var(--edu-brand-soft); }
+.edu-admissions-v1__next-action > span { color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-admissions-v1__next-action em { color: var(--edu-muted); }
+.edu-admissions-v1__journey li[data-state='complete'] { color: var(--edu-muted); }
+.edu-admissions-v1__journey li[data-state='complete'] i,
+.edu-admissions-v1__journey li[data-state='current'] i { color: var(--edu-on-brand); background: var(--edu-brand); box-shadow: 0 0 0 2px var(--edu-brand-soft); }
+.edu-admissions-v1__verified { border-color: var(--edu-border); color: var(--edu-ink); background: var(--edu-surface-muted); }
+.edu-admissions-v1__repairs { border-color: var(--edu-border); color: var(--edu-ink); background: var(--edu-surface-muted); }
+.edu-admissions-v1__repairs ul { color: var(--edu-muted); }
+.edu-admissions-v1__verified span { color: var(--edu-muted); }
+.edu-admissions-v1__evidence li > i { color: var(--edu-brand); background: var(--edu-brand-soft); }
+.edu-admissions-v1__evidence li > i[data-kind='booking'],
+.edu-admissions-v1__evidence li > i[data-kind='enrollment'] { color: var(--edu-brand); background: var(--edu-brand-soft); }
+.edu-admissions-v1__whatsapp-action { border-color: var(--edu-border); color: var(--edu-ink); background: var(--edu-surface-muted); }
+.edu-admissions-v1__whatsapp-action small { color: var(--edu-muted); }
+.edu-admissions-wa__panel { border-color: var(--edu-border); }
+.edu-admissions-wa__panel > header { color: var(--edu-ink); background: var(--edu-brand-soft); }
+.edu-admissions-wa__panel > header p { color: var(--edu-muted); }
+.edu-admissions-wa__panel > header > div > span { color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-admissions-wa__panel > header > button { color: var(--edu-ink); border-color: var(--edu-border); background: var(--edu-surface); }
+.edu-admissions-wa button { color: var(--edu-ink); background: var(--edu-surface-muted); }
+.edu-admissions-wa button[aria-pressed='true'][data-state='unknown'],
+.edu-admissions-wa__message-actions .primary,
+.edu-admissions-wa__response > button { color: var(--edu-on-brand); background: var(--edu-brand); }
+.edu-admissions-wa select,
+.edu-admissions-wa textarea,
+.edu-admissions-wa__history li { color: var(--edu-ink); background: var(--edu-surface); }
+.edu-admissions-wa__history { background: var(--edu-surface-muted); }
+
+@container (max-width: 580px) {
+  .edu-admissions-v1__priority { align-items: stretch; flex-direction: column; padding: 19px; }
+  .edu-admissions-v1__priority button { width: 100%; }
+  .edu-admissions-v1__status-line > div { min-height: 58px; }
 }

@@ -15,8 +15,8 @@ interface ProjectFactoryModalProps {
     templateForm: Partial<ProjectTemplate>;
     setTemplateForm: (form: Partial<ProjectTemplate>) => void;
     handleSaveTemplate: (e: React.FormEvent) => Promise<void>;
-    activeModalTab: 'details' | 'resources' | 'targeting' | 'publishing';
-    setActiveModalTab: (tab: 'details' | 'resources' | 'targeting' | 'publishing') => void;
+    activeModalTab: 'details' | 'resources' | 'workflow' | 'targeting' | 'publishing';
+    setActiveModalTab: (tab: 'details' | 'resources' | 'workflow' | 'targeting' | 'publishing') => void;
     availableGrades: Grade[];
     availableGroups: string[];
     processTemplates: any[]; // ProcessTemplate[]
@@ -41,20 +41,20 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
         }
     }, [isOpen, availableGrades, availableGroups]);
 
-    const tabs = ['details', 'resources', 'workflow', 'targeting', 'publishing'];
+    const tabs = ['details', 'resources', 'workflow', 'targeting', 'publishing'] as const;
     const currentTabIndex = tabs.indexOf(activeModalTab);
     const isFirstTab = currentTabIndex === 0;
     const isLastTab = currentTabIndex === tabs.length - 1;
 
     const handleNext = () => {
         if (!isLastTab) {
-            setActiveModalTab(tabs[currentTabIndex + 1] as any);
+            setActiveModalTab(tabs[currentTabIndex + 1]);
         }
     };
 
     const handlePrevious = () => {
         if (!isFirstTab) {
-            setActiveModalTab(tabs[currentTabIndex - 1] as any);
+            setActiveModalTab(tabs[currentTabIndex - 1]);
         }
     };
 
@@ -79,23 +79,25 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "Edit project" : "Create project"} size="xl">
-            <form onSubmit={handleSaveTemplate} className="flex flex-col h-[80vh] md:h-auto">
+        <Modal designSystem isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "Edit project" : "Create project"} size="xl">
+            <form onSubmit={handleSaveTemplate} className="edu-learning-project-form flex min-h-0 flex-col">
                 {/* Header with Import */}
-                <div className="flex shrink-0 flex-col gap-2 border-b border-white/10 bg-slate-950/80 px-4 pt-2 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-                    <div className="flex overflow-x-auto no-scrollbar">
+                <div className="edu-learning-project-toolbar flex shrink-0 flex-col gap-2 border-b border-white/10 bg-slate-950/80 px-4 pt-2 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <div className="edu-learning-project-tabs flex overflow-x-auto no-scrollbar" role="tablist" aria-label="Project setup steps">
                         {tabs.map(tab => (
                             <button
                                 key={tab}
                                 type="button"
-                                onClick={() => setActiveModalTab(tab as any)}
+                                role="tab"
+                                aria-selected={activeModalTab === tab}
+                                onClick={() => setActiveModalTab(tab)}
                                 className={`min-h-10 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2 text-sm font-bold capitalize transition-colors ${activeModalTab === tab ? 'border-teal-400 bg-teal-400/10 text-teal-200' : 'border-transparent text-slate-500 hover:bg-white/[0.05] hover:text-white'}`}
                             >
                                 {tab}
                             </button>
                         ))}
                     </div>
-                    <div className="flex gap-2 ml-4">
+                    <div className="edu-learning-project-toolbar-actions flex gap-2 sm:ml-4">
                         <input
                             type="file"
                             id="import-json"
@@ -133,7 +135,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto bg-slate-900 p-4 custom-scrollbar sm:p-6">
+                <div className="edu-learning-project-content flex-1 overflow-y-auto bg-slate-900 p-4 custom-scrollbar sm:p-6">
                     {/* DETAILS TAB */}
                     {activeModalTab === 'details' && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
@@ -533,8 +535,8 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                     )}
                 </div>
 
-                <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 bg-slate-950/90 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                    <div className="flex gap-2">
+                <div className="edu-learning-project-footer flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 bg-slate-950/90 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                    <div className="edu-learning-project-footer-secondary flex gap-2">
                         <button type="button" onClick={onClose} className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold transition-colors">Cancel</button>
                         {editingTemplateId && onArchive && (
                             <button

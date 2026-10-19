@@ -1,9 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
 import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Filter, MessageCircle, RotateCcw, Search, ShieldCheck, UserRound, Users, XCircle } from 'lucide-react';
 import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import '../components/education-ui/education-system-v1.css';
 import './school-day/education-school-day-v1.css';
+import './school-day/education-attendance-pulse.css';
+import './school-day/education-attendance-playful.css';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -11,19 +14,26 @@ import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
 import { findMembershipRenewalsDue, isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
 import { getScheduledSlotForWeekday } from '../utils/schoolSchedule';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 
 export const AbsenceView = () => {
     const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { enrollments, students, programs, attendanceRecords, navigateTo } = useAppContext();
+    const { enrollments, students, programs, attendanceRecords, attendanceLoading, attendanceError, navigateTo } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const today = format(new Date(), 'yyyy-MM-dd');
-    const [selectedDate, setSelectedDate] = useState(today);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectedGroup, setSelectedGroup] = useState('All');
+    const workspaceScope = `attendance:${currentOrganization?.id || 'none'}:${userProfile?.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
+    const [selectedDate, setSelectedDate] = useWorkspaceViewState(workspaceScope, 'selectedDate', today);
+    const [searchQuery, setSearchQuery] = useWorkspaceViewState(workspaceScope, 'searchQuery', '');
+    const [selectedGroup, setSelectedGroup] = useWorkspaceViewState(workspaceScope, 'selectedGroup', 'All');
     const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
     const [isConfirmingSession, setIsConfirmingSession] = useState(false);
     const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+    const operationPending = useRef(false);
+    const [pendingStatuses, setPendingStatuses] = useState<Record<string, AttendanceRecord['status'] | 'unmarked'>>({});
+    const [saveFeedback, setSaveFeedback] = useState<{ date: string; text: string; error?: boolean } | null>(null);
+    const isWorking = savingRecordId !== null || isConfirmingSession;
 
     const dayOfWeek = useMemo(() => {
         return format(parseISO(selectedDate), 'EEEE');
@@ -112,10 +122,14 @@ export const AbsenceView = () => {
 
     const getStatus = (studentId: string, timeSlot: string) => {
         const recordId = getRecordId(studentId, timeSlot);
+        // Local Firestore snapshots may arrive before acknowledgement. Keep this
+        // operation's previous status visible until its existing write completes.
+        if (pendingStatuses[recordId]) return pendingStatuses[recordId];
         return attendanceRecords.find(record => record.id === recordId)?.status || 'unmarked';
     };
 
     const handleMarkAttendance = async (studentId: string, enrollmentId: string, status: AttendanceRecord['status'], timeSlot: string) => {
+        if (operationPending.current || attendanceLoading || attendanceError) return;
         if (!db || !currentOrganization?.id) {
             await showAlert('Organization required', 'Select an organization before marking student attendance.', 'warning');
             return;
@@ -127,6 +141,9 @@ export const AbsenceView = () => {
 
         const recordId = getRecordId(studentId, timeSlot);
         const existingRecord = attendanceRecords.find(record => record.id === recordId);
+        operationPending.current = true;
+        setPendingStatuses({ [recordId]: getStatus(studentId, timeSlot) });
+        setSaveFeedback(null);
         setSavingRecordId(recordId);
 
         try {
@@ -142,7 +159,10 @@ export const AbsenceView = () => {
                 updatedAt: serverTimestamp()
             }, { merge: true });
             setSelectedRecordIds(previous => previous.filter(id => id !== recordId));
+            const name = students.find(student => student.id === studentId)?.name || 'Student';
+            setSaveFeedback({ date: selectedDate, text: `${name} · ${status} saved for ${timeSlot}.` });
         } catch (error) {
+            setSaveFeedback({ date: selectedDate, text: 'Mark not saved. Check the connection and try again.', error: true });
             console.error('Error marking attendance', error);
             await showAlert(
                 'Attendance was not saved',
@@ -150,11 +170,14 @@ export const AbsenceView = () => {
                 'danger'
             );
         } finally {
+            operationPending.current = false;
+            setPendingStatuses({});
             setSavingRecordId(null);
         }
     };
 
     const handleClearAttendance = async (studentId: string, studentName: string, timeSlot: string) => {
+        if (operationPending.current || attendanceLoading || attendanceError) return;
         if (!db || !currentOrganization?.id || isFutureDate) return;
         const recordId = getRecordId(studentId, timeSlot);
         const approved = await confirm({
@@ -164,21 +187,29 @@ export const AbsenceView = () => {
             cancelText: 'Keep mark',
             variant: 'warning'
         });
-        if (!approved) return;
+        if (!approved || operationPending.current) return;
 
+        operationPending.current = true;
+        setPendingStatuses({ [recordId]: getStatus(studentId, timeSlot) });
+        setSaveFeedback(null);
         setSavingRecordId(recordId);
         try {
             await deleteDoc(doc(db, 'attendance', recordId));
             setSelectedRecordIds(previous => previous.filter(id => id !== recordId));
+            setSaveFeedback({ date: selectedDate, text: `${studentName} · mark cleared for ${timeSlot}.` });
         } catch (error) {
+            setSaveFeedback({ date: selectedDate, text: 'Mark not cleared. Check the connection and try again.', error: true });
             console.error('Error clearing attendance', error);
             await showAlert('Attendance mark was not cleared', 'The existing mark is still in place. Please try again.', 'danger');
         } finally {
+            operationPending.current = false;
+            setPendingStatuses({});
             setSavingRecordId(null);
         }
     };
 
     const handleConfirmAllPresent = async (studentsInSlot: typeof scheduledStudents, selectedOnly = false) => {
+        if (operationPending.current || attendanceLoading || attendanceError) return;
         if (!db || !currentOrganization?.id) {
             await showAlert('Organization required', 'Select an organization before confirming this session.', 'warning');
             return;
@@ -205,8 +236,11 @@ export const AbsenceView = () => {
             cancelText: 'Cancel',
             variant: 'info'
         });
-        if (!approved) return;
+        if (!approved || operationPending.current) return;
 
+        operationPending.current = true;
+        setPendingStatuses(Object.fromEntries(unmarked.map(student => [getRecordId(student.studentId, student.displayTime), 'unmarked' as const])));
+        setSaveFeedback(null);
         setIsConfirmingSession(true);
         try {
             // Firestore batches have a 500-write limit. Leave room for future
@@ -227,11 +261,16 @@ export const AbsenceView = () => {
                     });
                 });
                 await batch.commit();
+                // Acknowledged chunks can be displayed even if a later chunk fails.
+                const acknowledgedIds = new Set(unmarked.slice(offset, offset + 400).map(student => getRecordId(student.studentId, student.displayTime)));
+                setPendingStatuses(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !acknowledgedIds.has(id))));
             }
             const confirmedIds = new Set(unmarked.map(student => getRecordId(student.studentId, student.displayTime)));
             setSelectedRecordIds(previous => previous.filter(id => !confirmedIds.has(id)));
+            setSaveFeedback({ date: selectedDate, text: `${unmarked.length} attendance ${unmarked.length === 1 ? 'mark' : 'marks'} saved. Existing exceptions preserved.` });
             await showAlert('Session confirmed', `${unmarked.length} unmarked ${unmarked.length === 1 ? 'student is' : 'students are'} now marked present. Existing exceptions were preserved.`, 'success');
         } catch (error) {
+            setSaveFeedback({ date: selectedDate, text: 'Session not fully saved. Review the roster before retrying.', error: true });
             console.error('Error confirming attendance', error);
             await showAlert(
                 'Session was not confirmed',
@@ -239,6 +278,8 @@ export const AbsenceView = () => {
                 'danger'
             );
         } finally {
+            operationPending.current = false;
+            setPendingStatuses({});
             setIsConfirmingSession(false);
         }
     };
@@ -267,7 +308,7 @@ export const AbsenceView = () => {
         });
 
         return { total: allScheduledStudents.length, present, absent, late, excused, unmarked };
-    }, [allScheduledStudents, attendanceRecords, selectedDate]);
+    }, [allScheduledStudents, attendanceRecords, selectedDate, pendingStatuses]);
     const sessionCount = new Set(allScheduledStudents.map(student => student.displayTime)).size;
 
     const uniqueGroups = useMemo(() => {
@@ -289,56 +330,21 @@ export const AbsenceView = () => {
         setSelectedRecordIds([]);
     };
 
-    return (
-        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-attendance-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-attendance-v1' : undefined}>
-            <AtlasCommandHeader
-                eyebrow="Learning operations"
-                title="Student attendance"
-                description="Mark each scheduled session, surface exceptions, and contact families without leaving the roster."
-                icon={ClipboardCheck}
-                badges={isToday
-                    ? <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-1 text-[10px] font-black uppercase text-teal-200">Today</span>
-                    : isFutureDate
-                        ? <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Preview only</span>
-                        : undefined}
-                actions={(
-                    <div className="flex w-full items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 p-1 lg:w-auto">
-                        <button type="button" onClick={() => moveDate(-1)} aria-label="Previous day" title="Previous day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
-                            <ChevronRight size={18} className="rotate-180" />
-                        </button>
-                        <div className="min-w-0 border-x border-white/10 px-2 text-center">
-                            <div className="text-[9px] font-black uppercase text-teal-300">{dayOfWeek}</div>
-                            <input type="date" value={selectedDate} onChange={(event) => { if (event.target.value) { setSelectedDate(event.target.value); setSelectedRecordIds([]); } }} aria-label="Attendance date" className="w-[132px] bg-transparent text-center font-mono text-xs font-bold text-white outline-none" />
-                        </div>
-                        {!isToday && <button type="button" onClick={() => { setSelectedDate(today); setSelectedRecordIds([]); }} className="h-9 rounded-lg px-2 text-[10px] font-black uppercase text-teal-200 hover:bg-teal-400/10">Today</button>}
-                        <button type="button" onClick={() => moveDate(1)} aria-label="Next day" title="Next day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
-                            <ChevronRight size={18} />
-                        </button>
-                    </div>
-                )}
-            />
-
-            {showEducationSchoolDayV1 && <div className="edu-school-day-v1__focus" role="region" aria-label="Attendance priority">
-                <div className="edu-school-day-v1__focus-copy">
-                    <span className="edu-school-day-v1__eyebrow">{isFutureDate ? 'Schedule preview' : isToday ? 'Today’s priority' : 'Selected day'}</span>
-                    <h2>{dailyStats.total === 0 ? 'No students scheduled' : dailyStats.unmarked === 0 ? 'Attendance complete' : `${dailyStats.unmarked} ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`}</h2>
-                    <p>{dailyStats.total === 0 ? `No eligible enrollments on ${dayOfWeek}.` : `${dailyStats.total} scheduled across ${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}.${isFutureDate ? ' Marks unlock on the session date.' : ''}`}</p>
-                </div>
-                <div className="edu-school-day-v1__focus-actions">
-                    {dailyStats.total > 0 && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => { setSearchQuery(''); setSelectedGroup('All'); document.getElementById('edu-attendance-roster')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{isFutureDate ? 'Review roster' : dailyStats.unmarked > 0 ? 'Finish attendance' : 'Review attendance'} <ChevronRight size={16} /></button>}
-                    {dailyStats.total === 0 && <button type="button" className="edu-school-day-v1__focus-secondary" onClick={() => navigateTo('classes')}>Open classes</button>}
-                </div>
-            </div>}
-
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <AtlasSignalCard label="Scheduled" value={dailyStats.total} detail={`${sessionCount} session${sessionCount === 1 ? '' : 's'}`} icon={Users} tone="slate" />
-                <AtlasSignalCard label="Marked present" value={dailyStats.present} detail={`${dailyStats.unmarked} awaiting a mark`} icon={CheckCircle2} tone="teal" />
-                <AtlasSignalCard label="Late" value={dailyStats.late} detail="Needs follow-up" icon={AlertCircle} tone="amber" />
-                <AtlasSignalCard label="Absent" value={dailyStats.absent} detail={`${dailyStats.excused} excused`} icon={XCircle} tone="red" />
+    if (attendanceLoading || attendanceError) {
+        return <div className={`flex flex-col gap-4 ${showEducationSchoolDayV1 ? 'edu-v1 edu-attendance-pulse' : ''}`} data-edu-system={showEducationSchoolDayV1 ? '1' : undefined}>
+            <AtlasCommandHeader density={showEducationSchoolDayV1 ? 'compact' : 'default'} eyebrow="Learning operations" title="Student attendance" icon={ClipboardCheck} />
+            <div role={attendanceError ? 'alert' : 'status'}>
+                <AtlasEmptyState
+                    title={attendanceError ? 'Attendance unavailable' : 'Loading attendance'}
+                    description={attendanceError || 'Connecting to your school’s attendance records. Marking opens once they are ready.'}
+                    icon={attendanceError ? AlertCircle : ClipboardCheck}
+                    action={attendanceError ? <AtlasActionButton onClick={() => window.location.reload()}>Reload attendance</AtlasActionButton> : undefined}
+                />
             </div>
+        </div>;
+    }
 
-            {renewalsDue.length > 0 && (
-                <section className="overflow-hidden rounded-xl border border-amber-300/25 bg-amber-400/[0.06]" aria-labelledby="membership-renewals-title">
+    const renewalPanel = (<section className="overflow-hidden rounded-xl border border-amber-300/25 bg-amber-400/[0.06]" aria-labelledby="membership-renewals-title">
                     <div className="flex flex-col gap-2 border-b border-amber-300/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-start gap-3">
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-300/15 text-amber-200"><RotateCcw size={17} /></span>
@@ -367,25 +373,80 @@ export const AbsenceView = () => {
                             </div>
                         ))}
                     </div>
-                </section>
-            )}
+                </section>);
 
-            <AtlasToolbar>
+    return (
+        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-attendance-pulse' : ''}`} data-edu-system={showEducationSchoolDayV1 ? '1' : undefined} data-testid={showEducationSchoolDayV1 ? 'education-attendance-v1' : undefined}>
+            <AtlasCommandHeader
+                density={showEducationSchoolDayV1 ? 'compact' : 'default'}
+                eyebrow={showEducationSchoolDayV1 ? 'Class register' : 'Learning operations'}
+                title={showEducationSchoolDayV1 ? 'Attendance' : 'Student attendance'}
+                description={showEducationSchoolDayV1 ? undefined : 'Mark each scheduled session, surface exceptions, and contact families without leaving the roster.'}
+                icon={ClipboardCheck}
+                badges={isToday
+                    ? <span className="pulse-attendance-today rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-1 text-[10px] font-black uppercase text-teal-200">Today</span>
+                    : isFutureDate
+                        ? <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Preview only</span>
+                        : undefined}
+                actions={(
+                    <div className="pulse-attendance-date flex w-full items-center gap-1 rounded-lg border border-white/10 bg-slate-950/70 p-1 lg:w-auto">
+                        <button type="button" disabled={isWorking} onClick={() => moveDate(-1)} aria-label="Previous day" title="Previous day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                            <ChevronRight size={18} className="rotate-180" />
+                        </button>
+                        <div className="pulse-attendance-date__value min-w-0 border-x border-white/10 px-2 text-center">
+                            <div className="text-[9px] font-black uppercase text-teal-300">{dayOfWeek}</div>
+                            <input type="date" disabled={isWorking} value={selectedDate} onChange={(event) => { if (event.target.value) { setSelectedDate(event.target.value); setSelectedRecordIds([]); } }} aria-label="Attendance date" className="w-[132px] bg-transparent text-center font-mono text-xs font-bold text-white outline-none" />
+                        </div>
+                        {!isToday && <button type="button" disabled={isWorking} onClick={() => { setSelectedDate(today); setSelectedRecordIds([]); }} className="h-9 rounded-lg px-2 text-[10px] font-black uppercase text-teal-200 hover:bg-teal-400/10">Today</button>}
+                        <button type="button" disabled={isWorking} onClick={() => moveDate(1)} aria-label="Next day" title="Next day" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
+                )}
+            />
+
+            {showEducationSchoolDayV1 && <div className="pulse-attendance-progress" aria-label="Daily attendance progress">
+                <div className="pulse-attendance-progress__line">
+                    <strong>{isFutureDate ? 'Schedule preview' : dailyStats.total === 0 ? 'No sessions scheduled' : dailyStats.unmarked === 0 && !isWorking ? 'Attendance complete' : `${dailyStats.total - dailyStats.unmarked} of ${dailyStats.total} recorded`}</strong>
+                    <span>{isFutureDate ? 'Marking opens on the session date' : `${dailyStats.unmarked} remaining · ${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`}</span>
+                </div>
+                <progress aria-label="Recorded attendance" value={dailyStats.total - dailyStats.unmarked} max={dailyStats.total || 1} />
+                <div className="pulse-attendance-progress__summary">
+                    <span data-summary="present"><b>{dailyStats.present}</b> present</span><span data-summary="late"><b>{dailyStats.late}</b> late</span><span data-summary="absent"><b>{dailyStats.absent}</b> absent</span><span data-summary="excused"><b>{dailyStats.excused}</b> excused</span>
+                </div>
+                <p className="pulse-attendance-feedback" role="status" aria-live="polite" data-error={saveFeedback?.date === selectedDate && saveFeedback.error ? 'true' : undefined}>
+                    {isWorking ? 'Saving attendance… Please wait for confirmation.' : isFutureDate ? 'This date is read-only. Choose today or an earlier date to mark attendance.' : saveFeedback?.date === selectedDate ? saveFeedback.text : 'Choose a status for each student. Changes save individually.'}
+                </p>
+                {renewalsDue.length > 0 && <a className="pulse-attendance-renewal-link" href="#pulse-attendance-renewals">{renewalsDue.length} {renewalsDue.length === 1 ? 'learner needs' : 'learners need'} a membership renewal · Review</a>}
+            </div>}
+
+            {!showEducationSchoolDayV1 && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <AtlasSignalCard label="Scheduled" value={dailyStats.total} detail={`${sessionCount} session${sessionCount === 1 ? '' : 's'}`} icon={Users} tone="slate" />
+                <AtlasSignalCard label="Marked present" value={dailyStats.present} detail={`${dailyStats.unmarked} awaiting a mark`} icon={CheckCircle2} tone="teal" />
+                <AtlasSignalCard label="Late" value={dailyStats.late} detail="Needs follow-up" icon={AlertCircle} tone="amber" />
+                <AtlasSignalCard label="Absent" value={dailyStats.absent} detail={`${dailyStats.excused} excused`} icon={XCircle} tone="red" />
+            </div>}
+
+            {!showEducationSchoolDayV1 && renewalsDue.length > 0 && renewalPanel}
+
+            <div className={showEducationSchoolDayV1 ? 'pulse-attendance-workspace' : 'contents'}>
+            {showEducationSchoolDayV1 && <div className="pulse-attendance-workspace__heading"><h3>Daily register</h3><span>{scheduledStudents.length} scheduled {scheduledStudents.length === 1 ? 'place' : 'places'}{searchQuery || selectedGroup !== 'All' ? ' in this view' : ''}</span></div>}
+            <AtlasToolbar className="pulse-attendance-toolbar">
                 <div className="relative min-w-[220px] flex-1">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <input type="search" placeholder="Search students" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                    <input type="search" aria-label="Search students" placeholder="Search students" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                 </div>
                 <div className="relative min-w-[170px]">
                     <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <select value={selectedGroup} onChange={(event) => setSelectedGroup(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-10 pr-8 text-sm text-slate-300 outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10">
+                    <select aria-label="Filter by group" value={selectedGroup} onChange={(event) => setSelectedGroup(event.target.value)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-10 pr-8 text-sm text-slate-300 outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10">
                         <option value="All">All groups</option>
                         {uniqueGroups.map(group => <option key={group} value={group}>{group}</option>)}
                     </select>
                 </div>
             </AtlasToolbar>
 
-            <section id="edu-attendance-roster" className="space-y-4 scroll-mt-5">
-                <AtlasSectionHeader title="Session roster" description={`${dayOfWeek}, ${selectedDate} · ${dailyStats.unmarked} attendance ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`} icon={Calendar} />
+            <section aria-label="Session roster" id="edu-attendance-roster" className="space-y-4 scroll-mt-5">
+                {!showEducationSchoolDayV1 && <AtlasSectionHeader title="Session roster" description={`${dayOfWeek}, ${selectedDate} · ${dailyStats.unmarked} attendance ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`} icon={Calendar} />}
                 {isFutureDate && (
                     <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
                         This is a schedule preview. Attendance controls unlock on the session date.
@@ -396,10 +457,10 @@ export const AbsenceView = () => {
                         title={allScheduledStudents.length > 0 ? 'No students match these filters' : 'No scheduled sessions'}
                         description={allScheduledStudents.length > 0 ? 'Clear the search or group filter to restore the daily roster.' : `No active class enrollments are scheduled for ${dayOfWeek}. Try another date or review the class schedule.`}
                         icon={Calendar}
-                        action={allScheduledStudents.length > 0 ? <AtlasActionButton onClick={() => { setSearchQuery(''); setSelectedGroup('All'); }}>Clear filters</AtlasActionButton> : !isToday ? <AtlasActionButton onClick={() => setSelectedDate(today)}>Go to today</AtlasActionButton> : undefined}
+                        action={allScheduledStudents.length > 0 ? <AtlasActionButton onClick={() => { setSearchQuery(''); setSelectedGroup('All'); }}>Clear filters</AtlasActionButton> : !isToday ? <AtlasActionButton onClick={() => setSelectedDate(today)}>Go to today</AtlasActionButton> : <AtlasActionButton onClick={() => navigateTo('classes')}>Open classes</AtlasActionButton>}
                     />
                 ) : (
-                    <div className="space-y-3">
+                    <div className="pulse-attendance-sessions space-y-3">
                         {studentsByTime.map(slot => {
                             const isLive = isCurrentBlock(slot.time);
                             const unmarkedCount = slot.students.filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked').length;
@@ -411,14 +472,16 @@ export const AbsenceView = () => {
                                 .filter(student => getStatus(student.studentId, student.displayTime) === 'unmarked')
                                 .map(student => getRecordId(student.studentId, student.displayTime));
                             return (
-                                <div key={slot.time} className={`overflow-hidden rounded-xl border bg-slate-900/75 ${isLive ? 'border-teal-300/40' : 'border-white/10'}`}>
-                                    <div className={`flex flex-col gap-3 border-b px-3 py-3 sm:flex-row sm:items-center ${isLive ? 'border-teal-300/20 bg-teal-400/[0.06]' : 'border-white/10 bg-slate-950/55'}`}>
+                                <div key={slot.time} className={`pulse-attendance-session overflow-hidden rounded-xl border bg-slate-900/75 ${isLive ? 'border-teal-300/40' : 'border-white/10'}`}>
+                                    {showEducationSchoolDayV1 && <div className="pulse-attendance-session__time"><span>Session</span><strong>{slot.time}</strong>{isLive && <span className="pulse-attendance-live">Live now</span>}</div>}
+                                    <div className={showEducationSchoolDayV1 ? 'pulse-attendance-session__body' : 'contents'}>
+                                    <div className={`pulse-attendance-session__head flex flex-col gap-3 border-b px-3 py-3 sm:flex-row sm:items-center ${isLive ? 'border-teal-300/20 bg-teal-400/[0.06]' : 'border-white/10 bg-slate-950/55'}`}>
                                         <div className="flex min-w-0 items-center gap-3">
-                                            <span className={`rounded-lg border px-2.5 py-1.5 font-mono text-xs font-black ${isLive ? 'border-teal-300/30 bg-teal-400/10 text-teal-200' : 'border-white/10 bg-white/[0.04] text-slate-200'}`}>{slot.time}</span>
+                                            {!showEducationSchoolDayV1 && <span className={`rounded-lg border px-2.5 py-1.5 font-mono text-xs font-black ${isLive ? 'border-teal-300/30 bg-teal-400/10 text-teal-200' : 'border-white/10 bg-white/[0.04] text-slate-200'}`}>{slot.time}</span>}
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="text-sm font-black text-white">{slot.students.length} scheduled</span>
-                                                    {isLive && <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-0.5 text-[9px] font-black uppercase text-teal-200">Live now</span>}
+                                                    {!showEducationSchoolDayV1 && isLive && <span className="rounded-full border border-teal-300/20 bg-teal-400/10 px-2 py-0.5 text-[9px] font-black uppercase text-teal-200">Live now</span>}
                                                 </div>
                                                 <p className="text-[11px] text-slate-500">{unmarkedCount === 0 ? 'Session complete' : selectedCount > 0 ? `${selectedCount} selected · ${unmarkedCount} unmarked` : `${unmarkedCount} ${unmarkedCount === 1 ? 'mark' : 'marks'} remaining`}</p>
                                             </div>
@@ -428,7 +491,7 @@ export const AbsenceView = () => {
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedCount === unmarkedCount}
-                                                    disabled={isConfirmingSession}
+                                                    disabled={isWorking}
                                                     onChange={() => setSelectedRecordIds(previous => {
                                                         const slotIds = new Set(unmarkedRecordIds);
                                                         return selectedCount === unmarkedCount
@@ -440,7 +503,7 @@ export const AbsenceView = () => {
                                                 Select unmarked
                                             </label>
                                         )}
-                                        <AtlasActionButton icon={CheckCircle2} variant="primary" disabled={unmarkedCount === 0 || isFutureDate || isConfirmingSession} onClick={() => handleConfirmAllPresent(slot.students, selectedCount > 0)}>
+                                        <AtlasActionButton icon={CheckCircle2} variant={showEducationSchoolDayV1 && selectedCount === 0 ? 'secondary' : 'primary'} disabled={unmarkedCount === 0 || isFutureDate || isWorking} onClick={() => handleConfirmAllPresent(slot.students, selectedCount > 0)}>
                                             {isConfirmingSession ? 'Confirming...' : selectedCount > 0 ? `Mark ${selectedCount} selected present` : 'Confirm unmarked'}
                                         </AtlasActionButton>
                                     </div>
@@ -453,27 +516,27 @@ export const AbsenceView = () => {
                                             const initials = (student.studentName || '').split(' ').map(name => name[0]).join('').slice(0, 2);
                                             const studentDetails = students.find(item => item.id === student.studentId);
                                             return (
-                                                <div key={`${student.id}_${student.displayTime}_${student.displayGroup}_${studentIndex}`} className="flex flex-col gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
+                                                <div key={`${student.id}_${student.displayTime}_${student.displayGroup}_${studentIndex}`} data-status={status} aria-busy={isSaving || undefined} className="pulse-attendance-row flex flex-col gap-3 px-3 py-3 transition-colors hover:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="flex min-w-0 items-center gap-3">
                                                         <input
                                                             type="checkbox"
                                                             aria-label={`Select ${student.studentName} for attendance`}
                                                             checked={selectedRecordIds.includes(recordId) && status === 'unmarked'}
-                                                            disabled={status !== 'unmarked' || isFutureDate || isConfirmingSession}
+                                                            disabled={status !== 'unmarked' || isFutureDate || isWorking}
                                                             onChange={() => setSelectedRecordIds(previous => previous.includes(recordId) ? previous.filter(id => id !== recordId) : [...previous, recordId])}
                                                             className="h-4 w-4 shrink-0 accent-teal-400"
                                                         />
-                                                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-[11px] font-black text-slate-300">{initials}</div>
+                                                        <div className="pulse-attendance-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-[11px] font-black text-slate-300">{initials}</div>
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="truncate text-sm font-bold text-white">{student.studentName}</span>
+                                                                <span className="pulse-attendance-name truncate text-sm font-bold text-white">{student.studentName}</span>
                                                                 {(status === 'absent' || status === 'late') && studentDetails?.parentPhone && (
                                                                     <button type="button" onClick={(event) => { event.stopPropagation(); handleWhatsAppAlert(student.studentName, studentDetails.parentPhone, status); }} aria-label={`Message ${student.studentName}'s parent`} title="Message parent on WhatsApp" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-teal-300 transition-colors hover:bg-teal-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
                                                                         <MessageCircle size={14} />
                                                                     </button>
                                                                 )}
                                                                 {status !== 'unmarked' && (
-                                                                    <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleClearAttendance(student.studentId, student.studentName, student.displayTime)} aria-label={`Clear attendance mark for ${student.studentName}`} title="Return to unmarked" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
+                                                                    <button type="button" disabled={isWorking || isFutureDate} onClick={() => handleClearAttendance(student.studentId, student.studentName, student.displayTime)} aria-label={`Clear attendance mark for ${student.studentName}`} title="Return to unmarked" className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
                                                                         <RotateCcw size={13} />
                                                                     </button>
                                                                 )}
@@ -482,21 +545,22 @@ export const AbsenceView = () => {
                                                                 <span className="truncate">{student.programName}</span>
                                                                 <span aria-hidden="true">·</span>
                                                                 <span className="truncate">{student.displayGroup}</span>
+                                                                <span className="pulse-attendance-row__state">{isSaving ? 'Saving…' : status === 'unmarked' ? 'Not marked' : status}</span>
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    <div className="grid grid-cols-2 gap-1.5 sm:flex sm:shrink-0">
-                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'present', student.displayTime)} aria-pressed={status === 'present'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${status === 'present' ? 'border-teal-300/40 bg-teal-500 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-teal-300/30 hover:text-teal-200'}`}>
+                                                    <div className="pulse-attendance-marks grid grid-cols-2 gap-1.5 sm:flex sm:shrink-0" role="group" aria-label={`Attendance for ${student.studentName}`}>
+                                                        <button type="button" disabled={isWorking || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'present', student.displayTime)} data-mark="present" aria-pressed={status === 'present'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${status === 'present' ? 'border-teal-300/40 bg-teal-500 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-teal-300/30 hover:text-teal-200'}`}>
                                                             <CheckCircle2 size={14} /> Present
                                                         </button>
-                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'late', student.displayTime)} aria-pressed={status === 'late'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 ${status === 'late' ? 'border-amber-300/40 bg-amber-400 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-amber-300/30 hover:text-amber-200'}`}>
+                                                        <button type="button" disabled={isWorking || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'late', student.displayTime)} data-mark="late" aria-pressed={status === 'late'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 ${status === 'late' ? 'border-amber-300/40 bg-amber-400 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-amber-300/30 hover:text-amber-200'}`}>
                                                             <Clock size={14} /> Late
                                                         </button>
-                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent', student.displayTime)} aria-pressed={status === 'absent'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 ${status === 'absent' ? 'border-red-300/40 bg-red-500 text-white' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-red-300/30 hover:text-red-200'}`}>
+                                                        <button type="button" disabled={isWorking || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'absent', student.displayTime)} data-mark="absent" aria-pressed={status === 'absent'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 ${status === 'absent' ? 'border-red-300/40 bg-red-500 text-white' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-red-300/30 hover:text-red-200'}`}>
                                                             <XCircle size={14} /> Absent
                                                         </button>
-                                                        <button type="button" disabled={isSaving || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'excused', student.displayTime)} aria-pressed={status === 'excused'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 ${status === 'excused' ? 'border-sky-300/40 bg-sky-400 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-sky-300/30 hover:text-sky-200'}`}>
+                                                        <button type="button" disabled={isWorking || isFutureDate} onClick={() => handleMarkAttendance(student.studentId, student.id, 'excused', student.displayTime)} data-mark="excused" aria-pressed={status === 'excused'} className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/60 ${status === 'excused' ? 'border-sky-300/40 bg-sky-400 text-slate-950' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-sky-300/30 hover:text-sky-200'}`}>
                                                             <ShieldCheck size={14} /> Excused
                                                         </button>
                                                     </div>
@@ -504,12 +568,18 @@ export const AbsenceView = () => {
                                             );
                                         })}
                                     </div>
+                                    </div>
                                 </div>
                             );
                         })}
                     </div>
                 )}
             </section>
+            </div>
+            {showEducationSchoolDayV1 && renewalsDue.length > 0 && <details id="pulse-attendance-renewals" className="pulse-attendance-renewals">
+                <summary>{renewalsDue.length} membership {renewalsDue.length === 1 ? 'renewal' : 'renewals'} to review</summary>
+                {renewalPanel}
+            </details>}
         </div>
     );
 };

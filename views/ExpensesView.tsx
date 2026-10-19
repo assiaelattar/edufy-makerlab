@@ -5,12 +5,17 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 import { formatCurrency, formatDate, compressImage } from '../utils/helpers';
 import { addDoc, collection, serverTimestamp, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Expense, ExpenseTemplate } from '../types';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { format } from 'date-fns';
+import '../components/education-ui/education-system-v1.css';
 import './finance/education-finance-v1.css';
+import './finance/education-finance-focus.css';
+import './finance/education-finance-playful.css';
 
 const getRecurringDueDate = (month: string, dayDue?: number) => {
     const [year, monthNumber] = month.split('-').map(Number);
@@ -22,9 +27,11 @@ const getRecurringDueDate = (month: string, dayDue?: number) => {
 export const ExpensesView = () => {
     const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { expenses, expenseTemplates, payments, settings } = useAppContext();
-    const { can, currentOrganization } = useAuth();
+    const { can, currentOrganization, user } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const orgId = currentOrganization?.id || '';
+    const workspaceScope = `expenses:${orgId || 'none'}:${user?.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
 
     // Dynamic session list derived from real data
     const availableSessions = useMemo(() => {
@@ -38,18 +45,19 @@ export const ExpensesView = () => {
     const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
     const [isPayTemplateModalOpen, setIsPayTemplateModalOpen] = useState(false);
     
-    const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState<string>('All');
+    const [searchQuery, setSearchQuery] = useWorkspaceViewState(workspaceScope, 'searchQuery', '');
+    const [categoryFilter, setCategoryFilter] = useWorkspaceViewState<string>(workspaceScope, 'categoryFilter', 'All');
+    const [ledgerTemplateId, setLedgerTemplateId] = useWorkspaceViewState<string | null>(workspaceScope, 'ledgerTemplateId', null);
     
     // Filters
-    const [selectedSession, setSelectedSession] = useState(settings.academicYear || '2024-2025');
-    const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+    const [selectedSession, setSelectedSession] = useWorkspaceViewState(workspaceScope, 'selectedSession', settings.academicYear || '2024-2025');
+    const [selectedMonth, setSelectedMonth] = useWorkspaceViewState<string>(workspaceScope, 'selectedMonth', format(new Date(), 'yyyy-MM'));
 
     const [showProof, setShowProof] = useState<string | null>(null);
 
     // Form State (Ad-Hoc / Edit)
     const [expenseForm, setExpenseForm] = useState<Partial<Expense>>({
-        title: '', category: 'rent', amount: 0, date: new Date().toISOString().split('T')[0],
+        title: '', category: 'rent', amount: 0, date: format(new Date(), 'yyyy-MM-dd'),
         method: 'cash', status: 'paid', beneficiary: '', notes: '', receiptUrl: ''
     });
     const [isEditing, setIsEditing] = useState(false);
@@ -73,7 +81,10 @@ export const ExpensesView = () => {
         setSelectedSession(settings.academicYear && availableSessions.includes(settings.academicYear) ? settings.academicYear : availableSessions[0]);
     }, [availableSessions, selectedSession, settings.academicYear]);
 
+    useEffect(() => { setLedgerTemplateId(null); }, [selectedSession, selectedMonth]);
+
     // --- DATA PROCESSING ---
+    const today = format(new Date(), 'yyyy-MM-dd');
     
     // 1. Recurring Status Logic (The "Virtual Bills" System)
     const recurringStatus = useMemo(() => {
@@ -81,24 +92,27 @@ export const ExpensesView = () => {
         
         return expenseTemplates.filter(t => t.recurring).map(template => {
             if (template.frequency === 'weekly') {
-                return { template, status: 'manual' as const, expense: undefined, dueDate: undefined };
+                return { template, status: 'manual' as const, expense: undefined, matchCount: 0, dueDate: undefined };
             }
             const dueDate = getRecurringDueDate(selectedMonth, template.dayDue);
-            // Find if paid this month
-            const matchedExpense = expenses.find(e => 
+            // Keep conflicting stored records visible for review instead of choosing an arbitrary status.
+            const matchedExpenses = expenses.filter(e =>
                 e.templateId === template.id && 
                 e.date.startsWith(selectedMonth) && 
-                e.session === selectedSession
+                e.session === selectedSession &&
+                e.organizationId === orgId
             );
+            const matchedExpense = matchedExpenses[0];
             
             return {
                 template,
-                status: matchedExpense ? 'paid' as const : dueDate > new Date().toISOString().split('T')[0] ? 'scheduled' as const : 'due' as const,
+                status: matchedExpenses.length > 1 ? 'review' as const : matchedExpense ? matchedExpense.status === 'paid' ? 'paid' as const : 'pending' as const : dueDate > today ? 'scheduled' as const : 'due' as const,
                 expense: matchedExpense,
+                matchCount: matchedExpenses.length,
                 dueDate
             };
         });
-    }, [expenseTemplates, expenses, selectedMonth, selectedSession]);
+    }, [expenseTemplates, expenses, selectedMonth, selectedSession, orgId, today]);
 
     // 2. Filtered Expenses (The History List)
     const filteredExpenses = useMemo(() => {
@@ -107,9 +121,10 @@ export const ExpensesView = () => {
             const matchesMonth = !selectedMonth || e.date.startsWith(selectedMonth);
             const matchesSearch = e.title.toLowerCase().includes(searchQuery.toLowerCase()) || e.beneficiary.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesCategory = categoryFilter === 'All' || e.category === categoryFilter;
-            return matchesSession && matchesMonth && matchesSearch && matchesCategory;
+            const matchesTemplate = !ledgerTemplateId || e.templateId === ledgerTemplateId;
+            return matchesSession && matchesMonth && matchesSearch && matchesCategory && matchesTemplate;
         }).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [expenses, selectedSession, selectedMonth, searchQuery, categoryFilter]);
+    }, [expenses, selectedSession, selectedMonth, searchQuery, categoryFilter, ledgerTemplateId]);
 
     // 3. Financial Stats
     const stats = useMemo(() => {
@@ -143,13 +158,20 @@ export const ExpensesView = () => {
     // Helper for month display
     const displayMonthName = useMemo(() => {
         if(!selectedMonth) return "All Time";
-        const d = new Date(selectedMonth);
+        const [year, month] = selectedMonth.split('-').map(Number);
+        const d = new Date(year, month - 1, 1);
         return isNaN(d.getTime()) ? selectedMonth : d.toLocaleString('default', { month: 'long' });
     }, [selectedMonth]);
 
     const recurringDueCount = recurringStatus.filter(item => item.status === 'due').length;
+    const recurringReviewCount = recurringStatus.filter(item => item.status === 'review').length;
+    const recurringPendingCount = recurringStatus.filter(item => item.status === 'pending').length;
     const recurringScheduledCount = recurringStatus.filter(item => item.status === 'scheduled').length;
     const recurringManualCount = recurringStatus.filter(item => item.status === 'manual').length;
+    const firstDue = recurringStatus.filter(item => item.status === 'due').sort((first, second) => (first.dueDate || '').localeCompare(second.dueDate || ''))[0];
+    const firstReview = recurringStatus.find(item => item.status === 'review');
+    const firstPending = recurringStatus.find(item => item.status === 'pending');
+    const nextScheduled = recurringStatus.filter(item => item.status === 'scheduled').sort((first, second) => (first.dueDate || '').localeCompare(second.dueDate || ''))[0];
 
     const requireExpenseWriteAccess = async () => {
         if (!can('expenses.manage')) {
@@ -194,7 +216,7 @@ export const ExpensesView = () => {
     };
 
     const getTemplateDueDate = (template: ExpenseTemplate) => {
-        if (!selectedMonth) return new Date().toISOString().split('T')[0];
+        if (!selectedMonth) return format(new Date(), 'yyyy-MM-dd');
         return getRecurringDueDate(selectedMonth, template.dayDue);
     };
 
@@ -208,6 +230,7 @@ export const ExpensesView = () => {
         const existingExpense = expenses.find(expense =>
             expense.templateId === template.id &&
             expense.session === selectedSession &&
+            expense.organizationId === orgId &&
             (!selectedMonth || expense.date.startsWith(selectedMonth))
         );
         if (existingExpense) {
@@ -253,7 +276,7 @@ export const ExpensesView = () => {
                 category: expenseForm.category || 'other',
                 amount: expenseForm.amount || 0,
                 beneficiary: expenseForm.beneficiary || '',
-                date: expenseForm.date || new Date().toISOString().split('T')[0],
+                date: expenseForm.date || format(new Date(), 'yyyy-MM-dd'),
                 method: expenseForm.method || 'cash',
                 status: 'paid',
                 notes: expenseForm.notes || '',
@@ -350,7 +373,7 @@ export const ExpensesView = () => {
                 category: expenseForm.category || 'other',
                 amount: Number(expenseForm.amount),
                 beneficiary: expenseForm.beneficiary!.trim(),
-                date: expenseForm.date || new Date().toISOString().split('T')[0],
+                date: expenseForm.date || format(new Date(), 'yyyy-MM-dd'),
                 method: expenseForm.method || 'cash',
                 status: expenseForm.status || 'paid',
                 notes: expenseForm.notes || '',
@@ -462,7 +485,7 @@ export const ExpensesView = () => {
     };
 
     return (
-        <div className={`flex flex-col space-y-6 pb-24 md:h-full md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-expenses-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-expenses-v1' : undefined}>
+        <div data-edu-system={showEducationFinanceV1 ? '1' : undefined} className={`flex flex-col space-y-6 pb-24 md:h-full md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-expenses-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-expenses-v1' : undefined}>
             
             <AtlasCommandHeader
                 eyebrow="Finance operations"
@@ -479,7 +502,7 @@ export const ExpensesView = () => {
                     {can('expenses.manage') && (
                         <>
                             <AtlasActionButton icon={Settings} onClick={() => setIsTemplateManagerOpen(true)} title="Manage recurring charges">Recurring</AtlasActionButton>
-                            <AtlasActionButton variant="primary" icon={Plus} onClick={() => { setIsEditing(false); setExpenseForm({title: '', category: 'other', amount: 0, date: new Date().toISOString().split('T')[0], method: 'cash', status: 'paid', beneficiary: ''}); setIsModalOpen(true); }}>
+                            <AtlasActionButton variant="primary" icon={Plus} onClick={() => { setIsEditing(false); setExpenseForm({title: '', category: 'other', amount: 0, date: format(new Date(), 'yyyy-MM-dd'), method: 'cash', status: 'paid', beneficiary: ''}); setIsModalOpen(true); }}>
                                 Record expense
                             </AtlasActionButton>
                         </>
@@ -487,13 +510,6 @@ export const ExpensesView = () => {
                     </>
                 }
             />
-
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <AtlasSignalCard label="Period expenses" value={formatCurrency(stats.totalExpenses)} detail={displayMonthName} icon={TrendingDown} tone="red" />
-                <AtlasSignalCard label="Session margin" value={formatCurrency(stats.sessionNetProfit)} detail={`${formatCurrency(stats.sessionTotalIncome)} income`} icon={DollarSign} tone={stats.sessionNetProfit >= 0 ? 'emerald' : 'red'} />
-                <AtlasSignalCard label="Recurring due" value={recurringDueCount} detail={recurringScheduledCount > 0 ? `${recurringScheduledCount} scheduled later` : recurringDueCount === 1 ? 'Charge needs payment' : 'Charges need payment'} icon={Clock} tone={recurringDueCount > 0 ? 'amber' : 'slate'} />
-                <AtlasSignalCard label="Highest category" value={stats.topCategory} detail="Largest period cost" icon={PieChart} tone="blue" />
-            </div>
 
             <AtlasToolbar
                 leading={
@@ -513,22 +529,40 @@ export const ExpensesView = () => {
                 <span className="text-xs text-slate-500">Showing expenses for the selected academic session and month.</span>
             </AtlasToolbar>
 
+            {showEducationFinanceV1 && (
+                <section className="edu-expenses-v1__focus" aria-label="Next expense action">
+                    <div>
+                        <span className="edu-expenses-v1__eyebrow">Next step / {displayMonthName}</span>
+                        <h2>{firstReview ? `${recurringReviewCount} recurring ${recurringReviewCount === 1 ? 'charge needs' : 'charges need'} review` : firstDue ? `${recurringDueCount} recurring ${recurringDueCount === 1 ? 'charge' : 'charges'} due` : firstPending ? `${recurringPendingCount} recurring ${recurringPendingCount === 1 ? 'record' : 'records'} pending` : nextScheduled ? 'Upcoming recurring charge' : 'Expenses in view'}</h2>
+                        <p>{firstReview ? `${firstReview.template.title} has ${firstReview.matchCount} linked ledger records this month. Review them before recording another payment.` : firstDue ? `${firstDue.template.title} · ${formatCurrency(firstDue.template.amount)} · due ${formatDate(firstDue.dueDate!)}` : firstPending ? `${firstPending.template.title} has a pending ledger entry. Review it before recording another payment.` : nextScheduled ? `${nextScheduled.template.title} · ${formatCurrency(nextScheduled.template.amount)} · scheduled ${formatDate(nextScheduled.dueDate!)}` : recurringManualCount > 0 ? `${recurringManualCount} weekly template${recurringManualCount === 1 ? '' : 's'} need manual review.` : 'Review the ledger or record a new operating cost.'}</p>
+                    </div>
+                    {!firstReview && firstDue && can('expenses.manage') ? (
+                        <button type="button" onClick={() => handlePayTemplateOpen(firstDue.template)}>Record payment <ArrowRight size={16} /></button>
+                    ) : (
+                        <button type="button" onClick={() => {
+                            if (firstReview || (!firstDue && firstPending)) { setLedgerTemplateId((firstReview || firstPending)?.template.id || null); setSearchQuery(''); setCategoryFilter('All'); }
+                            document.getElementById(firstReview || (!firstDue && firstPending) ? 'expenses-ledger' : recurringStatus.length ? 'expenses-recurring' : 'expenses-ledger')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }}>{firstReview || (!firstDue && firstPending) ? 'Review ledger' : recurringStatus.length ? 'Review charges' : 'Review ledger'} <ArrowRight size={16} /></button>
+                    )}
+                </section>
+            )}
+
             {/* RECURRING CHARGES GRID */}
             {recurringStatus.length > 0 && (
-                <div className="space-y-3">
+                <div id="expenses-recurring" className="space-y-3 edu-expenses-v1__recurring">
                     <AtlasSectionHeader
                         title={`Recurring charges / ${displayMonthName}`}
                         description="Review fixed obligations before they become overdue."
                         icon={Repeat}
                         meta={
                             <span className="rounded-md bg-amber-400/10 px-2 py-1 text-[10px] font-bold uppercase text-amber-200">
-                                {recurringDueCount} due{recurringManualCount > 0 ? ` / ${recurringManualCount} manual` : ''}
+                                {recurringDueCount} due{recurringReviewCount > 0 ? ` / ${recurringReviewCount} review` : ''}{recurringPendingCount > 0 ? ` / ${recurringPendingCount} pending` : ''}{recurringManualCount > 0 ? ` / ${recurringManualCount} manual` : ''}
                             </span>
                         }
                     />
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {recurringStatus.map(({ template, status, expense, dueDate }) => (
-                            <div key={template.id} className={`group relative rounded-lg border p-4 transition-colors ${status === 'paid' ? 'border-emerald-400/20 bg-slate-900/50' : status === 'manual' || status === 'scheduled' ? 'border-sky-400/20 bg-slate-900/70' : 'border-amber-300/25 bg-slate-900'}`}>
+                        {recurringStatus.map(({ template, status, expense, matchCount, dueDate }) => (
+                            <div key={template.id} data-status={status} className={`group relative rounded-lg border p-4 transition-colors ${status === 'paid' ? 'border-emerald-400/20 bg-slate-900/50' : status === 'manual' || status === 'scheduled' ? 'border-sky-400/20 bg-slate-900/70' : 'border-amber-300/25 bg-slate-900'}`}>
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                         <div className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${status === 'paid' ? 'bg-emerald-900/20 text-emerald-500' : status === 'manual' || status === 'scheduled' ? 'bg-sky-900/20 text-sky-400' : 'bg-amber-900/20 text-amber-500'}`}>
@@ -544,10 +578,15 @@ export const ExpensesView = () => {
                                             <div className="text-emerald-400 font-bold text-sm">{formatCurrency(expense.amount)}</div>
                                             <div className="text-[10px] text-slate-500">{formatDate(expense.date)}</div>
                                         </div>
-                                    ) : status === 'due' || status === 'scheduled' ? (
+                                    ) : status === 'review' ? (
                                         <div className="text-right">
-                                            <div className="text-slate-300 font-bold text-sm">{formatCurrency(template.amount)}</div>
-                                            <div className={`text-[10px] font-medium ${status === 'due' ? 'text-amber-500' : 'text-sky-400'}`}>{status === 'due' ? 'Due' : 'Scheduled'} {dueDate ? formatDate(dueDate) : ''}</div>
+                                            <div className="text-slate-300 font-bold text-sm">{matchCount} ledger entries</div>
+                                            <div className="text-[10px] font-medium text-amber-500">Review records</div>
+                                        </div>
+                                    ) : status === 'due' || status === 'scheduled' || status === 'pending' ? (
+                                        <div className="text-right">
+                                            <div className="text-slate-300 font-bold text-sm">{formatCurrency(expense?.amount ?? template.amount)}</div>
+                                            <div className={`text-[10px] font-medium ${status === 'due' || status === 'pending' ? 'text-amber-500' : 'text-sky-400'}`}>{status === 'pending' ? 'Pending record' : status === 'due' ? 'Due' : 'Scheduled'} {status === 'pending' && expense ? formatDate(expense.date) : dueDate ? formatDate(dueDate) : ''}</div>
                                         </div>
                                     ) : (
                                         <div className="text-right">
@@ -557,7 +596,7 @@ export const ExpensesView = () => {
                                     )}
                                 </div>
                                 
-                                {(status === 'due' || status === 'scheduled') && (
+                                {(status === 'due' || status === 'scheduled') && can('expenses.manage') && (
                                     <AtlasActionButton
                                         onClick={() => handlePayTemplateOpen(template)}
                                         variant={status === 'due' ? 'primary' : 'secondary'}
@@ -570,6 +609,9 @@ export const ExpensesView = () => {
                                     <div className="mt-3 text-center text-[10px] text-emerald-500 font-medium bg-emerald-950/30 py-1.5 rounded border border-emerald-900/30 flex items-center justify-center gap-1">
                                         Paid via {expense?.method}
                                     </div>
+                                )}
+                                {(status === 'pending' || status === 'review') && (
+                                    <button type="button" className="edu-expenses-v1__review" onClick={() => { setLedgerTemplateId(template.id); setSearchQuery(''); setCategoryFilter('All'); document.getElementById('expenses-ledger')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{status === 'review' ? 'Review ledger entries' : 'Review pending record'} <ArrowRight size={12} /></button>
                                 )}
                                 {status === 'manual' && (
                                     <AtlasActionButton
@@ -588,9 +630,16 @@ export const ExpensesView = () => {
                 </div>
             )}
 
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                <AtlasSignalCard label="Period expenses" value={formatCurrency(stats.totalExpenses)} detail={displayMonthName} icon={TrendingDown} tone="red" />
+                <AtlasSignalCard label="Session margin" value={formatCurrency(stats.sessionNetProfit)} detail={`${formatCurrency(stats.sessionTotalIncome)} income`} icon={DollarSign} tone={stats.sessionNetProfit >= 0 ? 'emerald' : 'red'} />
+                <AtlasSignalCard label="Recurring due" value={recurringDueCount} detail={recurringReviewCount > 0 ? `${recurringReviewCount} need ledger review` : recurringPendingCount > 0 ? `${recurringPendingCount} pending records` : recurringScheduledCount > 0 ? `${recurringScheduledCount} scheduled later` : recurringDueCount === 1 ? 'Charge needs payment' : 'Charges need payment'} icon={Clock} tone={recurringDueCount > 0 || recurringReviewCount > 0 || recurringPendingCount > 0 ? 'amber' : 'slate'} />
+                <AtlasSignalCard label="Highest category" value={stats.topCategory} detail="Largest period cost" icon={PieChart} tone="blue" />
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:h-full md:min-h-0">
                 {/* Expense History List */}
-                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col min-h-[400px] md:h-full">
+                <div id="expenses-ledger" className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col min-h-[400px] md:h-full edu-expenses-v1__ledger">
                     <AtlasToolbar className="rounded-none border-0 border-b border-slate-800 bg-slate-950/30">
                         <div className="relative w-full sm:w-64">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
@@ -603,13 +652,20 @@ export const ExpensesView = () => {
                         </div>
                     </AtlasToolbar>
 
+                    {ledgerTemplateId && (
+                        <div className="edu-expenses-v1__ledger-filter">
+                            <span>Showing records for {expenseTemplates.find(template => template.id === ledgerTemplateId)?.title || 'this recurring charge'}</span>
+                            <button type="button" onClick={() => setLedgerTemplateId(null)}>Show all expenses</button>
+                        </div>
+                    )}
+
                     <div className="md:flex-1 md:overflow-y-auto custom-scrollbar p-2">
                         {filteredExpenses.length === 0 ? (
                             <AtlasEmptyState
                                 title="No expenses found"
                                 description="Adjust the month, academic session, category, or search terms. No totals or exports are generated from an empty result."
                                 icon={Receipt}
-                                action={(searchQuery || categoryFilter !== 'All') ? <AtlasActionButton onClick={() => { setSearchQuery(''); setCategoryFilter('All'); }}>Clear filters</AtlasActionButton> : undefined}
+                                action={(searchQuery || categoryFilter !== 'All' || ledgerTemplateId) ? <AtlasActionButton onClick={() => { setSearchQuery(''); setCategoryFilter('All'); setLedgerTemplateId(null); }}>Clear filters</AtlasActionButton> : undefined}
                             />
                         ) : (
                             <div className="space-y-2">
@@ -672,7 +728,7 @@ export const ExpensesView = () => {
             {/* --- MODALS --- */}
 
             {/* 1. Ad-Hoc Expense Modal */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? "Edit Expense" : "Record Ad-Hoc Expense"}>
+            <Modal designSystem={showEducationFinanceV1} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? "Edit Expense" : "Record Ad-Hoc Expense"}>
                 <form onSubmit={handleSaveAdHocExpense} className="space-y-4">
                     <div><label className="block text-xs font-medium text-slate-400 mb-1">Title</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.title} onChange={e => setExpenseForm({...expenseForm, title: e.target.value})} placeholder="e.g. Plumbing Repair"/></div>
                     <div className="grid grid-cols-2 gap-4">
@@ -703,7 +759,7 @@ export const ExpensesView = () => {
             </Modal>
 
             {/* 2. Pay Recurring Template Modal (The "Pay Now" Flow) */}
-            <Modal isOpen={isPayTemplateModalOpen} onClose={() => setIsPayTemplateModalOpen(false)} title={`Pay ${payingTemplate?.title}`}>
+            <Modal designSystem={showEducationFinanceV1} isOpen={isPayTemplateModalOpen} onClose={() => setIsPayTemplateModalOpen(false)} title={`Pay ${payingTemplate?.title}`}>
                 <form onSubmit={handleConfirmPayment} className="space-y-5">
                     <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center mb-2">
                         <span className="text-xs text-slate-400 uppercase">Default Amount</span>
@@ -742,7 +798,7 @@ export const ExpensesView = () => {
             </Modal>
 
             {/* 3. Template Manager Modal */}
-            <Modal isOpen={isTemplateManagerOpen} onClose={() => setIsTemplateManagerOpen(false)} title="Manage Recurring Charges">
+            <Modal designSystem={showEducationFinanceV1} isOpen={isTemplateManagerOpen} onClose={() => setIsTemplateManagerOpen(false)} title="Manage Recurring Charges">
                 <div className="space-y-6">
                     {/* Create New Template */}
                     <form onSubmit={handleSaveTemplate} className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3">
@@ -798,7 +854,7 @@ export const ExpensesView = () => {
             </Modal>
 
             {/* Receipt Viewer */}
-            <Modal isOpen={!!showProof} onClose={() => setShowProof(null)} title="Expense receipt" size="lg">
+            <Modal designSystem={showEducationFinanceV1} isOpen={!!showProof} onClose={() => setShowProof(null)} title="Expense receipt" size="lg">
                 {showProof && <img src={showProof} className="max-h-[70vh] w-full rounded-lg bg-slate-950 object-contain" alt="Expense receipt" />}
             </Modal>
         </div>

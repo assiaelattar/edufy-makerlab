@@ -1,0 +1,159 @@
+/* One-page direction study: tactile school UI. No shared theme changes. */
+.edu-pickup-playful.edu-v1 {
+  --edu-canvas:#ffffff; --edu-surface:#fff; --edu-surface-muted:#f1f9fd; --edu-border:#dce6e9;
+  --edu-ink:#263c44; --edu-ink-soft:#354b54; --edu-muted:#596e77; --edu-brand:#397d08;
+  --edu-brand-hover:#2c6503; --edu-brand-soft:#d7ffb8; --edu-on-brand:#fff;
+  --edu-success:#397d08; --edu-success-soft:#d7ffb8;
+  --play-button:#1cb0f6; --play-button-edge:#1683b5; --play-button-ink:#08374d;
+  --play-hero:#d7ffb8; --play-hero-border:#58cc02; --play-depth:#d5e2e6;
+  font-family:'Nunito',sans-serif; padding:24px; background:var(--edu-canvas); border-radius:30px;
+}
+[data-edu-theme='dark'] .edu-pickup-playful.edu-v1 {
+  --edu-canvas:#021d2e; --edu-surface:#103247; --edu-surface-muted:#183f53; --edu-border:#305466;
+  --edu-ink:#f7fcff; --edu-ink-soft:#e0f2ff; --edu-muted:#adc7d5; --edu-brand:#89e219;
+  --edu-brand-hover:#b6f27e; --edu-brand-soft:#244c25; --edu-success:#89e219; --edu-success-soft:#244c25;
+  --edu-on-brand:#16300c; --play-hero:#d7ffb8; --play-hero-border:#58cc02; --play-depth:#00121f;
+}
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command {
+  display:grid; grid-template-columns:minmax(0,1fr) 270px; gap:20px; align-items:center;
+  padding:28px 34px; border:2px solid var(--play-hero-border); border-bottom-width:5px;
+  border-radius:28px; background:var(--play-hero); box-shadow:none;
+}
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__eyebrow { color:var(--edu-brand); font-family:inherit; font-size:12px; letter-spacing:.08em; font-weight:900; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command h1 { font-family:inherit; font-size:clamp(32px,3.5vw,46px); font-weight:900; line-height:1.08; letter-spacing:-.025em; margin:14px 0 12px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command p { font-size:14px; font-weight:700; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command button { margin-top:20px; padding:0 16px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button { font-family:inherit; font-weight:800; border-radius:15px !important; transition:transform 140ms ease,box-shadow 140ms ease,background-color 140ms ease; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button:not(:disabled):active { transform:translateY(3px); box-shadow:none !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(button,a,input,select,textarea):focus-visible { outline:3px solid var(--edu-brand); outline-offset:4px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command button,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__incoming button,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff form button[type='button'] {
+  color:var(--edu-ink) !important; background:var(--edu-surface) !important; border:2px solid var(--edu-border) !important; box-shadow:0 3px 0 var(--play-depth) !important;
+}
+.edu-pickup-playful__guide { display:flex; align-items:center; flex-direction:column; position:relative; padding-top:4px; }
+.edu-pickup-playful__bubble { padding:10px 18px; border:2px solid var(--play-hero-border); border-radius:20px 20px 4px 20px; color:var(--edu-ink); background:var(--edu-surface); text-align:center; font-weight:900; font-size:15px; transform:rotate(3deg); position:absolute; top:0; right:-5px; z-index:1; }
+.edu-pickup-playful__guide .sq-parent-o11y { width:200px; height:190px; position:relative; overflow:hidden; margin-top:16px; border-radius:50%; background:#fff; border:3px solid var(--play-hero-border); }
+.edu-pickup-playful__guide .sq-parent-o11y-art { width:100%; height:100%; }
+.edu-pickup-playful__guide canvas { width:100%; height:100%; display:block; transform:translateY(12px) scale(1.25); touch-action:pan-y; }
+.edu-pickup-playful__guide .sq-parent-o11y-fallback { position:absolute; inset:0; display:grid; place-items:center; font-size:64px; color:#70ae2d; }
+.edu-pickup-playful__guide-label { display:flex; gap:6px; align-items:center; margin-top:9px; font-size:12px; font-weight:900; color:var(--edu-brand); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; align-items:stretch; }
+.edu-pickup-pulse__brief > div { display:flex; align-items:center; gap:16px; padding:18px 20px; border:2px solid var(--edu-border); border-radius:22px; background:var(--edu-surface); box-shadow:0 3px 0 var(--play-depth); }
+.edu-pickup-playful__stat-icon { display:grid; width:48px; height:48px; flex-shrink:0; place-items:center; background:var(--edu-brand-soft); color:var(--edu-brand); border-radius:16px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief strong { display:block; color:var(--edu-ink); font-size:30px; font-weight:900; line-height:1; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief small { display:block; margin-top:6px; color:var(--edu-muted); font-size:12px; font-weight:800; }
+.edu-pickup-playful__queue-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:12px; }
+.edu-pickup-playful__queue-heading h2 { font-size:26px; font-weight:900; letter-spacing:-.02em; }
+.edu-pickup-playful__queue-heading a { display:flex; align-items:center; gap:5px; color:var(--edu-brand); font-size:13px; font-weight:900; min-height:44px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .atlas-toolbar { padding:0; border:0; border-radius:0; background:transparent !important; box-shadow:none !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(input:not([type='checkbox']),select,textarea) { min-height:48px; font-family:inherit; border:2px solid var(--edu-border) !important; border-radius:15px; background:var(--edu-surface) !important; font-size:14px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[aria-pressed] { min-height:46px; padding:0 13px; border:2px solid var(--edu-border) !important; box-shadow:0 2px 0 var(--play-depth) !important; background:var(--edu-surface) !important; font-size:12px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[aria-pressed='true'] { border-color:var(--play-button-edge) !important; color:var(--edu-brand) !important; background:var(--edu-brand-soft) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(.edu-pickup-pulse__register,.edu-pickup-pulse__incoming-list,.edu-pickup-pulse__daily-list) { display:grid; grid-template-columns:1fr; gap:14px; overflow:visible; border:0; border-radius:0; background:transparent; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(.edu-pickup-v1__handoff,.edu-pickup-v1__incoming,.edu-pickup-v1__roster-card) { padding:22px; border:2px solid var(--edu-border) !important; border-bottom:5px solid var(--play-depth) !important; border-radius:23px !important; background:var(--edu-surface) !important; box-shadow:none !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(.edu-pickup-v1__handoff,.edu-pickup-v1__incoming,.edu-pickup-v1__roster-card):last-child { border-bottom:5px solid var(--play-depth) !important; }
+.edu-pickup-playful__learner { align-items:center; justify-content:flex-start; gap:18px; }
+.edu-pickup-playful__avatar { display:grid; width:66px; height:70px; flex:0 0 auto; place-items:center; background:var(--edu-brand-soft); color:var(--edu-brand); border:2px solid var(--edu-border); border-bottom-width:5px; border-radius:23px; font-size:23px; font-weight:900; transform:rotate(-4deg); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff h3 { font-size:22px; font-weight:900; letter-spacing:-.01em; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__status { padding:5px 9px; border-radius:9px; font-size:10px; letter-spacing:.05em; font-weight:900; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__verify,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff form button[type='submit'],
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__roster-card button {
+  min-height:48px; padding:0 20px; font-size:13px; font-weight:900; color:var(--play-button-ink) !important;
+  background:var(--play-button) !important; border:2px solid var(--play-button) !important; box-shadow:0 4px 0 var(--play-button-edge) !important;
+}
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff form { background:var(--edu-surface-muted) !important; border:2px solid var(--edu-border) !important; border-radius:20px; padding:20px; max-width:100%; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff form input[type='checkbox'] { width:20px; height:20px; accent-color:var(--edu-brand); flex-shrink:0; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__released { border:2px solid var(--edu-border) !important; border-radius:19px !important; background:var(--edu-surface) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__live > section { border-color:var(--edu-border); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .atlas-section-header { border-color:var(--edu-border); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .atlas-section-header h3 { font-family:inherit; font-size:19px; font-weight:900; }
+.edu-pickup-playful__credit { text-align:center; color:var(--edu-muted); font-size:11px; }
+.edu-pickup-playful__credit a { text-decoration:underline; text-underline-offset:3px; }
+@media (max-width:1000px) {
+  .edu-pickup-playful.edu-v1 { padding:18px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command { grid-template-columns:minmax(0,1fr) 210px; padding:26px; }
+  .edu-pickup-playful__bubble { right:-12px; }
+  .edu-pickup-pulse__brief > div { padding:16px 12px; gap:10px; }
+}
+@media (max-width:700px) {
+  .edu-pickup-playful.edu-v1 { padding:12px; border-radius:22px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command { grid-template-columns:minmax(0,1fr) 86px; padding:20px 16px; gap:4px; border-radius:23px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command h1 { font-size:29px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command p { font-size:12px; line-height:1.6; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command button { font-size:11px; padding:0 10px; margin-top:14px; }
+  .edu-pickup-playful__guide .sq-parent-o11y { width:92px; height:100px; margin-top:0; }
+  .edu-pickup-playful__bubble,.edu-pickup-playful__guide-label { display:none; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief { gap:7px; }
+  .edu-pickup-pulse__brief > div { flex-direction:column; align-items:flex-start; padding:12px 10px; gap:8px; border-radius:17px; }
+  .edu-pickup-playful__stat-icon { width:32px; height:32px; border-radius:10px; }
+  .edu-pickup-playful__stat-icon svg { width:19px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief strong { font-size:25px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief small { font-size:10px; line-height:1.4; }
+  .edu-pickup-playful__queue-heading h2 { font-size:23px; }
+  .edu-pickup-playful__queue-heading a { font-size:11px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(.edu-pickup-v1__handoff,.edu-pickup-v1__incoming,.edu-pickup-v1__roster-card) { padding:17px; }
+  .edu-pickup-playful__learner { gap:12px; }
+  .edu-pickup-playful__avatar { width:48px; height:56px; border-radius:17px; font-size:18px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff h3 { font-size:20px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff form { padding:13px; }
+}
+@media (prefers-reduced-motion:reduce) { body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button { transition:none; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button:active { transform:none; } }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-playful__learner { justify-content:flex-start; align-items:center; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(h2,h3,strong,.text-white,.text-slate-200,.text-slate-300) { color:var(--edu-ink) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(.text-slate-400,.text-slate-500,.text-slate-600) { color:var(--edu-muted) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful :is(.text-teal-200,.text-teal-300,.text-sky-200) { color:var(--edu-brand) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .atlas-section-header svg { color:var(--edu-brand) !important; }
+@media(max-width:700px) {
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command { padding:16px 14px; }
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command h1 { font-size:27px; margin:11px 0; }
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div { padding:10px 9px; flex-direction:row; flex-wrap:wrap; align-items:center; gap:7px; }
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief small { margin-top:4px; }
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div > span:last-child { flex:1; min-width:42px; }
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-playful__queue-heading { padding-top:0; }
+}
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .atlas-section-header p { color:var(--edu-muted) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful input::placeholder,body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful textarea::placeholder { color:var(--edu-muted) !important; opacity:1; }
+@media(max-width:700px) {
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div { flex-direction:column; align-items:flex-start; flex-wrap:nowrap; }
+ body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div > span:last-child { min-width:0; }
+}
+
+/* Colors sampled directly from the supplied Duolingo references. */
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command {
+ --edu-ink:#26440e; --edu-muted:#47662d; --edu-brand:#397d08; --edu-surface:#fff; --edu-border:#bde995; --play-depth:#a7d482;
+ color:var(--edu-ink); border-bottom-width:7px;
+}
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__command h1 { color:#26440e !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-playful__avatar { color:#075678; background:#e0f2ff; border-color:#abdff3; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-playful__bubble { color:#26440e; background:#fff; }
+
+/* Reference palette: orange = arrival, blue = incoming, purple = ready,
+   green = released, yellow = attention. Labels always carry the meaning. */
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful { --play-orange:#ff9600; --play-orange-edge:#e68200; --play-purple:#dc7bff; --play-purple-edge:#a947d0; --play-yellow:#ffc700; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div[data-tone='orange'] { --tile:#ff9600; --tile-edge:#e68200; --tile-ink:#542800; --tile-icon:#fff2dc; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div[data-tone='blue'] { --tile:#1cb0f6; --tile-edge:#1683b5; --tile-ink:#08374d; --tile-icon:#e0f2ff; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div[data-tone='green'] { --tile:#58cc02; --tile-edge:#3e9200; --tile-ink:#1e4109; --tile-icon:#d7ffb8; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div[data-tone] { background:var(--tile); border:2px solid var(--tile-edge); box-shadow:0 5px 0 var(--tile-edge); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div[data-tone] :is(strong,small) { color:var(--tile-ink) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-pulse__brief > div[data-tone] .edu-pickup-playful__stat-icon { color:var(--tile-ink); background:var(--tile-icon); border:2px solid var(--tile-edge); box-shadow:0 3px 0 var(--tile-edge); border-radius:50%; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-playful__attention { display:inline-flex; align-items:center; min-height:30px; padding:4px 11px; border:2px solid #d99b00; border-bottom-width:4px; border-radius:10px; background:var(--play-yellow) !important; color:#573900 !important; font-weight:900; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff[data-status='arrived'] { --card-accent:var(--play-orange); --card-edge:var(--play-orange-edge); --card-ink:#542800; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff[data-status='ready'] { --card-accent:var(--play-purple); --card-edge:var(--play-purple-edge); --card-ink:#481360; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff[data-status] { border-left:6px solid var(--card-accent) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__handoff[data-status] .edu-pickup-playful__avatar { background:var(--card-accent); border-color:var(--card-edge); color:var(--card-ink); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__status[data-status='arrived'] { background:var(--play-orange) !important; color:#542800 !important; border:1px solid var(--play-orange-edge) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__status[data-status='ready'] { background:var(--play-purple) !important; color:#481360 !important; border:1px solid var(--play-purple-edge) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__status[data-status='on_the_way'] { background:#1cb0f6 !important; color:#08374d !important; border:1px solid #1683b5 !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful .edu-pickup-v1__status[data-status='released'] { background:#58cc02 !important; color:#1e4109 !important; border:1px solid #3e9200 !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter='all'] { --filter-accent:#58cc02; --filter-ink:#1e4109; --filter-edge:#3e9200; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter='arrived'] { --filter-accent:var(--play-orange); --filter-ink:#542800; --filter-edge:var(--play-orange-edge); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter='ready'] { --filter-accent:var(--play-purple); --filter-ink:#481360; --filter-edge:var(--play-purple-edge); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter='incoming'] { --filter-accent:#1cb0f6; --filter-ink:#08374d; --filter-edge:#1683b5; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter='released'] { --filter-accent:#58cc02; --filter-ink:#1e4109; --filter-edge:#3e9200; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter]::before { content:''; display:inline-block; width:9px; height:9px; margin-right:7px; border-radius:50%; background:var(--filter-accent); border:1px solid var(--filter-edge); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter][aria-pressed='true'] { background:var(--filter-accent) !important; color:var(--filter-ink) !important; border-color:var(--filter-edge) !important; box-shadow:0 3px 0 var(--filter-edge) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-playful button[data-queue-filter][aria-pressed='true']::before { background:var(--filter-ink); }

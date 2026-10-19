@@ -27,7 +27,11 @@ import { buildProgramDuplicateDraft, getNextAcademicPeriod, getProgramOperationa
 import { buildPublicEnrollmentUrl } from '../utils/publicEnrollment';
 import { getEnrollmentCoverageState } from '../utils/membershipLifecycle';
 import { Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+import '../components/education-ui/education-system-v1.css';
 import './programs/education-programs-v1.css';
+import './programs/education-programs-playful.css';
+import './programs/education-programs-workspace.css';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 
 interface ProgramsViewProps {
   onEnrollLead?: (lead: Lead) => void;
@@ -35,14 +39,16 @@ interface ProgramsViewProps {
 
 export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const { programs, enrollments, navigateTo, leads, settings, viewParams } = useAppContext();
-  const { currentOrganization, can, userProfile } = useAuth();
+  const { currentOrganization, can, userProfile, user } = useAuth();
+  const workspaceScope = `programs:${currentOrganization?.id || 'none'}:${user?.uid || 'guest'}`;
+  useWorkspaceScroll(workspaceScope);
   const { alert: showAlert, confirm } = useConfirm();
   const [isProgramModalOpen, setProgramModalOpen] = useState(false);
   const [viewDetailProgramId, setViewDetailProgramId] = useState<string | null>(viewParams.programId || null);
   const [isEditingProgram, setIsEditingProgram] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | Program['status'] | 'active' | 'finished' | 'needs_setup'>('active');
+  const [searchQuery, setSearchQuery] = useWorkspaceViewState(workspaceScope, 'searchQuery', '');
+  const [statusFilter, setStatusFilter] = useWorkspaceViewState<'all' | Program['status'] | 'active' | 'finished' | 'needs_setup'>(workspaceScope, 'statusFilter', 'active');
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [isRolloverOpen, setIsRolloverOpen] = useState(false);
@@ -679,9 +685,10 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
         ? `Review ${portfolioFocus.emptyGroupCount} empty ${portfolioFocus.emptyGroupCount === 1 ? 'group' : 'groups'}`
         : '';
 
-  // Render Full Page Details if selected
-  if (viewDetailProgramId) {
-    return (
+  return (
+    <div className={`atlas-module atlas-programs-module flex flex-col gap-5 pb-8 ${showEducationProgramsV1 ? 'edu-v1 edu-programs-v1' : ''}`} data-edu-system={showEducationProgramsV1 ? '1' : undefined} data-testid={showEducationProgramsV1 ? 'education-programs-v1' : undefined}>
+
+      {viewDetailProgramId ? (
       <ProgramDetailsView
         programIdProp={viewDetailProgramId}
         onEnrollLead={(lead) => {
@@ -692,18 +699,10 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
         onPrintProgram={triggerPrint}
         onQuoteProgram={openDevisModal}
         onOpenEnrollmentAccess={openEnrollmentAccess}
-        onEditProgram={(program) => {
-          setViewDetailProgramId(null);
-          openEditProgram(program);
-        }}
-        onTogglePause={handleToggleProgramPause}
+        onEditProgram={canEditPrograms ? openEditProgram : undefined}
+        onTogglePause={canEditPrograms ? handleToggleProgramPause : undefined}
       />
-    );
-  }
-
-  return (
-    <div className={`atlas-module atlas-programs-module flex flex-col gap-5 pb-8 ${showEducationProgramsV1 ? 'edu-v1 edu-programs-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-programs-v1' : undefined}>
-
+      ) : (<>
       {/* Header Section */}
       {showEducationProgramsV1 ? (
         <section className="edu-programs-v1__command" aria-labelledby="education-programs-title">
@@ -789,7 +788,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
           <label className="flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-300">
             <Settings2 size={15} className="text-slate-500" />
             <span className="sr-only">Filter by status</span>
-            <select value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="bg-transparent font-bold outline-none">
+            <select aria-label="Filter by status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)} className="bg-transparent font-bold outline-none">
               <option value="all">All statuses</option>
               <option value="active">Active</option>
               <option value="paused">Paused</option>
@@ -845,6 +844,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                 <motion.article
                   layout
                   key={program.id}
+                  data-needs-setup={needsSetup}
+                  data-program-status={program.status}
                   initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
@@ -904,6 +905,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
         </div>
       )}
 
+      </>)}
+
       <ProgramSetupWizard
         key={selectedProgram?.id || (isEditingProgram ? 'edit-program' : 'new-program')}
         isOpen={isProgramModalOpen}
@@ -926,7 +929,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       />
 
       {/* Legacy editor retained temporarily as a rollback surface while the wizard settles. */}
-      <Modal isOpen={false} onClose={() => setProgramModalOpen(false)} title={isEditingProgram ? "Edit Program" : "New Program"} size="lg">
+      <Modal designSystem isOpen={false} onClose={() => setProgramModalOpen(false)} title={isEditingProgram ? "Edit Program" : "New Program"} size="lg">
         <div className="mb-5 flex items-start gap-3 rounded-lg border border-teal-300/15 bg-teal-300/[0.05] p-4">
           <Settings2 className="mt-0.5 shrink-0 text-teal-300" size={18} />
           <div>
@@ -1296,7 +1299,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
 
       {/* QR Code Modal for Kiosk */}
       {qrProgram && (
-        <Modal isOpen={!!qrProgram} onClose={() => setQrProgram(null)} title="Kiosk Access Link" size="md">
+        <Modal designSystem isOpen={!!qrProgram} onClose={() => setQrProgram(null)} title="Kiosk Access Link" size="md">
           <div className="text-center mb-6">
             <h3 className="text-xl font-bold text-white">{qrProgram.name}</h3>
             <p className="text-sm text-slate-400">Scan to open the public enrollment form</p>
@@ -1334,12 +1337,12 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       </div>
 
       {/* Devis Modal */}
-      <Modal isOpen={isDevisModalOpen} onClose={() => setIsDevisModalOpen(false)} title={`Generate Devis: ${devisTargetProgram?.name}`} size="md">
+      <Modal designSystem isOpen={isDevisModalOpen} onClose={() => setIsDevisModalOpen(false)} title={`Prepare a quote: ${devisTargetProgram?.name}`} size="md">
         {devisTargetProgram && (
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1">Parent / Client Name</label>
-              <input 
+              <label htmlFor="quote-parent" className="block text-xs font-bold text-slate-400 mb-1">Parent / Client Name</label>
+              <input id="quote-parent"
                 className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white outline-none focus:border-teal-400"
                 value={devisConfig.parentName}
                 onChange={e => setDevisConfig(prev => ({ ...prev, parentName: e.target.value }))}
@@ -1348,8 +1351,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1">Child Name (Optional)</label>
-              <input 
+              <label htmlFor="quote-child" className="block text-xs font-bold text-slate-400 mb-1">Child Name (Optional)</label>
+              <input id="quote-child"
                 className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white outline-none focus:border-teal-400"
                 value={devisConfig.childName}
                 onChange={e => setDevisConfig(prev => ({ ...prev, childName: e.target.value }))}
@@ -1357,8 +1360,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1">Session Details / Dates (Optional)</label>
-              <textarea 
+              <label htmlFor="quote-dates" className="block text-xs font-bold text-slate-400 mb-1">Session Details / Dates (Optional)</label>
+              <textarea id="quote-dates"
                 className="h-20 w-full resize-none rounded-lg border border-slate-800 bg-slate-950 p-3 text-sm text-white outline-none focus:border-teal-400"
                 value={devisConfig.sessionDetails}
                 onChange={e => setDevisConfig(prev => ({ ...prev, sessionDetails: e.target.value }))}
@@ -1403,8 +1406,8 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 mb-1">Discount Amount (Optional)</label>
-              <input 
+              <label htmlFor="quote-discount" className="block text-xs font-bold text-slate-400 mb-1">Discount Amount (Optional)</label>
+              <input id="quote-discount"
                 type="number"
                 min="0"
                 className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white outline-none focus:border-teal-400"
@@ -1425,7 +1428,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                 disabled={devisConfig.selectedPacks.length === 0}
                 className="flex min-h-10 items-center gap-2 rounded-lg bg-teal-500 px-6 py-2 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <FileText size={18} /> Generate Devis
+                <FileText size={18} /> Generate quote
               </button>
             </div>
           </div>

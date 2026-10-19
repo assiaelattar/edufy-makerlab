@@ -1,3 +1,4 @@
+import { useWorkspaceViewState, useWorkspaceScroll } from '../components/education-ui/useWorkspaceViewState';
 
 import React, { useState, useMemo } from 'react';
 import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, FileDown, AlertTriangle, Users, ShieldCheck, Wallet, Link as LinkIcon } from 'lucide-react';
@@ -30,15 +31,17 @@ export const StudentsView = ({
     onViewProfile: (id: string) => void
 }) => {
     const { students, enrollments, programs, bookings, leads, navigateTo, settings } = useAppContext();
-    const { can, currentOrganization } = useAuth();
+    const { can, currentOrganization, user } = useAuth();
+    const workspaceScope = `students:${currentOrganization?.id || 'none'}:${user?.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
     const { confirm, alert: showAlert } = useConfirm();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterProgramId, setFilterProgramId] = useState('');
-    const [filterGradeName, setFilterGradeName] = useState('');
-    const [filterDay, setFilterDay] = useState('');
-    const [filterAudience, setFilterAudience] = useState<'all' | 'kids' | 'adults'>('all');
-    const [showArchived, setShowArchived] = useState(false);
-    const [directoryFilter, setDirectoryFilter] = useState<StudentDirectoryFilter>('all');
+    const [searchQuery, setSearchQuery] = useWorkspaceViewState(workspaceScope, 'searchQuery', '');
+    const [filterProgramId, setFilterProgramId] = useWorkspaceViewState(workspaceScope, 'filterProgramId', '');
+    const [filterGradeName, setFilterGradeName] = useWorkspaceViewState(workspaceScope, 'filterGradeName', '');
+    const [filterDay, setFilterDay] = useWorkspaceViewState(workspaceScope, 'filterDay', '');
+    const [filterAudience, setFilterAudience] = useWorkspaceViewState<'all' | 'kids' | 'adults'>(workspaceScope, 'filterAudience', 'all');
+    const [showArchived, setShowArchived] = useWorkspaceViewState(workspaceScope, 'showArchived', false);
+    const [directoryFilter, setDirectoryFilter] = useWorkspaceViewState<StudentDirectoryFilter>(workspaceScope, 'directoryFilter', 'all');
 
     // Selection state
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -51,7 +54,7 @@ export const StudentsView = ({
     const [showAutofillResults, setShowAutofillResults] = useState(false);
 
     // Parent View Mode state
-    const [viewMode, setViewMode] = useState<'students' | 'parents'>('students');
+    const [viewMode, setViewMode] = useWorkspaceViewState<'students' | 'parents'>(workspaceScope, 'viewMode', 'students');
     const [selectedParentStatement, setSelectedParentStatement] = useState<any>(null);
     const [selectedParentProgramIds, setSelectedParentProgramIds] = useState<string[]>([]);
 
@@ -434,7 +437,7 @@ export const StudentsView = ({
         <div className={`atlas-module atlas-students-module flex flex-col space-y-6 pb-24 md:pb-8 ${showEducationStudentsV1 ? 'edu-v1 edu-students-v1' : ''}`} data-testid={showEducationStudentsV1 ? 'education-students-v1' : undefined}>
             {/* Header with Actions */}
             {showEducationStudentsV1 ? (
-                <EducationStudentsOperationsV1
+                <EducationStudentsOperationsV1 workspaceScope={workspaceScope}
                     students={students}
                     enrollments={enrollments}
                     programs={programs}

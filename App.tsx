@@ -1389,7 +1389,7 @@ const AppContent = () => {
 
             {/* --- GLOBAL PAYMENT MODAL --- */}
             <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record a payment" size="lg">
-                <form onSubmit={handleSubmitPayment} className="mx-auto w-full max-w-xl space-y-5">
+                <form onSubmit={handleSubmitPayment} className="edu-dashboard-payment-form mx-auto w-full max-w-xl space-y-5">
                     <div>
                         <p className="text-sm font-semibold text-white">Who is this payment for?</p>
                         <p className="mt-1 text-xs leading-5 text-slate-400">Choose one student or pay for several children in the same family.</p>

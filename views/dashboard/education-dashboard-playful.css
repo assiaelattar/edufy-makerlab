@@ -1,0 +1,189 @@
+/* Layout adapters for Design System v1; no independent module palette. */
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 { --dash-green:var(--ds-green-ink); --dash-blue:var(--ds-blue-ink); --dash-blue-soft:var(--ds-blue-soft); --dash-warning:var(--ds-orange-ink); --dash-warning-soft:var(--ds-orange-soft); --edu-radius-card:24px; font-family:var(--ds-font-body); background:transparent; border:0; padding:22px 8px 48px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 :is(h1,h2,h3,strong,b) { font-family:Nunito,sans-serif; letter-spacing:-.02em; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__welcome { align-items:center; padding:12px 4px 18px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__welcome h1 { font-weight:900; letter-spacing:-.035em; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-v1-kicker { color:var(--edu-muted); font-size:10px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-v1-section-header h3 { color:var(--edu-ink); font-size:23px; font-weight:900; line-height:1.2; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-v1-section-header p { color:var(--edu-muted); font-size:13px; line-height:1.5; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 :is(.edu-v1-surface,.edu-dashboard-v1__metric,.edu-dashboard-v1__workshop) { border:2px solid var(--edu-border); border-bottom-width:4px; border-radius:24px; background:var(--edu-surface); color:var(--edu-ink); box-shadow:none; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day { background:var(--edu-surface); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus { background:var(--edu-brand-soft); border:2px solid var(--ds-green); border-bottom:5px solid var(--ds-green-edge); border-radius:22px; color:var(--edu-ink); box-shadow:none; gap:9px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus::after,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__contour,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__readiness-contour { display:none; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus > :is(span,p),
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus > span b { color:var(--dash-green); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus > strong { color:var(--edu-ink); font-weight:900; overflow-wrap:anywhere; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 :is(.edu-v1-button,.edu-dashboard-v1__day-focus > button) { border:2px solid var(--edu-border); border-bottom-width:4px; border-radius:14px; color:var(--edu-ink); background:var(--edu-surface); box-shadow:none; font-weight:800; min-height:44px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-v1-button[data-edu-variant="primary"],
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus > button { color:var(--ds-on-color); background:var(--ds-blue); border-color:var(--ds-blue-edge); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-v1-button[data-edu-variant="quiet"] { background:transparent; border-color:transparent; color:var(--dash-blue); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 button:focus-visible,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 select:focus-visible { outline:3px solid var(--ds-blue); outline-offset:3px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 button:active { transform:translateY(2px); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__session-row { color:var(--edu-ink); border-color:var(--edu-border); border-radius:12px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__session-row:hover { background:var(--edu-surface-muted); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__session-copy small,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__session-row > svg { color:var(--edu-muted); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__session-copy strong,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list strong,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list small { white-space:normal; overflow-wrap:anywhere; text-overflow:clip; line-height:1.4; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__dayline-marker { color:var(--dash-green); background:var(--edu-brand-soft); border-color:var(--edu-surface); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__dayline-marker[data-tone="warm"],
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__dayline-marker[data-tone="lilac"] { color:var(--dash-blue); background:var(--dash-blue-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__dayline::before { background:var(--edu-border); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__capacity { color:var(--edu-muted); background:var(--edu-surface-muted); text-transform:none; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list > button { background:var(--edu-surface-muted); border:1px solid var(--edu-border); border-radius:14px; padding:12px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list > button > span:first-child { color:var(--dash-blue); background:var(--dash-blue-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list > button > span:first-child[data-tone="brand"] { color:var(--dash-green); background:var(--edu-brand-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list > button > span:first-child[data-tone="warm"] { color:var(--dash-warning); background:var(--dash-warning-soft); border-bottom:3px solid var(--ds-orange); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list > button > span:first-child[data-tone="lilac"] { color:var(--dash-blue); background:var(--dash-blue-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list small,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__priority-list > button > svg { color:var(--edu-muted); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__disclosure { margin-top:14px; width:100%; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric { min-height:160px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric-icon,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric[data-edu-surface="ink"] .edu-dashboard-v1__metric-icon,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric[data-edu-surface="neutral"] .edu-dashboard-v1__metric-icon { color:var(--dash-blue); background:var(--dash-blue-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric[data-edu-surface="brand"] .edu-dashboard-v1__metric-icon { color:var(--dash-green); background:var(--edu-brand-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric-label,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__metric-note { color:var(--edu-muted); opacity:1; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-chart { gap:8px; background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 45px,var(--edu-border) 46px); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-chart > button { min-width:0; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-chart u { background:var(--ds-blue); border-bottom:4px solid var(--ds-blue-edge); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-chart > button:focus-visible > span { opacity:1; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-actions button:first-child,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-actions button:last-child { background:var(--edu-surface-muted); color:var(--edu-ink); border:1px solid var(--edu-border); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__readiness-top { margin-bottom:24px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__readiness-top > span,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__community-heading > span { color:var(--dash-green); background:var(--edu-brand-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__readiness-top > b { color:var(--dash-green); background:var(--edu-brand-soft); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__readiness > p,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__community > button small,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__birthdays > span small,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__no-birthdays { color:var(--edu-muted); font-size:12px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__community > button { color:var(--edu-ink); background:var(--edu-surface-muted); border-color:var(--edu-border); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__community > button strong,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__birthdays > span strong { font-size:13px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__birthdays { border-color:var(--edu-border); flex-wrap:wrap; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__birthdays > div { flex-wrap:wrap; gap:4px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__birthdays > div > button { color:var(--dash-blue); background:var(--dash-blue-soft); border-color:var(--edu-surface); margin:0; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__clear-day { background:var(--edu-surface-muted); border-color:var(--edu-border); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__school-day .edu-dashboard-v1__clear-day p { color:var(--edu-muted); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup-empty { display:flex; gap:14px; align-items:center; border:1px dashed var(--edu-border); border-radius:16px; padding:24px; background:var(--edu-surface-muted); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup-empty svg { color:var(--dash-green); flex-shrink:0; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup-empty p { font-size:13px; color:var(--edu-muted); margin:4px 0 0; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup { background:transparent; border:0; padding:0; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup .atlas-section-header { display:none; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup-column,
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup-item { border:1px solid var(--edu-border); border-radius:16px; background:var(--edu-surface-muted); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup-item { background:var(--edu-surface); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup :is(h4,h5,span) { color:var(--edu-ink); }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup p { color:var(--edu-muted); white-space:normal; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-followup .atlas-action { border-radius:12px; min-height:44px; background:var(--dash-blue-soft); color:var(--dash-blue); border:1px solid var(--edu-border); border-bottom-width:3px; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-v1-progress u { background:var(--ds-green); }
+
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-payment-form,.edu-dashboard-followup-form) { font-family:Nunito,sans-serif; }
+
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-payment-form,.edu-dashboard-followup-form) :is(input,select,textarea,button) { border-radius:12px; min-height:44px; }
+
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-payment-form,.edu-dashboard-followup-form) :is(input,select,textarea):focus-visible { outline:3px solid #1cb0f6; outline-offset:2px; }
+
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-payment-form,.edu-dashboard-followup-form) [aria-pressed="true"] { background:#d7ffb8!important; color:#263c44!important; border:2px solid #58cc02; box-shadow:0 3px 0 #4eaf06; }
+
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-payment-form,.edu-dashboard-followup-form) :is(button[type="submit"],[data-atlas-variant="primary"]) { background:#1cb0f6!important; color:#08374d!important; border:2px solid #1683b5; border-bottom-width:4px; }
+
+@media(max-width:700px) { body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 { padding:10px 0 40px; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__finance-chart { gap:4px; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__quick-actions { grid-template-columns:1fr; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__quick-actions .edu-v1-button:last-child { grid-column:auto; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__day-focus { padding:16px; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__session-copy strong { font-size:13px; } }
+
+/* Leave no transformed containing block around the fixed follow-up dialog. */
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 > * { animation-fill-mode: backwards; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1__workshop { overflow: visible; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 :is(button,input,select,textarea) { font-family: Nunito,sans-serif; }
+
+/* Explicit field colors prevent legacy pale inputs from leaking into dark dialogs. */
+body.education-ui-v1-active[data-edu-theme] .atlas-dialog:has(:is(.edu-dashboard-followup-form,.edu-dashboard-payment-form)) { --dash-form-bg:#fff; --dash-form-field:#f1f9fd; --dash-form-ink:#263c44; --dash-form-muted:#596e77; --dash-form-border:#dce6e9; background:var(--dash-form-bg); color:var(--dash-form-ink); border-radius:24px; }
+body.education-ui-v1-active[data-edu-theme="dark"] .atlas-dialog:has(:is(.edu-dashboard-followup-form,.edu-dashboard-payment-form)) { --dash-form-bg:#103247; --dash-form-field:#183f53; --dash-form-ink:#f7fcff; --dash-form-muted:#adc7d5; --dash-form-border:#305466; }
+body.education-ui-v1-active[data-edu-theme] .atlas-dialog:has(:is(.edu-dashboard-followup-form,.edu-dashboard-payment-form)) .atlas-dialog-header { background:var(--dash-form-bg); border-color:var(--dash-form-border); }
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-followup-form,.edu-dashboard-payment-form) :is(input,select,textarea) { background:var(--dash-form-field)!important; color:var(--dash-form-ink)!important; border:1px solid var(--dash-form-border)!important; }
+body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-followup-form,.edu-dashboard-payment-form) :is(input,textarea)::placeholder { color:var(--dash-form-muted)!important; }
+@media(max-width:700px) { body.education-ui-v1-active[data-edu-theme] .atlas-dialog:has(:is(.edu-dashboard-followup-form,.edu-dashboard-payment-form)) { border-radius:0; } }
+
+body.education-ui-v1-active[data-edu-theme] .edu-dashboard-payment-form [role="radio"][aria-checked="true"] { background:#d7ffb8!important; color:#263c44!important; border-color:#58cc02!important; box-shadow:0 3px 0 #4eaf06; }
+body.education-ui-v1-active[data-edu-theme] .edu-dashboard-payment-form [role="radio"][aria-checked="true"] svg { color:#397d08!important; }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__welcome { display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:12px 24px; padding:24px; border:2px solid var(--ds-green); border-bottom:5px solid var(--ds-green-edge); border-radius:24px; background:var(--ds-green-soft); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__quick-actions { grid-column:1 / -1; display:flex; flex-wrap:wrap; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__command-grid { grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__day-focus { background:var(--ds-purple-soft); border-color:var(--ds-purple); border-bottom-color:var(--ds-purple-edge); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__day-focus > span { color:var(--ds-purple-ink); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__priority-list > button > span:first-child[data-tone="lilac"] { background:var(--ds-purple); color:var(--ds-on-color); }
+@media(max-width:800px) { body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__command-grid { grid-template-columns:1fr; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__welcome { grid-template-columns:minmax(0,1fr) 85px; padding:18px; gap:8px; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-ds-mascot { width:85px; height:100px; } body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__welcome h1 { font-size:27px; } }
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__metric { background:var(--accent-soft); border-bottom-color:var(--accent); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__metric .edu-dashboard-v1__metric-icon { background:var(--accent); color:var(--ds-on-color); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__priority-list > button > span:first-child[data-tone="lilac"] { background:var(--ds-yellow); color:var(--ds-on-color); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__day-focus > p { color:var(--ds-purple-ink); }

@@ -1,3 +1,5 @@
+import { EducationDetailPanel } from '../../components/education-ui/EducationPrimitives';
+import { useWorkspaceViewState } from '../../components/education-ui/useWorkspaceViewState';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Archive,
@@ -28,6 +30,9 @@ import { EducationAdmissionsReadOnlyV1 } from '../../modules/admissions/ui/Educa
 import { formatCurrency } from '../../utils/helpers';
 import { STUDENT_DIRECTORY_ISSUE_LABELS, type StudentDuplicateGroup } from '../../utils/studentIdentity';
 import './education-students-operations-v1.css';
+import './education-students-pulse.css';
+import './education-students-playful.css';
+import '../../components/education-ui/education-system-v1.css';
 
 type ViewMode = 'students' | 'parents';
 type WorkspaceMode = ViewMode | 'admissions';
@@ -88,6 +93,7 @@ type Props = {
   allFilteredSelected: boolean;
   toggleSelectAll: () => void;
   can: (permission: string) => boolean;
+  workspaceScope?: string;
   onAddStudent: () => void;
   onEditStudent: (student: any, field?: 'name' | 'parentName' | 'parentPhone' | 'birthDate' | 'school') => void;
   onEditEnrollment: (studentId: string, enrollmentId: string) => void;
@@ -161,6 +167,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   allFilteredSelected,
   toggleSelectAll,
   can,
+  workspaceScope = 'students:synthetic',
   onAddStudent,
   onEditStudent,
   onEditEnrollment,
@@ -170,12 +177,12 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   onLinkParent,
   onOpenParentStatement,
 }) => {
-  const [smartView, setSmartView] = useState<SmartView>('all');
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+  const [smartView, setSmartView] = useWorkspaceViewState<SmartView>(workspaceScope, 'smartView', 'all');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useWorkspaceViewState(workspaceScope, 'showAdvancedFilters', false);
+  const [selectedStudentId, setSelectedStudentId] = useWorkspaceViewState<string>(workspaceScope, 'selectedStudentId', '');
   const [showDuplicateReview, setShowDuplicateReview] = useState(false);
   const [selectedFamilyPhone, setSelectedFamilyPhone] = useState<string>('');
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(viewMode);
+  const [workspaceMode, setWorkspaceMode] = useWorkspaceViewState<WorkspaceMode>(workspaceScope, 'workspaceMode', viewMode);
 
   const changeWorkspaceMode = (mode: WorkspaceMode) => {
     setWorkspaceMode(mode);
@@ -184,18 +191,18 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
 
   const headingCopy = workspaceMode === 'students'
     ? {
-      eyebrow: 'School community · student operations',
-      title: 'Find every learner.',
-      description: 'All learners are shown by default. Search by learner, family, phone or school, or choose a focused worklist.',
+      eyebrow: 'School community',
+      title: 'Students',
+      description: 'Learner records, family contacts and class placement.',
     }
     : workspaceMode === 'parents'
       ? {
         eyebrow: 'School community · family accounts',
-        title: 'Keep every family understood.',
+        title: 'Families',
         description: 'See siblings, balances, and contact context together before opening a statement.',
       }
       : {
-        eyebrow: 'Family journey · admissions preview',
+        eyebrow: 'Family journey · admissions',
         title: 'Know the family’s next step.',
         description: 'See every inquiry from first contact through trial and enrollment, with ambiguous legacy evidence clearly marked.',
       };
@@ -303,7 +310,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
   ] : [];
 
   return (
-    <div className="edu-student-ops" data-testid="education-students-operations-v1">
+    <div data-edu-system="1" className="edu-student-ops edu-student-pulse edu-student-playful" data-testid="education-students-operations-v1">
       <section className="edu-student-ops__heading" aria-labelledby="student-ops-title">
         <div>
           <span className="edu-student-ops__eyebrow">{headingCopy.eyebrow}</span>
@@ -311,40 +318,31 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
           <p>{headingCopy.description}</p>
         </div>
         <div className="edu-student-ops__heading-tools">
-          <div className="edu-student-ops__mode" role="group" aria-label="Community view">
-            <button type="button" aria-pressed={workspaceMode === 'students'} onClick={() => changeWorkspaceMode('students')}>Students</button>
-            <button type="button" aria-pressed={workspaceMode === 'parents'} onClick={() => changeWorkspaceMode('parents')}>Families</button>
-            <button type="button" aria-pressed={workspaceMode === 'admissions'} onClick={() => changeWorkspaceMode('admissions')}>Admissions</button>
-          </div>
           {workspaceMode !== 'admissions' && can('students.enroll') && <button className="edu-student-ops__button" type="button" onClick={() => onQuickEnroll()}><Zap size={16} />Quick enroll</button>}
           {workspaceMode !== 'admissions' && can('students.edit') && <button className="edu-student-ops__button edu-student-ops__button--primary" type="button" onClick={onAddStudent}><Plus size={17} />Add student</button>}
         </div>
       </section>
 
+      <nav className="pulse-students-navigation" aria-label="School community">
+          <div className="edu-student-ops__mode" role="group" aria-label="Community view">
+            <button type="button" aria-pressed={workspaceMode === 'students'} onClick={() => changeWorkspaceMode('students')}>Students</button>
+            <button type="button" aria-pressed={workspaceMode === 'parents'} onClick={() => changeWorkspaceMode('parents')}>Families</button>
+            <button type="button" aria-pressed={workspaceMode === 'admissions'} onClick={() => changeWorkspaceMode('admissions')}>Admissions</button>
+          </div>
+      </nav>
+
       {workspaceMode === 'students' ? (
         <>
-          <section className="edu-student-ops__priority-grid" aria-label="Student priorities">
-            <button type="button" className="edu-student-ops__priority edu-student-ops__priority--lime" onClick={() => handleSmartView('attention')}>
-              <span><small>Operational readiness</small><strong>{issueCounts.attention} record{issueCounts.attention === 1 ? '' : 's'} block daily work</strong></span>
-              <span className="edu-student-ops__priority-icon"><ShieldCheck size={20} /></span>
-              <span className="edu-student-ops__priority-meta">Resolve contact, enrollment, class, or identity gaps <ChevronRight size={15} /></span>
-            </button>
-            <button type="button" className="edu-student-ops__priority" onClick={() => handleSmartView('enrollment')}>
-              <span><small>Enrollment decisions</small><strong>{directorySummary.noEnrollment} learner{directorySummary.noEnrollment === 1 ? '' : 's'} need a program</strong></span>
-              <span className="edu-student-ops__priority-icon"><GraduationCap size={20} /></span>
-              <span className="edu-student-ops__priority-meta">Move from record to enrollment <ChevronRight size={15} /></span>
-            </button>
-            <button type="button" className="edu-student-ops__priority edu-student-ops__priority--ink" onClick={() => handleSmartView('placement')}>
-              <span><small>Ready to place</small><strong>{directorySummary.unassignedGroup} learner{directorySummary.unassignedGroup === 1 ? '' : 's'} need the right class</strong></span>
-              <span className="edu-student-ops__priority-icon"><MapPin size={20} /></span>
-              <span className="edu-student-ops__priority-meta">Match by program, level and day <ChevronRight size={15} /></span>
-            </button>
-          </section>
+          <div className="pulse-students-summary" aria-label="Student record summary">
+            <div data-tone="green"><UsersRound size={24}/><span><b>{stats.active}</b><small>Active learners</small></span></div>
+            <button data-tone="orange" type="button" onClick={() => handleSmartView('attention')}><ShieldCheck size={24}/><span><b>{issueCounts.attention}</b><small>Records to review</small></span><ChevronRight size={18}/></button>
+            <div data-tone="blue"><GraduationCap size={24}/><span><b>{stats.enrolled}</b><small>Enrolled learners</small></span></div>
+          </div>
 
           <section className="edu-student-ops__desk" aria-label="Student operations desk">
-            <div className="edu-student-ops__roster">
+            <div id="pulse-students-roster" tabIndex={-1} className="edu-student-ops__roster">
               <div className="edu-student-ops__section-heading">
-                <div><h2>Smart roster</h2><p>An explainable worklist, ordered around the job.</p></div>
+                <div><h2>Learner directory</h2><p>Choose a learner or focus on records that need attention.</p></div>
                 <span>{visibleStudents.length} shown</span>
               </div>
 
@@ -361,7 +359,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
 
               <div className="edu-student-ops__smart-views" role="group" aria-label="Smart roster views">
                 {SMART_VIEWS.map(view => (
-                  <button key={view.id} type="button" aria-pressed={smartView === view.id} onClick={() => handleSmartView(view.id)}>
+                  <button key={view.id} data-view={view.id} type="button" aria-pressed={smartView === view.id} onClick={() => handleSmartView(view.id)}>
                     {view.label}<span>{issueCounts[view.id]}</span>
                   </button>
                 ))}
@@ -397,7 +395,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                   const firstIssue = primaryIssue ? STUDENT_DIRECTORY_ISSUE_LABELS[primaryIssue] : 'Record ready';
                   const isSelected = selectedStudent?.id === student.id;
                   return (
-                    <div key={student.id} className="edu-student-ops__student-row" data-selected={isSelected}>
+                    <div key={student.id} className="edu-student-ops__student-row" data-selected={isSelected} data-needs-action={operationalIssues.length > 0}>
                       <label className="edu-student-ops__row-check" onClick={event => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${student.name}`} checked={selectedIds.includes(student.id)} onChange={() => setSelectedIds(current => current.includes(student.id) ? current.filter(id => id !== student.id) : [...current, student.id])} /></label>
                       <button type="button" className="edu-student-ops__student-main" onClick={() => onViewProfile(student.id)} aria-label={`Open ${student.name}'s profile`}>
                         <span className="edu-student-ops__avatar">{getInitials(student.name)}</span>
@@ -411,15 +409,15 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
               </div>
             </div>
 
-            <aside id="student-ops-passport" className="edu-student-ops__passport" aria-label="Selected student operational passport">
+            <EducationDetailPanel id="student-ops-passport" className="edu-student-ops__passport" label="Selected student operational passport">
               {selectedStudent ? (
                 <>
                   <div className="edu-student-ops__passport-top">
-                    <span className="edu-student-ops__passport-label">Student passport · one operational view</span>
+                    <div className="pulse-students-preview-heading"><span className="edu-student-ops__passport-label">Learner overview</span><button type="button" onClick={() => { const roster = document.getElementById('pulse-students-roster'); roster?.focus({ preventScroll: true }); roster?.scrollIntoView({ block: 'start', behavior: 'auto' }); }}>Back to list</button></div>
                     <div className="edu-student-ops__passport-person"><span>{getInitials(selectedStudent.name)}</span><div><h2>{selectedStudent.name}</h2><p>{selectedStudent.status === 'inactive' ? 'Archived learner' : `Active learner · joined ${getDate(selectedStudent.createdAt)}`}</p></div></div>
                   </div>
                   <div className="edu-student-ops__passport-body">
-                    {nextAction && <div className="edu-student-ops__next-action"><span><Sparkles size={17} /></span><div><small>Next best action</small><strong>{nextAction.label}</strong></div><button type="button" onClick={nextAction.action}>{nextAction.button}</button></div>}
+                    {nextAction && <div className="edu-student-ops__next-action" data-attention={selectedIssues.length > 0}><span><Sparkles size={17} /></span><div><small>Next step</small><strong>{nextAction.label}</strong></div><button type="button" onClick={nextAction.action}>{nextAction.button}</button></div>}
                     {showDuplicateReview && selectedDuplicateGroups.length > 0 && <div className="edu-student-ops__duplicate-review" aria-label="Possible duplicate records">
                       <div className="edu-student-ops__duplicate-heading"><strong>Compare matching records</strong><button type="button" onClick={() => setShowDuplicateReview(false)} aria-label="Close comparison"><X size={16} /></button></div>
                       <p>Check the family and learner details before changing either record.</p>
@@ -453,7 +451,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                   </div>
                 </>
               ) : <div className="edu-student-ops__empty edu-student-ops__empty--passport"><UsersRound size={24} /><strong>No learner selected</strong><span>Choose a learner from the smart roster.</span></div>}
-            </aside>
+            </EducationDetailPanel>
           </section>
         </>
       ) : workspaceMode === 'parents' ? (
@@ -486,7 +484,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
           </aside>
         </section>
       ) : (
-        <EducationAdmissionsReadOnlyV1 projection={admissionProjection} programs={programs} canUseWhatsApp={can('admissions.whatsapp')} />
+        <EducationAdmissionsReadOnlyV1 projection={admissionProjection} programs={programs} canUseWhatsApp={can('admissions.whatsapp')} workspaceScope={`${workspaceScope}:admissions`} />
       )}
     </div>
   );

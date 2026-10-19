@@ -7,6 +7,7 @@ interface SuccessModalProps {
     title: string;
     message: string;
     showConfetti?: boolean;
+    designSystem?: boolean;
 }
 
 export const SuccessModal: React.FC<SuccessModalProps> = ({
@@ -15,11 +16,13 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
     title,
     message,
     showConfetti = true,
+    designSystem = false,
 }) => {
     if (!isOpen) return null;
 
     return (
         <div
+            data-edu-system={designSystem ? '1' : undefined}
             className="fixed inset-0 z-[100] flex items-center justify-center p-3 animate-in fade-in duration-200 sm:p-5"
             role="dialog"
             aria-modal="true"

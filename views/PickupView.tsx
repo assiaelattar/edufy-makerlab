@@ -32,6 +32,9 @@ import {
 } from '../components/atlas/AtlasSurface';
 import './family-journey/education-family-journey-v1.css';
 import './pickup/education-pickup-v1.css';
+import './pickup/education-pickup-pulse.css';
+import './pickup/education-pickup-playful.css';
+import { ParentO11Y } from '../sparkquest/components/ParentO11Y';
 
 type QueueFilter = 'all' | 'arrived' | 'ready' | 'incoming' | 'released';
 
@@ -422,7 +425,7 @@ export const PickupView = () => {
     };
 
     const filterOptions: Array<{ id: QueueFilter; label: string; count: number }> = [
-        { id: 'all', label: 'All active', count: queueGroups.length },
+        { id: 'all', label: 'All pickups', count: queueGroups.length },
         { id: 'arrived', label: 'At gate', count: pickupSignals.arrived },
         { id: 'ready', label: 'Learner ready', count: pickupSignals.ready },
         { id: 'incoming', label: 'Incoming', count: pickupSignals.onTheWay },
@@ -433,29 +436,29 @@ export const PickupView = () => {
         const isPending = pendingAction === `release:${group.entry.studentId}`;
         const learnerReady = group.entry.status === 'ready';
         return (
-            <article key={group.entry.id} className="edu-pickup-v1__handoff rounded-lg border border-amber-300/25 bg-slate-900 p-4">
-                <div className="flex items-start justify-between gap-3">
+            <article key={group.entry.id} data-status={group.entry.status} className="edu-pickup-v1__handoff rounded-lg border border-amber-300/25 bg-slate-900 p-4">
+                <div className="edu-pickup-playful__learner flex items-start justify-between gap-3">
+                    {showEducationFamilyJourneyV1 && <span className="edu-pickup-playful__avatar" aria-hidden="true">{group.entry.studentName.split(' ').filter(Boolean).slice(0, 2).map(part => part[0]).join('')}</span>}
                     <div className="min-w-0">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <span className={`rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${learnerReady ? 'bg-amber-300 text-slate-950' : 'border border-teal-300/25 bg-teal-300/10 text-teal-200'}`}>{learnerReady ? 'Learner ready · optional signal' : 'Parent at gate'}</span>
+                            <span data-status={group.entry.status} className={`edu-pickup-v1__status rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${learnerReady ? 'bg-amber-300 text-slate-950' : 'border border-teal-300/25 bg-teal-300/10 text-teal-200'}`}>{learnerReady ? 'Learner ready' : 'Parent at gate'}</span>
                             <span className="font-mono text-xs text-amber-200">{formatTime(group.entry)}</span>
                             {group.duplicateCount > 0 && <span className="text-[10px] font-bold text-slate-500">{group.duplicateCount + 1} records linked</span>}
                         </div>
                         <h3 className="truncate text-xl font-black text-white">{group.entry.studentName}</h3>
                         <p className="mt-1 flex items-center gap-2 truncate text-sm text-slate-400"><UserCheck size={14} className="shrink-0" />{group.entry.pickerName || group.entry.parentName || 'Pickup contact not listed'}</p>
-                        {!learnerReady && <p className="mt-2 text-xs leading-5 text-slate-400">The learner-ready button is optional. Staff may verify the authorized picker and complete the handoff now.</p>}
                     </div>
                 </div>
                 {isGatekeeper ? (
-                    verificationEntryId === group.entry.id ? <form className="mt-4 space-y-3 rounded-xl border border-teal-300/30 bg-slate-950/60 p-3" onSubmit={event => { event.preventDefault(); void releaseStudent(group); }}>
+                    verificationEntryId === group.entry.id ? <form aria-label={`Verify pickup for ${group.entry.studentName}`} className="mt-4 space-y-3 rounded-xl border border-teal-300/30 bg-slate-950/60 p-3" onSubmit={event => { event.preventDefault(); void releaseStudent(group); }}>
                         <p className="text-xs font-bold text-teal-200">Match the person in front of you to the authorized picker: {group.entry.pickerName}</p>
                         <label htmlFor={`pickup-method-${group.entry.id}`} className="block text-xs font-bold text-slate-200">How was their identity checked?</label>
-                        <select id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')} className="min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30"><option value="photo_id">Photo ID</option><option value="known_person">Known person</option></select>
+                        <select autoFocus id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')} className="min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30"><option value="photo_id">Photo ID</option><option value="known_person">Known person</option></select>
                         <label htmlFor={`pickup-note-${group.entry.id}`} className="block text-xs font-bold text-slate-200">Verification note</label>
                         <textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} minLength={8} maxLength={500} required rows={2} placeholder="Record what you checked; do not enter an ID number." className="w-full rounded-lg border border-white/20 bg-slate-900 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30" />
                         <label className="flex items-start gap-2 text-xs leading-5 text-slate-200"><input type="checkbox" checked={verificationConfirmed} onChange={event => setVerificationConfirmed(event.target.checked)} required className="mt-1 accent-teal-400" /><span>I verified this person against the authorized picker list and am handing over {group.entry.studentName}.</span></label>
                         <div className="flex gap-2"><button type="submit" disabled={pendingAction !== null || verificationNote.trim().length < 8 || !verificationConfirmed} className="min-h-11 flex-1 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{isPending ? 'Recording…' : 'Record verified release'}</button><button type="button" onClick={() => setVerificationEntryId(null)} className="min-h-11 rounded-lg border border-white/20 px-3 text-xs font-bold text-slate-200 focus-visible:ring-2 focus-visible:ring-white">Cancel</button></div>
-                    </form> : <AtlasActionButton icon={CheckCircle2} variant="primary" className="mt-4 w-full" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}>Verify picker and release</AtlasActionButton>
+                    </form> : <AtlasActionButton aria-label={`Verify picker and release ${group.entry.studentName}`} icon={CheckCircle2} variant="primary" className="edu-pickup-pulse__verify mt-4 w-full" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}>Verify picker and release</AtlasActionButton>
                 ) : <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500">Authorized pickup staff must complete release.</div>}
             </article>
         );
@@ -463,7 +466,7 @@ export const PickupView = () => {
 
     if (!organizationId) {
         return (
-            <div className={`pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
+            <div className={`pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1 edu-pickup-pulse edu-pickup-playful' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
                 <AtlasEmptyState
                     title="Select an organization"
                     description="Pickup operations are tenant-scoped. Select an organization before opening the live queue."
@@ -474,12 +477,12 @@ export const PickupView = () => {
     }
 
     return (
-        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
+        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1 edu-pickup-pulse edu-pickup-playful' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
             {!isDisplayMode && (
                 <>
                     {showEducationFamilyJourneyV1 ? <section className="edu-pickup-v1__command" aria-labelledby="pickup-command-title">
-                        <div><span className="edu-pickup-v1__eyebrow"><Car size={15} /> School day · live pickup</span><h1 id="pickup-command-title">A safe handoff, one learner at a time.</h1><p>{format(new Date(), 'EEEE, d MMMM')} · {dailyRosterRows.length} learners scheduled today</p></div>
-                        <button type="button" onClick={() => setIsDisplayMode(true)}><Monitor size={17} /> Lobby display</button>
+                        <div className="edu-pickup-playful__welcome"><span className="edu-pickup-v1__eyebrow"><Car size={17} /> School day / Pickup</span><h1 id="pickup-command-title">Home time,<br />handled with care.</h1><p>{format(new Date(), 'EEEE, d MMMM')} · {dailyRosterRows.length} learners scheduled today</p><button type="button" onClick={() => setIsDisplayMode(true)}><Monitor size={17} /> Open lobby display</button></div>
+                        <div className="edu-pickup-playful__guide"><span className="edu-pickup-playful__bubble">One safe handoff<br />at a time.</span><ParentO11Y cue={0} mood="welcome" /><span className="edu-pickup-playful__guide-label"><ShieldCheck size={16} /> In good hands</span></div>
                     </section> : <AtlasCommandHeader
                         eyebrow="Live operations"
                         title="Pickup Desk"
@@ -505,6 +508,11 @@ export const PickupView = () => {
                         <ul className="mt-3 space-y-1 text-xs">{legacyActive.map(entry => <li key={entry.id} className="flex flex-wrap gap-x-2"><strong>{entry.studentName}</strong><span>{getStatusLabel(entry.status)}</span><code className="break-all text-amber-200">{entry.id}</code></li>)}</ul>
                     </section>}
 
+                    {showEducationFamilyJourneyV1 ? <div className="edu-pickup-pulse__brief" aria-label="Pickup summary">
+                        <div data-tone="orange"><span className="edu-pickup-playful__stat-icon"><UserCheck size={23} /></span><span><strong>{pickupSignals.arrived + pickupSignals.ready}</strong><small>At the gate</small></span></div>
+                        <div data-tone="blue"><span className="edu-pickup-playful__stat-icon"><Car size={23} /></span><span><strong>{pickupSignals.onTheWay}</strong><small>On the way</small></span></div>
+                        <div data-tone="green"><span className="edu-pickup-playful__stat-icon"><CheckCircle2 size={23} /></span><span><strong>{pickupSignals.released}</strong><small>Released · awaiting receipt</small></span></div>
+                    </div> : <>
                     <div className="edu-pickup-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-5">
                         <AtlasSignalCard label="At the gate" value={pickupSignals.arrived} detail="Verify and release" icon={UserCheck} tone={pickupSignals.arrived > 0 ? 'amber' : 'slate'} onClick={() => setQueueFilter('arrived')} />
                         <AtlasSignalCard label="Incoming" value={pickupSignals.onTheWay} detail="Approaching the gate" icon={MapPin} tone="blue" onClick={() => setQueueFilter('incoming')} />
@@ -513,12 +521,9 @@ export const PickupView = () => {
                         <AtlasSignalCard label="Released" value={pickupSignals.released} detail="Awaiting parent confirmation" icon={CheckCircle2} tone="emerald" onClick={() => setQueueFilter('released')} />
                     </div>
 
-                    {showEducationFamilyJourneyV1 && <section className="edu-pickup-v1__focus" aria-label="Current pickup priority">
-                        <span className="edu-pickup-v1__focus-icon"><ShieldCheck size={21} /></span>
-                        <div><small>Next safe handoff</small><strong>{pickupSignals.arrived + pickupSignals.ready > 0 ? `${pickupSignals.arrived + pickupSignals.ready} ${pickupSignals.arrived + pickupSignals.ready === 1 ? 'learner' : 'learners'} at the gate` : pickupSignals.onTheWay > 0 ? `${pickupSignals.onTheWay} ${pickupSignals.onTheWay === 1 ? 'family' : 'families'} on the way` : 'No immediate handoff'}</strong><p>{pickupSignals.arrived + pickupSignals.ready > 0 ? 'Confirm the authorized picker and record the release below.' : pickupSignals.onTheWay > 0 ? 'Watch for physical arrival before starting verification.' : 'Use the daily roster to record a new arrival.'}</p></div>
-                        <button type="button" onClick={() => { setQueueFilter('all'); window.requestAnimationFrame(() => document.getElementById(pickupSignals.active > 0 ? 'pickup-live-queue' : 'pickup-daily-roster')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' })); }}>{pickupSignals.active > 0 ? 'Open live queue' : 'View today’s list'} <ChevronRight size={16} /></button>
-                    </section>}
+                    </>}
 
+                    {showEducationFamilyJourneyV1 && <div className="edu-pickup-playful__queue-heading"><h2>Pickup desk</h2><a href="#pickup-daily-roster">Today’s learners <ChevronRight size={16} /></a></div>}
                     <div className="relative z-20">
                         <AtlasToolbar
                             leading={isGatekeeper ? (
@@ -587,8 +592,10 @@ export const PickupView = () => {
                                 {filterOptions.map(option => (
                                     <button
                                         key={option.id}
+                                        data-queue-filter={option.id}
                                         type="button"
                                         onClick={() => setQueueFilter(option.id)}
+                                        aria-pressed={queueFilter === option.id}
                                         className={`min-h-9 rounded-lg border px-3 text-xs font-bold transition-colors ${queueFilter === option.id
                                             ? 'border-teal-300/30 bg-teal-400/10 text-teal-200'
                                             : 'border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white'
@@ -621,7 +628,7 @@ export const PickupView = () => {
             )}
 
             {isDisplayMode ? (
-                <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950 p-4 sm:p-6">
+                <div className="edu-pickup-pulse__lobby fixed inset-0 z-[100] flex flex-col bg-slate-950 p-4 sm:p-6">
                     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
                         <div className="flex min-w-0 items-center gap-3">
                             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-teal-400 text-slate-950">
@@ -651,7 +658,7 @@ export const PickupView = () => {
                                     <article key={row.studentId} className="rounded-xl border border-white/10 bg-slate-950 p-4">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0"><h3 className="truncate text-xl font-black text-white">{row.studentName}</h3><p className="mt-1 truncate text-xs text-slate-400">{row.slots.map(slot => [slot.time, slot.programName, slot.groupName].filter(Boolean).join(' · ')).join(' / ')}</p></div>
-                                            <span className={`shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
+                                            <span data-status={row.entry?.status || 'scheduled'} className={`edu-pickup-v1__status shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
                                         </div>
                                         {row.entry?.pickerName && <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400"><span className="truncate">{row.entry.pickerName}</span><span className="shrink-0 font-mono text-slate-500">{formatTime(row.entry)}</span></div>}
                                     </article>
@@ -668,19 +675,19 @@ export const PickupView = () => {
                         ? 'Incoming parent notifications and staff-added arrivals will appear here.'
                         : 'Choose another status filter to continue scanning the live queue.'}
                     icon={Clock}
-                    action={queueGroups.length > 0 ? <AtlasActionButton onClick={() => setQueueFilter('all')}>Show all active</AtlasActionButton> : undefined}
+                    action={queueGroups.length > 0 ? <AtlasActionButton onClick={() => setQueueFilter('all')}>Show all pickups</AtlasActionButton> : undefined}
                 />
             ) : (
                 <div id="pickup-live-queue" className="edu-pickup-v1__live space-y-7">
                     {handoffGroups.length > 0 && (
                         <section className="space-y-4">
                             <AtlasSectionHeader
-                                title="At the gate — verify and release"
-                                description="Staff can complete the verified handoff as soon as the parent is present. The learner-ready update is helpful but optional."
+                                title="At the gate"
+                                description="Verify the authorized person before release. Learner-ready status is optional."
                                 icon={ShieldCheck}
-                                meta={<span className="rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{handoffGroups.length} action required</span>}
+                                meta={<span className="edu-pickup-playful__attention rounded-md bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{handoffGroups.length} action required</span>}
                             />
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="edu-pickup-pulse__register grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 {handoffGroups.map(renderHandoffCard)}
                             </div>
                         </section>
@@ -689,7 +696,7 @@ export const PickupView = () => {
                     {incomingGroups.length > 0 && (
                         <section className="space-y-4">
                             <AtlasSectionHeader title="Incoming" description="Parents approaching or waiting to confirm physical arrival." icon={Car} />
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                            <div className="edu-pickup-pulse__incoming-list grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
                                 {incomingGroups.map(group => {
                                     const isPending = pendingAction === `arrive:${group.entry.studentId}`;
                                     return (
@@ -710,7 +717,7 @@ export const PickupView = () => {
                                                         title="Confirm physical arrival"
                                                         aria-label={`Mark ${group.entry.studentName} as arrived`}
                                                     >
-                                                        {isPending ? <Loader2 size={17} className="animate-spin" /> : <MapPin size={17} />}
+                                                        {isPending ? <Loader2 size={17} className="animate-spin" /> : <MapPin size={17} />}{showEducationFamilyJourneyV1 && <span className="edu-pickup-pulse__arrival-label">Mark arrived</span>}
                                                     </button>
                                                 )}
                                                 {group.entry.status === 'waiting' && <span className="text-[11px] text-slate-500">Older record · staff review</span>}
@@ -750,11 +757,11 @@ export const PickupView = () => {
                     <section id="pickup-daily-roster" className="space-y-4" aria-label="Today’s workshop pickup list">
                         <AtlasSectionHeader
                             title="Today’s workshop pickup list"
-                            description="Every active learner scheduled today appears here before a parent starts pickup. Parent and staff updates change these statuses live."
+                            description="Scheduled learners remain on this list throughout pickup."
                             icon={Clock}
                             meta={<span className="rounded-md bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">{dailyRosterRows.length} scheduled</span>}
                         />
-                        {dailyRosterRows.length > 0 ? <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        {dailyRosterRows.length > 0 ? <div className="edu-pickup-pulse__daily-list grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                             {dailyRosterRows.map(row => {
                                 const pickerOptions = Array.from(new Set([row.student.parentName, ...(row.student.authorizedPickups || [])].filter(Boolean) as string[]));
                                 const selectedPicker = pickerSelections[row.studentId] || pickerOptions[0] || '';
@@ -779,6 +786,7 @@ export const PickupView = () => {
                         </div> : <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-5 py-8 text-center text-sm text-slate-500">No active workshop enrollment is scheduled for {todayWeekday}.</div>}
                     </section>
             )}
+            {showEducationFamilyJourneyV1 && !isDisplayMode && <p className="edu-pickup-playful__credit">011Y by <a href="https://rive.app/marketplace/26076-48718-011y/" target="_blank" rel="noopener noreferrer">Pat Grivet</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a></p>}
         </div>
     );
 };

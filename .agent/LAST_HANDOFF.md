@@ -560,3 +560,8 @@ Authenticated browser tracing after that release isolated a second Studio failur
 The Edufy parent API and Student Details flow now handle a historical contact email or orphan UID by creating a verified `p.*@makerlab.academy` login, moving only consistent same-tenant family links, and preserving learner records. Platform super admins under `atlas-platform` may manage existing target organizations; other staff stay same-tenant. Staff enter the real parent name and verify the relationship. After refresh, displaying a card issues a new password and invalidates the old one; no plaintext parent password is retained. Synthetic Auth/Firestore emulator passes the orphan/external/staff-link/tenant/password cases. The Edufy build passes; repo-wide TypeScript still reports existing unrelated errors. Release status is recorded in `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`. Multi-tenant ownership remediation follows as a separate phase.
 
 ---
+## Edufy Design System v1 release candidate — 2026-10-19
+
+The user approved deployment of the completed school workspace UI after aligning the left and top menus. This release carries the Design System v1 module surfaces and shell only. It preserves the current `origin/main` tenant provisioning, authentication, schedule write guards, API, Firestore rules, schemas and financial logic. Build and signed-in read-only checks passed for desktop/mobile and light/dark. See `docs/education/DESIGN_SYSTEM_V1_CONSOLIDATED_HANDOFF_2026-10-19.md` and `docs/education/DESIGN_SYSTEM_NAVIGATION_RELEASE_2026-10-19.md`.
+
+---

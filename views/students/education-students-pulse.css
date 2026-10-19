@@ -1,0 +1,64 @@
+/* Pulse learner directory: restrained worklist with an adjacent learner overview. */
+.edu-students-v1 .edu-student-pulse .edu-student-ops__heading { padding:4px 0 16px; border:0; border-radius:0; background:transparent; align-items:center; box-shadow:none; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__heading h1 { margin:6px 0; font-size:32px; font-weight:750; letter-spacing:-.045em; line-height:1.15; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__heading p { font-size:12px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__heading-tools { margin:0; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__button { min-height:44px; border-radius:10px; box-shadow:none; }
+.pulse-students-navigation { border-bottom:1px solid var(--edu-border); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__mode { display:inline-flex; border:0; background:transparent; padding:0; border-radius:0; gap:20px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__mode button { min-height:44px; min-width:0; padding:8px 0; border:0; border-bottom:2px solid transparent; border-radius:0; background:transparent; color:var(--edu-muted); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__mode button[aria-pressed='true'] { border-bottom-color:var(--edu-brand); color:var(--edu-info); }
+.pulse-students-summary { display:flex; flex-wrap:wrap; gap:8px 24px; align-items:center; min-height:60px; color:var(--edu-muted); font-size:12px; }
+.pulse-students-summary b { color:var(--edu-ink); }
+.pulse-students-summary button { display:inline-flex; align-items:center; gap:7px; min-height:44px; color:var(--edu-info); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__desk { grid-template-columns:minmax(0,1fr) 360px; gap:18px; margin-top:0; align-items:start; }
+.edu-students-v1 .edu-student-pulse :is(.edu-student-ops__roster,.edu-student-ops__passport) { border-radius:18px; box-shadow:none; min-height:0; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__roster { padding:20px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__section-heading h2 { font-size:16px; font-weight:750; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__section-heading p { font-size:11px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__search { border-color:var(--edu-border); border-radius:10px; min-height:44px; background:var(--edu-surface-muted); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__filter-trigger { border-radius:10px; min-height:44px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__search input::placeholder { color:var(--edu-muted); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__smart-views { flex-wrap:nowrap; overflow-x:auto; gap:6px; padding-bottom:6px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__smart-views button { flex-shrink:0; border-radius:8px; font-weight:600; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__smart-views button[aria-pressed='true'] { color:var(--edu-info); background:var(--edu-brand-soft); border-color:var(--edu-brand); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__student-list { gap:0; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__student-row { border-radius:0; border:0; border-bottom:1px solid var(--edu-border); background:var(--edu-surface); min-height:80px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__student-row[data-selected='true'] { background:var(--edu-brand-soft); box-shadow:inset 3px 0 var(--edu-brand); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__avatar { border-radius:50%; background:var(--edu-surface-muted); color:var(--edu-muted); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__student-copy strong { font-size:14px; font-weight:700; white-space:normal; overflow-wrap:anywhere; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__student-copy > span { font-size:11px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__row-preview { min-width:44px; min-height:44px; color:var(--edu-info); background:transparent; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__row-preview[aria-pressed='true'] { color:var(--edu-info); background:var(--edu-surface); border:1px solid var(--edu-border); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__facts :is(small,span) { font-size:11px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__facts strong { font-size:12px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-top { padding:20px; color:var(--edu-ink); background:var(--edu-surface-muted); border-bottom:1px solid var(--edu-border); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-top::after { display:none; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-label { color:var(--edu-muted); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-person > span { color:var(--edu-info); background:var(--edu-brand-soft); border-radius:50%; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-person h2 { font-size:22px; font-weight:750; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-person p { color:var(--edu-muted); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__next-action { border:1px solid var(--edu-border); border-radius:12px; background:var(--edu-brand-soft); }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__next-action > span { color:var(--edu-info); background:transparent; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__facts > div { border-radius:0; border:0; border-bottom:1px solid var(--edu-border); padding:12px 0; }
+.pulse-students-preview-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.pulse-students-preview-heading button { display:none; color:var(--edu-info); min-height:44px; font-size:12px; }
+.edu-students-v1 .edu-student-pulse :is(button,input,select):focus-visible { outline:3px solid var(--edu-brand); outline-offset:3px; }
+@container(max-width:1000px) {
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__desk { grid-template-columns:minmax(0,1fr); }
+ .pulse-students-preview-heading button { display:inline-flex; align-items:center; }
+}
+@media(max-width:800px) {
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__desk { grid-template-columns:minmax(0,1fr); }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__heading-tools { display:flex; margin-top:12px; }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__roster { padding:14px; }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__search-row { grid-template-columns:minmax(0,1fr) auto; }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__student-main { grid-template-columns:32px minmax(0,1fr); gap:8px; }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__student-main .edu-student-ops__avatar { width:32px; height:32px; }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__row-action { display:none; }
+ .edu-students-v1 .edu-student-pulse .edu-student-ops__row-preview span { display:none; }
+ .pulse-students-preview-heading button { display:inline-flex; align-items:center; }
+}
+
+.edu-students-v1 .edu-student-pulse .edu-student-ops__row-action { color:var(--edu-muted); font-size:11px; }
+.edu-students-v1 .edu-student-pulse .edu-student-ops__passport-actions .edu-student-ops__status-action { color:var(--edu-danger); background:var(--edu-danger-soft); }

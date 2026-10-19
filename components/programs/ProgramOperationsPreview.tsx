@@ -68,9 +68,9 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="atlas-text-strong text-base font-black">{preview.run.name}</p>
-                <span className="rounded border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Safe preview</span>
+                <span className="rounded border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Schedule preview</span>
               </div>
-              <p className="atlas-text-subtle mt-1 text-xs leading-5">Edufy translated the current setup into the adaptive run model. Nothing has been moved or saved.</p>
+              <p className="atlas-text-subtle mt-1 text-xs leading-5">Review the schedule and family plans from your current setup. These dates are a preview, not published classes.</p>
             </div>
           </div>
           {onEditSetup && <AtlasActionButton icon={Pencil} onClick={onEditSetup}>Edit current setup</AtlasActionButton>}
@@ -95,7 +95,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
           <div className="p-4 sm:p-5 lg:border-r lg:border-white/10">
             <AtlasSectionHeader
               title="Upcoming class preview"
-              description="The first dates Edufy can generate from the current weekly timetable. Publishing will create the real occurrences later."
+              description="Projected dates based on the current timetable. Confirm the run dates and group schedules before publishing."
               icon={Clock3}
               meta={nextOccurrences.length ? <span className="text-xs font-black text-teal-300">Next {nextOccurrences.length}</span> : undefined}
             />
@@ -126,7 +126,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
           </div>
 
           <div className="p-4 sm:p-5">
-            <AtlasSectionHeader title="What families can buy" description="Pricing is separated from the timetable in the new model." icon={BadgeDollarSign} />
+            <AtlasSectionHeader title="What families can buy" description="Available plans and billing periods for this program." icon={BadgeDollarSign} />
             <div className="mt-4 divide-y divide-white/10">
               {preview.pricingOffers.slice(0, 5).map(offer => (
                 <div key={offer.id} className="flex items-center justify-between gap-3 py-3">
@@ -144,12 +144,12 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
       </section>
 
       <section className="atlas-surface rounded-lg border p-4 sm:p-5">
-        <AtlasSectionHeader title="Ready for the autopilot setup" description="The compatibility check shows exactly what can move forward and what still needs an operator decision." icon={ShieldCheck} />
+        <AtlasSectionHeader title="Delivery checklist" description="Check timetable, capacity and pricing before opening registration." icon={ShieldCheck} />
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           {[
             { label: 'Groups and timetable', ready: scheduleReady, detail: scheduleReady ? 'Every group has a readable weekly block.' : 'One or more groups need a valid day and time.' },
             { label: 'Capacity and waitlist', ready: capacityReady, detail: capacityReady ? 'Every group has a seat policy.' : 'Set missing capacity before public registration.' },
-            { label: 'Pricing offers', ready: offerReady, detail: offerReady ? 'Current plans can become family offers.' : 'Add a positive price before publishing.' }
+            { label: 'Pricing offers', ready: offerReady, detail: offerReady ? 'Priced family plans are available.' : 'Add a positive price before publishing.' }
           ].map(item => (
             <div key={item.label} className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
               {item.ready ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-teal-300" /> : <AlertCircle size={17} className="mt-0.5 shrink-0 text-amber-200" />}
@@ -163,7 +163,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
         <div className="mt-4 flex flex-col gap-3 rounded-lg border border-teal-400/15 bg-teal-400/[0.05] p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <Users size={17} className="mt-0.5 shrink-0 text-teal-300" />
-            <p className="atlas-text-muted text-xs leading-5"><span className="atlas-text-strong font-black">Next architecture step:</span> one learner agreement will be able to include a run, a group, a second camp week, and add-ons without duplicating the learner.</p>
+            <p className="atlas-text-muted text-xs leading-5"><span className="atlas-text-strong font-black">Before opening registration:</span> review group capacity and family plans, then resolve any missing setup.</p>
           </div>
           {onEditSetup && <AtlasActionButton icon={ArrowRight} variant="quiet" className="shrink-0" onClick={onEditSetup}>Resolve setup gaps</AtlasActionButton>}
         </div>

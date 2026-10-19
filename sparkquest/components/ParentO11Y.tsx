@@ -20,6 +20,7 @@ export const ParentO11Y: React.FC<{ cue: number; mood?: ParentMascotMood }> = ({
     if (pauseTimer.current !== null) window.clearTimeout(pauseTimer.current);
     pauseTimer.current = null;
     riveRef.current?.pause();
+    riveRef.current?.drawFrame();
   };
 
   const react = () => {
@@ -64,8 +65,9 @@ export const ParentO11Y: React.FC<{ cue: number; mood?: ParentMascotMood }> = ({
           const inputs = instance.stateMachineInputs(MACHINE) || [];
           canvas.dataset.riveInputs = inputs.map(input => `${input.name}:${input.type}`).join(',');
           hitRef.current = inputs.find(input => input.name === 'Hit' && input.type === StateMachineInputType.Trigger) || null;
-          resizer = new ResizeObserver(() => instance.resizeDrawingSurfaceToCanvas());
+          resizer = new ResizeObserver(() => { instance.resizeDrawingSurfaceToCanvas(); instance.drawFrame(); });
           resizer.observe(canvas);
+          instance.drawFrame();
           if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && visibleRef.current && !document.hidden) {
             instance.play();
             hitRef.current?.fire();

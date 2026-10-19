@@ -301,10 +301,10 @@ export const WorkshopActionCenter = () => {
 
     if (!can('workshops.manage')) return null;
     const totalActions = upcomingReminders.length + pendingConfirmation.length + pendingFeedback.length;
-    if (totalActions === 0) return null;
+    if (totalActions === 0) return <div className="edu-dashboard-followup-empty"><CheckCircle2 size={22} aria-hidden="true" /><div><strong>Workshop follow-ups are clear</strong><p>Reminders, confirmations and family feedback will appear here when they need attention.</p></div></div>;
 
     return (
-        <section className="rounded-lg border border-amber-300/20 bg-slate-900/80 p-4 md:p-5">
+        <section className="edu-dashboard-followup rounded-lg border border-amber-300/20 bg-slate-900/80 p-4 md:p-5">
             <AtlasSectionHeader title="Workshop follow-up" description="Keep every family moving from reminder to attendance and admission." icon={AlertTriangle} meta={<span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{totalActions} actions</span>} />
 
             <div className="mt-4 grid gap-4 xl:grid-cols-3">
@@ -330,7 +330,7 @@ export const WorkshopActionCenter = () => {
             </div>
 
             <Modal isOpen={isFeedbackModalOpen} onClose={closeFeedbackModal} title="Workshop follow-up">
-                <div className="space-y-4">
+                <div className="edu-dashboard-followup-form space-y-4">
                     <p className="text-sm text-slate-500">Record the family response for <span className="font-bold text-slate-700">{selectedBooking?.kidName}</span>, then complete the follow-up or convert it to CRM.</p>
                     <label className="block"><span className="mb-1 block text-xs font-bold text-slate-500">Parent feedback or follow-up note</span><textarea className="min-h-[104px] w-full rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15" placeholder="Capture what they enjoyed, what they need next, or why they declined." value={feedbackNotes} onChange={event => setFeedbackNotes(event.target.value)} /></label>
                     <label className="block"><span className="mb-1 block text-xs font-bold text-slate-500">Interested program</span><select className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/15" value={selectedProgramInterest} onChange={event => setSelectedProgramInterest(event.target.value)}><option value="">Choose a program for conversion</option>{programs.map(program => <option key={program.id} value={program.name}>{program.name}</option>)}</select></label>
@@ -347,14 +347,14 @@ export const WorkshopActionCenter = () => {
 };
 
 const QueueColumn = ({ title, count, icon: Icon, tone, children }: { title: string; count: number; icon: typeof Clock; tone: 'teal' | 'amber'; children: React.ReactNode }) => (
-    <div className="min-w-0 rounded-lg border border-white/10 bg-slate-950/55 p-3">
+    <div className="edu-dashboard-followup-column min-w-0 rounded-lg border border-white/10 bg-slate-950/55 p-3">
         <div className="mb-3 flex items-center justify-between gap-2"><div className="flex min-w-0 items-center gap-2"><Icon size={15} className={tone === 'amber' ? 'text-amber-200' : 'text-teal-300'} /><h4 className="truncate text-xs font-black uppercase text-slate-300">{title}</h4></div><span className="text-xs font-black text-white">{count}</span></div>
         <div className="space-y-2">{children}</div>
     </div>
 );
 
 const QueueItem = ({ title, detail, meta, action }: { title: string; detail: string; meta?: string; action: React.ReactNode }) => (
-    <article className="rounded-lg border border-white/10 bg-white/[0.04] p-3"><h5 className="truncate text-sm font-black text-white">{title}</h5><p className="mt-0.5 truncate text-xs text-slate-400">{detail}</p>{meta && <p className="mt-1 truncate text-[10px] font-bold uppercase text-amber-200">{meta}</p>}<div className="mt-3">{action}</div></article>
+    <article className="edu-dashboard-followup-item rounded-lg border border-white/10 bg-white/[0.04] p-3"><h5 className="truncate text-sm font-black text-white">{title}</h5><p className="mt-0.5 truncate text-xs text-slate-400">{detail}</p>{meta && <p className="mt-1 truncate text-[10px] font-bold uppercase text-amber-200">{meta}</p>}<div className="mt-3">{action}</div></article>
 );
 
 const CompactEmpty = ({ label }: { label: string }) => <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-3 py-5 text-center text-xs text-slate-500">{label}</div>;

@@ -24,6 +24,8 @@ interface AppContextType {
 
   // Attendance
   attendanceRecords: AttendanceRecord[];
+  attendanceLoading: boolean;
+  attendanceError: string | null;
   staffAttendanceRecords: StaffAttendanceRecord[];
 
   // Team Module Data
@@ -134,6 +136,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Attendance
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [attendanceError, setAttendanceError] = useState<string | null>(null);
   const [staffAttendanceRecords, setStaffAttendanceRecords] = useState<StaffAttendanceRecord[]>([]);
 
   // Team State
@@ -218,6 +222,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     setLoading(true);
+    setAttendanceLoading(true);
+    setAttendanceError(null);
     setWorkspaceError(null);
     if (!db) {
       setWorkspaceError('The data connection is unavailable. Check your connection and try again.');
@@ -237,6 +243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // The public demo has a virtual account and no authenticated Firestore
     // session; keep its existing lightweight preview behavior separate.
     if (userProfile?.uid === 'demo-admin-id') {
+      setAttendanceLoading(false);
       setLoading(false);
       return;
     }
@@ -365,7 +372,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       onSnapshot(query(collection(firestore, 'workshop_evaluations'), where('organizationId', '==', orgId), orderBy('createdAt', 'desc')), (snap) => setWorkshopEvaluations(snap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopEvaluation)))),
 
       // Attendance
-      onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), (snap) => { setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord))); markReady('attendance'); }, error => failRequired('attendance', error)),
+      onSnapshot(query(collection(firestore, 'attendance'), where('organizationId', '==', orgId)), { includeMetadataChanges: true }, (snap) => {
+        setAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as AttendanceRecord)));
+        // Attendance opens after its first server snapshot, not an empty local
+        // cache. Other modules keep the established workspace startup order.
+        if (!snap.metadata.fromCache) setAttendanceLoading(false);
+        markReady('attendance');
+      }, error => {
+        setAttendanceLoading(false);
+        setAttendanceError(error.code === 'permission-denied'
+          ? 'Your account cannot load attendance for this school. Contact your administrator.'
+          : 'Attendance could not be loaded. Check your connection and reload.');
+        failRequired('attendance', error);
+      }),
       onSnapshot(query(collection(firestore, 'staff_attendance'), where('organizationId', '==', orgId)), (snap) => setStaffAttendanceRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as StaffAttendanceRecord)))),
 
       // Team Listeners
@@ -455,6 +474,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       students, programs, enrollments, payments, expenses, expenseTemplates,
       workshopTemplates, workshopSlots, bookings, workshopEvaluations, classSessions,
       attendanceRecords,
+      attendanceLoading,
+      attendanceError,
       staffAttendanceRecords,
       tasks, projects, chatMessages, teamMembers,
       marketingPosts, campaigns, leads,

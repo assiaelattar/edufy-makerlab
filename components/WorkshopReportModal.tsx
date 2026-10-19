@@ -149,8 +149,8 @@ export const WorkshopReportModal = ({ isOpen, onClose, workshopTitle, sessionId,
     const textAreaClass = 'h-20 w-full resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20';
 
     return (
-        <Modal isOpen={isOpen} onClose={closeModal} title="Workshop performance report">
-            <form onSubmit={handleSubmit} className="space-y-5">
+        <Modal designSystem isOpen={isOpen} onClose={closeModal} title="Workshop performance report">
+            <form onSubmit={handleSubmit} className="edu-workshops-v1__report-form space-y-5">
                 <div className="flex gap-3 rounded-lg border border-teal-200 bg-teal-50 p-4">
                     <Sparkles className="shrink-0 text-teal-700" size={20} />
                     <p className="text-xs font-medium leading-relaxed text-teal-950">

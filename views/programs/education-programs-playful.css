@@ -1,0 +1,173 @@
+/* Edufy Design System v1 adoption for the Programs catalog and workspace.
+   Structure stays operational; shared tokens own all color and interaction meaning. */
+[data-edu-system="1"]:is(.edu-programs-v1,.edu-program-details-v1) {
+  --program-card-edge:var(--ds-depth);
+  font-family:var(--ds-font-body);
+}
+[data-edu-system="1"]:is(.edu-programs-v1,.edu-program-details-v1) button {
+  font-family:var(--ds-font-heading);
+  font-weight:900;
+  transition:transform 120ms,filter 120ms;
+}
+[data-edu-system="1"]:is(.edu-programs-v1,.edu-program-details-v1) button:not(:disabled):active { transform:translateY(2px); }
+
+/* A program is a learning environment: green welcomes, purple identifies, blue acts. */
+[data-edu-system="1"] :is(.edu-programs-v1__command,.edu-program-details-v1__command) {
+  color:var(--ds-green-ink)!important;
+  background:var(--ds-green-soft)!important;
+  border:2px solid var(--ds-green)!important;
+  border-bottom:6px solid var(--ds-green-edge)!important;
+  border-radius:var(--ds-radius-card)!important;
+  box-shadow:none!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__command,.edu-program-details-v1__command)::after { display:none; }
+[data-edu-system="1"] :is(.edu-programs-v1__command-copy,.edu-program-details-v1__identity) :is(h2,p,span,b) { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] :is(.edu-programs-v1__command-copy,.edu-program-details-v1__identity) h2 { font:900 clamp(28px,4vw,40px)/1.05 var(--ds-font-heading); }
+[data-edu-system="1"] :is(.edu-programs-v1__command-actions,.edu-program-details-v1__actions) button,
+[data-edu-system="1"] .edu-program-details-v1__topline button {
+  min-height:44px;
+  color:var(--ds-green-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-green-edge)!important;
+  border-bottom-width:4px!important;
+  border-radius:var(--ds-radius-control)!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__command-actions button.is-primary,.edu-program-details-v1__actions button.is-primary,.edu-program-details-v1__actions button:last-child) {
+  color:var(--ds-on-color)!important;
+  background:var(--ds-blue)!important;
+  border-color:var(--ds-blue-edge)!important;
+}
+
+[data-edu-system="1"] .edu-programs-v1__focus,
+[data-edu-system="1"] .edu-program-details-v1__priority {
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:16px 18px;
+  color:var(--ds-orange-ink)!important;
+  background:var(--ds-orange-soft)!important;
+  border:2px solid var(--ds-orange-edge)!important;
+  border-radius:20px!important;
+  box-shadow:0 3px 0 var(--ds-depth)!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__focus-icon,.edu-program-details-v1__priority-icon) {
+  display:grid;
+  place-items:center;
+  width:44px;
+  height:44px;
+  flex:0 0 44px;
+  color:var(--ds-yellow-ink)!important;
+  background:var(--ds-yellow)!important;
+  border-bottom:4px solid var(--ds-yellow-edge);
+  border-radius:14px;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority) :is(strong,small,p,em) { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority) > button {
+  min-height:44px;
+  margin-inline-start:auto;
+  color:var(--ds-on-color)!important;
+  background:var(--ds-blue)!important;
+  border:2px solid var(--ds-blue-edge)!important;
+  border-bottom-width:4px!important;
+  border-radius:var(--ds-radius-control)!important;
+}
+
+/* Supporting numbers stay calm; their icons carry category color. */
+[data-edu-system="1"] .edu-programs-v1__summary,
+[data-edu-system="1"] .edu-program-details-v1__metrics {
+  display:grid;
+  gap:12px;
+  overflow:visible;
+  background:transparent!important;
+  border:0!important;
+}
+[data-edu-system="1"] .edu-programs-v1__summary { grid-template-columns:repeat(3,minmax(0,1fr)); }
+[data-edu-system="1"] .edu-program-details-v1__metrics { grid-template-columns:repeat(4,minmax(0,1fr)); }
+[data-edu-system="1"] :is(.edu-programs-v1__summary,.edu-program-details-v1__metrics) > * {
+  min-width:0;
+  padding:16px!important;
+  text-align:left;
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:18px!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__summary,.edu-program-details-v1__metrics) > * :is(span,small,strong,em) { color:var(--ds-ink)!important; }
+[data-edu-system="1"] .edu-programs-v1__summary > :nth-child(1) svg { color:var(--ds-green-ink)!important; background:var(--ds-green-soft); }
+[data-edu-system="1"] .edu-programs-v1__summary > :nth-child(2) svg { color:var(--ds-blue-ink)!important; background:var(--ds-blue-soft); }
+[data-edu-system="1"] .edu-programs-v1__summary > :nth-child(3) svg { color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft); }
+[data-edu-system="1"] .edu-program-details-v1__metrics > :nth-child(1) svg { color:var(--ds-green-ink); }
+[data-edu-system="1"] .edu-program-details-v1__metrics > :nth-child(2) svg { color:var(--ds-purple-ink); }
+[data-edu-system="1"] .edu-program-details-v1__metrics > :nth-child(3) svg { color:var(--ds-blue-ink); }
+[data-edu-system="1"] .edu-program-details-v1__metrics > :nth-child(4) svg { color:var(--ds-orange-ink); }
+[data-edu-system="1"] :is(.edu-programs-v1__summary,.edu-program-details-v1__metrics) svg { width:28px; height:28px; padding:5px; border-radius:9px; }
+
+[data-edu-system="1"] .edu-programs-v1__toolbar { padding-inline:0; background:transparent!important; border:0!important; box-shadow:none!important; }
+[data-edu-system="1"] .edu-programs-v1__toolbar :is(input,label:has(select)) {
+  min-height:48px;
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-radius:var(--ds-radius-control)!important;
+}
+
+[data-edu-system="1"] .edu-programs-v1__program {
+  --program-accent:var(--ds-purple);
+  --program-accent-soft:var(--ds-purple-soft);
+  --program-accent-ink:var(--ds-purple-ink);
+  --program-accent-edge:var(--ds-purple-edge);
+  padding:18px!important;
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:5px solid var(--ds-depth)!important;
+  border-radius:22px!important;
+  box-shadow:none!important;
+}
+[data-edu-system="1"] .edu-programs-v1__program[data-needs-setup="true"] { --program-accent:var(--ds-orange); --program-accent-soft:var(--ds-orange-soft); --program-accent-ink:var(--ds-orange-ink); --program-accent-edge:var(--ds-orange-edge); }
+[data-edu-system="1"] .edu-programs-v1__program[data-program-status="archived"] { --program-accent:var(--ds-subtle); --program-accent-soft:var(--ds-subtle); --program-accent-ink:var(--ds-muted); --program-accent-edge:var(--ds-border); }
+[data-edu-system="1"] .edu-programs-v1__program-title > span:first-child {
+  width:50px;
+  height:54px;
+  color:var(--program-accent-ink)!important;
+  background:var(--program-accent-soft)!important;
+  border:2px solid var(--program-accent-edge)!important;
+  border-bottom-width:5px!important;
+  border-radius:17px!important;
+}
+[data-edu-system="1"] .edu-programs-v1__program-title .text-base { color:var(--ds-ink)!important; font:900 20px var(--ds-font-heading); }
+[data-edu-system="1"] .edu-programs-v1__program-stats { border-color:var(--ds-border)!important; }
+[data-edu-system="1"] .edu-programs-v1__program :is(.text-white,.text-slate-200,.text-slate-300) { color:var(--ds-ink)!important; }
+[data-edu-system="1"] .edu-programs-v1__program :is(.text-slate-400,.text-slate-500,.text-slate-600) { color:var(--ds-muted)!important; }
+[data-edu-system="1"] .edu-programs-v1__program-attention > span:first-child { background:var(--program-accent)!important; }
+[data-edu-system="1"] .edu-programs-v1__program-actions button {
+  min-width:44px;
+  min-height:44px;
+  color:var(--ds-ink)!important;
+  background:var(--ds-subtle)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom-width:4px!important;
+  border-radius:13px!important;
+}
+[data-edu-system="1"] .edu-programs-v1__program-actions button:first-child { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border-color:var(--ds-blue-edge)!important; }
+
+[data-edu-system="1"] [role="tablist"] { gap:10px; padding:0 2px; background:transparent!important; border:0!important; border-bottom:2px solid var(--ds-border)!important; border-radius:0!important; box-shadow:none!important; }
+[data-edu-system="1"] [role="tab"] { min-height:46px; color:var(--ds-muted)!important; background:transparent!important; border:0!important; border-bottom:4px solid transparent!important; border-radius:0!important; }
+[data-edu-system="1"] [role="tab"][aria-selected="true"] { color:var(--ds-purple-ink)!important; border-bottom-color:var(--ds-purple)!important; }
+[data-edu-system="1"] [role="tab"] > span { color:inherit!important; background:var(--ds-subtle)!important; }
+
+@media(max-width:800px) {
+  [data-edu-system="1"] .edu-program-details-v1__metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  [data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority) { align-items:flex-start; flex-wrap:wrap; }
+  [data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority) > button { width:100%; margin-inline-start:0; }
+}
+@media(max-width:520px) {
+  [data-edu-system="1"] .edu-programs-v1__summary { gap:7px; }
+  [data-edu-system="1"] .edu-programs-v1__summary > * { padding:12px 8px!important; }
+  [data-edu-system="1"] .edu-programs-v1__summary svg { width:24px; height:24px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  [data-edu-system="1"]:is(.edu-programs-v1,.edu-program-details-v1) button { transition:none; }
+  [data-edu-system="1"]:is(.edu-programs-v1,.edu-program-details-v1) button:active { transform:none; }
+}

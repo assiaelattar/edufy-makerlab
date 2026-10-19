@@ -1,0 +1,121 @@
+/* Edufy Design System v1 adoption for the continuous attendance register.
+   The register stays operationally dense; shared semantic tokens carry meaning. */
+[data-edu-system="1"].edu-attendance-pulse {
+  --edu-surface-strong:var(--ds-border);
+  --play-depth:var(--ds-depth);
+  font-family:var(--ds-font-body);
+}
+[data-edu-system="1"].edu-attendance-pulse button { font-family:var(--ds-font-heading); font-weight:900; transition:transform 120ms,filter 120ms; }
+[data-edu-system="1"].edu-attendance-pulse button:not(:disabled):active { transform:translateY(2px); }
+
+.education-ui-v1-active[data-edu-theme] .edu-attendance-pulse[data-edu-system="1"] .atlas-command-header[data-edu-density="compact"] {
+  padding:24px!important;
+  color:var(--ds-green-ink)!important;
+  background:var(--ds-green-soft)!important;
+  border:2px solid var(--ds-green)!important;
+  border-bottom:6px solid var(--ds-green-edge)!important;
+  border-radius:var(--ds-radius-card)!important;
+}
+.education-ui-v1-active[data-edu-theme] .edu-attendance-pulse[data-edu-system="1"] .atlas-command-header[data-edu-density="compact"] h2 { color:var(--ds-green-ink)!important; font:900 clamp(28px,4vw,38px)/1.05 var(--ds-font-heading)!important; }
+.education-ui-v1-active[data-edu-theme] .edu-attendance-pulse[data-edu-system="1"] .atlas-command-header[data-edu-density="compact"] :is(.atlas-text-accent,.text-teal-300) { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] .pulse-attendance-date {
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:15px!important;
+}
+[data-edu-system="1"] .pulse-attendance-date :is(button,input,div) { color:var(--ds-ink)!important; }
+[data-edu-system="1"] .pulse-attendance-today { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border:1px solid var(--ds-blue-edge)!important; }
+
+[data-edu-system="1"] .pulse-attendance-progress {
+  gap:10px 24px;
+  padding:18px!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:5px solid var(--ds-depth)!important;
+  border-radius:20px!important;
+}
+[data-edu-system="1"] .pulse-attendance-progress__line strong { color:var(--ds-ink); font:900 20px var(--ds-font-heading); }
+[data-edu-system="1"] .pulse-attendance-progress progress { height:12px; margin-top:2px; border-radius:8px; }
+[data-edu-system="1"] .pulse-attendance-progress progress::-webkit-progress-value { background:var(--ds-green); border-bottom:3px solid var(--ds-green-edge); border-radius:8px; }
+[data-edu-system="1"] .pulse-attendance-progress progress::-moz-progress-bar { background:var(--ds-green); border-bottom:3px solid var(--ds-green-edge); border-radius:8px; }
+[data-edu-system="1"] :is([data-summary="present"],[data-mark="present"]) { --mark:var(--ds-green); --mark-edge:var(--ds-green-edge); --mark-soft:var(--ds-green-soft); --mark-ink:var(--ds-green-ink); }
+[data-edu-system="1"] :is([data-summary="late"],[data-mark="late"]) { --mark:var(--ds-orange); --mark-edge:var(--ds-orange-edge); --mark-soft:var(--ds-orange-soft); --mark-ink:var(--ds-orange-ink); }
+[data-edu-system="1"] :is([data-summary="absent"],[data-mark="absent"]) { --mark:var(--ds-red); --mark-edge:var(--ds-red-edge); --mark-soft:var(--ds-red-soft); --mark-ink:var(--ds-red-ink); }
+[data-edu-system="1"] :is([data-summary="excused"],[data-mark="excused"]) { --mark:var(--ds-purple); --mark-edge:var(--ds-purple-edge); --mark-soft:var(--ds-purple-soft); --mark-ink:var(--ds-purple-ink); }
+[data-edu-system="1"] .pulse-attendance-progress__summary { gap:8px; }
+[data-edu-system="1"] .pulse-attendance-progress__summary > span {
+  min-width:75px;
+  padding:8px 12px;
+  color:var(--ds-muted)!important;
+  background:var(--ds-subtle)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--mark)!important;
+  border-radius:14px;
+  font-size:11px;
+  font-weight:800;
+}
+[data-edu-system="1"] .pulse-attendance-progress__summary > span::before { display:none; }
+[data-edu-system="1"] .pulse-attendance-progress__summary b { color:var(--ds-ink)!important; font:900 25px var(--ds-font-heading); }
+[data-edu-system="1"] .pulse-attendance-feedback { font-weight:700; }
+
+[data-edu-system="1"] .pulse-attendance-workspace {
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:5px solid var(--ds-depth)!important;
+  border-radius:23px!important;
+}
+[data-edu-system="1"] .pulse-attendance-workspace__heading h3 { color:var(--ds-ink); font:900 23px var(--ds-font-heading); }
+[data-edu-system="1"] .pulse-attendance-toolbar :is(input,select) { min-height:48px; color:var(--ds-ink)!important; background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-radius:14px!important; }
+[data-edu-system="1"] .pulse-attendance-session__time strong {
+  padding:8px;
+  color:var(--ds-purple-ink)!important;
+  background:var(--ds-purple-soft)!important;
+  border:2px solid var(--ds-purple)!important;
+  border-bottom:4px solid var(--ds-purple-edge)!important;
+  border-radius:12px;
+  font-size:15px;
+}
+[data-edu-system="1"] .pulse-attendance-session__head { border-top-left-radius:15px; border-top-right-radius:15px; border-bottom-width:2px; }
+[data-edu-system="1"] .pulse-attendance-session__head .atlas-action { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border:2px solid var(--ds-blue-edge)!important; border-bottom-width:4px!important; border-radius:12px!important; box-shadow:none!important; }
+[data-edu-system="1"] .pulse-attendance-avatar {
+  width:40px;
+  height:44px;
+  color:var(--ds-blue-ink)!important;
+  background:var(--ds-blue-soft)!important;
+  border:2px solid var(--ds-blue)!important;
+  border-bottom:4px solid var(--ds-blue-edge)!important;
+  border-radius:14px!important;
+  font-weight:900;
+}
+[data-edu-system="1"] .pulse-attendance-name { color:var(--ds-ink)!important; font:900 16px var(--ds-font-heading); }
+[data-edu-system="1"] .pulse-attendance-marks { gap:6px; padding:0; background:transparent!important; border:0!important; }
+[data-edu-system="1"] .pulse-attendance-marks button {
+  min-height:44px;
+  color:var(--ds-ink)!important;
+  background:var(--ds-surface)!important;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:12px!important;
+  box-shadow:none!important;
+}
+[data-edu-system="1"] .pulse-attendance-marks button svg { color:var(--mark-edge)!important; }
+[data-edu-system="1"] .pulse-attendance-marks button[aria-pressed="true"] { color:var(--mark-ink)!important; background:var(--mark-soft)!important; border-color:var(--mark-edge)!important; border-bottom-color:var(--mark-edge)!important; }
+[data-edu-system="1"] .pulse-attendance-marks button[aria-pressed="true"] svg { color:var(--mark-ink)!important; }
+[data-edu-system="1"] .pulse-attendance-row[aria-busy="true"] { border-left:4px solid var(--ds-yellow); }
+[data-edu-system="1"] .pulse-attendance-renewals { border:2px solid var(--ds-orange-edge)!important; border-radius:16px!important; }
+[data-edu-system="1"] .pulse-attendance-renewals summary { color:var(--ds-orange-ink)!important; }
+
+@media(max-width:800px) {
+  .education-ui-v1-active[data-edu-theme] .edu-attendance-pulse[data-edu-system="1"] .atlas-command-header[data-edu-density="compact"] { padding:18px!important; }
+  [data-edu-system="1"] .pulse-attendance-progress { padding:12px!important; gap:8px; }
+  [data-edu-system="1"] .pulse-attendance-progress__summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; width:100%; }
+  [data-edu-system="1"] .pulse-attendance-progress__summary > span { min-width:0; padding:7px 8px; border-radius:12px; }
+  [data-edu-system="1"] .pulse-attendance-progress__summary b { font-size:21px; }
+  [data-edu-system="1"] .pulse-attendance-marks { gap:7px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  [data-edu-system="1"].edu-attendance-pulse button { transition:none; }
+  [data-edu-system="1"].edu-attendance-pulse button:active { transform:none; }
+}

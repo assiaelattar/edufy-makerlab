@@ -19,7 +19,11 @@ import {
     AtlasSectionHeader,
     AtlasSignalCard
 } from '../components/atlas/AtlasSurface';
+import '../components/education-ui/education-system-v1.css';
 import './programs/education-programs-v1.css';
+import './programs/education-programs-playful.css';
+import './programs/education-programs-workspace.css';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 
 interface ProgramDetailsViewProps {
     onEnrollLead?: (lead: Lead) => void;
@@ -48,15 +52,19 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     const { programs, viewParams, navigateTo, leads, enrollments, students, settings } = useAppContext();
     const { currentOrganization, userProfile, can } = useAuth();
     const { alert: showAlert, confirm } = useConfirm();
-    const [activeTab, setActiveTab] = useState<'operations' | 'overview' | 'classes' | 'students' | 'waiting-list' | 'financials' | 'resources'>('overview');
+    const targetId = programIdProp || viewParams.programId;
+    const workspaceScope = `program:${currentOrganization?.id || 'none'}:${userProfile?.uid || 'guest'}:${targetId || 'none'}`;
+    useWorkspaceScroll(workspaceScope);
+    const [activeTab, setActiveTab] = useWorkspaceViewState<'operations' | 'overview' | 'classes' | 'students' | 'waiting-list' | 'financials' | 'resources'>(workspaceScope, 'activeTab', 'overview');
     const [linkCopied, setLinkCopied] = useState(false);
     const [expandedGradeIds, setExpandedGradeIds] = useState<string[]>([]);
     const [pendingLeadAction, setPendingLeadAction] = useState<string | null>(null);
+    const [rosterQuery, setRosterQuery] = useWorkspaceViewState(workspaceScope, 'rosterQuery', '');
+    const [rosterPlacement, setRosterPlacement] = useWorkspaceViewState<'all' | 'placed' | 'unplaced'>(workspaceScope, 'rosterPlacement', 'all');
     const workspaceRef = useRef<HTMLDivElement>(null);
     const showEducationProgramsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
 
     // Get the program (Prioritize Prop -> then URL Param)
-    const targetId = programIdProp || viewParams.programId;
     const program = useMemo(() =>
         programs.find(p => p.id === targetId),
         [programs, targetId]
@@ -68,7 +76,6 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
         if (!workspace) return;
 
         const frame = window.requestAnimationFrame(() => {
-            setActiveTab('overview');
             setExpandedGradeIds(program.grades?.length === 1 ? [program.grades[0].id] : []);
             const contentScroller = workspace.closest<HTMLElement>('.edu-shell-v1__content');
             if (contentScroller) contentScroller.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -124,6 +131,14 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
         const placementDelta = Number(assignedEnrollmentIds.has(a.id)) - Number(assignedEnrollmentIds.has(b.id));
         return placementDelta || a.studentName.localeCompare(b.studentName);
     });
+    const rosterSearch = rosterQuery.trim().toLocaleLowerCase();
+    const filteredRoster = sortedEnrollments.filter(enrollment => {
+        const placed = assignedEnrollmentIds.has(enrollment.id);
+        const matchesPlacement = rosterPlacement === 'all' || (rosterPlacement === 'placed' ? placed : !placed);
+        return matchesPlacement && [enrollment.studentName, enrollment.groupName, enrollment.packName]
+            .some(value => (value || '').toLocaleLowerCase().includes(rosterSearch));
+    });
+    const clearRosterFilters = () => { setRosterQuery(''); setRosterPlacement('all'); };
     const programOperationsPreview = buildLegacyProgramOperationsPreview(program, {
         academicPeriod: settings.academicYear,
         rosterByGroupId: Object.fromEntries(groupOperations.map(item => [item.group.id, item.roster.length]))
@@ -470,18 +485,26 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                 </div>
                             )}
                         />
+                        <div className="program-roster-tools">
+                            <label className="program-roster-search"><span>Find a learner</span><input type="search" value={rosterQuery} onChange={event => setRosterQuery(event.target.value)} placeholder="Search name, group or plan" /></label>
+                            <label><span>Group placement</span><select aria-label="Group placement" value={rosterPlacement} onChange={event => setRosterPlacement(event.target.value as typeof rosterPlacement)}><option value="all">All learners</option><option value="unplaced">Needs placement ({unassignedEnrollments.length})</option><option value="placed">Placed ({programEnrollments.length - unassignedEnrollments.length})</option></select></label>
+                            {(rosterQuery || rosterPlacement !== 'all') && <AtlasActionButton variant="quiet" icon={X} onClick={clearRosterFilters}>Clear filters</AtlasActionButton>}
+                            <div className="program-roster-results"><span role="status">Showing {filteredRoster.length} of {programEnrollments.length} learners</span><span>Exports include all learners</span></div>
+                        </div>
                         {unassignedEnrollments.length > 0 && (
-                            <div className="flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4">
+                            <div className="program-attention flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-4">
                                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-amber-200" />
-                                <div><p className="text-sm font-black text-amber-100">{unassignedEnrollments.length} learner{unassignedEnrollments.length === 1 ? '' : 's'} need a group</p><p className="mt-1 text-xs leading-5 text-slate-400">Open each profile to confirm level and class placement.</p></div>
+                                <div><p className="text-sm font-black text-amber-100">{unassignedEnrollments.length} learner{unassignedEnrollments.length === 1 ? ' needs' : 's need'} a group</p><p className="mt-1 text-xs leading-5 text-slate-400">Open each profile to confirm level and class placement.</p></div>
                             </div>
                         )}
                         {programEnrollments.length === 0 ? (
                             <AtlasEmptyState title="No active enrollments" description="New enrollments for this program will appear here." icon={Users} />
+                        ) : filteredRoster.length === 0 ? (
+                            <AtlasEmptyState title="No matching learners" description="Try another name, group or plan, or clear your placement filter." icon={Users} action={<AtlasActionButton onClick={clearRosterFilters}>Clear filters</AtlasActionButton>} />
                         ) : (
                             <>
                                 <div className="space-y-2 md:hidden">
-                                    {sortedEnrollments.map(enrollment => {
+                                    {filteredRoster.map(enrollment => {
                                         const isPlaced = assignedEnrollmentIds.has(enrollment.id);
                                         return (
                                             <article key={enrollment.id} className={`rounded-lg border p-4 ${isPlaced ? 'border-white/10 bg-slate-900/55' : 'border-amber-300/20 bg-amber-300/[0.05]'}`}>
@@ -498,15 +521,15 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                 <div className="hidden overflow-x-auto rounded-lg border border-white/10 bg-slate-900/55 md:block">
                                     <table className="min-w-[720px] w-full text-left">
                                         <thead className="border-b border-slate-800 bg-slate-950 text-[10px] font-bold uppercase text-slate-500">
-                                            <tr><th className="p-4">Learner</th><th className="p-4">Group</th><th className="p-4">Plan</th><th className="p-4">Started</th><th className="p-4 text-right">Action</th></tr>
+                                            <tr><th scope="col" className="p-4">Learner</th><th scope="col" className="p-4">Group</th><th scope="col" className="p-4">Plan</th><th scope="col" className="p-4">Started</th><th scope="col" className="p-4 text-right">Action</th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
-                                            {sortedEnrollments.map(enrollment => {
+                                            {filteredRoster.map(enrollment => {
                                                 const isPlaced = assignedEnrollmentIds.has(enrollment.id);
                                                 return (
-                                                    <tr key={enrollment.id} className={`transition-colors hover:bg-white/[0.03] ${isPlaced ? '' : 'bg-amber-300/[0.04]'}`}>
+                                                    <tr key={enrollment.id} data-placement={isPlaced ? 'placed' : 'unplaced'} className={`transition-colors hover:bg-white/[0.03] ${isPlaced ? '' : 'bg-amber-300/[0.04]'}`}>
                                                         <td className="p-4 font-bold text-white">{enrollment.studentName}</td>
-                                                        <td className="p-4"><span className={`text-sm font-bold ${isPlaced ? 'text-slate-300' : 'text-amber-200'}`}>{isPlaced ? enrollment.groupName : 'Needs placement'}</span></td>
+                                                        <td className="p-4"><span data-placement={isPlaced ? 'placed' : 'unplaced'} className={`text-sm font-bold ${isPlaced ? 'text-slate-300' : 'text-amber-200'}`}>{isPlaced ? enrollment.groupName : 'Needs placement'}</span></td>
                                                         <td className="p-4 text-sm text-slate-300">{enrollment.packName || 'Not set'}</td>
                                                         <td className="p-4 text-sm text-slate-400">{enrollment.startDate || 'Not set'}</td>
                                                         <td className="p-4 text-right"><AtlasActionButton icon={ArrowRight} variant="quiet" onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })}>Open learner</AtlasActionButton></td>
@@ -523,6 +546,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
             case 'waiting-list':
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in fade-in">
+                        <div className="col-span-full"><AtlasSectionHeader title="Waiting families" description="Review preferences, then continue enrollment when a place is available." icon={UserPlus} /></div>
                         {programLeads.length === 0 ? (
                             <div className="col-span-full"><AtlasEmptyState title="No one is waiting" description="New program leads and pre-enrollments will appear here." icon={List} /></div>
                         ) : (
@@ -545,12 +569,12 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
 
                                     <div className="bg-slate-950 p-3 rounded-lg space-y-2 border border-slate-800/50">
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-slate-500">Slot Pref:</span>
-                                            <span className="text-white font-medium">{lead.selectedSlot || 'N/A'}</span>
+                                            <span className="text-slate-500">Preferred time</span>
+                                            <span className="text-white font-medium">{lead.selectedSlot || 'Not specified'}</span>
                                         </div>
                                         <div className="flex justify-between text-xs">
-                                            <span className="text-slate-500">Pack:</span>
-                                            <span className="text-white font-medium">{lead.selectedPack || 'N/A'}</span>
+                                            <span className="text-slate-500">Plan</span>
+                                            <span className="text-white font-medium">{lead.selectedPack || 'Not specified'}</span>
                                         </div>
                                     </div>
 
@@ -559,7 +583,8 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                             <button
                                                 type="button"
                                                 onClick={() => onEnrollLead(lead)}
-                                                disabled={pendingLeadAction !== null}
+                                                disabled={!can('students.enroll') || pendingLeadAction !== null}
+                                                data-program-action="primary"
                                                 className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-amber-300/25 bg-amber-300 px-3 py-2.5 font-bold text-slate-950 transition-colors hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
                                             >
                                                 <UserPlus size={16} /> Enroll now
@@ -627,7 +652,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                 <div className="hidden overflow-x-auto md:block">
                                     <table className="w-full min-w-[680px] text-left">
                                         <thead className="border-y border-white/10 bg-slate-950/70 text-[10px] font-bold uppercase text-slate-500">
-                                            <tr><th className="p-3">Learner</th><th className="p-3">Plan</th><th className="p-3 text-right">Tuition</th><th className="p-3 text-right">Paid</th><th className="p-3 text-right">Balance</th><th className="p-3 text-right">Action</th></tr>
+                                            <tr><th scope="col" className="p-3">Learner</th><th scope="col" className="p-3">Plan</th><th scope="col" className="p-3 text-right">Tuition</th><th scope="col" className="p-3 text-right">Paid</th><th scope="col" className="p-3 text-right">Balance</th><th scope="col" className="p-3 text-right">Action</th></tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/10">
                                             {programEnrollments.map(enrollment => (
@@ -670,6 +695,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                 </div>
                             </div>
 
+                            {(program.status !== 'active' || !isEnrollmentReady) && <p className="program-attention">{program.status !== 'active' ? 'Activate this program before sharing enrollment.' : 'Add a priced plan and a scheduled group before sharing enrollment.'}</p>}
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                 <AtlasActionButton
                                     onClick={() => window.open(buildPublicEnrollmentUrl(program.id), '_blank', 'noopener,noreferrer')}
@@ -787,7 +813,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     const NextActionIcon = nextAction.icon;
 
     return (
-        <div ref={workspaceRef} tabIndex={-1} className={`flex flex-col gap-4 pb-6 outline-none ${showEducationProgramsV1 ? 'edu-v1 edu-program-details-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-program-details-v1' : undefined}>
+        <div ref={workspaceRef} tabIndex={-1} className={`flex flex-col gap-4 pb-6 outline-none ${showEducationProgramsV1 ? 'edu-v1 edu-program-details-v1' : ''}`} data-edu-system={showEducationProgramsV1 ? '1' : undefined} data-testid={showEducationProgramsV1 ? 'education-program-details-v1' : undefined}>
             {showEducationProgramsV1 ? (
                 <section className="edu-program-details-v1__command" aria-labelledby="education-program-detail-title">
                     <div className="edu-program-details-v1__topline">
@@ -938,6 +964,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                         key={tab.id}
                         type="button"
                         role="tab"
+                        id={`program-tab-${tab.id}`}
                         aria-selected={activeTab === tab.id}
                         aria-controls="program-tab-panel"
                         onClick={() => setActiveTab(tab.id as any)}
@@ -954,7 +981,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                 ))}
             </div>
 
-            <div id="program-tab-panel" role="tabpanel" className="min-w-0 flex-1">
+            <div id="program-tab-panel" role="tabpanel" aria-labelledby={`program-tab-${activeTab}`} data-program-tab={activeTab} className="min-w-0 flex-1">
                 {renderTabContent()}
             </div>
         </div>

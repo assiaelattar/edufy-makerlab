@@ -89,7 +89,7 @@ export function ServiceInvoiceModal({ organizationId, services, documents, setti
   const modalTitle = issued
     ? `Facture ${issued.number} ${isEditing ? 'mise à jour' : 'émise'}`
     : isEditing ? `Modifier la facture ${editingInvoice!.number}` : 'Nouvelle facture de services';
-  return <Modal isOpen onClose={() => !busy && onClose()} title={modalTitle} size="xl">
+  return <Modal designSystem isOpen onClose={() => !busy && onClose()} title={modalTitle} size="xl">
     <div className="service-workspace">{issued ? <><p role="status">La facture {issued.number} est {isEditing ? 'mise à jour dans' : 'enregistrée dans'} l’historique.</p><div className="service-totals"><span>{issued.customer.name}</span><strong>{money(issued.total)} TTC</strong></div><div className="service-actions"><button onClick={onClose}>Fermer</button><button className="primary" onClick={() => { if (!generateFinanceDocument(issued, settings)) setError('Autorisez les fenêtres contextuelles pour ouvrir le PDF.'); }}>Imprimer / PDF</button></div></> : <form onSubmit={submit} className="service-form">
       {isEditing && <div className="service-edit-notice"><strong>N° {editingInvoice!.number} conservé</strong><span>Version {Math.max(0, Number(editingInvoice!.revision) || 0) + 1} · les avoirs et les factures créditées restent verrouillés.</span></div>}
       <div className="service-steps"><strong>{review ? '3 · Vérification et sauvegarde' : '1 · Client'}</strong><span>2 · Lignes et détails</span>{!review && <span>3 · Aperçu et sauvegarde</span>}</div>

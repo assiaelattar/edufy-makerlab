@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { startOfWeek, addDays, format, isSameDay, addWeeks, subWeeks, parse, getDay } from 'date-fns';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, AlertTriangle, RefreshCw, UserPlus } from 'lucide-react';
+import { startOfWeek, addDays, format, isSameDay, addWeeks, subWeeks, parse, getDay, isValid } from 'date-fns';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, AlertTriangle, RefreshCw, UserPlus, Search, List, LayoutGrid, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { ClassSession } from '../types';
 import { collection, updateDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import './school-day/education-school-day-v1.css';
+import './school-day/education-calendar-playful.css';
 import { Modal } from '../components/Modal';
 import { getProgramOperationalState } from '../utils/programLifecycle';
 import { getSchoolWeekdayIndex } from '../utils/schoolSchedule';
@@ -27,6 +28,11 @@ export const CalendarView = () => {
     const { confirm, alert: showAlert } = useConfirm();
     const [currentDate, setCurrentDate] = useState(new Date());
 
+    const [scheduleView, setScheduleView] = useState<'week' | 'agenda'>(() => window.matchMedia('(max-width: 767px)').matches ? 'agenda' : 'week');
+    const [sessionQuery, setSessionQuery] = useState('');
+    const [coverageFilter, setCoverageFilter] = useState<'all' | 'unassigned'>('all');
+    const [typeFilter, setTypeFilter] = useState<'all' | 'program_class' | 'workshop_trial'>('all');
+    const [instructorQuery, setInstructorQuery] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [assignModalSession, setAssignModalSession] = useState<ClassSession | null>(null);
     const [isAssigning, setIsAssigning] = useState(false);
@@ -56,10 +62,27 @@ export const CalendarView = () => {
     const nextSession = sortedEvents.find(event => `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm')) || sortedEvents[0];
     const assignableTeam = useMemo(() => teamMembers.filter((member): member is typeof member & { uid: string } => Boolean(member.uid) && ['instructor', 'admin', 'admission_officer'].includes(member.role)), [teamMembers]);
 
+    const filteredEvents = useMemo(() => {
+        const query = sessionQuery.trim().toLocaleLowerCase();
+        return sortedEvents.filter(event =>
+            (coverageFilter === 'all' || !event.instructorId) &&
+            (typeFilter === 'all' || event.type === typeFilter) &&
+            [event.title, event.subTitle, event.instructorName].some(value => (value || '').toLocaleLowerCase().includes(query))
+        );
+    }, [sortedEvents, sessionQuery, coverageFilter, typeFilter]);
+    const jumpToDate = (value: string) => {
+        const selectedDate = parse(value, 'yyyy-MM-dd', new Date());
+        if (isValid(selectedDate)) setCurrentDate(selectedDate);
+    };
+    const hasFilters = Boolean(sessionQuery || coverageFilter !== 'all' || typeFilter !== 'all');
+    const clearFilters = () => { setSessionQuery(''); setCoverageFilter('all'); setTypeFilter('all'); };
+    const openSession = (session: ClassSession) => { setInstructorQuery(''); setAssignModalSession(session); };
+    const visibleInstructors = assignableTeam.filter(member => `${member.name} ${member.role}`.toLocaleLowerCase().includes(instructorQuery.trim().toLocaleLowerCase()));
+
     // --- 3. Render Helpers ---
     const getEventsForDay = (date: Date) => {
         const dateStr = format(date, 'yyyy-MM-dd');
-        return events.filter(e => e.date === dateStr);
+        return (showEducationSchoolDayV1 ? filteredEvents : events).filter(e => e.date === dateStr);
     };
 
     const getThemeColor = (event: ClassSession) => {
@@ -77,6 +100,29 @@ export const CalendarView = () => {
         };
         return colors[event.color || 'blue'] || colors.blue;
     };
+
+    const renderSessionCard = (event: ClassSession) => (
+        <button
+            type="button"
+            key={event.id}
+            onClick={() => openSession(event)}
+            data-session-type={event.type}
+            data-coverage={event.instructorId ? 'assigned' : 'unassigned'}
+            className={`edu-calendar-session group relative w-full rounded-lg border border-l-4 bg-slate-900/90 p-4 text-left transition-colors hover:bg-slate-800/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 md:p-3 ${getThemeColor(event)}`}
+        >
+            <div className="edu-calendar-session__time flex justify-between items-start mb-2">
+                <span className="rounded-lg border border-white/10 bg-slate-950 px-2 py-1 font-mono text-xs font-black text-white md:py-0.5 md:text-[10px]">{event.startTime} - {event.endTime}</span>
+            </div>
+            <h4 className="font-bold text-base md:text-sm leading-tight mb-1">{event.title}</h4>
+            <p className="edu-calendar-session__group text-[11px] font-bold opacity-80 uppercase tracking-widest mb-2">{event.subTitle}</p>
+
+            {/* Instructor Assignment Status */}
+            <div className={`edu-calendar-session__coverage mt-3 flex items-center gap-1.5 border-t border-white/10 pt-2 text-xs font-bold ${event.instructorId ? 'text-slate-300' : 'text-amber-300'}`}>
+                <UserPlus size={14} />
+                {event.instructorId ? (event.instructorName || 'Instructor assigned') : 'Needs instructor'}
+            </div>
+        </button>
+    );
 
     // --- 4. Timetable Generator (Progressive Materialization) ---
     const handleSyncWeek = async () => {
@@ -256,7 +302,7 @@ export const CalendarView = () => {
         <div className={`space-y-6 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-calendar-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-calendar-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Daily operations"
-                title="Session Calendar"
+                title="School schedule"
                 description="Coordinate classes, workshops, and instructor coverage from one weekly schedule."
                 icon={CalendarIcon}
                 badges={
@@ -288,27 +334,56 @@ export const CalendarView = () => {
                 }
             />
 
-            {showEducationSchoolDayV1 && <div className="edu-school-day-v1__focus" role="region" aria-label="Schedule priority">
+            {showEducationSchoolDayV1 && <div className="edu-school-day-v1__focus" data-attention={Boolean(firstCoverageGap)} role="region" aria-label="Schedule priority">
                 <div className="edu-school-day-v1__focus-copy">
                     <span className="edu-school-day-v1__eyebrow">Selected week</span>
                     <h2>{firstCoverageGap ? `${calendarSignals.unassigned} ${calendarSignals.unassigned === 1 ? 'session needs' : 'sessions need'} coverage` : nextSession ? 'Instructor coverage is set' : 'No sessions in this week'}</h2>
                     <p>{firstCoverageGap ? `${firstCoverageGap.date} · ${firstCoverageGap.startTime} · ${firstCoverageGap.title}` : nextSession ? `Next: ${nextSession.date} · ${nextSession.startTime} · ${nextSession.title}` : can('attendance.manage') ? 'Synchronize the week to create sessions from active groups and workshops.' : 'No class or workshop sessions are available for this week.'}</p>
                 </div>
                 <div className="edu-school-day-v1__focus-actions">
-                    {(firstCoverageGap || nextSession) && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => setAssignModalSession((firstCoverageGap || nextSession)!)}>{firstCoverageGap && can('attendance.manage') ? 'Assign instructor' : 'Review session'} <ChevronRight size={16} /></button>}
+                    {(firstCoverageGap || nextSession) && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => openSession((firstCoverageGap || nextSession)!)}>{firstCoverageGap && can('attendance.manage') ? 'Assign instructor' : 'Review session'} <ChevronRight size={16} /></button>}
                     {!nextSession && can('attendance.manage') && <button type="button" className="edu-school-day-v1__focus-primary" onClick={handleSyncWeek} disabled={isGenerating}>Sync week</button>}
                 </div>
             </div>}
 
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <AtlasSignalCard label="Week sessions" value={calendarSignals.sessions} detail="Classes and workshops" icon={CalendarIcon} tone="teal" />
-                <AtlasSignalCard label="Assigned" value={calendarSignals.assigned} detail="Instructor confirmed" icon={UserPlus} tone="emerald" />
-                <AtlasSignalCard label="Coverage gaps" value={calendarSignals.unassigned} detail="Needs an instructor" icon={AlertTriangle} tone={calendarSignals.unassigned > 0 ? 'amber' : 'slate'} />
+                <AtlasSignalCard label="Assigned" value={calendarSignals.assigned} detail="Instructor assigned" icon={UserPlus} tone="emerald" />
+                <AtlasSignalCard label="Coverage gaps" value={calendarSignals.unassigned} detail="Needs an instructor" icon={AlertTriangle} tone={calendarSignals.unassigned > 0 ? 'amber' : 'slate'} onClick={showEducationSchoolDayV1 ? () => { setCoverageFilter('unassigned'); setScheduleView('agenda'); } : undefined} />
                 <AtlasSignalCard label="Workshops" value={calendarSignals.workshops} detail="Trial and Make & Go" icon={Users} tone="blue" />
             </div>
 
-            {/* Calendar Grid */}
-            <div className="overflow-x-auto rounded-xl border border-white/10 bg-slate-950/50 p-4 md:p-5">
+            {showEducationSchoolDayV1 && <section className="edu-calendar-tools" aria-label="Schedule controls">
+                <div className="edu-calendar-tools__top">
+                    <div><span className="edu-calendar-eyebrow">Your week at a glance</span><h3>{format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}</h3></div>
+                    <div className="edu-calendar-view" role="group" aria-label="Schedule view">
+                        <button type="button" aria-pressed={scheduleView === 'week'} onClick={() => setScheduleView('week')}><LayoutGrid size={16} />Week</button>
+                        <button type="button" aria-pressed={scheduleView === 'agenda'} onClick={() => setScheduleView('agenda')}><List size={16} />Agenda</button>
+                    </div>
+                </div>
+                <div className="edu-calendar-filters">
+                    <label className="edu-calendar-search"><span>Find a session</span><div><Search size={17} /><input type="search" value={sessionQuery} onChange={event => setSessionQuery(event.target.value)} placeholder="Session, group or instructor" /></div></label>
+                    <label><span>Coverage</span><select aria-label="Coverage" value={coverageFilter} onChange={event => setCoverageFilter(event.target.value as typeof coverageFilter)}><option value="all">All sessions</option><option value="unassigned">Needs instructor</option></select></label>
+                    <label><span>Session type</span><select aria-label="Session type" value={typeFilter} onChange={event => setTypeFilter(event.target.value as typeof typeFilter)}><option value="all">Classes & workshops</option><option value="program_class">Classes</option><option value="workshop_trial">Workshops</option></select></label>
+                    <label><span>Week containing</span><input aria-label="Week containing" type="date" value={format(currentDate, 'yyyy-MM-dd')} onInput={event => jumpToDate(event.currentTarget.value)} onChange={event => jumpToDate(event.target.value)} /></label>
+                </div>
+                <div className="edu-calendar-results"><span role="status">Showing {filteredEvents.length} of {events.length} sessions this week</span>{hasFilters && <button type="button" onClick={clearFilters}><X size={14} />Clear filters</button>}<span>Weekly totals above include all sessions.</span></div>
+            </section>}
+
+            {showEducationSchoolDayV1 && filteredEvents.length === 0 ? (
+                <AtlasEmptyState icon={CalendarIcon} title={hasFilters && events.length ? 'No matching sessions' : 'No sessions this week'} description={hasFilters && events.length ? 'Try another session, instructor or filter.' : can('attendance.manage') ? 'Choose another week, or sync the timetable to create missing sessions from active groups and workshops.' : 'Choose another week, or ask an attendance manager to prepare the timetable.'} action={hasFilters ? <AtlasActionButton onClick={clearFilters}>Clear filters</AtlasActionButton> : <AtlasActionButton onClick={() => setCurrentDate(new Date())}>Go to this week</AtlasActionButton>} />
+            ) : showEducationSchoolDayV1 && scheduleView === 'agenda' ? (
+                <div className="edu-calendar-agenda" aria-label="Weekly agenda">
+                    {weekDays.filter(day => getEventsForDay(day).length > 0).map(day => (
+                        <section className="edu-calendar-agenda__day" key={format(day, 'yyyy-MM-dd')} aria-label={format(day, 'EEEE d MMMM')}>
+                            <header><div data-today={isSameDay(day, new Date())}><span>{format(day, 'EEE')}</span><strong>{format(day, 'd')}</strong></div><h3>{format(day, 'EEEE')}<small>{getEventsForDay(day).length} {getEventsForDay(day).length === 1 ? 'session' : 'sessions'}{isSameDay(day, new Date()) ? ' · Today' : ''}</small></h3></header>
+                            <div className="edu-calendar-agenda__sessions">{getEventsForDay(day).map(renderSessionCard)}</div>
+                        </section>
+                    ))}
+                </div>
+            ) : (
+            /* Calendar grid preserves the existing weekly timetable. */
+            <div className="edu-calendar-grid overflow-x-auto rounded-xl border border-white/10 bg-slate-950/50 p-4 md:p-5">
                 <div className="grid min-w-0 grid-cols-1 gap-5 pb-2 md:min-w-[1000px] md:grid-cols-7 md:gap-3">
                     {weekDays.map((day, i) => {
                         const dayEvents = getEventsForDay(day);
@@ -333,26 +408,7 @@ export const CalendarView = () => {
                                         </div>
                                     )}
                                     
-                                    {dayEvents.map(event => (
-                                        <button
-                                            type="button"
-                                            key={event.id}
-                                            onClick={() => setAssignModalSession(event)}
-                                            className={`group relative w-full rounded-lg border border-l-4 bg-slate-900/90 p-4 text-left transition-colors hover:bg-slate-800/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 md:p-3 ${getThemeColor(event)}`}
-                                        >
-                                            <div className="flex justify-between items-start mb-2">
-                                                <span className="rounded-lg border border-white/10 bg-slate-950 px-2 py-1 font-mono text-xs font-black text-white md:py-0.5 md:text-[10px]">{event.startTime} - {event.endTime}</span>
-                                            </div>
-                                            <h4 className="font-bold text-base md:text-sm leading-tight mb-1">{event.title}</h4>
-                                            <p className="text-[11px] font-bold opacity-80 uppercase tracking-widest mb-2">{event.subTitle}</p>
-                                            
-                                            {/* Instructor Assignment Status */}
-                                            <div className={`mt-3 flex items-center gap-1.5 border-t border-white/10 pt-2 text-xs font-bold ${event.instructorId ? 'text-slate-300' : 'text-amber-300'}`}>
-                                                <UserPlus size={14} />
-                                                {event.instructorId ? event.instructorName : 'Unassigned'}
-                                            </div>
-                                        </button>
-                                    ))}
+                                    {dayEvents.map(renderSessionCard)}
                                 </div>
                             </div>
                         );
@@ -360,24 +416,32 @@ export const CalendarView = () => {
                 </div>
             </div>
 
+            )}
+
             <Modal isOpen={Boolean(assignModalSession)} onClose={() => !isAssigning && setAssignModalSession(null)} title={can('attendance.manage') ? 'Assign instructor' : 'Session details'}>
                 {assignModalSession && (
                     <div className="space-y-4">
                         <div className="rounded-lg border border-white/10 bg-slate-950 p-4 text-sm text-slate-300">
                             <div className="font-black text-white">{assignModalSession.title}</div>
                             <div className="mt-1 font-mono text-xs text-slate-400">{assignModalSession.date} · {assignModalSession.startTime} - {assignModalSession.endTime}</div>
+                            <p className="mt-2">{assignModalSession.subTitle}</p>
+                            <p className="mt-2">Current instructor: <strong>{assignModalSession.instructorName || (assignModalSession.instructorId ? 'Assigned' : 'Unassigned')}</strong></p>
                         </div>
                         {can('attendance.manage') && <div>
+                            <label className="edu-calendar-instructor-search"><span>Find an instructor</span><input type="search" value={instructorQuery} onChange={event => setInstructorQuery(event.target.value)} placeholder="Name or role" /></label>
                             <p className="mb-3 text-xs font-bold uppercase text-slate-500">Available instructors</p>
                             {assignableTeam.length === 0 ? (
                                 <AtlasEmptyState title="No instructors available" description="Add an instructor or administrator to the team before assigning coverage." icon={Users} />
+                            ) : visibleInstructors.length === 0 ? (
+                                <AtlasEmptyState title="No matching instructors" description="Try another name or clear the search." icon={Users} action={<AtlasActionButton onClick={() => setInstructorQuery('')}>Clear search</AtlasActionButton>} />
                             ) : (
                             <div className="max-h-[300px] space-y-2 overflow-y-auto">
-                                {assignableTeam.map(teamMember => (
+                                {visibleInstructors.map(teamMember => (
                                     <button
                                         type="button"
                                         key={teamMember.uid}
                                         disabled={isAssigning}
+                                        aria-pressed={assignModalSession.instructorId === teamMember.uid}
                                         onClick={() => handleAssignInstructor(teamMember.uid)}
                                         className={`w-full rounded-lg border px-4 py-3 text-left font-bold transition-colors disabled:cursor-wait disabled:opacity-50 ${assignModalSession.instructorId === teamMember.uid ? 'border-teal-300/50 bg-teal-400/10 text-teal-100' : 'border-white/10 bg-slate-900 text-slate-300 hover:border-white/20'}`}
                                     >
@@ -387,7 +451,6 @@ export const CalendarView = () => {
                             </div>
                             )}
                         </div>}
-                        {!can('attendance.manage') && <p className="text-sm text-slate-400">Instructor: {assignModalSession.instructorName || 'Unassigned'}</p>}
                         {can('attendance.manage') && <div className="flex justify-end border-t border-white/10 pt-4">
                             <AtlasActionButton variant={assignModalSession.instructorId ? 'danger' : 'secondary'} disabled={isAssigning || !assignModalSession.instructorId} onClick={() => handleAssignInstructor('')}>
                                 {isAssigning ? 'Saving...' : 'Remove assignment'}

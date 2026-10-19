@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useId, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   Banknote,
@@ -20,6 +20,8 @@ import type { Enrollment, Program, Student } from '../../types';
 import { formatCurrency } from '../../utils/helpers';
 import { getProgramReadiness } from '../../utils/program-readiness';
 import { Modal } from '../Modal';
+import { EducationButton } from '../education-ui/EducationPrimitives';
+import './education-enrollment-system.css';
 
 export type EnrollmentLearnerMode = 'existing' | 'new';
 
@@ -174,10 +176,13 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
   isSubmitting,
   onFinish,
 }) => {
+  const formId = useId();
   const [studentSearch, setStudentSearch] = useState('');
   const [stepError, setStepError] = useState('');
   const [showPaymentEntry, setShowPaymentEntry] = useState(false);
   const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (stepError) errorRef.current?.focus(); }, [stepError]);
 
   const selectedStudent = useMemo(
     () => students.find(student => student.id === selectedStudentId),
@@ -378,8 +383,8 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Enroll a student" size="5xl">
-      <div className="grid min-h-[34rem] gap-0 lg:grid-cols-[15rem_minmax(0,1fr)]">
+    <Modal designSystem isOpen={isOpen} onClose={onClose} title="Enroll a student" size="5xl">
+      <div data-edu-system="1" className="edu-enrollment-system grid min-h-[34rem] gap-0 lg:grid-cols-[15rem_minmax(0,1fr)]">
         <aside className="border-b border-white/10 pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-5">
           <div className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible">
             {steps.map(item => {
@@ -443,10 +448,10 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
             {step === 1 && (
               <div className="space-y-5">
                 <div className="grid h-11 grid-cols-2 rounded-lg border border-white/10 bg-slate-950/60 p-1">
-                  <button type="button" onClick={() => chooseLearnerMode('existing')} className={`flex items-center justify-center gap-2 rounded-md text-xs font-black transition ${learnerMode === 'existing' ? 'bg-white text-slate-950' : 'text-slate-400 hover:text-white'}`}>
+                  <button type="button" aria-pressed={learnerMode === 'existing'} onClick={() => chooseLearnerMode('existing')} className={`flex items-center justify-center gap-2 rounded-md text-xs font-black transition ${learnerMode === 'existing' ? 'bg-white text-slate-950' : 'text-slate-400 hover:text-white'}`}>
                     <Search size={15} /> Find learner
                   </button>
-                  <button type="button" onClick={() => chooseLearnerMode('new')} className={`flex items-center justify-center gap-2 rounded-md text-xs font-black transition ${learnerMode === 'new' ? 'bg-white text-slate-950' : 'text-slate-400 hover:text-white'}`}>
+                  <button type="button" aria-pressed={learnerMode === 'new'} onClick={() => chooseLearnerMode('new')} className={`flex items-center justify-center gap-2 rounded-md text-xs font-black transition ${learnerMode === 'new' ? 'bg-white text-slate-950' : 'text-slate-400 hover:text-white'}`}>
                     <UserPlus size={15} /> New learner
                   </button>
                 </div>
@@ -467,7 +472,7 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                     <div>
                       <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
-                        <input autoFocus type="search" className={`${fieldClass} pl-10`} placeholder="Search learner, parent, or phone" value={studentSearch} onChange={event => setStudentSearch(event.target.value)} />
+                        <input aria-label="Search existing learners" autoFocus type="search" className={`${fieldClass} pl-10`} placeholder="Search learner, parent, or phone" value={studentSearch} onChange={event => setStudentSearch(event.target.value)} />
                       </div>
                       <div className="mt-3 divide-y divide-white/[0.07] border-y border-white/10">
                         {matchingStudents.length === 0 ? (
@@ -493,12 +498,12 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                   )
                 ) : (
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2"><label className={labelClass}>Learner full name *</label><input autoFocus className={fieldClass} value={studentForm.name} onChange={event => setStudentForm(previous => ({ ...previous, name: event.target.value }))} /></div>
-                    <div><label className={labelClass}>Parent or guardian *</label><input className={fieldClass} value={studentForm.parentName} onChange={event => setStudentForm(previous => ({ ...previous, parentName: event.target.value }))} /></div>
-                    <div><label className={labelClass}>Family phone *</label><input inputMode="tel" className={fieldClass} value={studentForm.parentPhone} onChange={event => setStudentForm(previous => ({ ...previous, parentPhone: event.target.value }))} /></div>
-                    <div><label className={labelClass}>Birth date{requiredStudentFields.birthDate ? ' *' : ''}</label><input type="date" className={fieldClass} value={studentForm.birthDate} onChange={event => setStudentForm(previous => ({ ...previous, birthDate: event.target.value }))} /></div>
-                    <div><label className={labelClass}>School</label><input className={fieldClass} value={studentForm.school} onChange={event => setStudentForm(previous => ({ ...previous, school: event.target.value }))} /></div>
-                    <div className="sm:col-span-2"><label className={labelClass}>Parent email <span className="font-medium text-slate-600">Optional</span></label><input type="email" className={fieldClass} value={studentForm.email} onChange={event => setStudentForm(previous => ({ ...previous, email: event.target.value }))} placeholder="Used for parent access" /></div>
+                    <div className="sm:col-span-2"><label className={labelClass} htmlFor={formId + '-1'}>Learner full name *</label><input id={formId + '-1'} autoFocus className={fieldClass} value={studentForm.name} onChange={event => setStudentForm(previous => ({ ...previous, name: event.target.value }))} /></div>
+                    <div><label className={labelClass} htmlFor={formId + '-2'}>Parent or guardian{requiredStudentFields.parentName ? ' *' : ''}</label><input id={formId + '-2'} className={fieldClass} value={studentForm.parentName} onChange={event => setStudentForm(previous => ({ ...previous, parentName: event.target.value }))} /></div>
+                    <div><label className={labelClass} htmlFor={formId + '-3'}>Family phone *</label><input id={formId + '-3'} inputMode="tel" className={fieldClass} value={studentForm.parentPhone} onChange={event => setStudentForm(previous => ({ ...previous, parentPhone: event.target.value }))} /></div>
+                    <div><label className={labelClass} htmlFor={formId + '-4'}>Birth date{requiredStudentFields.birthDate ? ' *' : ''}</label><input id={formId + '-4'} type="date" className={fieldClass} value={studentForm.birthDate} onChange={event => setStudentForm(previous => ({ ...previous, birthDate: event.target.value }))} /></div>
+                    <div><label className={labelClass} htmlFor={formId + '-5'}>School</label><input id={formId + '-5'} className={fieldClass} value={studentForm.school} onChange={event => setStudentForm(previous => ({ ...previous, school: event.target.value }))} /></div>
+                    <div className="sm:col-span-2"><label className={labelClass} htmlFor={formId + '-6'}>Parent email <span className="font-medium text-slate-600">Optional</span></label><input id={formId + '-6'} type="email" className={fieldClass} value={studentForm.email} onChange={event => setStudentForm(previous => ({ ...previous, email: event.target.value }))} placeholder="Used for parent access" /></div>
                   </div>
                 )}
               </div>
@@ -637,7 +642,7 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
 
                     <details className="border-t border-white/10 pt-4" open={Boolean(programForm.secondGroupId)}>
                       <summary className="cursor-pointer text-xs font-bold text-slate-400">Add a second weekly class <span className="font-medium text-slate-600">Optional</span></summary>
-                      <select className={`${fieldClass} mt-3`} value={programForm.secondGroupId} onChange={event => setProgramForm(previous => ({ ...previous, secondGroupId: event.target.value }))}>
+                      <select aria-label="Second weekly class" className={`${fieldClass} mt-3`} value={programForm.secondGroupId} onChange={event => setProgramForm(previous => ({ ...previous, secondGroupId: event.target.value }))}>
                         <option value="">No second class</option>
                         {groupChoices.filter(choice => choice.group.id !== programForm.groupId && !choice.isFull).map(choice => <option key={choice.group.id} value={choice.group.id}>{choice.group.name} / {choice.group.day} {choice.group.time}</option>)}
                       </select>
@@ -668,9 +673,9 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
 
                 <div className="grid gap-4 border-y border-white/10 py-5 sm:grid-cols-[minmax(0,1fr)_15rem] sm:items-end">
                   <div>
-                    <label className={labelClass}>Agreed tuition fee</label>
+                    <label className={labelClass} htmlFor={formId + '-7'}>Agreed tuition fee</label>
                     <div className="relative">
-                      <input type="number" min={0} className={`${fieldClass} pr-16 text-lg font-black`} value={negotiatedPrice || ''} onChange={event => setNegotiatedPrice(Number(event.target.value))} />
+                      <input id={formId + '-7'} type="number" min={0} className={`${fieldClass} pr-16 text-lg font-black`} value={negotiatedPrice || ''} onChange={event => setNegotiatedPrice(Number(event.target.value))} />
                       <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-black text-slate-500">MAD</span>
                     </div>
                     {standardTuition > 0 && <p className="mt-1.5 text-xs text-slate-500">Listed fee {formatCurrency(standardTuition)}{discountAmount > 0 ? ` / ${discountPercent}% reduction` : ''}</p>}
@@ -704,16 +709,16 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                       )}
 
                       <div className="grid gap-3 sm:grid-cols-3">
-                        <div><label className={labelClass}>Amount received</label><input type="number" min={0} className={fieldClass} value={currentPayment.amount} onChange={event => setCurrentPayment(previous => ({ ...previous, amount: event.target.value }))} /></div>
-                        <div><label className={labelClass}>Method</label><select className={fieldClass} value={currentPayment.method} onChange={event => setCurrentPayment(previous => ({ ...previous, method: event.target.value }))}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank transfer</option></select></div>
-                        <div><label className={labelClass}>Date received</label><input type="date" className={fieldClass} value={currentPayment.date} onChange={event => setCurrentPayment(previous => ({ ...previous, date: event.target.value }))} /></div>
+                        <div><label className={labelClass} htmlFor={formId + '-8'}>Amount received</label><input id={formId + '-8'} type="number" min={0} className={fieldClass} value={currentPayment.amount} onChange={event => setCurrentPayment(previous => ({ ...previous, amount: event.target.value }))} /></div>
+                        <div><label className={labelClass} htmlFor={formId + '-9'}>Method</label><select id={formId + '-9'} className={fieldClass} value={currentPayment.method} onChange={event => setCurrentPayment(previous => ({ ...previous, method: event.target.value }))}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank transfer</option></select></div>
+                        <div><label className={labelClass} htmlFor={formId + '-10'}>Date received</label><input id={formId + '-10'} type="date" className={fieldClass} value={currentPayment.date} onChange={event => setCurrentPayment(previous => ({ ...previous, date: event.target.value }))} /></div>
                       </div>
 
                       {currentPayment.method === 'check' && (
                         <div className="grid gap-3 sm:grid-cols-3">
-                          <div><label className={labelClass}>Check number</label><input className={fieldClass} value={currentPayment.checkNumber} onChange={event => setCurrentPayment(previous => ({ ...previous, checkNumber: event.target.value }))} /></div>
-                          <div><label className={labelClass}>Bank</label><input className={fieldClass} value={currentPayment.bankName} onChange={event => setCurrentPayment(previous => ({ ...previous, bankName: event.target.value }))} /></div>
-                          <div><label className={labelClass}>Deposit date</label><input type="date" className={fieldClass} value={currentPayment.depositDate} onChange={event => setCurrentPayment(previous => ({ ...previous, depositDate: event.target.value }))} /></div>
+                          <div><label className={labelClass} htmlFor={formId + '-11'}>Check number</label><input id={formId + '-11'} className={fieldClass} value={currentPayment.checkNumber} onChange={event => setCurrentPayment(previous => ({ ...previous, checkNumber: event.target.value }))} /></div>
+                          <div><label className={labelClass} htmlFor={formId + '-12'}>Bank</label><input id={formId + '-12'} className={fieldClass} value={currentPayment.bankName} onChange={event => setCurrentPayment(previous => ({ ...previous, bankName: event.target.value }))} /></div>
+                          <div><label className={labelClass} htmlFor={formId + '-13'}>Deposit date</label><input id={formId + '-13'} type="date" className={fieldClass} value={currentPayment.depositDate} onChange={event => setCurrentPayment(previous => ({ ...previous, depositDate: event.target.value }))} /></div>
                         </div>
                       )}
 
@@ -728,8 +733,8 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
                     <div className="mt-4 space-y-3">
                       {promises.length > 0 && <div className="divide-y divide-white/[0.07] border-y border-white/10">{promises.map(promise => <div key={promise.id} className="flex items-center gap-3 py-2"><CalendarDays size={15} className="text-sky-300" /><span className="flex-1 text-sm text-slate-300">{promise.month}</span><span className="text-sm font-black text-white">{formatCurrency(Number(promise.amount))}</span><button type="button" onClick={() => onRemovePromise(promise.id)} aria-label="Remove scheduled payment" className="p-2 text-slate-500 hover:text-red-300"><Trash2 size={14} /></button></div>)}</div>}
                       <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                        <div><label className={labelClass}>Month</label><input type="month" className={fieldClass} value={currentPromise.month} onChange={event => setCurrentPromise(previous => ({ ...previous, month: event.target.value }))} /></div>
-                        <div><label className={labelClass}>Amount</label><input type="number" min={0} className={fieldClass} value={currentPromise.amount} onChange={event => setCurrentPromise(previous => ({ ...previous, amount: event.target.value }))} /></div>
+                        <div><label className={labelClass} htmlFor={formId + '-14'}>Month</label><input id={formId + '-14'} type="month" className={fieldClass} value={currentPromise.month} onChange={event => setCurrentPromise(previous => ({ ...previous, month: event.target.value }))} /></div>
+                        <div><label className={labelClass} htmlFor={formId + '-15'}>Amount</label><input id={formId + '-15'} type="number" min={0} className={fieldClass} value={currentPromise.amount} onChange={event => setCurrentPromise(previous => ({ ...previous, amount: event.target.value }))} /></div>
                         <button type="button" onClick={addPromise} aria-label="Add scheduled payment" title="Add scheduled payment" className="flex h-11 w-11 items-center justify-center rounded-lg bg-sky-400 text-slate-950"><Plus size={18} /></button>
                       </div>
                     </div>
@@ -760,19 +765,19 @@ export const EnrollmentWizard: React.FC<EnrollmentWizardProps> = ({
               </div>
             )}
 
-            {stepError && <div role="alert" className="mt-5 rounded-lg border border-red-400/25 bg-red-400/10 px-3 py-2.5 text-sm font-bold text-red-200">{stepError}</div>}
+            {stepError && <div ref={errorRef} id={formId + '-error'} tabIndex={-1} role="alert" className="mt-5 rounded-lg border border-red-400/25 bg-red-400/10 px-3 py-2.5 text-sm font-bold text-red-200">{stepError}</div>}
 
-            <footer className="sticky bottom-0 mt-6 flex items-center justify-between gap-3 border-t border-white/10 bg-[#0F1B2D]/95 py-4 backdrop-blur">
+            <footer className="edu-ds-form-footer sticky bottom-0 mt-6 flex items-center justify-between gap-3 border-t border-white/10 bg-[#0F1B2D]/95 py-4 backdrop-blur">
               {step > 1 ? (
-                <button type="button" onClick={() => setStep(previous => previous - 1)} className="flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white"><ArrowLeft size={16} /> Back</button>
+                <EducationButton type="button" onClick={() => setStep(previous => previous - 1)} className="flex h-11 items-center gap-2 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white"><ArrowLeft size={16} /> Back</EducationButton>
               ) : (
-                <button type="button" onClick={onClose} className="h-11 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white">Cancel</button>
+                <EducationButton type="button" onClick={onClose} className="h-11 rounded-lg px-3 text-sm font-bold text-slate-400 transition hover:bg-white/[0.04] hover:text-white">Cancel</EducationButton>
               )}
 
               {step < 4 ? (
-                <button type="button" onClick={continueForward} className="flex h-11 items-center gap-2 rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950 transition hover:bg-teal-200 active:scale-[0.98]">Continue <ChevronRight size={16} /></button>
+                <EducationButton type="button" onClick={continueForward} variant="primary">Continue <ChevronRight size={16} /></EducationButton>
               ) : (
-                <button type="button" onClick={finish} disabled={isSubmitting} className="flex h-11 items-center gap-2 rounded-lg bg-teal-300 px-5 text-sm font-black text-slate-950 transition hover:bg-teal-200 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60">{isSubmitting ? 'Creating enrollment...' : 'Create enrollment'} <CheckCircle2 size={17} /></button>
+                <EducationButton type="button" onClick={finish} disabled={isSubmitting} variant="primary">{isSubmitting ? 'Creating enrollment...' : 'Create enrollment'} <CheckCircle2 size={17} /></EducationButton>
               )}
             </footer>
           </div>

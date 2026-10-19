@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Check,
@@ -24,7 +24,10 @@ import {
   selectAdmissionTodayCases,
 } from '../domain';
 import { EducationAdmissionsWhatsAppAssistant } from './EducationAdmissionsWhatsAppAssistant';
+import { useWorkspaceViewState } from '../../../components/education-ui/useWorkspaceViewState';
+import '../../../components/education-ui/education-system-v1.css';
 import './education-admissions-v1.css';
+import './education-admissions-playful.css';
 
 type ProgramSummary = { id: string; name: string };
 type WorkspaceView = 'today' | 'pipeline' | 'all';
@@ -43,18 +46,18 @@ const STAGE_META: Record<AdmissionStage, { label: string; shortLabel: string }> 
 const VIEW_COPY: Record<WorkspaceView, { eyebrow: string; title: string; description: string }> = {
   today: {
     eyebrow: 'Today · active follow-up',
-    title: 'Families still waiting for a next step.',
-    description: 'An honest triage of active legacy cases. No task date means no case is labelled due or overdue.',
+    title: 'Help each family take the next step.',
+    description: 'Review active inquiries, family interests and the latest recorded activity.',
   },
   pipeline: {
     eyebrow: 'Pipeline · journey position',
-    title: 'See every stage without dragging a board.',
-    description: 'Choose a stage to review its families. Verified workshop and enrollment evidence outranks legacy labels.',
+    title: 'Follow each family’s journey.',
+    description: 'Choose a stage to see its families and their workshop or enrollment records.',
   },
   all: {
     eyebrow: 'All cases · complete inventory',
-    title: 'Every projected family stays findable.',
-    description: 'Search the full tenant-safe inventory, then narrow by stage or compatibility repairs.',
+    title: 'Find every family in one place.',
+    description: 'Search learners and parents, then filter by journey stage or records to review.',
   },
 };
 
@@ -65,7 +68,7 @@ const REPAIR_LABELS: Record<AdmissionRepairFlag, string> = {
   lead_tenant_mismatch: 'Lead tenant does not match',
   legacy_closed_reason_missing: 'Closed reason is missing',
   missing_booking_link: 'Workshop booking link is missing',
-  missing_contact: 'Family contact is missing',
+  missing_contact: 'Parent contact details are missing',
   missing_created_at: 'Creation date is missing',
   missing_lead_name: 'Learner name is missing',
   missing_next_action: 'No structured next action',
@@ -113,17 +116,21 @@ export const EducationAdmissionsReadOnlyV1 = ({
   projection,
   programs,
   canUseWhatsApp,
+  workspaceScope = 'admissions:synthetic',
 }: {
   projection: AdmissionProjection;
   programs: ProgramSummary[];
   canUseWhatsApp: boolean;
+  workspaceScope?: string;
 }) => {
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>('today');
-  const [query, setQuery] = useState('');
-  const [repairOnly, setRepairOnly] = useState(false);
-  const [pipelineStage, setPipelineStage] = useState<AdmissionStage>('new_inquiry');
-  const [allStage, setAllStage] = useState<AllStageFilter>('all');
-  const [selectedId, setSelectedId] = useState('');
+  const passportRef = useRef<HTMLElement>(null);
+  const [showAllEvidence, setShowAllEvidence] = useState(false);
+  const [workspaceView, setWorkspaceView] = useWorkspaceViewState<WorkspaceView>(workspaceScope, 'workspaceView', 'today');
+  const [query, setQuery] = useWorkspaceViewState(workspaceScope, 'query', '');
+  const [repairOnly, setRepairOnly] = useWorkspaceViewState(workspaceScope, 'repairOnly', false);
+  const [pipelineStage, setPipelineStage] = useWorkspaceViewState<AdmissionStage>(workspaceScope, 'pipelineStage', 'new_inquiry');
+  const [allStage, setAllStage] = useWorkspaceViewState<AllStageFilter>(workspaceScope, 'allStage', 'all');
+  const [selectedId, setSelectedId] = useWorkspaceViewState(workspaceScope, 'selectedId', '');
   const [isMobilePassportOpen, setIsMobilePassportOpen] = useState(false);
   const [isWhatsAppAssistantOpen, setIsWhatsAppAssistantOpen] = useState(false);
 
@@ -157,13 +164,23 @@ export const EducationAdmissionsReadOnlyV1 = ({
   }, [selectedId, visibleCases]);
 
   useEffect(() => {
-    if (!isMobilePassportOpen) return undefined;
+    if (!isMobilePassportOpen || !passportRef.current || getComputedStyle(passportRef.current).position !== 'fixed') return undefined;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    passportRef.current.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setIsMobilePassportOpen(false);
+      if (event.key === 'Tab' && passportRef.current) {
+        const controls = [...passportRef.current.querySelectorAll<HTMLElement>('button:not(:disabled),input,select,textarea')];
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === passportRef.current)) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
     };
     window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    return () => { window.removeEventListener('keydown', closeOnEscape); previousFocus?.focus(); };
   }, [isMobilePassportOpen]);
+
+  useEffect(() => { setShowAllEvidence(false); }, [selectedCase?.id]);
 
   const changeWorkspaceView = (view: WorkspaceView) => {
     setWorkspaceView(view);
@@ -185,15 +202,38 @@ export const EducationAdmissionsReadOnlyV1 = ({
     : JOURNEY_STAGES.findIndex(item => item.stage === selectedCase?.stage);
   const selectedProgram = selectedCase?.programId ? programNames.get(selectedCase.programId) : null;
   const viewCopy = VIEW_COPY[workspaceView];
+  const priorityCase = todayCases[0] || null;
+
+  const openPriorityCase = () => {
+    if (!priorityCase) {
+      changeWorkspaceView('all');
+      return;
+    }
+    setWorkspaceView('today');
+    setQuery('');
+    setRepairOnly(false);
+    setSelectedId(priorityCase.id);
+    setIsWhatsAppAssistantOpen(false);
+    setIsMobilePassportOpen(true);
+    document.getElementById('admissions-workbench')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  };
 
   return (
-    <section className="edu-admissions-v1" data-testid="education-admissions-read-only-v1" aria-label="Admissions workspace">
+    <section className="edu-admissions-v1" data-edu-system="1" data-testid="education-admissions-read-only-v1" aria-label="Admissions workspace">
+      <div className="edu-admissions-v1__priority" role="region" aria-label="Next family follow-up">
+        <div>
+          <span className="edu-admissions-v1__priority-label">Family follow-up</span>
+          <h2>{priorityCase ? priorityCase.learnerName : 'No active family to follow up'}</h2>
+          <p>{priorityCase ? `${priorityCase.parentName} · ${priorityCase.nextAction.label}. ${formatActivityAge(priorityCase)}.` : 'Review the complete family inventory or start a new inquiry in Marketing.'}</p>
+        </div>
+        <button type="button" onClick={openPriorityCase}>{priorityCase ? 'Open family journey' : 'View all cases'} <ChevronRight size={16} /></button>
+      </div>
       <div className="edu-admissions-v1__status-line">
-        <div><span>Legacy cases visible</span><strong>{projection.counts.total}</strong></div>
+        <div><span>Family inquiries</span><strong>{projection.counts.total}</strong></div>
         <div><span>Active follow-up</span><strong>{todayCases.length}</strong></div>
         <div><span>Trial journey</span><strong>{projection.counts.trial}</strong></div>
         <div data-attention={projection.counts.needsRepair > 0}><span>Needs review</span><strong>{projection.counts.needsRepair}</strong></div>
-        <p><ShieldCheck size={15} />Evidence-based projection · controlled activity logging</p>
+        <p><ShieldCheck size={15} />Connected to workshop and enrollment records</p>
       </div>
 
       <nav className="edu-admissions-v1__view-tabs" role="tablist" aria-label="Admissions workspace views">
@@ -212,7 +252,7 @@ export const EducationAdmissionsReadOnlyV1 = ({
           {workspaceView === 'today' && (
             <div className="edu-admissions-v1__honesty-note">
               <Clock3 size={17} aria-hidden="true" />
-              <div><strong>Active, not overdue</strong><span>The legacy CRM stores no due dates. This queue prioritizes an honest next conversation, not an invented deadline.</span></div>
+              <div><strong>Follow-up dates</strong><span>These inquiries have no follow-up deadline recorded. Review the latest activity to plan your next conversation.</span></div>
             </div>
           )}
 
@@ -224,7 +264,7 @@ export const EducationAdmissionsReadOnlyV1 = ({
 
           {workspaceView === 'pipeline' && (
             <div className="edu-admissions-v1__pipeline-control">
-              <div className="edu-admissions-v1__control-label"><div><strong>Journey stage</strong><span>All seven canonical states stay visible, including empty ones.</span></div><small>{stageCounts[pipelineStage]} in stage</small></div>
+              <div className="edu-admissions-v1__control-label"><div><strong>Journey stage</strong><span>Choose a stage to see where families are in their journey.</span></div><small>{stageCounts[pipelineStage]} in stage</small></div>
               <div className="edu-admissions-v1__stage-grid" role="group" aria-label="Choose a pipeline stage">
                 {ADMISSION_STAGES.map(stage => (
                   <button key={stage} type="button" aria-pressed={pipelineStage === stage} onClick={() => setPipelineStage(stage)}>
@@ -238,14 +278,14 @@ export const EducationAdmissionsReadOnlyV1 = ({
           {workspaceView === 'all' && (
             <div className="edu-admissions-v1__all-controls" aria-label="All case filters">
               <label><span>Journey stage</span><div><select value={allStage} onChange={event => setAllStage(event.target.value as AllStageFilter)} aria-label="Filter all cases by stage"><option value="all">Every stage · {projection.counts.total}</option>{ADMISSION_STAGES.map(stage => <option key={stage} value={stage}>{STAGE_META[stage].label} · {stageCounts[stage]}</option>)}</select><ChevronDown size={15} aria-hidden="true" /></div></label>
-              <div><span>Compatibility</span><button type="button" aria-pressed={repairOnly} onClick={() => setRepairOnly(value => !value)}><AlertTriangle size={15} />{repairOnly ? 'Showing needs review' : `Needs review · ${projection.counts.needsRepair}`}</button></div>
+              <div><span>Record review</span><button type="button" aria-pressed={repairOnly} onClick={() => setRepairOnly(value => !value)}><AlertTriangle size={15} />{repairOnly ? 'Showing needs review' : `Needs review · ${projection.counts.needsRepair}`}</button></div>
             </div>
           )}
 
           {workspaceView !== 'all' && (
             <div className="edu-admissions-v1__review-filter">
               <button type="button" aria-pressed={repairOnly} onClick={() => setRepairOnly(value => !value)}><AlertTriangle size={15} />{repairOnly ? 'Showing needs review only' : `Filter needs review · ${projection.counts.needsRepair}`}</button>
-              <span>Repair flags narrow this view; they never hide a family by default.</span>
+              <span>Use this filter to focus on missing details or records that need checking.</span>
             </div>
           )}
 
@@ -281,12 +321,12 @@ export const EducationAdmissionsReadOnlyV1 = ({
           </div>
         </div>
 
-        <aside className="edu-admissions-v1__passport" data-mobile-open={isMobilePassportOpen} aria-label="Selected family journey passport">
+        <aside ref={passportRef} tabIndex={-1} className="edu-admissions-v1__passport" data-mobile-open={isMobilePassportOpen} aria-label="Selected family journey passport">
           {selectedCase ? (
             <>
               <div className="edu-admissions-v1__passport-top">
                 <button type="button" className="edu-admissions-v1__passport-close" onClick={() => setIsMobilePassportOpen(false)} aria-label="Close family journey passport"><X size={16} /><span>Back</span></button>
-                <span>Family journey passport · safe workflow</span>
+                <span>Family journey</span>
                 <div><i>{getInitials(selectedCase.learnerName)}</i><div><h2>{selectedCase.learnerName}</h2><p>{selectedCase.parentName} · {selectedCase.phone || selectedCase.email || 'Contact not recorded'}</p></div></div>
                 <b data-repair={selectedCase.repairFlags.length > 0}>{STAGE_META[selectedCase.stage].label}</b>
               </div>
@@ -294,7 +334,7 @@ export const EducationAdmissionsReadOnlyV1 = ({
               <div className="edu-admissions-v1__passport-body">
                 <div className="edu-admissions-v1__next-action">
                   <span><Sparkles size={17} /></span>
-                  <div><small>Suggested from the legacy stage</small><strong>{selectedCase.nextAction.label}</strong><em>No due date exists in the legacy CRM.</em></div>
+                  <div><small>Suggested next step</small><strong>{selectedCase.nextAction.label}</strong><em>No follow-up date recorded.</em></div>
                 </div>
 
                 <button type="button" className="edu-admissions-v1__whatsapp-action" onClick={() => setIsWhatsAppAssistantOpen(true)} disabled={!canUseWhatsApp || !selectedCase.phone}>
@@ -304,7 +344,7 @@ export const EducationAdmissionsReadOnlyV1 = ({
                 </button>
 
                 <div className="edu-admissions-v1__journey" data-closed={selectedCase.stage === 'legacy_closed'}>
-                  <div><strong>Family journey</strong><span>{selectedCase.stage === 'legacy_closed' ? 'Closed legacy state needs a reason' : 'Verified evidence outranks legacy labels'}</span></div>
+                  <div><strong>Family journey</strong><span>{selectedCase.stage === 'legacy_closed' ? 'The reason for closing this inquiry is missing' : 'Progress reflects linked workshop and enrollment records'}</span></div>
                   <ol>
                     {JOURNEY_STAGES.map((item, index) => {
                       const state = selectedCase.stage === 'legacy_closed' ? 'future' : index < selectedJourneyIndex ? 'complete' : index === selectedJourneyIndex ? 'current' : 'future';
@@ -322,20 +362,21 @@ export const EducationAdmissionsReadOnlyV1 = ({
 
                 {selectedCase.repairFlags.length > 0 ? (
                   <div className="edu-admissions-v1__repairs">
-                    <div><AlertTriangle size={16} /><strong>Compatibility review</strong><span>{selectedCase.repairFlags.length} item{selectedCase.repairFlags.length === 1 ? '' : 's'}</span></div>
+                    <div><AlertTriangle size={16} /><strong>Details to review</strong><span>{selectedCase.repairFlags.length} item{selectedCase.repairFlags.length === 1 ? '' : 's'}</span></div>
                     <ul>{selectedCase.repairFlags.map(flag => <li key={flag}>{REPAIR_LABELS[flag]}</li>)}</ul>
                   </div>
                 ) : (
-                  <div className="edu-admissions-v1__verified"><ShieldCheck size={17} /><div><strong>No compatibility repair detected</strong><span>Lifecycle stages remain evidence-based.</span></div></div>
+                  <div className="edu-admissions-v1__verified"><ShieldCheck size={17} /><div><strong>Record checks complete</strong><span>No missing links or details were flagged.</span></div></div>
                 )}
 
                 <div className="edu-admissions-v1__evidence">
                   <div><Clock3 size={15} /><strong>Recorded evidence</strong><span>{selectedCase.evidence.length}</span></div>
-                  {selectedCase.evidence.length === 0 ? <p>No timeline, workshop, or enrollment evidence is linked.</p> : <ul>{selectedCase.evidence.slice(0, 5).map(item => <li key={`${item.kind}:${item.recordId}`}><i data-kind={item.kind}>{item.kind}</i><span><strong>{item.label}</strong><small>{formatDate(item.occurredAt)}</small></span></li>)}</ul>}
+                  {selectedCase.evidence.length === 0 ? <p>No timeline, workshop, or enrollment evidence is linked.</p> : <ul>{(showAllEvidence ? selectedCase.evidence : selectedCase.evidence.slice(0, 5)).map(item => <li key={`${item.kind}:${item.recordId}`}><i data-kind={item.kind}>{item.kind}</i><span><strong>{item.label}</strong><small>{formatDate(item.occurredAt)}</small></span></li>)}</ul>}
+                  {selectedCase.evidence.length > 5 && <button type="button" className="edu-admissions-v1__evidence-toggle" aria-expanded={showAllEvidence} onClick={() => setShowAllEvidence(value => !value)}>{showAllEvidence ? 'Show recent activity' : `View all ${selectedCase.evidence.length} records`}</button>}
                 </div>
               </div>
             </>
-          ) : <div className="edu-admissions-v1__empty edu-admissions-v1__empty--passport"><UserRound size={25} /><strong>No family selected</strong><span>The passport appears when a projected case is available.</span></div>}
+          ) : <div className="edu-admissions-v1__empty edu-admissions-v1__empty--passport"><UserRound size={25} /><strong>No family selected</strong><span>Select a family to see their journey and contact details.</span></div>}
         </aside>
       </div>
       {selectedCase && <EducationAdmissionsWhatsAppAssistant key={`${selectedCase.organizationId}:${selectedCase.id}`} admissionCase={selectedCase} programName={selectedProgram || ''} isOpen={isWhatsAppAssistantOpen} onClose={() => setIsWhatsAppAssistantOpen(false)} />}

@@ -6,13 +6,20 @@ import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { config } from '../utils/config';
 import { formatDate } from '../utils/helpers';
+import { useWorkspaceScroll } from '../components/education-ui/useWorkspaceViewState';
+import '../components/education-ui/education-system-v1.css';
 import './learning/education-learning-v1.css';
+import './learning/education-learning-focus.css';
+import './learning/education-learning-playful.css';
 
 export const PortfolioView = () => {
     const showEducationLearningV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { studentProjects, badges, students } = useAppContext();
-    const { userProfile } = useAuth();
+    const { userProfile, currentOrganization, user } = useAuth();
+    const workspaceScope = `portfolio:${currentOrganization?.id || userProfile?.organizationId || 'none'}:${user?.uid || userProfile?.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
     const { alert } = useConfirm();
+    const isLearnerPortfolio = userProfile?.role === 'student';
 
     const myProjects = useMemo(() => {
         if (!userProfile) return [];
@@ -21,6 +28,8 @@ export const PortfolioView = () => {
     }, [studentProjects, userProfile, students]);
 
     const publishedProjects = myProjects.filter(project => project.status === 'published');
+    const activeProjects = myProjects.filter(project => ['planning', 'building', 'testing', 'changes_requested'].includes(project.status));
+    const submittedProjects = myProjects.filter(project => project.status === 'submitted');
     const workInProgress = myProjects.length - publishedProjects.length;
     const xp = publishedProjects.length * 150 + myProjects.length * 50;
     const level = Math.floor(xp / 500) + 1;
@@ -50,7 +59,7 @@ export const PortfolioView = () => {
     };
 
     return (
-        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationLearningV1 ? 'edu-v1 edu-portfolio-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-portfolio-v1' : undefined}>
+        <div data-edu-system={showEducationLearningV1 ? '1' : undefined} className={`space-y-5 pb-24 md:pb-8 ${showEducationLearningV1 ? 'edu-v1 edu-portfolio-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-portfolio-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Maker portfolio"
                 title={`${userProfile?.name || 'My'}'s work`}
@@ -59,6 +68,21 @@ export const PortfolioView = () => {
                 badges={<span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2.5 py-1 text-[10px] font-bold text-amber-200">Level {level}</span>}
                 actions={<AtlasActionButton icon={Rocket} variant="primary" onClick={() => window.open(config.sparkQuestUrl, '_blank')}>Open SparkQuest</AtlasActionButton>}
             />
+
+            {showEducationLearningV1 && isLearnerPortfolio && (
+                <section className="edu-portfolio-v1__focus" aria-label="Next portfolio action">
+                    <div>
+                        <span>Portfolio / next step</span>
+                        <h2>{activeProjects.length > 0 ? `Continue ${activeProjects[0].title}` : submittedProjects.length > 0 ? `${submittedProjects.length} ${submittedProjects.length === 1 ? 'project is' : 'projects are'} awaiting review` : publishedProjects.length > 0 ? `${publishedProjects.length} published ${publishedProjects.length === 1 ? 'project' : 'projects'} to explore` : 'Start the first project'}</h2>
+                        <p>{activeProjects.length > 0 ? 'Return to this build in SparkQuest.' : submittedProjects.length > 0 ? 'Your submitted work is waiting for an instructor decision. You can open it to see its current state.' : publishedProjects.length > 0 ? 'Open a finished build or share it from the portfolio below.' : 'Choose a mission in SparkQuest to begin your maker portfolio.'}</p>
+                    </div>
+                    <button type="button" onClick={() => {
+                        if (activeProjects[0] || submittedProjects[0]) window.open(`${config.sparkQuestUrl}/?projectId=${(activeProjects[0] || submittedProjects[0]).id}`, '_blank');
+                        else if (publishedProjects.length > 0) document.getElementById('portfolio-published')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        else window.open(config.sparkQuestUrl, '_blank');
+                    }}>{activeProjects.length > 0 ? 'Continue project' : submittedProjects.length > 0 ? 'View submission' : publishedProjects.length > 0 ? 'View published work' : 'Open SparkQuest'} <ExternalLink size={16} /></button>
+                </section>
+            )}
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <AtlasSignalCard label="Level" value={level} detail={`${Math.round(levelProgress)}% to the next level`} icon={Sparkles} tone="amber" />
@@ -76,7 +100,7 @@ export const PortfolioView = () => {
             </section>
 
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-                <section className="rounded-lg border border-white/10 bg-slate-950/45 p-4 lg:col-span-2">
+                <section id="portfolio-published" className="rounded-lg border border-white/10 bg-slate-950/45 p-4 lg:col-span-2">
                     <AtlasSectionHeader title="Published projects" description="Every shipped project is ready to open or share." icon={Grid3X3} meta={<span className="text-xs text-slate-500">{publishedProjects.length}</span>} />
                     {publishedProjects.length === 0 ? (
                         <div className="mt-4"><AtlasEmptyState title="Ship the first project" description="Complete a mission and publish it to start building this portfolio." icon={BookOpen} action={<AtlasActionButton icon={Rocket} variant="primary" onClick={() => window.open(config.sparkQuestUrl, '_blank')}>Continue building</AtlasActionButton>} /></div>

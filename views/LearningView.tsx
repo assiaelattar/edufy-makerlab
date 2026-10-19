@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 
-import { Brain, Plus, Target, Star, Upload, ExternalLink, CheckCircle2, Clock, AlertCircle, Image as ImageIcon, ChevronRight, Award, BookOpen, LayoutGrid, List, UserCheck, Trash2, ArrowRight, ClipboardList, Play, CheckSquare, ArrowLeft, Lock, Zap, PenTool, Send, Database, MoreHorizontal, Rocket, ListChecks, Beaker, FileText, GitCommit, Edit3 } from 'lucide-react';
+import { Brain, Plus, Target, Star, Upload, ExternalLink, CheckCircle2, Clock, AlertCircle, Image as ImageIcon, ChevronRight, Award, BookOpen, LayoutGrid, List, UserCheck, Trash2, ArrowRight, ClipboardList, Play, CheckSquare, ArrowLeft, Lock, Zap, PenTool, Send, Database, MoreHorizontal, Rocket, ListChecks, Beaker, FileText, GitCommit, Edit3, Search } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 import { SuccessModal } from '../components/SuccessModal';
 import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp, deleteDoc, doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -30,7 +31,10 @@ import { ToastContainer, ToastMessage } from '../components/Toast';
 import { Confetti } from '../components/Confetti';
 import { ProjectSelector } from '../sparkquest/components/ProjectSelector';
 import { normalizeAcademicYear, projectAcademicYear } from '../sparkquest/utils/academicYear';
+import '../components/education-ui/education-system-v1.css';
 import './learning/education-learning-v1.css';
+import './learning/education-learning-focus.css';
+import './learning/education-learning-playful.css';
 
 // Helper to recursively remove undefined values for Firestore
 const cleanData = (obj: any): any => {
@@ -84,6 +88,8 @@ export const LearningView = () => {
 
     if (!userProfile) return null;
     const tenantOrgId = userProfile.organizationId || currentOrganization?.id || 'makerlab-academy';
+    const workspaceScope = `learning:${tenantOrgId}:${user?.uid || userProfile.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
 
     const isInstructor = can('learning.manage');
     const isStudioTheme = userProfile?.role === 'instructor';
@@ -100,12 +106,13 @@ export const LearningView = () => {
     };
 
     // --- SHARED STATE ---
-    const [activeTab, setActiveTab] = useState<'curriculum' | 'studio' | 'review' | 'portfolios' | 'track' | 'setup' | 'trash'>('curriculum');
-    const [studentTab, setStudentTab] = useState<'my_studio' | 'explore'>('explore');
-    const [studentProjectFilter, setStudentProjectFilter] = useState<'all' | 'in_progress' | 'completed'>('all');
+    const [activeTab, setActiveTab] = useWorkspaceViewState<'curriculum' | 'studio' | 'review' | 'portfolios' | 'track' | 'setup' | 'trash'>(workspaceScope, 'activeTab', 'curriculum');
+    const [studentTab, setStudentTab] = useWorkspaceViewState<'my_studio' | 'explore'>(workspaceScope, 'studentTab', 'explore');
+    const [studentProjectFilter, setStudentProjectFilter] = useWorkspaceViewState<'all' | 'in_progress' | 'completed'>(workspaceScope, 'studentProjectFilter', 'all');
+    const [portfolioSearch, setPortfolioSearch] = useWorkspaceViewState(workspaceScope, 'portfolioSearch', '');
 
     // --- STUDIO STATE ---
-    const [studioView, setStudioView] = useState<'dashboard' | 'commits' | 'reviews'>('dashboard');
+    const [studioView, setStudioView] = useWorkspaceViewState<'dashboard' | 'commits' | 'reviews'>(workspaceScope, 'studioView', 'dashboard');
     const [selectedReviewStep, setSelectedReviewStep] = useState<{ step: any; project: any; student: any } | null>(null);
 
     // --- INSTRUCTOR STATE ---
@@ -163,12 +170,12 @@ export const LearningView = () => {
         return groupsList;
     }, [programs]);
     const [wizardStep, setWizardStep] = useState(0);
-    const [activeModalTab, setActiveModalTab] = useState<'details' | 'resources' | 'targeting' | 'publishing'>('details');
+    const [activeModalTab, setActiveModalTab] = useState<'details' | 'resources' | 'workflow' | 'targeting' | 'publishing'>('details');
     const [reviewModalOpen, setReviewModalOpen] = useState(false);
     const [selectedSubmission, setSelectedSubmission] = useState<StudentProject | null>(null);
     const [feedback, setFeedback] = useState('');
     const [isSeeding, setIsSeeding] = useState(false);
-    const [statusFilter, setStatusFilter] = useState<'all' | 'planning' | 'building' | 'testing' | 'delivered' | 'submitted' | 'changes_requested' | 'published'>('all');
+    const [statusFilter, setStatusFilter] = useWorkspaceViewState<'all' | 'planning' | 'building' | 'testing' | 'delivered' | 'submitted' | 'changes_requested' | 'published'>(workspaceScope, 'statusFilter', 'all');
     const [selectedStation, setSelectedStation] = useState<StationType | null>(null);
     const [showStationProjects, setShowStationProjects] = useState(false);
 
@@ -270,6 +277,26 @@ export const LearningView = () => {
 
         return matches;
     }, [enrollments, studentProjects, students]);
+
+    const activePortfolioStudents = useMemo(() => {
+        const publishedByStudent = new Map<string, number>();
+        const legacyByStudent = new Map<string, number>();
+        studentProjects.forEach(project => {
+            if (project.status === 'published') publishedByStudent.set(project.studentId, (publishedByStudent.get(project.studentId) || 0) + 1);
+            const reconciliation = reconciliationByProject.get(project.id);
+            if (reconciliation) legacyByStudent.set(reconciliation.student.id, (legacyByStudent.get(reconciliation.student.id) || 0) + 1);
+        });
+        const queryValue = normalizeLearnerName(portfolioSearch);
+        return students
+            .filter(student => student.status === 'active')
+            .filter(student => !queryValue || normalizeLearnerName(student.name).includes(queryValue))
+            .map(student => ({
+                student,
+                workCount: publishedByStudent.get(student.id) || 0,
+                possibleLegacyCount: legacyByStudent.get(student.id) || 0
+            }))
+            .sort((left, right) => right.workCount - left.workCount || left.student.name.localeCompare(right.student.name));
+    }, [portfolioSearch, reconciliationByProject, studentProjects, students]);
 
     const unlinkedProjectCount = useMemo(() => {
         const studentById = new Map(students.map(student => [student.id, student]));
@@ -481,6 +508,8 @@ export const LearningView = () => {
 
     // --- HELPERS ---
     const pendingReviews = studentProjects.filter(p => p.status === 'submitted');
+    const activeBuildCount = studentProjects.filter(project => ['planning', 'building', 'testing', 'changes_requested'].includes(project.status)).length;
+    const publishedProjectCount = studentProjects.filter(project => project.status === 'published').length;
 
     const currentStudentId = useMemo(() => {
         if (!userProfile) return null;
@@ -1319,8 +1348,14 @@ export const LearningView = () => {
     };
 
     if (isInstructor) {
+        const openCreateMission = () => {
+            setTemplateForm({ title: '', description: '', difficulty: 'beginner', skills: [], defaultSteps: [], station: 'general', resources: [], status: 'draft', targetAudience: { grades: [], groups: [] } });
+            setEditingTemplateId(null);
+            setActiveModalTab('details');
+            setIsTemplateModalOpen(true);
+        };
         return (
-            <div className={`learning-flightdeck flex h-full flex-col space-y-5 pb-24 md:pb-8 animate-in fade-in duration-200 ${showEducationLearningV1 ? 'edu-v1 edu-learning-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-learning-v1' : undefined}>
+            <div data-edu-system={showEducationLearningV1 ? '1' : undefined} className={`learning-flightdeck flex h-full flex-col space-y-5 pb-24 md:pb-8 animate-in fade-in duration-200 ${showEducationLearningV1 ? 'edu-v1 edu-learning-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-learning-v1' : undefined}>
                 {showConfetti && <Confetti duration={4000} />}
                 <section className="learning-flightdeck__hero">
                     <div className="learning-flightdeck__intro">
@@ -1331,15 +1366,27 @@ export const LearningView = () => {
                     <button
                         type="button"
                         className="learning-flightdeck__create"
-                        onClick={() => { setTemplateForm({ title: '', description: '', difficulty: 'beginner', skills: [], defaultSteps: [], station: 'general', resources: [], status: 'draft', targetAudience: { grades: [], groups: [] } }); setEditingTemplateId(null); setActiveModalTab('details'); setIsTemplateModalOpen(true); }}
+                        onClick={openCreateMission}
                     >
                         <Plus size={18} /> Create a mission
                     </button>
+                    {showEducationLearningV1 && (
+                        <div className="learning-flightdeck__priority" role="region" aria-label="Next learning action">
+                            <div>
+                                <span className="learning-flightdeck__priority-label">Next learning action</span>
+                                <h3>{pendingReviews.length > 0 ? `${pendingReviews.length} submitted ${pendingReviews.length === 1 ? 'project' : 'projects'} to review` : projectTemplates.length === 0 ? 'Plan the first mission' : activeBuildCount > 0 ? `Follow ${activeBuildCount} active ${activeBuildCount === 1 ? 'build' : 'builds'}` : publishedProjectCount > 0 ? 'Review published portfolios' : 'Open the learner studio'}</h3>
+                                <p>{pendingReviews.length > 0 ? 'Open the evidence queue and decide what each learner needs next.' : projectTemplates.length === 0 ? 'Create a mission outline before assigning work to learners.' : activeBuildCount > 0 ? 'See where learners are building, testing, or revising their projects.' : publishedProjectCount > 0 ? 'See the work already published for families and identify what is ready to share.' : 'Open the studio to follow new learner work.'}</p>
+                            </div>
+                            <button type="button" onClick={() => projectTemplates.length === 0 && pendingReviews.length === 0 ? openCreateMission() : setActiveTab(pendingReviews.length > 0 ? 'review' : activeBuildCount === 0 && publishedProjectCount > 0 ? 'portfolios' : 'studio')}>
+                                {pendingReviews.length > 0 ? 'Review evidence' : projectTemplates.length === 0 ? 'Create mission' : activeBuildCount === 0 && publishedProjectCount > 0 ? 'Open portfolios' : 'Open studio'} <ArrowRight size={16} />
+                            </button>
+                        </div>
+                    )}
                     <div className="learning-flightdeck__signals">
                         <button type="button" onClick={() => setActiveTab('curriculum')}><strong>{projectTemplates.length}</strong><span>mission templates</span></button>
                         <button type="button" onClick={() => setActiveTab('studio')}><strong>{studentProjects.length}</strong><span>learner projects</span></button>
                         <button type="button" onClick={() => setActiveTab('review')} data-attention={pendingReviews.length > 0}><strong>{pendingReviews.length}</strong><span>waiting for review</span></button>
-                        <button type="button" onClick={() => setActiveTab('portfolios')}><strong>{studentProjects.filter(project => project.status === 'published').length}</strong><span>ready for families</span></button>
+                        <button type="button" onClick={() => setActiveTab('portfolios')}><strong>{publishedProjectCount}</strong><span>ready for families</span></button>
                         <button type="button" onClick={() => setActiveTab('review')} data-attention={unlinkedProjectCount > 0}><strong>{unlinkedProjectCount}</strong><span>identity checks</span></button>
                     </div>
                 </section>
@@ -1966,25 +2013,50 @@ export const LearningView = () => {
                 {/* PORTFOLIO TAB */}
                 {
                     activeTab === 'portfolios' && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pb-4">
-                            {students.filter(s => s.status === 'active').map(student => {
-                                const workCount = studentProjects.filter(p => p.studentId === student.id && p.status === 'published').length;
-                                const possibleLegacyProjects = studentProjects.filter(project => reconciliationByProject.get(project.id)?.student.id === student.id);
-                                return (
-                                    <div key={student.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center text-center hover:border-slate-700 transition-colors group">
-                                        <div className="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-400 mb-3 group-hover:bg-cyan-900/20 group-hover:text-cyan-400 transition-colors">
-                                            {student.name.charAt(0)}
-                                        </div>
-                                        <h3 className="font-bold text-white">{student.name}</h3>
-                                        <p className="text-xs text-slate-500 mb-3">{workCount} Published Projects</p>
-                                        {possibleLegacyProjects.length > 0 && (
-                                            <div className="rounded-lg border border-amber-800/70 bg-amber-950/40 px-3 py-2 text-xs font-medium text-amber-200">
-                                                {possibleLegacyProjects.length} possible legacy {possibleLegacyProjects.length === 1 ? 'project' : 'projects'} to review
+                        <div className="edu-learning-portfolio-register space-y-4 pb-4">
+                            <section className="edu-learning-portfolio-toolbar">
+                                <div>
+                                    <span className="edu-learning-portfolio-kicker">Family sharing workspace</span>
+                                    <h3>Published portfolios</h3>
+                                    <p>Find a learner, review what is already family-ready, and spot records that still need reconciliation.</p>
+                                </div>
+                                <label className="edu-learning-portfolio-search">
+                                    <Search size={18} aria-hidden="true" />
+                                    <span className="sr-only">Search learner portfolios</span>
+                                    <input
+                                        type="search"
+                                        value={portfolioSearch}
+                                        onChange={event => setPortfolioSearch(event.target.value)}
+                                        placeholder="Search a learner"
+                                        aria-label="Search learner portfolios"
+                                    />
+                                </label>
+                                <span className="edu-learning-portfolio-count">{activePortfolioStudents.length} learner{activePortfolioStudents.length === 1 ? '' : 's'}</span>
+                            </section>
+                            {activePortfolioStudents.length > 0 ? (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {activePortfolioStudents.map(({ student, workCount, possibleLegacyCount }) => (
+                                        <article key={student.id} className="edu-learning-portfolio-card bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col items-center text-center transition-colors group">
+                                            <div className="edu-learning-portfolio-avatar w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-xl font-bold text-slate-400 mb-3 transition-colors">
+                                                {student.name.charAt(0)}
                                             </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
+                                            <h3 className="font-bold text-white">{student.name}</h3>
+                                            <p className="text-xs text-slate-500 mb-3">{workCount} published project{workCount === 1 ? '' : 's'}</p>
+                                            {possibleLegacyCount > 0 && (
+                                                <div className="edu-learning-portfolio-attention rounded-lg px-3 py-2 text-xs font-medium">
+                                                    {possibleLegacyCount} possible legacy {possibleLegacyCount === 1 ? 'project' : 'projects'} to review
+                                                </div>
+                                            )}
+                                        </article>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="edu-ds-state" data-edu-accent="purple">
+                                    <h3>No learner matches this search</h3>
+                                    <p>Try a shorter name or clear the search to see every active learner.</p>
+                                    <button type="button" className="edu-ds-button" data-edu-variant="primary" onClick={() => setPortfolioSearch('')}>Clear search</button>
+                                </div>
+                            )}
                         </div>
                     )
                 }
@@ -2221,6 +2293,7 @@ export const LearningView = () => {
                                     {/* WORKFLOW MODAL */}
                                     {isWorkflowModalOpen && (
                                         <Modal
+                                            designSystem={showEducationLearningV1}
                                             isOpen={isWorkflowModalOpen}
                                             onClose={() => {
                                                 setIsWorkflowModalOpen(false);
@@ -2379,6 +2452,7 @@ export const LearningView = () => {
 
                                     {/* STATION EDITOR MODAL */}
                                     <Modal
+                                        designSystem={showEducationLearningV1}
                                         isOpen={isStationModalOpen}
                                         onClose={() => {
                                             setIsStationModalOpen(false);
@@ -2574,6 +2648,7 @@ export const LearningView = () => {
 
                                     {/* BADGE EDITOR MODAL */}
                                     <Modal
+                                        designSystem={showEducationLearningV1}
                                         isOpen={isBadgeModalOpen}
                                         onClose={() => {
                                             setIsBadgeModalOpen(false);
@@ -2711,54 +2786,55 @@ export const LearningView = () => {
                                     </Modal>
                                 </div>
                             )}
-                            <ProjectFactoryModal
-                                isOpen={isTemplateModalOpen}
-                                onClose={() => setIsTemplateModalOpen(false)}
-                                editingTemplateId={editingTemplateId}
-                                templateForm={templateForm}
-                                setTemplateForm={setTemplateForm}
-                                handleSaveTemplate={handleSaveTemplate}
-                                activeModalTab={activeModalTab}
-                                setActiveModalTab={setActiveModalTab}
-                                availableGrades={grades as any}
-                                availableGroups={groups as any}
-                                processTemplates={processTemplates}
-                                wizardStep={wizardStep}
-                                WIZARD_STEPS={WIZARD_STEPS}
-                                onArchive={() => handleArchiveTemplate(templateForm.id!, templateForm.status || 'draft')}
-                            />
-
-                            <Modal isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
-                                <div className="space-y-4">
-                                    <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                                        <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-500 uppercase">Student</span><span className="text-white font-medium">{selectedSubmission?.studentName}</span></div>
-                                        <h4 className="text-lg font-bold text-white mb-2">{selectedSubmission?.title}</h4>
-                                        <div className="mb-4">
-                                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Engineering Process</h5>
-                                            <div className="space-y-1">
-                                                {selectedSubmission?.steps?.map((step, i) => (
-                                                    <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
-                                                        {step.status === 'done' ? <CheckSquare size={14} className="text-emerald-500" /> : <Clock size={14} className="text-amber-500" />}
-                                                        {step.title}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        {selectedSubmission?.mediaUrls?.[0] && <img src={selectedSubmission.mediaUrls[0]} alt="Work" className="w-full rounded-lg border border-slate-800" />}
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">Feedback</label>
-                                        <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Great job!..." />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <button onClick={() => handleReviewAction('changes_requested')} className="py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-bold border border-slate-700">Request Changes</button>
-                                        <button onClick={() => handleReviewAction('published')} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Approve & Publish</button>
-                                    </div>
-                                </div>
-                            </Modal>
                         </div>
                     )
                 }
+
+                <ProjectFactoryModal
+                    isOpen={isTemplateModalOpen}
+                    onClose={() => setIsTemplateModalOpen(false)}
+                    editingTemplateId={editingTemplateId}
+                    templateForm={templateForm}
+                    setTemplateForm={setTemplateForm}
+                    handleSaveTemplate={handleSaveTemplate}
+                    activeModalTab={activeModalTab}
+                    setActiveModalTab={setActiveModalTab}
+                    availableGrades={grades as any}
+                    availableGroups={groups as any}
+                    processTemplates={processTemplates}
+                    wizardStep={wizardStep}
+                    WIZARD_STEPS={WIZARD_STEPS}
+                    onArchive={() => handleArchiveTemplate(templateForm.id!, templateForm.status || 'draft')}
+                />
+
+                <Modal designSystem={showEducationLearningV1} isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
+                    <div className="space-y-4">
+                        <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
+                            <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-500 uppercase">Student</span><span className="text-white font-medium">{selectedSubmission?.studentName}</span></div>
+                            <h4 className="text-lg font-bold text-white mb-2">{selectedSubmission?.title}</h4>
+                            <div className="mb-4">
+                                <h5 className="text-xs font-bold text-slate-500 uppercase mb-2">Engineering Process</h5>
+                                <div className="space-y-1">
+                                    {selectedSubmission?.steps?.map((step, i) => (
+                                        <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
+                                            {step.status === 'done' ? <CheckSquare size={14} className="text-emerald-500" /> : <Clock size={14} className="text-amber-500" />}
+                                            {step.title}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            {selectedSubmission?.mediaUrls?.[0] && <img src={selectedSubmission.mediaUrls[0]} alt="Work" className="w-full rounded-lg border border-slate-800" />}
+                        </div>
+                        <div>
+                            <label className="block text-xs text-slate-400 mb-1">Feedback</label>
+                            <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Great job!..." />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <button onClick={() => handleReviewAction('changes_requested')} className="py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-bold border border-slate-700">Request Changes</button>
+                            <button onClick={() => handleReviewAction('published')} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Approve & Publish</button>
+                        </div>
+                    </div>
+                </Modal>
             </div >
         );
     }
@@ -2792,7 +2868,7 @@ export const LearningView = () => {
 
     // --- LEGACY / INSTRUCTOR VIEW FALLBACK ---
     return (
-        <div className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationLearningV1 ? 'edu-v1 edu-learning-student-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-learning-student-v1' : undefined}>
+        <div data-edu-system={showEducationLearningV1 ? '1' : undefined} className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationLearningV1 ? 'edu-v1 edu-learning-student-v1' : ''}`} data-testid={showEducationLearningV1 ? 'education-learning-student-v1' : undefined}>
             {showConfetti && <Confetti duration={5000} />}
             {/* Student Header */}
             <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 relative overflow-hidden shadow-sm group">
@@ -3131,7 +3207,7 @@ export const LearningView = () => {
 
 
             {/* Review Modal */}
-            <Modal isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
+            <Modal designSystem={showEducationLearningV1} isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
                 {selectedSubmission && (
                     <div className="space-y-6">
                         <div className="flex items-start gap-4 p-4 bg-slate-900 rounded-xl border border-slate-800">
@@ -3190,7 +3266,7 @@ export const LearningView = () => {
             </Modal>
 
             {/* Proof of Work Modal */}
-            <Modal isOpen={isProofModalOpen} onClose={() => setIsProofModalOpen(false)} title="Proof of Work Required 📸" size="md">
+            <Modal designSystem={showEducationLearningV1} isOpen={isProofModalOpen} onClose={() => setIsProofModalOpen(false)} title="Proof of Work Required 📸" size="md">
                 <div className="p-6 text-center">
                     <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-slate-800 shadow-xl">
                         <Upload size={32} className="text-cyan-400" />
@@ -3233,6 +3309,7 @@ export const LearningView = () => {
 
             {/* Success Modal */}
             <SuccessModal
+                designSystem={showEducationLearningV1}
                 isOpen={showSuccessModal}
                 onClose={() => setShowSuccessModal(false)}
                 title="Mission Submitted! 🚀"

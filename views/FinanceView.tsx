@@ -16,8 +16,12 @@ import { Enrollment, Payment } from '../types';
 import { db } from '../services/firebase';
 import { doc, writeBatch, collection, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Modal } from '../components/Modal';
+import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
+import '../components/education-ui/education-system-v1.css';
 import './finance/education-finance-v1.css';
+import './finance/education-finance-focus.css';
+import './finance/education-finance-playful.css';
 import { FinanceDocumentsPanel } from '../components/finance/FinanceDocumentsPanel';
 import { getProgramOperationalState } from '../utils/programLifecycle';
 import { getEnrollmentFinancialSummary } from '../utils/enrollmentFinancials';
@@ -99,7 +103,9 @@ export const computeAcademicYear = (d: Date = new Date()): string => {
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
     const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { payments, enrollments, students, programs, navigateTo, settings, viewParams, fetchDashboardData } = useAppContext();
-    const { can, currentOrganization, userProfile } = useAuth();
+    const { can, currentOrganization, userProfile, user } = useAuth();
+    const workspaceScope = `finance:${currentOrganization?.id || 'none'}:${user?.uid || 'guest'}`;
+    useWorkspaceScroll(workspaceScope);
     const canManageInvoices = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
     const { confirm, alert: showAlert } = useConfirm();
     const financeTopRef = useRef<HTMLDivElement>(null);
@@ -128,19 +134,19 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     const [isSubmittingTransactionEdit, setIsSubmittingTransactionEdit] = useState(false);
 
     // --- State ---
-    const [viewMode, setViewMode] = useState<'home' | 'transactions' | 'balances' | 'upcoming' | 'reports' | 'invoices'>('home');
-    const [showFinanceTools, setShowFinanceTools] = useState(false);
-    const [showHistoryFilters, setShowHistoryFilters] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [viewMode, setViewMode] = useWorkspaceViewState<'home' | 'transactions' | 'balances' | 'upcoming' | 'reports' | 'invoices'>(workspaceScope, 'viewMode', 'home');
+    const [showFinanceTools, setShowFinanceTools] = useWorkspaceViewState(workspaceScope, 'showFinanceTools', false);
+    const [showHistoryFilters, setShowHistoryFilters] = useWorkspaceViewState(workspaceScope, 'showHistoryFilters', false);
+    const [searchQuery, setSearchQuery] = useWorkspaceViewState(workspaceScope, 'searchQuery', '');
     // Default to the academically correct year (Sept 1 - June 30 rule)
-    const [selectedSession, setSelectedSession] = useState(() => computeAcademicYear());
-    const [selectedMonth, setSelectedMonth] = useState(''); // YYYY-MM, empty = all months
-    const [selectedProgram, setSelectedProgram] = useState('All');
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
-    const [balanceFilter, setBalanceFilter] = useState<'all' | 'paid' | 'unpaid'>('unpaid');
-    const [transactionStatusFilter, setTransactionStatusFilter] = useState<string>('all');
-    const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | 'cash' | 'check' | 'virement'>('all');
-    const [datePresetFilter, setDatePresetFilter] = useState<'all' | 'today' | 'this_week' | 'this_month' | 'custom'>('all');
+    const [selectedSession, setSelectedSession] = useWorkspaceViewState(workspaceScope, 'selectedSession', computeAcademicYear());
+    const [selectedMonth, setSelectedMonth] = useWorkspaceViewState(workspaceScope, 'selectedMonth', ''); // YYYY-MM, empty = all months
+    const [selectedProgram, setSelectedProgram] = useWorkspaceViewState(workspaceScope, 'selectedProgram', 'All');
+    const [dateRange, setDateRange] = useWorkspaceViewState(workspaceScope, 'dateRange', { start: '', end: '' });
+    const [balanceFilter, setBalanceFilter] = useWorkspaceViewState<'all' | 'paid' | 'unpaid'>(workspaceScope, 'balanceFilter', 'unpaid');
+    const [transactionStatusFilter, setTransactionStatusFilter] = useWorkspaceViewState<string>(workspaceScope, 'transactionStatusFilter', 'all');
+    const [paymentMethodFilter, setPaymentMethodFilter] = useWorkspaceViewState<'all' | 'cash' | 'check' | 'virement'>(workspaceScope, 'paymentMethodFilter', 'all');
+    const [datePresetFilter, setDatePresetFilter] = useWorkspaceViewState<'all' | 'today' | 'this_week' | 'this_month' | 'custom'>(workspaceScope, 'datePresetFilter', 'all');
     const [selectedTransactionIds, setSelectedTransactionIds] = useState<Set<string>>(new Set());
     const [filterAudience, setFilterAudience] = useState<'all' | 'kids' | 'adults'>('all');
     const [isFixingSession, setIsFixingSession] = useState(false);
@@ -1382,7 +1388,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     } as const;
 
     return (
-        <div ref={financeTopRef} className={`atlas-module atlas-finance-module flex flex-col gap-4 pb-24 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-finance-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-finance-v1' : undefined}>
+        <div ref={financeTopRef} data-edu-system={showEducationFinanceV1 ? '1' : undefined} className={`atlas-module atlas-finance-module flex flex-col gap-4 pb-24 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-finance-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-finance-v1' : undefined}>
 
  {/*  Header  */}
             {showEducationFinanceV1 ? (
@@ -2422,7 +2428,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             )}
 
             {/* --- PARENT PAYMENT MODAL --- */}
-            <Modal isOpen={isParentPaymentModalOpen} onClose={() => setIsParentPaymentModalOpen(false)} title="Record Bulk Parent Payment" size="md">
+            <Modal designSystem={showEducationFinanceV1} isOpen={isParentPaymentModalOpen} onClose={() => setIsParentPaymentModalOpen(false)} title="Record Bulk Parent Payment" size="md">
                 {parentPaymentAccount && (
                     <form onSubmit={handleSubmitParentPayment} className="space-y-5">
                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -2512,7 +2518,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             </Modal>
 
             {/* --- PARENT STATEMENT MODAL --- */}
-            <Modal isOpen={isStatementModalOpen} onClose={() => setIsStatementModalOpen(false)} title="Parent Statement of Account" size="lg">
+            <Modal designSystem={showEducationFinanceV1} isOpen={isStatementModalOpen} onClose={() => setIsStatementModalOpen(false)} title="Parent Statement of Account" size="lg">
                 {statementViewAccount && (() => {
                     const childEnrollmentIds = statementViewAccount.children.map((c: any) => c.enrollment.id);
                     const parentPayments = payments.filter(p => childEnrollmentIds.includes(p.enrollmentId))
@@ -2679,7 +2685,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 })()}
             </Modal>
 
-            <Modal isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Edit transaction">
+            <Modal designSystem={showEducationFinanceV1} isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Edit transaction">
                 <form onSubmit={handleSaveTransactionEdit} className="space-y-4">
                     <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
                         Changing the amount or clearing status also reconciles the linked enrollment balance in the same atomic write.

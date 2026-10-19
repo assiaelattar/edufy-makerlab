@@ -234,7 +234,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
 
     return (
         <>
-            <Modal isOpen={isOpen} onClose={onClose} title="" size="6xl">
+            <Modal designSystem isOpen={isOpen} onClose={onClose} title="Student project" size="6xl">
                 <div className="-m-6 flex h-[88vh] flex-col overflow-hidden bg-slate-100 font-sans">
                     {/* 1. Top HUD (Head Up Display) */}
                     <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-xl">
@@ -819,7 +819,7 @@ export const StudentProjectModal: React.FC<StudentProjectModalProps> = ({
                 </div>
             </Modal >
             {/* Step Edit Modal */}
-            <Modal isOpen={!!editingStepId} onClose={() => setEditingStepId(null)} title="Edit Mission Step ✏️" size="md">
+            <Modal designSystem isOpen={!!editingStepId} onClose={() => setEditingStepId(null)} title="Edit Mission Step ✏️" size="md">
                 <div className="p-6">
                     <div className="space-y-4">
                         <div>

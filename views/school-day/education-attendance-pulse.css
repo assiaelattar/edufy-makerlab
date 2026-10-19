@@ -1,0 +1,122 @@
+/* Pulse daily register: time rail, continuous rows, grouped status controls.
+   Shared Education tokens own both themes; scoped overrides beat the legacy bridge. */
+.edu-v1.edu-attendance-pulse { gap:20px; height:auto; padding-bottom:32px; }
+body .edu-v1.edu-attendance-pulse .atlas-command-header[data-edu-density='compact'] h2 { font-size:32px !important; font-weight:750; letter-spacing:-.045em; }
+body .edu-v1.edu-attendance-pulse .atlas-command-header__icon { display:none; }
+.edu-attendance-pulse .pulse-attendance-date { padding:2px 4px; border-radius:14px; }
+.edu-attendance-pulse .pulse-attendance-date button { min-width:44px; min-height:44px; color:var(--edu-muted); }
+.edu-attendance-pulse .pulse-attendance-date input { color:var(--edu-ink); min-height:28px; }
+.edu-attendance-pulse .pulse-attendance-date__value { display:flex; align-items:center; gap:8px; }
+.edu-attendance-pulse .pulse-attendance-date > div > div { color:var(--edu-muted); }
+.edu-attendance-pulse .pulse-attendance-date button:disabled { opacity:.45; cursor:wait; }
+.edu-attendance-pulse :is(input,select,button,summary,a):focus-visible { outline:3px solid var(--edu-brand); outline-offset:3px; }
+.edu-attendance-pulse .pulse-attendance-progress { position:sticky; top:0; z-index:10; display:grid; grid-template-columns:minmax(240px,1fr) auto; column-gap:32px; padding:14px 0; border-block:1px solid var(--edu-border); background:var(--edu-canvas); }
+.pulse-attendance-progress__line { display:flex; flex-wrap:wrap; gap:4px 16px; align-items:baseline; }
+.pulse-attendance-progress__line strong { color:var(--edu-ink); font-size:15px; font-weight:750; }
+.pulse-attendance-progress__line > span { color:var(--edu-muted); font-size:12px; }
+.pulse-attendance-progress progress { grid-column:1; grid-row:2; display:block; width:100%; max-width:480px; height:5px; margin:10px 0 0; appearance:none; border:0; border-radius:4px; overflow:hidden; background:var(--edu-surface-strong); color:var(--edu-brand); }
+.pulse-attendance-progress progress::-webkit-progress-bar { background:var(--edu-surface-strong); }
+.pulse-attendance-progress progress::-webkit-progress-value { background:var(--edu-brand); }
+.pulse-attendance-progress progress::-moz-progress-bar { background:var(--edu-brand); }
+.pulse-attendance-progress__summary { grid-column:2; grid-row:1 / 3; display:flex; gap:24px; align-items:center; color:var(--edu-muted); font-size:12px; }
+.pulse-attendance-progress__summary span { display:block; position:relative; padding-left:11px; }
+.pulse-attendance-progress__summary span::before { content:''; position:absolute; left:0; top:9px; width:5px; height:5px; border-radius:50%; background:var(--edu-info); }
+.pulse-attendance-progress__summary [data-summary='present']::before { background:var(--edu-success); }
+.pulse-attendance-progress__summary [data-summary='late']::before { background:var(--edu-warning); }
+.pulse-attendance-progress__summary [data-summary='absent']::before { background:var(--edu-danger); }
+.pulse-attendance-progress__summary b { display:block; color:var(--edu-ink); font-size:21px; font-weight:650; line-height:1.2; font-variant-numeric:tabular-nums; }
+.edu-attendance-pulse .pulse-attendance-feedback { grid-column:1 / -1; margin:8px 0 0; min-height:18px; color:var(--edu-muted); font-size:11px; line-height:18px; }
+.edu-attendance-pulse .pulse-attendance-feedback[data-error='true'] { color:var(--edu-danger); }
+.edu-attendance-pulse .pulse-attendance-renewal-link { grid-column:1 / -1; display:inline-flex; min-height:44px; align-items:center; color:var(--edu-warning); font-size:12px; text-decoration:underline; text-underline-offset:3px; }
+.edu-attendance-pulse .pulse-attendance-workspace { background:var(--edu-surface); border:1px solid var(--edu-border); border-radius:18px; min-width:0; }
+.pulse-attendance-workspace__heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px; padding:20px 24px 0; }
+.pulse-attendance-workspace__heading h3 { font-size:16px; font-weight:750; letter-spacing:-.025em; color:var(--edu-ink); }
+.pulse-attendance-workspace__heading > span { color:var(--edu-muted); font-size:12px; }
+.edu-attendance-pulse .pulse-attendance-toolbar :is(input,select) { min-height:44px; border-radius:10px; }
+.edu-attendance-pulse .pulse-attendance-toolbar > div { gap:10px; }
+.edu-attendance-pulse #edu-attendance-roster { padding:0; border:0; background:transparent; box-shadow:none; }
+.edu-attendance-pulse .pulse-attendance-sessions { padding:0 24px 8px; }
+.edu-attendance-pulse .pulse-attendance-session { display:grid; grid-template-columns:86px minmax(0,1fr); overflow:visible; }
+.edu-attendance-pulse .pulse-attendance-session + .pulse-attendance-session { margin-top:0; padding-top:24px; }
+.pulse-attendance-session__time { display:flex; flex-direction:column; gap:3px; align-items:flex-start; padding-top:17px; color:var(--edu-muted); }
+.pulse-attendance-session__time > span:first-child { font-size:10px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
+.pulse-attendance-session__time strong { color:var(--edu-ink); font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:600; letter-spacing:-.06em; }
+.pulse-attendance-live { color:var(--edu-success); font-size:10px; font-weight:700; }
+.pulse-attendance-session__body { min-width:0; border-left:1px solid var(--edu-border); }
+.edu-attendance-pulse .pulse-attendance-session__head { flex-direction:row; align-items:center; flex-wrap:wrap; padding:10px 16px; gap:8px 16px; }
+.edu-attendance-pulse .pulse-attendance-session__head label { min-height:44px; font-size:11px; }
+.edu-attendance-pulse .pulse-attendance-session__head .atlas-action { margin-inline-start:auto; font-size:11px; }
+.edu-attendance-pulse .pulse-attendance-row { padding:15px 16px; gap:16px; }
+.edu-attendance-pulse .pulse-attendance-row > div:first-child { flex:1; }
+.edu-attendance-pulse .pulse-attendance-name { white-space:normal; overflow-wrap:anywhere; font-size:14px; font-weight:700; letter-spacing:-.015em; }
+.edu-attendance-pulse .pulse-attendance-avatar { width:38px; height:38px; border-radius:50%; font-weight:600; }
+.edu-attendance-pulse .pulse-attendance-row__state { padding-inline-start:4px; color:var(--edu-muted); text-transform:capitalize; }
+.edu-attendance-pulse input[type='checkbox'] { width:20px; height:20px; accent-color:var(--edu-brand); }
+.edu-attendance-pulse .pulse-attendance-row > div:first-child > div:last-child { min-width:0; }
+.edu-attendance-pulse .pulse-attendance-row > div:first-child button { min-width:44px; min-height:44px; }
+.edu-attendance-pulse .pulse-attendance-marks { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:2px; padding:3px; border:1px solid var(--edu-border); border-radius:12px; background:var(--edu-surface-muted); }
+.edu-attendance-pulse .pulse-attendance-marks button { min-height:44px; height:auto; border:1px solid transparent; border-radius:8px; font-size:11px; font-weight:650; padding-inline:9px; }
+.edu-attendance-pulse .pulse-attendance-marks button:focus-visible { position:relative; z-index:1; }
+.edu-attendance-pulse .pulse-attendance-row[aria-busy='true'] { background:var(--edu-surface-muted); }
+.edu-attendance-pulse .pulse-attendance-renewals { scroll-margin-top:190px; border:1px solid var(--edu-border); border-radius:12px; background:var(--edu-surface); }
+.edu-attendance-pulse .pulse-attendance-renewals summary { padding:12px 16px; min-height:44px; color:var(--edu-warning); font-size:13px; font-weight:700; cursor:pointer; }
+.edu-attendance-pulse .pulse-attendance-renewals > section { border:0; background:transparent; }
+
+/* Explicit module ownership across the older light/dark utility bridge. */
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse :is(.pulse-attendance-date,.pulse-attendance-avatar) { background:var(--edu-surface) !important; border-color:var(--edu-border) !important; color:var(--edu-muted) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-avatar { background:var(--edu-surface-muted) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-today { color:var(--edu-info) !important; background:var(--edu-brand-soft) !important; border-color:transparent !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-toolbar { padding:14px 24px 20px !important; background:transparent !important; border:0 !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-toolbar :is(input,select) { color:var(--edu-ink) !important; border-color:var(--edu-border) !important; background:var(--edu-surface-muted) !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-toolbar input::placeholder { color:var(--edu-muted); }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session { border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session__head { background:var(--edu-surface-muted) !important; border-color:var(--edu-border) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button { color:var(--edu-muted) !important; border-color:transparent !important; background:transparent !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button:hover:not(:disabled) { color:var(--edu-ink) !important; background:var(--edu-surface) !important; border-color:var(--edu-border) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button[aria-pressed='true'][data-mark='present'] { color:var(--edu-success) !important; background:var(--edu-success-soft) !important; border-color:var(--edu-success) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button[aria-pressed='true'][data-mark='late'] { color:var(--edu-warning) !important; background:var(--edu-warning-soft) !important; border-color:var(--edu-warning) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button[aria-pressed='true'][data-mark='absent'] { color:var(--edu-danger) !important; background:var(--edu-danger-soft) !important; border-color:var(--edu-danger) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button[aria-pressed='true'][data-mark='excused'] { color:var(--edu-info) !important; background:var(--edu-brand-soft) !important; border-color:var(--edu-brand) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse :is(.text-slate-400,.text-slate-500,.text-slate-600) { color:var(--edu-muted) !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .atlas-action { min-height:44px; border-radius:10px !important; box-shadow:none !important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .atlas-action[data-atlas-variant='primary'] { border-color:var(--edu-brand) !important; color:var(--edu-on-brand) !important; background:var(--edu-brand) !important; }
+@media (min-width:701px) and (max-width:1100px) {
+ .edu-attendance-pulse .pulse-attendance-row { flex-wrap:wrap; }
+ .edu-attendance-pulse .pulse-attendance-row > div:first-child { flex-basis:100%; }
+ .edu-attendance-pulse .pulse-attendance-marks { margin-inline-start:70px; width:calc(100% - 70px); }
+ .pulse-attendance-progress__summary { gap:16px; }
+}
+@media (max-width:700px) {
+ .edu-v1.edu-attendance-pulse { gap:12px; }
+ .edu-attendance-pulse .atlas-command-header__actions { flex:1 0 100%; }
+ .edu-attendance-pulse .pulse-attendance-date { justify-content:space-between; }
+ .edu-attendance-pulse .pulse-attendance-progress { display:flex; flex-direction:column; gap:0; padding:10px 0; }
+ .pulse-attendance-progress__line strong { font-size:14px; }
+ .pulse-attendance-progress__line > span { font-size:11px; }
+ .pulse-attendance-progress__summary { gap:16px; margin-top:10px; font-size:11px; }
+ .pulse-attendance-progress__summary span { display:flex; gap:4px; padding-left:0; }
+ .pulse-attendance-progress__summary span::before { position:static; align-self:center; }
+ .pulse-attendance-progress__summary b { font-size:13px; }
+ .edu-attendance-pulse .pulse-attendance-feedback { font-size:10px; }
+ .pulse-attendance-workspace__heading { padding:16px 14px 0; }
+ .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-toolbar { padding:12px 14px 16px !important; }
+ .edu-attendance-pulse .pulse-attendance-toolbar > div > div { min-width:0; }
+ .edu-attendance-pulse .pulse-attendance-toolbar > div > div:first-child { flex:1; }
+ .edu-attendance-pulse .pulse-attendance-toolbar > div > div:last-child { flex:0 0 124px; }
+ .edu-attendance-pulse .pulse-attendance-toolbar :is(input,select) { font-size:12px; padding-left:32px; padding-right:8px; }
+ .edu-attendance-pulse .pulse-attendance-sessions { padding:0 0 4px; }
+ .edu-attendance-pulse .pulse-attendance-session { display:block; }
+ .edu-attendance-pulse .pulse-attendance-session + .pulse-attendance-session { padding-top:12px; }
+ .pulse-attendance-session__time { flex-direction:row; align-items:baseline; gap:8px; padding:8px 14px; }
+ .pulse-attendance-session__time strong { font-size:18px; }
+ .pulse-attendance-session__body { border-left:0; }
+ .edu-attendance-pulse .pulse-attendance-session__head { padding:8px 14px; gap:4px 8px; }
+ .edu-attendance-pulse .pulse-attendance-session__head > div:first-child { flex:1 0 100%; }
+ .edu-attendance-pulse .pulse-attendance-session__head > div:first-child > div { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+ .edu-attendance-pulse .pulse-attendance-session__head .atlas-action { padding-inline:8px; }
+ .edu-attendance-pulse .pulse-attendance-row { padding:14px; gap:10px; }
+ .edu-attendance-pulse .pulse-attendance-row > div:first-child { gap:9px; }
+ .edu-attendance-pulse .pulse-attendance-avatar { width:32px; height:32px; font-size:10px; }
+ .edu-attendance-pulse .pulse-attendance-marks { width:100%; }
+ .edu-attendance-pulse .pulse-attendance-marks button { flex-direction:column; min-height:48px; gap:4px; padding:5px 1px; font-size:10px; line-height:1.2; }
+}

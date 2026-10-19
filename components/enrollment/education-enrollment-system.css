@@ -1,0 +1,29 @@
+/* Compatibility adapter for the existing enrollment journey. Domain validation and fees stay in their current owners. */
+[data-edu-system="1"] .edu-enrollment-system { color:var(--ds-ink); font-family:var(--ds-font-body); }
+[data-edu-system="1"] .edu-enrollment-system :is(h2,h3,strong) { color:var(--ds-ink)!important; font-family:var(--ds-font-heading); }
+[data-edu-system="1"] .edu-enrollment-system :is(input,select,textarea) { min-height:46px; border:2px solid var(--ds-border)!important; border-radius:12px; background:var(--ds-surface)!important; color:var(--ds-ink)!important; font-size:16px; }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-slate-"] { color:var(--ds-muted); }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-white"] { color:var(--ds-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-teal-"] { color:var(--ds-blue-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-sky-"] { color:var(--ds-blue-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-emerald-"] { color:var(--ds-green-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-amber-"] { color:var(--ds-orange-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="text-red-"] { color:var(--ds-red-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="bg-slate-"] { background:var(--ds-subtle); }
+[data-edu-system="1"] .edu-enrollment-system [class*="bg-white"] { background:var(--ds-surface); }
+[data-edu-system="1"] .edu-enrollment-system [class*="bg-teal-"] { background:var(--ds-blue-soft); color:var(--ds-blue-ink); }
+[data-edu-system="1"] .edu-enrollment-system [class*="border-white"] { border-color:var(--ds-border); }
+[data-edu-system="1"] .edu-enrollment-system [class*="border-teal-"] { border-color:var(--ds-blue); }
+[data-edu-system="1"] .edu-enrollment-system aside { padding-right:20px; border-color:var(--ds-border); }
+[data-edu-system="1"] .edu-enrollment-system aside button { border-radius:14px; min-height:54px; }
+[data-edu-system="1"] .edu-enrollment-system aside button > span:first-child { border-radius:12px; background:var(--ds-purple-soft); color:var(--ds-purple-ink); }
+[data-edu-system="1"] .edu-enrollment-system aside button:disabled { opacity:.65; }
+[data-edu-system="1"] .edu-enrollment-system button { min-height:44px; font-family:var(--ds-font-heading); font-weight:800; }
+[data-edu-system="1"] .edu-enrollment-system label { font-size:13px; color:var(--ds-ink)!important; }
+[data-edu-system="1"] .edu-enrollment-system [role="alert"] { background:var(--ds-red-soft); color:var(--ds-red-ink); border:2px solid var(--ds-red); }
+[data-edu-system="1"] .edu-enrollment-system footer { background:var(--ds-surface); }
+@media(max-width:700px) { [data-edu-system="1"] .edu-enrollment-system aside { padding-right:0; } }
+
+[data-edu-system="1"] .edu-enrollment-system button[aria-pressed="true"] { background:var(--ds-blue-soft); color:var(--ds-blue-ink); outline:2px solid var(--ds-blue); }
+[data-edu-system="1"] .edu-enrollment-system input::placeholder { color:var(--ds-muted); opacity:1; }
+[data-edu-system="1"] .edu-enrollment-system aside button[aria-current="step"] > span:first-child { background:var(--ds-purple); color:var(--ds-on-color); }

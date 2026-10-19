@@ -17,6 +17,14 @@
     --edu-success: #19725a;
     --edu-danger: #ad3d51;
     --edu-info: #3159d6;
+    --edu-warning: #875b16;
+    --edu-success-soft: #e7f4ee;
+    --edu-warning-soft: #fff2d8;
+    --edu-danger-soft: #fbecef;
+    --edu-control-height: 44px;
+    --edu-control-radius: 12px;
+    --edu-space-unit: 4px;
+    --edu-motion-fast: 160ms;
     --edu-on-brand: #ffffff;
     --edu-radius-sm: 12px;
     --edu-radius-md: 17px;
@@ -48,6 +56,10 @@
     --edu-success: #79d4ac;
     --edu-danger: #ff9da9;
     --edu-info: #9cb5ff;
+    --edu-warning: #f1c779;
+    --edu-success-soft: #173d37;
+    --edu-warning-soft: #3c3224;
+    --edu-danger-soft: #442b3c;
     --edu-on-brand: #101b33;
     --edu-shadow-sm: 0 14px 34px rgba(2, 8, 23, .22);
     --edu-shadow-md: 0 20px 54px rgba(2, 8, 23, .35);
@@ -71,6 +83,33 @@
     outline: 3px solid var(--edu-brand);
     outline-offset: 3px;
 }
+
+/* Pulse operational density is opt-in; existing header consumers keep their layout. */
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact'] {
+    min-height: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    color: var(--edu-ink);
+    background: transparent !important;
+    box-shadow: none !important;
+    overflow: visible;
+}
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact']::before,
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact']::after,
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact'] .atlas-command-header__signal { display: none; }
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact'] .atlas-command-header__body {
+    display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+    justify-content: space-between; gap: 12px; padding: 4px 0;
+}
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact'] .atlas-command-header__icon {
+    width: 40px; height: 40px; border: 0; border-radius: var(--edu-control-radius);
+    color: var(--edu-brand); background: var(--edu-brand-soft); box-shadow: none;
+}
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact'] h2 {
+    font-size: 22px; line-height: 1.2; font-weight: 750; letter-spacing: -.03em;
+}
+body .edu-v1 .atlas-command-header.atlas-surface-raised[data-edu-density='compact'] .atlas-command-header__actions { width: auto; }
 
 .edu-v1-surface {
     position: relative;

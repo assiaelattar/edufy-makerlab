@@ -1,0 +1,61 @@
+/* Pulse: the gate register is the primary work surface. Shared theme tokens only. */
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__command {
+  padding: 4px 0 18px; border: 0; border-bottom: 1px solid var(--edu-border);
+  border-radius: 0; background: transparent; box-shadow: none; align-items: center;
+}
+.edu-pickup-pulse .edu-pickup-v1__command h1 { font-size: clamp(28px, 3vw, 36px); margin: 8px 0; letter-spacing: -.035em; }
+.edu-pickup-pulse__brief { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: center; font-size: 13px; color: var(--edu-muted); }
+.edu-pickup-pulse__brief strong { color: var(--edu-ink); font-variant-numeric: tabular-nums; margin-right: 4px; }
+.edu-pickup-pulse__brief a { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; min-height: 44px; color: var(--edu-brand); font-weight: 700; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .atlas-toolbar { padding: 12px; border-radius: 12px; box-shadow: none; background: var(--edu-surface); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse button { min-height: 44px; border-radius: 10px; box-shadow: none; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse button[aria-pressed] { color: var(--edu-muted) !important; background: transparent !important; border-color: var(--edu-border) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse button[aria-pressed='true'] { color: var(--edu-brand) !important; background: var(--edu-brand-soft) !important; border-color: var(--edu-brand) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(input:not([type='checkbox']),select,textarea) { min-height: 44px; color: var(--edu-ink) !important; border-color: var(--edu-border) !important; background: var(--edu-surface-muted) !important; }
+.edu-pickup-pulse :is(button,a,input,select,textarea):focus-visible { outline: 2px solid var(--edu-brand); outline-offset: 3px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__live > section:first-child { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(.edu-pickup-pulse__register,.edu-pickup-pulse__incoming-list,.edu-pickup-pulse__daily-list) { display: block; overflow: hidden; border: 1px solid var(--edu-border); border-radius: 12px; background: var(--edu-surface); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(.edu-pickup-v1__handoff,.edu-pickup-v1__incoming,.edu-pickup-v1__roster-card) { border: 0 !important; border-bottom: 1px solid var(--edu-border) !important; border-radius: 0 !important; background: var(--edu-surface) !important; padding: 18px 20px; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(.edu-pickup-v1__handoff,.edu-pickup-v1__incoming,.edu-pickup-v1__roster-card):last-child { border-bottom: 0 !important; }
+.edu-pickup-pulse .edu-pickup-v1__handoff { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: center; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__verify { width: auto; margin: 0; padding: 0 16px; color: var(--edu-on-brand) !important; background: var(--edu-brand) !important; border-color: var(--edu-brand) !important; }
+.edu-pickup-pulse .edu-pickup-v1__handoff form { grid-column: 1 / -1; margin: 0; max-width: 700px; width: 100%; }
+.edu-pickup-pulse .edu-pickup-v1__handoff h3 { font-size: 19px; letter-spacing: -.02em; }
+.edu-pickup-pulse .edu-pickup-v1__handoff time { color: var(--edu-muted); }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__incoming button { width: auto; gap: 7px; padding: 0 12px; color: var(--edu-brand) !important; background: var(--edu-brand-soft) !important; border-color: var(--edu-border) !important; }
+.edu-pickup-pulse__arrival-label { font-size: 12px; font-weight: 700; }
+.edu-pickup-pulse .edu-pickup-v1__roster-card { display: grid; grid-template-columns: minmax(0,1fr) minmax(220px,360px); gap: 8px 24px; align-items: center; }
+.edu-pickup-pulse .edu-pickup-v1__roster-card > :is(p,div) { margin-top: 0; }
+.edu-pickup-pulse .edu-pickup-v1__roster-card > p:last-child { grid-column: 2; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(.text-slate-400,.text-slate-500,.text-slate-600) { color: var(--edu-muted) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(.text-teal-200,.text-sky-200) { color: var(--edu-brand) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__handoff .font-mono { color: var(--edu-muted) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__status { color: var(--edu-muted) !important; background: var(--edu-surface-muted) !important; border-color: var(--edu-border) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__status:is([data-status='arrived'],[data-status='ready']) { color: var(--edu-brand) !important; background: var(--edu-brand-soft) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-v1__status:is([data-status='released'],[data-status='confirmed']) { color: var(--edu-success) !important; background: var(--edu-success-soft) !important; }
+.edu-pickup-pulse__lobby { color: var(--edu-ink); background: var(--edu-canvas) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse__lobby :is(section,article) { background: var(--edu-surface) !important; border-color: var(--edu-border) !important; }
+@media (max-width: 700px) {
+  .edu-pickup-pulse .edu-pickup-v1__command button { margin-top: 12px; width: auto; }
+  .edu-pickup-pulse__brief { gap: 4px 16px; }
+  .edu-pickup-pulse__brief a { width: 100%; margin-left: 0; }
+  .edu-pickup-pulse .edu-pickup-v1__handoff { grid-template-columns: minmax(0,1fr); gap: 12px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__verify { width: 100%; }
+  .edu-pickup-pulse .edu-pickup-v1__roster-card { display: block; }
+  .edu-pickup-pulse .edu-pickup-v1__roster-card > :is(p,div):not(:first-child) { margin-top: 12px; }
+  body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse :is(.edu-pickup-v1__handoff,.edu-pickup-v1__incoming,.edu-pickup-v1__roster-card) { padding: 16px; }
+}
+
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse__lobby header > div > span { color: var(--edu-on-brand) !important; background: var(--edu-brand) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse__lobby time { color: var(--edu-ink) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse__lobby section > div:first-child { background: var(--edu-surface-muted) !important; border-color: var(--edu-border) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1__content-inner .edu-pickup-pulse__lobby h2 { color: var(--edu-ink) !important; }
+.edu-pickup-pulse__lobby article > div:first-child { flex-wrap: wrap; }
+/* The old family lobby bridge forces a dark palette even in light mode. */
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby { color: var(--edu-ink) !important; background: var(--edu-canvas) !important; border-radius: 0 !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby :is(section,article) { background: var(--edu-surface) !important; border-color: var(--edu-border) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby :is(h1,h2,h3,time) { color: var(--edu-ink) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby p { color: var(--edu-muted) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby .edu-pickup-v1__status { color: var(--edu-muted) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby .edu-pickup-v1__status:is([data-status='arrived'],[data-status='ready']) { color: var(--edu-brand) !important; }
+body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-pickup-pulse .edu-pickup-pulse__lobby .edu-pickup-v1__status:is([data-status='released'],[data-status='confirmed']) { color: var(--edu-success) !important; }

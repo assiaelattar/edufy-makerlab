@@ -219,3 +219,8 @@ The assisted wa.me workflow is complete as a development preview. The original d
 Complete the focused parent access hotfix in an isolated worktree. Verify synthetic Auth/Firestore family and tenant behavior, build Edufy, then release only the reviewed app paths if the registered release gates pass. Do not mutate a real family's account as a test. Record the API and Hostinger client release status separately. Resume multi-tenant ownership work after this phase.
 
 ---
+## Current task — verify and publish Design System v1 — 2026-10-19
+
+Run the production build, Design System check, diff check and protected-path scan from this clean release worktree. Fetch `origin/main` again, require a fast-forward push, then verify `https://edufy.makerlab.academy/` and record the release.
+
+---
