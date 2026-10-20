@@ -1,4 +1,12 @@
-# Latest handoff — 2026-10-20 scoped release review
+# Latest handoff — 2026-10-20 reviewed school modules
+
+The user requested publication of the completed, polished Edufy app modules. This clean `origin/main` release cut includes Programs, the Attendance desk, Classes, Calendar, Admissions/Workshops, and the shared confirmation modal. The Programs roster also formats start dates with the existing helper. It carries only their final reviewed files plus the Education tab/register/status primitives required for integration. The production build, Education System check, membership check, roster-print smoke, repository agent check and diff check pass. Repository-wide TypeScript remains red from existing diagnostics; none match the changed release files.
+
+Finance, Expenses, Student Details, Students register, Pickup, Communications, Learning/Portfolio, Team, Marketing, the unreviewed school-operations bridge, SparkQuest, and Edufy MCP remain outside this cut. The module reports retain their real-role, persistence, print, and physical-phone follow-ups; no production records or protected API/Firebase paths are part of this code release.
+
+---
+
+# Previous handoff — 2026-10-20 scoped release review
 
 Current `origin/main` is `c71d873`. A clean main-based candidate formats Programs roster start dates in desktop and mobile display using the existing `formatDate` helper. The production build, Education System check, repository agent check and diff check pass. The full school Design System rollout remains queued: its final physical-phone and designated-role acceptance is open, and the school-operations bridge `d92be59` is unreviewed. No push or deployment occurred in this review.
 

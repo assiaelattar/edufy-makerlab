@@ -15,6 +15,7 @@ import { AttendanceRecord } from '../types';
 import { findMembershipRenewalsDue, isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
 import { getScheduledSlotForWeekday } from '../utils/schoolSchedule';
 import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
+import { EducationBadge, EducationButton, EducationState } from '../components/education-ui/EducationPrimitives';
 
 export const AbsenceView = () => {
     const showEducationSchoolDayV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
@@ -331,41 +332,40 @@ export const AbsenceView = () => {
     };
 
     if (attendanceLoading || attendanceError) {
+        const accessRestricted = Boolean(attendanceError && /permission|access denied|insufficient privileges/i.test(attendanceError));
         return <div className={`flex flex-col gap-4 ${showEducationSchoolDayV1 ? 'edu-v1 edu-attendance-pulse' : ''}`} data-edu-system={showEducationSchoolDayV1 ? '1' : undefined}>
-            <AtlasCommandHeader density={showEducationSchoolDayV1 ? 'compact' : 'default'} eyebrow="Learning operations" title="Student attendance" icon={ClipboardCheck} />
-            <div role={attendanceError ? 'alert' : 'status'}>
-                <AtlasEmptyState
-                    title={attendanceError ? 'Attendance unavailable' : 'Loading attendance'}
-                    description={attendanceError || 'Connecting to your school’s attendance records. Marking opens once they are ready.'}
-                    icon={attendanceError ? AlertCircle : ClipboardCheck}
-                    action={attendanceError ? <AtlasActionButton onClick={() => window.location.reload()}>Reload attendance</AtlasActionButton> : undefined}
-                />
-            </div>
+            <AtlasCommandHeader density={showEducationSchoolDayV1 ? 'compact' : 'default'} eyebrow={showEducationSchoolDayV1 ? 'Class register' : 'Learning operations'} title={showEducationSchoolDayV1 ? 'Attendance' : 'Student attendance'} icon={ClipboardCheck} />
+            {showEducationSchoolDayV1 ? <EducationState
+                kind={attendanceLoading ? 'loading' : accessRestricted ? 'restricted' : 'error'}
+                title={attendanceLoading ? 'Loading attendance' : accessRestricted ? 'Attendance access restricted' : 'Attendance unavailable'}
+                description={attendanceError || 'Connecting to your school’s attendance records. Marking opens once they are ready.'}
+            >{attendanceError && <EducationButton onClick={() => window.location.reload()}>Reload attendance</EducationButton>}</EducationState>
+                : <div role={attendanceError ? 'alert' : 'status'}><AtlasEmptyState title={attendanceError ? 'Attendance unavailable' : 'Loading attendance'} description={attendanceError || 'Connecting to your school’s attendance records. Marking opens once they are ready.'} icon={attendanceError ? AlertCircle : ClipboardCheck} action={attendanceError ? <AtlasActionButton onClick={() => window.location.reload()}>Reload attendance</AtlasActionButton> : undefined} /></div>}
         </div>;
     }
 
-    const renewalPanel = (<section className="overflow-hidden rounded-xl border border-amber-300/25 bg-amber-400/[0.06]" aria-labelledby="membership-renewals-title">
-                    <div className="flex flex-col gap-2 border-b border-amber-300/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+    const renewalPanel = (<section className="pulse-attendance-renewal-panel" aria-labelledby="membership-renewals-title">
+                    <div className="pulse-attendance-renewal-panel__head">
                         <div className="flex items-start gap-3">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-300/15 text-amber-200"><RotateCcw size={17} /></span>
+                            <span className="pulse-attendance-renewal-panel__icon"><RotateCcw size={17} aria-hidden="true" /></span>
                             <div>
-                                <h2 id="membership-renewals-title" className="text-sm font-black text-white">Membership renewals</h2>
-                                <p className="mt-0.5 text-xs leading-5 text-amber-100/65">{renewalsDue.length} {renewalsDue.length === 1 ? 'learner is' : 'learners are'} hidden from today’s attendance until a new rolling membership is created.</p>
+                                <h2 id="membership-renewals-title">Membership renewals</h2>
+                                <p>{renewalsDue.length} {renewalsDue.length === 1 ? 'learner is' : 'learners are'} hidden from today’s attendance until a new rolling membership is created.</p>
                             </div>
                         </div>
-                        <span className="w-fit rounded-full border border-amber-300/25 bg-amber-300/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-amber-100">{renewalsDue.length} due</span>
+                        <EducationBadge status="warning">{renewalsDue.length} due</EducationBadge>
                     </div>
-                    <div className="divide-y divide-amber-300/10">
+                    <div className="pulse-attendance-renewal-panel__list">
                         {renewalsDue.map(renewal => (
-                            <div key={renewal.key} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div key={renewal.key} className="pulse-attendance-renewal-panel__row">
                                 <div className="flex min-w-0 items-center gap-3">
-                                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-300/20 bg-slate-950/40 text-amber-100"><UserRound size={15} /></span>
+                                    <span className="pulse-attendance-renewal-panel__student-icon"><UserRound size={15} aria-hidden="true" /></span>
                                     <div className="min-w-0">
-                                        <p className="truncate text-sm font-bold text-white">{renewal.studentName}</p>
-                                        <p className="mt-0.5 text-[11px] text-slate-400">
+                                        <p className="pulse-attendance-renewal-panel__student-name">{renewal.studentName}</p>
+                                        <p className="pulse-attendance-renewal-panel__detail">
                                             <span>{renewal.programName}{renewal.groupName ? ` · ${renewal.groupName}` : ''}</span>
-                                            <span className="mx-1.5 text-slate-600" aria-hidden="true">·</span>
-                                            <span className="text-amber-200">Ended {format(parseISO(renewal.endDate), 'dd MMM yyyy')} ({renewal.daysOverdue}d ago)</span>
+                                            <span aria-hidden="true"> · </span>
+                                            <span className="pulse-attendance-renewal-panel__overdue">Ended {format(parseISO(renewal.endDate), 'dd MMM yyyy')} ({renewal.daysOverdue}d ago)</span>
                                         </p>
                                     </div>
                                 </div>

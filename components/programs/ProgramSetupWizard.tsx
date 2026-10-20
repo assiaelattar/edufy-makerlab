@@ -1109,8 +1109,8 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                     {draft.registrationSetup.enabled && (
                       <>
                         <div className="grid gap-3 border-b border-white/[0.07] py-3 sm:grid-cols-2">
-                          <button type="button" onClick={() => updateRegistration({ mode: 'fast' })} className={`rounded-lg border p-3 text-left transition ${draft.registrationSetup.mode === 'fast' ? 'border-teal-300/35 bg-teal-300/10' : 'border-white/10 hover:border-white/20'}`}><p className="text-sm font-black text-white">Fast form</p><p className="mt-1 text-xs leading-5 text-slate-500">Learner, guardian, phone, and chosen run.</p></button>
-                          <button type="button" onClick={() => updateRegistration({ mode: 'extended' })} className={`rounded-lg border p-3 text-left transition ${draft.registrationSetup.mode === 'extended' ? 'border-teal-300/35 bg-teal-300/10' : 'border-white/10 hover:border-white/20'}`}><p className="text-sm font-black text-white">Extended form</p><p className="mt-1 text-xs leading-5 text-slate-500">Adds school, medical, consent, and custom details.</p></button>
+                          <button type="button" aria-pressed={draft.registrationSetup.mode === 'fast'} onClick={() => updateRegistration({ mode: 'fast' })} className={`rounded-lg border p-3 text-left transition ${draft.registrationSetup.mode === 'fast' ? 'border-teal-300/35 bg-teal-300/10' : 'border-white/10 hover:border-white/20'}`}><p className="text-sm font-black text-white">Fast form</p><p className="mt-1 text-xs leading-5 text-slate-500">Learner, guardian, phone, and chosen run.</p></button>
+                          <button type="button" aria-pressed={draft.registrationSetup.mode === 'extended'} onClick={() => updateRegistration({ mode: 'extended' })} className={`rounded-lg border p-3 text-left transition ${draft.registrationSetup.mode === 'extended' ? 'border-teal-300/35 bg-teal-300/10' : 'border-white/10 hover:border-white/20'}`}><p className="text-sm font-black text-white">Extended form</p><p className="mt-1 text-xs leading-5 text-slate-500">Adds school, medical, consent, and custom details.</p></button>
                         </div>
                         <Toggle checked={draft.registrationSetup.allowWaitlist} onChange={checked => updateRegistration({ allowWaitlist: checked })} label="Keep a waitlist" helper="Continue collecting requests when groups are full." />
                         <Toggle checked={draft.registrationSetup.requiresReview} onChange={checked => updateRegistration({ requiresReview: checked })} label="Review every request" helper="A team member approves the learner before enrollment." />
@@ -1128,8 +1128,8 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                 </div>
 
                 <div className="grid gap-4 border-t border-white/10 pt-5 sm:grid-cols-2">
-                  <div><label className={labelClass}>Cover image URL <span className="font-medium text-slate-600">Optional</span></label><input type="url" className={fieldClass} value={draft.thumbnailUrl} onChange={event => setDraft(previous => ({ ...previous, thumbnailUrl: event.target.value }))} placeholder="https://..." /></div>
-                  <div><label className={labelClass}>Brochure URL <span className="font-medium text-slate-600">Optional</span></label><input type="url" className={fieldClass} value={draft.brochureUrl} onChange={event => setDraft(previous => ({ ...previous, brochureUrl: event.target.value }))} placeholder="https://..." /></div>
+                  <div><label htmlFor="program-cover-url" className={labelClass}>Cover image URL <span className="font-medium text-slate-600">Optional</span></label><input id="program-cover-url" type="url" className={fieldClass} value={draft.thumbnailUrl} onChange={event => setDraft(previous => ({ ...previous, thumbnailUrl: event.target.value }))} placeholder="https://..." /></div>
+                  <div><label htmlFor="program-brochure-url" className={labelClass}>Brochure URL <span className="font-medium text-slate-600">Optional</span></label><input id="program-brochure-url" type="url" className={fieldClass} value={draft.brochureUrl} onChange={event => setDraft(previous => ({ ...previous, brochureUrl: event.target.value }))} placeholder="https://..." /></div>
                 </div>
               </div>
             )}
@@ -1160,7 +1160,7 @@ export const ProgramSetupWizard: React.FC<ProgramSetupWizardProps> = ({
                     {draft.deliveryModel === 'on_demand'
                       ? 'This program stays reusable. Your team creates a separate mission when a company orders it, then adds dates, groups, and participants only when they are known.'
                       : draft.registrationSetup.enabled
-                      ? `Families can use a ${draft.registrationSetup.mode} registration form${draft.registrationSetup.qrEnabled ? ' or scan its QR code' : ''}. ${draft.registrationSetup.requiresReview ? 'Your team reviews each request before enrollment.' : 'Requests can move ahead without staff review.'}`
+                      ? `Families can use ${draft.registrationSetup.mode === 'extended' ? 'an' : 'a'} ${draft.registrationSetup.mode} registration form${draft.registrationSetup.qrEnabled ? ' or scan its QR code' : ''}. ${draft.registrationSetup.requiresReview ? 'Your team reviews each request before enrollment.' : 'Requests can move ahead without staff review.'}`
                       : 'Online registration is off. Your team will enroll learners from inside Edufy.'}
                   </p>
                 </div>

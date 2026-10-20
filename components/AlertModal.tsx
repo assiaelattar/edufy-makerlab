@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import './education-ui/education-system-v1.css';
+import './alert-modal.css';
 
 export type AlertVariant = 'info' | 'success' | 'warning' | 'danger';
 
@@ -15,145 +17,80 @@ interface AlertModalProps {
     isAlert?: boolean;
 }
 
-const variantStyles: Record<AlertVariant, {
-    icon: React.ReactNode;
-    iconSurface: string;
-    accent: string;
-    confirm: string;
-}> = {
-    info: {
-        icon: <Info className="h-5 w-5 text-[#2DD4BF]" />,
-        iconSurface: 'border-[#14B8A6]/35 bg-[#14B8A6]/10',
-        accent: 'bg-[#14B8A6]',
-        confirm: 'bg-[#14B8A6] text-[#08111F] hover:bg-[#2DD4BF]',
-    },
-    success: {
-        icon: <CheckCircle2 className="h-5 w-5 text-[#2DD4BF]" />,
-        iconSurface: 'border-[#14B8A6]/35 bg-[#14B8A6]/10',
-        accent: 'bg-[#14B8A6]',
-        confirm: 'bg-[#14B8A6] text-[#08111F] hover:bg-[#2DD4BF]',
-    },
-    warning: {
-        icon: <AlertTriangle className="h-5 w-5 text-[#F2C766]" />,
-        iconSurface: 'border-[#F2C766]/35 bg-[#F2C766]/10',
-        accent: 'bg-[#F2C766]',
-        confirm: 'bg-[#F2C766] text-[#08111F] hover:bg-[#F7D98D]',
-    },
-    danger: {
-        icon: <AlertOctagon className="h-5 w-5 text-[#FB7185]" />,
-        iconSurface: 'border-[#FB7185]/35 bg-[#FB7185]/10',
-        accent: 'bg-[#FB7185]',
-        confirm: 'bg-[#FB7185] text-[#08111F] hover:bg-[#FDA4AF]',
-    },
-};
+const variantIcons = { info: Info, success: CheckCircle2, warning: AlertTriangle, danger: AlertOctagon };
+const variantAccents = { info: 'blue', success: 'green', warning: 'orange', danger: 'red' } as const;
+const focusableSelector = 'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]';
 
 export const AlertModal: React.FC<AlertModalProps> = ({
-    isOpen,
-    onClose,
-    onConfirm,
-    title,
-    message,
-    confirmText = 'Confirm',
-    cancelText = 'Cancel',
-    variant = 'info',
-    isAlert = false,
+    isOpen, onClose, onConfirm, title, message,
+    confirmText = 'Confirm', cancelText = 'Cancel', variant = 'info', isAlert = false,
 }) => {
-    const [isMounted, setIsMounted] = useState(false);
+    const titleId = useId();
+    const messageId = useId();
+    const dialogRef = useRef<HTMLDivElement>(null);
+    const initialFocusRef = useRef<HTMLButtonElement>(null);
+    const openerRef = useRef<HTMLElement | null>(null);
+    const wasOpenRef = useRef(false);
+    const onCloseRef = useRef(onClose);
 
-    useEffect(() => {
-        if (isOpen) {
-            setIsMounted(true);
-            return;
-        }
-
-        const timeout = window.setTimeout(() => setIsMounted(false), 200);
-        return () => window.clearTimeout(timeout);
-    }, [isOpen]);
+    // Capture the opener before the dialog moves focus.
+    if (isOpen && !wasOpenRef.current) openerRef.current = document.activeElement as HTMLElement | null;
+    wasOpenRef.current = isOpen;
+    useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
     useEffect(() => {
         if (!isOpen) return;
-
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        const focusFrame = requestAnimationFrame(() => initialFocusRef.current?.focus());
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') onClose();
+            const dialog = dialogRef.current;
+            if (!dialog) return;
+            const dialogs = document.querySelectorAll('[aria-modal="true"],[role="alertdialog"]');
+            if (dialogs[dialogs.length - 1] !== dialog) return;
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                onCloseRef.current();
+            }
+            if (event.key !== 'Tab') return;
+            const controls = Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector))
+                .filter(element => element.getClientRects().length > 0);
+            const first = controls[0], last = controls[controls.length - 1];
+            if (!first) { event.preventDefault(); dialog.focus(); }
+            else if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+                event.preventDefault(); last.focus();
+            } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+                event.preventDefault(); first.focus();
+            }
         };
-
         document.addEventListener('keydown', handleKeyDown);
-        return () => document.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, onClose]);
+        return () => {
+            cancelAnimationFrame(focusFrame);
+            document.removeEventListener('keydown', handleKeyDown);
+            document.body.style.overflow = previousOverflow;
+            if (openerRef.current?.isConnected) openerRef.current.focus();
+        };
+    }, [isOpen]);
 
-    if (!isMounted) return null;
-
-    const styles = variantStyles[variant];
-
+    if (!isOpen) return null;
+    const Icon = variantIcons[variant];
     return (
-        <div
-            className={`fixed inset-0 z-[100] flex items-center justify-center p-3 transition-opacity duration-200 sm:p-5 ${
-                isOpen ? 'visible opacity-100' : 'invisible opacity-0'
-            }`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="atlas-alert-title"
-            aria-describedby="atlas-alert-message"
-        >
-            <button
-                type="button"
-                className="atlas-dialog-backdrop absolute inset-0 cursor-default"
-                onClick={onClose}
-                aria-label="Close dialog"
-            />
-
-            <div
-                className={`atlas-dialog relative w-full max-w-md overflow-hidden border transition duration-200 ${
-                    isOpen ? 'translate-y-0 scale-100' : 'translate-y-2 scale-[0.98]'
-                }`}
-            >
-                <div className={`h-1 w-full ${styles.accent}`} />
-                <div className="atlas-dialog-header flex items-start gap-3 border-b px-4 py-4 sm:px-5">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${styles.iconSurface}`}>
-                        {styles.icon}
-                    </div>
-                    <div className="min-w-0 flex-1 pt-1">
-                        <h3 id="atlas-alert-title" className="text-base font-black leading-5">
-                            {title}
-                        </h3>
-                    </div>
-                    {!isAlert && (
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="atlas-dialog-close flex h-9 w-9 shrink-0 items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
-                            aria-label="Close dialog"
-                            title="Close"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
-                    )}
-                </div>
-
-                <div className="px-4 py-5 sm:px-5">
-                    <p id="atlas-alert-message" className="atlas-text-muted whitespace-pre-line text-sm leading-6">
-                        {message}
-                    </p>
-                </div>
-
-                <div className="atlas-dialog-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
-                    {!isAlert && (
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="atlas-action h-10 border px-4 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#14B8A6]"
-                        >
-                            {cancelText}
-                        </button>
-                    )}
-                    <button
-                        type="button"
-                        onClick={onConfirm}
-                        className={`h-10 rounded-lg px-5 text-sm font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-white/60 ${styles.confirm}`}
-                    >
-                        {confirmText}
-                    </button>
-                </div>
+        <div className="edu-confirm-layer" data-edu-system="1">
+            <div className="edu-confirm-backdrop" aria-hidden="true" onClick={event => {
+                if (event.target === event.currentTarget) onClose();
+            }} />
+            <div ref={dialogRef} className="edu-confirm-dialog" data-edu-accent={variantAccents[variant]} role={isAlert ? 'alertdialog' : 'dialog'}
+                aria-modal="true" aria-labelledby={titleId} aria-describedby={messageId} tabIndex={-1}>
+                <header className="edu-confirm-header">
+                    <span className="edu-confirm-icon"><Icon size={22} aria-hidden="true" /></span>
+                    <h3 id={titleId}>{title}</h3>
+                    {!isAlert && <button type="button" className="edu-confirm-close" onClick={onClose} aria-label="Close dialog" title="Close dialog"><X size={19} aria-hidden="true" /></button>}
+                </header>
+                <div className="edu-confirm-body"><p id={messageId}>{message}</p></div>
+                <footer className="edu-confirm-footer">
+                    {!isAlert && <button ref={initialFocusRef} type="button" className="edu-confirm-button edu-confirm-cancel" onClick={onClose}>{cancelText}</button>}
+                    <button ref={isAlert ? initialFocusRef : undefined} type="button" className="edu-confirm-button edu-confirm-approve" onClick={onConfirm}>{confirmText}</button>
+                </footer>
             </div>
         </div>
     );

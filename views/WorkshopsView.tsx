@@ -35,7 +35,8 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     useWorkspaceScroll(workspaceScope);
     const [activeTab, setActiveTab] = useWorkspaceViewState<'calendar' | 'followup' | 'templates'>(workspaceScope, 'activeTab', 'calendar');
 
-    const [workspaceSearch, setWorkspaceSearch] = useWorkspaceViewState(workspaceScope, 'workspaceSearch', '');
+    const [templateSearch, setTemplateSearch] = useWorkspaceViewState(workspaceScope, 'templateSearch', '');
+    const [followUpSearch, setFollowUpSearch] = useWorkspaceViewState(workspaceScope, 'followUpSearch', '');
     const [historySearch, setHistorySearch] = useState('');
 
     // --- Calendar State ---
@@ -493,8 +494,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         return bookings.filter(b => slotIds.includes(b.workshopSlotId)).sort((a, b) => b.bookedAt?.toMillis() - a.bookedAt?.toMillis());
     }, [viewingBookingsTemplateId, workshopSlots, bookings]);
 
-    const searchText = workspaceSearch.trim().toLocaleLowerCase();
-    const visibleTemplates = workshopTemplates.filter(template => `${template.title} ${template.description}`.toLocaleLowerCase().includes(searchText));
+    const visibleTemplates = workshopTemplates.filter(template => `${template.title} ${template.description}`.toLocaleLowerCase().includes(templateSearch.trim().toLocaleLowerCase()));
     const visibleHistory = templateBookings.filter(booking => `${booking.kidName} ${booking.parentName} ${booking.phoneNumber}`.toLocaleLowerCase().includes(historySearch.trim().toLocaleLowerCase()));
 
     // --- Calendar Logic ---
@@ -509,7 +509,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     const followUpBookings = useMemo(() => bookings
         .filter(booking => booking.organizationId === currentOrganization?.id && booking.status === 'attended' && booking.followUpStatus !== 'not_interested' && booking.followUpStatus !== 'converted')
         .sort((first, second) => (first.statusUpdatedAt?.toMillis() || first.bookedAt?.toMillis() || 0) - (second.statusUpdatedAt?.toMillis() || second.bookedAt?.toMillis() || 0)), [bookings, currentOrganization?.id]);
-    const visibleFollowUps = followUpBookings.filter(booking => `${booking.kidName} ${booking.parentName} ${booking.phoneNumber}`.toLocaleLowerCase().includes(searchText));
+    const visibleFollowUps = followUpBookings.filter(booking => `${booking.kidName} ${booking.parentName} ${booking.phoneNumber}`.toLocaleLowerCase().includes(followUpSearch.trim().toLocaleLowerCase()));
     const nextWorkshopSlot = virtualSlots.find(slot => slot.dateStr >= toLocalDateKey(new Date()) && slot.status !== 'cancelled') || null;
     const openWorkshopSlot = (slot: VirtualSlot) => {
         const slotDate = new Date(`${slot.dateStr}T12:00:00`);
@@ -583,13 +583,13 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 badges={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">{viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>}
                 actions={
                     <div className="flex rounded-lg border border-white/10 bg-white/[0.04] p-1" role="tablist" aria-label="Workshop workspace">
-                    <button role="tab" aria-selected={activeTab === 'calendar'} onClick={() => { setActiveTab('calendar'); setWorkspaceSearch(''); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'calendar' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <button role="tab" aria-selected={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'calendar' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
                         <CalendarIcon size={16} /> Calendar
                     </button>
-                    {showEducationProgramsV1 && <button role="tab" aria-selected={activeTab === 'followup'} onClick={() => { setActiveTab('followup'); setWorkspaceSearch(''); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'followup' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                    {showEducationProgramsV1 && <button role="tab" aria-selected={activeTab === 'followup'} onClick={() => setActiveTab('followup')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'followup' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
                         <UserCheck size={16} /> Follow-up {followUpBookings.length > 0 && <span className="edu-workshops-v1__tab-count">{followUpBookings.length}</span>}
                     </button>}
-                    <button role="tab" aria-selected={activeTab === 'templates'} onClick={() => { setActiveTab('templates'); setWorkspaceSearch(''); }} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'templates' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
+                    <button role="tab" aria-selected={activeTab === 'templates'} onClick={() => setActiveTab('templates')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'templates' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}>
                         <List size={16} /> Templates
                     </button>
                     </div>
@@ -603,9 +603,9 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                     <p>{followUpBookings.length > 0 ? 'Start with families who attended. Review their recorded booking before contacting or enrolling.' : nextWorkshopSlot ? `${nextWorkshopSlot.dateStr} · ${nextWorkshopSlot.startTime} · ${nextWorkshopSlot.bookedCount} reserved of ${nextWorkshopSlot.capacity} places` : 'No upcoming workshop appears in the selected calendar window.'}</p>
                 </div>
                 <div className="edu-workshops-v1__focus-actions">
-                    {followUpBookings.length > 0 && <button type="button" className="edu-workshops-v1__focus-primary" onClick={() => { setActiveTab('followup'); setWorkspaceSearch(''); }}>Open follow-up <ChevronRight size={16} /></button>}
+                    {followUpBookings.length > 0 && <button type="button" className="edu-workshops-v1__focus-primary" onClick={() => setActiveTab('followup')}>Open follow-up <ChevronRight size={16} /></button>}
                     {nextWorkshopSlot && <button type="button" className={followUpBookings.length > 0 ? 'edu-workshops-v1__focus-secondary' : 'edu-workshops-v1__focus-primary'} onClick={() => openWorkshopSlot(nextWorkshopSlot)}>Open next session</button>}
-                    {!nextWorkshopSlot && followUpBookings.length === 0 && <button type="button" className="edu-workshops-v1__focus-secondary" onClick={() => { setActiveTab('templates'); setWorkspaceSearch(''); }}>Review workshops</button>}
+                    {!nextWorkshopSlot && followUpBookings.length === 0 && <button type="button" className="edu-workshops-v1__focus-secondary" onClick={() => setActiveTab('templates')}>Review workshops</button>}
                 </div>
             </section>}
 
@@ -616,11 +616,12 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 <AtlasSignalCard label="Attended" value={workshopSignals.attendedBookings} icon={UserCheck} tone="emerald" detail="Ready for follow-up" />
             </div>
 
-            {activeTab !== 'calendar' && <div className="edu-workshops-v1__searchbar"><label><span>{activeTab === 'templates' ? 'Find a workshop' : 'Find a family'}</span><input type="search" value={workspaceSearch} onChange={event => setWorkspaceSearch(event.target.value)} placeholder={activeTab === 'templates' ? 'Title or description' : 'Learner, parent or phone'} /></label><span role="status">{activeTab === 'templates' ? visibleTemplates.length : visibleFollowUps.length} shown</span>{workspaceSearch && <button type="button" onClick={() => setWorkspaceSearch('')}>Clear search</button>}</div>}
+            {activeTab !== 'calendar' && <div className="edu-workshops-v1__searchbar"><label><span>{activeTab === 'templates' ? 'Find a workshop' : 'Find a family'}</span><input type="search" value={activeTab === 'templates' ? templateSearch : followUpSearch} onChange={event => activeTab === 'templates' ? setTemplateSearch(event.target.value) : setFollowUpSearch(event.target.value)} placeholder={activeTab === 'templates' ? 'Title or description' : 'Learner, parent or phone'} /></label><span role="status">{activeTab === 'templates' ? visibleTemplates.length : visibleFollowUps.length} shown</span>{(activeTab === 'templates' ? templateSearch : followUpSearch) && <button type="button" onClick={() => activeTab === 'templates' ? setTemplateSearch('') : setFollowUpSearch('')}>Clear search</button>}</div>}
 
             {showEducationProgramsV1 && activeTab === 'followup' && <section className="edu-workshops-v1__followup" aria-label="Workshop family follow-up">
                 <header><div><span className="edu-workshops-v1__eyebrow">After the workshop</span><h2>Families to contact</h2><p>Attended bookings with no closed follow-up. Contact and enrollment use the existing verified actions.</p></div><strong>{followUpBookings.length} open</strong></header>
-                {followUpBookings.length === 0 ? <div className="edu-workshops-v1__followup-empty"><UserCheck size={24} /><strong>Follow-up is clear</strong><p>New attended bookings will appear here. Review the calendar for upcoming sessions.</p><button type="button" onClick={() => { setActiveTab('calendar'); setWorkspaceSearch(''); }}>Open calendar</button></div> : <div className="edu-workshops-v1__followup-list">{visibleFollowUps.length === 0 && <p role="status">No family matches this search. Clear the search to see all follow-ups.</p>}
+                {!can('workshops.manage') && <p className="edu-workshops-v1__permission" role="status">You can review recorded follow-up here. Contact, enrollment and CRM actions require workshop management permission.</p>}
+                {followUpBookings.length === 0 ? <div className="edu-workshops-v1__followup-empty"><UserCheck size={24} /><strong>Follow-up is clear</strong><p>New attended bookings will appear here. Review the calendar for upcoming sessions.</p><button type="button" onClick={() => setActiveTab('calendar')}>Open calendar</button></div> : <div className="edu-workshops-v1__followup-list">{visibleFollowUps.length === 0 && <p role="status">No family matches this search. Clear the search to see all follow-ups.</p>}
                     {visibleFollowUps.map(booking => {
                         const slot = workshopSlots.find(item => item.id === booking.workshopSlotId && item.organizationId === currentOrganization?.id);
                         const template = workshopTemplates.find(item => item.id === booking.workshopTemplateId && item.organizationId === currentOrganization?.id);
@@ -731,22 +732,15 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                 {/* Timeline Dot */}
                                                 <div className={`absolute -left-[25px] md:-left-[41px] top-4 w-4 h-4 md:w-5 md:h-5 rounded-full border-4 border-slate-900 ${isExpanded ? 'bg-teal-400' : 'bg-slate-700'}`}></div>
 
-                                                {/* Make entire card clickable */}
-                                                <div
-                                                    onClick={() => setExpandedSlotUniqueId(isExpanded ? null : uniqueId)}
-                                                    onKeyDown={event => {
-                                                        if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
-                                                            event.preventDefault();
-                                                            setExpandedSlotUniqueId(isExpanded ? null : uniqueId);
-                                                        }
-                                                    }}
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    aria-expanded={isExpanded}
-                                                    className={`bg-slate-950 border rounded-lg overflow-hidden transition-colors duration-150 cursor-pointer ${isExpanded ? 'border-teal-300/40' : 'border-slate-800 hover:border-slate-700'}`}
-                                                >
+                                                <div className={`edu-workshops-v1__session bg-slate-950 border rounded-lg overflow-hidden transition-colors duration-150 ${isExpanded ? 'border-teal-300/40' : 'border-slate-800 hover:border-slate-700'}`}>
                                                     {/* Slot Header Card */}
-                                                    <div className="p-3 md:p-4 flex flex-col sm:flex-row gap-3 md:gap-4 sm:items-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedSlotUniqueId(isExpanded ? null : uniqueId)}
+                                                        aria-expanded={isExpanded}
+                                                        aria-label={`${slot.templateTitle}, ${slot.dateStr} at ${slot.startTime}, ${reservedCount} of ${safeCapacity} places reserved`}
+                                                        className="edu-workshops-v1__session-toggle p-3 md:p-4 flex flex-col sm:flex-row gap-3 md:gap-4 sm:items-center"
+                                                    >
                                                         <div className="flex flex-col min-w-[60px]">
                                                             <span className="text-lg md:text-xl font-bold text-white">{slot.startTime}</span>
                                                             <span className="text-xs text-slate-500 font-mono">{slot.endTime}</span>
@@ -769,8 +763,8 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                             <div className={`h-full rounded-full ${reservedCount >= safeCapacity ? 'bg-rose-500' : occupancy >= 80 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${occupancy}%` }}></div>
                                                         </div>
                                                         <p className="mt-1 text-right text-[10px] font-medium text-slate-500">{seatsLeft > 0 ? `${seatsLeft} seats open` : reservedCount > safeCapacity ? `${reservedCount - safeCapacity} over capacity` : 'Full'}</p>
-                                                    </div>
-                                                    </div>
+                                                        </div>
+                                                    </button>
 
                                                     {/* Expanded Details */}
                                                     {isExpanded && (
@@ -783,8 +777,8 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                                     setEvaluationTarget({ title: slot.templateTitle, sessionId: slot.slotId || uniqueId, date: slot.dateStr });
                                                                     setIsEvaluationModalOpen(true);
                                                                 }}
-                                                                disabled={!evaluatorAvailable}
-                                                                title={evaluatorAvailable ? 'Evaluate this workshop session' : 'Configure the Google AI key to enable quality analysis'}
+                                                                disabled={!evaluatorAvailable || !can('workshops.manage')}
+                                                                title={!can('workshops.manage') ? 'Workshop management permission required' : evaluatorAvailable ? 'Evaluate this workshop session' : 'Configure the Google AI key to enable quality analysis'}
                                                                 className="flex items-center gap-1.5 rounded-lg border border-teal-300/20 bg-teal-300/10 px-3 py-1 text-[10px] font-black uppercase text-teal-200 transition-colors hover:bg-teal-300/15 disabled:cursor-not-allowed disabled:opacity-45"
                                                             >
                                                                 <Star size={12} /> Analyze quality
@@ -825,13 +819,13 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                                 <option value="converted">Converted to CRM</option>
                                                             </select>
 
-                                                                                <div className="flex gap-1">
+                                                                                {can('workshops.manage') && <div className="flex gap-1">
                                                                 <button onClick={(e) => { e.stopPropagation(); void openWhatsApp(booking.phoneNumber, booking.parentName); }} className="p-1.5 text-emerald-500 hover:bg-emerald-950/30 rounded transition-colors" title="WhatsApp"><MessageCircle size={14} /></button>
                                                                                     {booking.status === 'attended' && (
                                                                                         <button onClick={(e) => { e.stopPropagation(); void handleConvertToStudent(booking); }} className="p-1.5 text-blue-500 hover:bg-blue-950/30 rounded transition-colors" title="Start student enrollment"><UserCheck size={14} /></button>
                                                                                     )}
                                                                 <button onClick={(e) => { e.stopPropagation(); void handlePushToCRM(booking, slot.templateTitle); }} disabled={booking.status === 'converted'} className="p-1.5 text-teal-300 hover:bg-teal-950/30 rounded transition-colors disabled:cursor-not-allowed disabled:opacity-35" title={booking.status === 'converted' ? 'Already converted to CRM' : 'Push to Lead CRM'}><Magnet size={14} /></button>
-                                                                                </div>
+                                                                                </div>}
                                                                             </div>
                                                                         </div>
                                                                     ))}
@@ -853,6 +847,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             {/* TEMPLATES TAB */}
             {activeTab === 'templates' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {!can('workshops.manage') && <p className="edu-workshops-v1__permission">You can review workshop invitations and booking history. Creating or changing a workshop requires workshop management permission.</p>}
                     {can('workshops.manage') && (
                         <button onClick={handleCreateNew} className="group min-h-[360px] rounded-[24px] border-2 border-dashed border-slate-700/80 bg-slate-900/35 p-8 text-left text-slate-400 transition-all hover:-translate-y-0.5 hover:border-teal-300/50 hover:bg-slate-900 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/70">
                             <div className="flex h-full flex-col justify-between">
@@ -866,7 +861,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                         </button>
                     )}
 
-                    {visibleTemplates.length === 0 && <p role="status" className="edu-workshops-v1__empty">{workspaceSearch ? 'No workshop matches this search.' : 'No workshop templates yet. Create a workshop to plan your first session.'}</p>}
+                    {visibleTemplates.length === 0 && <p role="status" className="edu-workshops-v1__empty">{templateSearch ? 'No workshop matches this search.' : can('workshops.manage') ? 'No workshop templates yet. Create a workshop to plan your first session.' : 'No workshop templates are available to review.'}</p>}
                     {visibleTemplates.map(template => (
                         <div key={template.id} className="edu-workshops-v1__template group relative flex min-h-[360px] flex-col overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900 shadow-[0_18px_45px_rgba(2,8,23,0.16)] transition-all hover:-translate-y-0.5 hover:border-teal-300/30">
                             <div className="relative aspect-[1.91/1] overflow-hidden border-b border-slate-800 bg-slate-950">

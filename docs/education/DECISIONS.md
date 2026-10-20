@@ -1,5 +1,10 @@
 # Education UI decisions
 
+## 2026-10-20 — Selective release promotion
+
+- Promote reviewed school modules by explicit final file delta from the coordinator branch into current `main`; never merge its complete history. Preserve business handlers, record shapes and permission sources.
+- Exclude the unreviewed school-operations bridge and modules with independent data, role or cross-product release gates. Keep API, rules, indexes, SparkQuest and MCP changes out of this app-only release.
+
 ## 2026-10-20 — Release scope
 
 - Carry only the reviewed Programs roster date display fix from the UI coordinator branch into a clean current-main candidate. Keep the unfinished school-operations bridge and module work with open acceptance gates out of this release cut.

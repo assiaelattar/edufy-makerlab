@@ -1,5 +1,9 @@
 # Education UI known issues
 
+## 2026-10-20 — Reviewed module follow-ups
+
+The released visual scope has synthetic action checks and read-only signed-in evidence where recorded in its module reports. Production writes were not exercised for design QA. A physical-phone and designated-role pass, populated Calendar week, real waiting list, actual print paths, and FaceID recognition remain follow-ups. Finance/Expenses real ledger acceptance, Pickup cross-product persistence, Student Details and Students signed-in checks, Communications bridge review, and the active Learning/Portfolio, Team and Marketing work are separate queued release candidates.
+
 ## 2026-10-20 — UI release gates
 
 The broader Design System rollout still requires a final physical-phone pass with designated roles. Several modules also need signed-in real-data, restricted-role or persistence checks described in their module reports. The unreviewed school-operations bridge `d92be59` must not be promoted from ancestry alone. The Programs roster date candidate needs read-only confirmation of the integrated display on a populated school roster before publication.

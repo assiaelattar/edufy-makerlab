@@ -58,7 +58,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
   const runDateLabel = `${formatDate(preview.run.startDate, { day: 'numeric', month: 'short', year: 'numeric' })} - ${formatDate(preview.run.endDate, { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
   return (
-    <div className="space-y-4 animate-in fade-in duration-200">
+    <div className="program-run-plan space-y-4 animate-in fade-in duration-200">
       <section className="atlas-surface overflow-hidden rounded-lg border">
         <div className="flex flex-col gap-4 border-b border-white/10 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex min-w-0 items-start gap-3">
@@ -68,7 +68,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="atlas-text-strong text-base font-black">{preview.run.name}</p>
-                <span className="rounded border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Schedule preview</span>
+                <span className="program-run-plan__preview rounded border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-[10px] font-black uppercase text-amber-200">Schedule preview</span>
               </div>
               <p className="atlas-text-subtle mt-1 text-xs leading-5">Review the schedule and family plans from your current setup. These dates are a preview, not published classes.</p>
             </div>
@@ -105,7 +105,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
                   const group = groupsById.get(occurrence.programGroupId);
                   return (
                     <div key={occurrence.id} className="grid grid-cols-[58px_minmax(0,1fr)_auto] items-center gap-3 py-3">
-                      <div className="rounded-lg bg-teal-400/10 px-2 py-2 text-center text-teal-300">
+                      <div className="program-run-plan__date rounded-lg bg-teal-400/10 px-2 py-2 text-center text-teal-300">
                         <span className="block text-[10px] font-black uppercase">{formatDate(occurrence.date, { weekday: 'short' })}</span>
                         <span className="block text-base font-black leading-5">{formatDate(occurrence.date, { day: '2-digit' })}</span>
                       </div>
@@ -137,7 +137,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
                   <p className="atlas-text-strong shrink-0 text-sm font-black">{formatCurrency(offer.baseAmount)}</p>
                 </div>
               ))}
-              {!preview.pricingOffers.length && <p className="py-4 text-sm font-bold text-amber-200">No valid family offer is configured.</p>}
+              {!preview.pricingOffers.length && <p className="program-run-plan__missing-offer py-4 text-sm font-bold text-amber-200">No valid family offer is configured.</p>}
             </div>
           </div>
         </div>
@@ -151,7 +151,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
             { label: 'Capacity and waitlist', ready: capacityReady, detail: capacityReady ? 'Every group has a seat policy.' : 'Set missing capacity before public registration.' },
             { label: 'Pricing offers', ready: offerReady, detail: offerReady ? 'Priced family plans are available.' : 'Add a positive price before publishing.' }
           ].map(item => (
-            <div key={item.label} className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
+            <div key={item.label} data-ready={item.ready} className="program-run-plan__check flex items-start gap-3 rounded-lg border border-white/10 bg-black/10 p-3">
               {item.ready ? <CheckCircle2 size={17} className="mt-0.5 shrink-0 text-teal-300" /> : <AlertCircle size={17} className="mt-0.5 shrink-0 text-amber-200" />}
               <div>
                 <p className="atlas-text-strong text-sm font-black">{item.label}</p>
@@ -160,7 +160,7 @@ export const ProgramOperationsPreviewPanel: React.FC<ProgramOperationsPreviewPro
             </div>
           ))}
         </div>
-        <div className="mt-4 flex flex-col gap-3 rounded-lg border border-teal-400/15 bg-teal-400/[0.05] p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="program-run-plan__guidance mt-4 flex flex-col gap-3 rounded-lg border border-teal-400/15 bg-teal-400/[0.05] p-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <Users size={17} className="mt-0.5 shrink-0 text-teal-300" />
             <p className="atlas-text-muted text-xs leading-5"><span className="atlas-text-strong font-black">Before opening registration:</span> review group capacity and family plans, then resolve any missing setup.</p>

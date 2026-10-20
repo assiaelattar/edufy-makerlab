@@ -61,3 +61,96 @@ body .edu-v1.edu-classes-pulse .atlas-command-header[data-edu-density='compact']
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .pulse-classes-group > div:first-child span { color:var(--edu-muted) !important; }
 
 .edu-classes-pulse .atlas-toolbar input::placeholder { color:var(--edu-muted) !important; opacity:1; }
+
+/* Design System v1 completion: the class roster is a working register, not a
+   legacy table placed inside a new shell. */
+.edu-classes-pulse .edu-classes-v1__register { margin-top:2px; }
+.edu-classes-pulse .edu-classes-v1__table-wrap { min-width:0; }
+.edu-classes-pulse .edu-classes-v1__table { border-collapse:separate; border-spacing:0; color:var(--ds-ink); }
+.edu-classes-pulse .edu-classes-v1__table thead { position:sticky; top:0; z-index:4; background:var(--ds-subtle); color:var(--ds-muted); font-size:10px; font-weight:900; letter-spacing:.07em; text-transform:uppercase; }
+.edu-classes-pulse .edu-classes-v1__table th { border-bottom:2px solid var(--ds-border); }
+.edu-classes-pulse .edu-classes-v1__table td { min-height:72px; border-bottom:1px solid var(--ds-border); color:var(--ds-ink); vertical-align:middle; }
+.edu-classes-pulse .edu-classes-v1__table tbody tr { transition:background 120ms ease; }
+.edu-classes-pulse .edu-classes-v1__table tbody tr:hover { background:var(--ds-blue-soft); }
+.edu-classes-pulse .edu-classes-v1__table tbody tr:last-child td { border-bottom:0; }
+.edu-classes-pulse .edu-classes-v1__avatar { display:grid; width:38px; height:38px; flex:0 0 auto; place-items:center; border:2px solid var(--ds-green); border-bottom:4px solid var(--ds-green-edge); border-radius:13px; background:var(--ds-green-soft); color:var(--ds-green-ink); font:900 12px var(--ds-font-heading); }
+.edu-classes-pulse .edu-classes-v1__table td:first-child>div>div:last-child>div:nth-child(2) { color:var(--ds-muted); }
+.edu-classes-pulse .edu-classes-v1__phone { display:flex; align-items:center; gap:5px; margin-top:4px; color:var(--ds-blue-ink); font-size:11px; font-weight:800; }
+.edu-classes-pulse .edu-classes-v1__table .edu-ds-button { min-height:38px; padding:6px 10px; }
+.edu-classes-pulse .atlas-command-header__actions .edu-ds-action-menu>div .edu-ds-button { width:100%; justify-content:flex-start; }
+@media(max-width:800px) {
+ .edu-classes-pulse .edu-classes-v1__register>header { padding:13px; }
+ .edu-classes-pulse .edu-classes-v1__mobile-roster { margin:0!important; padding:12px; }
+}
+
+/* The compact shell can mount without the historical body marker. */
+.edu-classes-pulse .atlas-command-header { padding:20px 22px!important; border:2px solid var(--ds-green)!important; border-bottom:5px solid var(--ds-green-edge)!important; border-radius:var(--ds-radius-card)!important; background:var(--ds-green-soft)!important; }
+.edu-classes-pulse .atlas-command-header h2 { color:var(--ds-green-ink)!important; font-family:var(--ds-font-heading); font-weight:900!important; }
+.edu-classes-pulse .atlas-command-header .atlas-action { border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important; border-radius:var(--ds-radius-control)!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; font-family:var(--ds-font-heading); font-weight:900; }
+.edu-classes-pulse .atlas-command-header .atlas-action:last-child { border-color:var(--ds-blue-edge)!important; background:var(--ds-blue)!important; color:var(--ds-on-color)!important; }
+.edu-classes-pulse .pulse-classes-today { border:2px solid var(--ds-blue)!important; border-bottom:4px solid var(--ds-blue-edge)!important; border-radius:var(--ds-radius-card)!important; background:var(--ds-surface)!important; }
+.edu-classes-pulse .pulse-classes-section-title h2,.edu-classes-pulse .pulse-classes-timeline strong { color:var(--ds-ink)!important; font-family:var(--ds-font-heading); font-weight:900; }
+.edu-classes-pulse .pulse-classes-timeline button { border-color:var(--ds-border)!important; color:var(--ds-ink)!important; }
+.edu-classes-pulse .pulse-classes-timeline time { border-color:var(--ds-blue)!important; color:var(--ds-blue-ink)!important; font-weight:900; }
+.edu-classes-pulse .pulse-classes-facts { display:grid!important; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px!important; padding:0!important; border:0!important; }
+.edu-classes-pulse .pulse-classes-facts>div { display:grid!important; gap:3px!important; padding:12px 14px; border:2px solid var(--ds-border); border-bottom:4px solid var(--ds-depth); border-radius:var(--ds-radius-control); background:var(--ds-surface); }
+.edu-classes-pulse .pulse-classes-facts dt { color:var(--ds-muted)!important; font-size:10px; font-weight:900; text-transform:uppercase; }
+.edu-classes-pulse .pulse-classes-facts dd { color:var(--ds-ink)!important; font:900 18px var(--ds-font-heading); }
+.edu-classes-pulse .atlas-toolbar { display:grid!important; gap:10px; padding:12px!important; border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important; border-radius:var(--ds-radius-card)!important; background:var(--ds-surface)!important; }
+.edu-classes-pulse .atlas-toolbar input { border:2px solid var(--ds-border)!important; border-radius:var(--ds-radius-control)!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; }
+.edu-classes-pulse .atlas-toolbar button { min-height:40px; border:2px solid var(--ds-border)!important; border-bottom:3px solid var(--ds-depth)!important; border-radius:var(--ds-radius-control)!important; background:var(--ds-surface)!important; color:var(--ds-muted)!important; font-family:var(--ds-font-heading); font-weight:900; }
+.edu-classes-pulse .atlas-toolbar button[aria-pressed='true'] { border-color:var(--ds-blue-edge)!important; background:var(--ds-blue)!important; color:var(--ds-on-color)!important; }
+.edu-classes-pulse .pulse-classes-directory { padding:0!important; border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important; border-radius:var(--ds-radius-card)!important; background:var(--ds-surface)!important; overflow:hidden; }
+.edu-classes-pulse .pulse-classes-directory .atlas-section-header { padding:15px 18px 12px!important; background:var(--ds-subtle)!important; }
+.edu-classes-pulse .pulse-classes-directory .atlas-section-header :is(h2,h3) { color:var(--ds-ink)!important; font-family:var(--ds-font-heading); font-weight:900; }
+.edu-classes-pulse .pulse-classes-groups { padding:0 18px 4px; }
+.edu-classes-pulse .pulse-classes-group { min-height:82px; padding:12px 0!important; border:0!important; border-top:2px solid var(--ds-border)!important; border-radius:0!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; }
+.edu-classes-pulse .pulse-classes-group:hover { background:var(--ds-blue-soft)!important; }
+.edu-classes-pulse .pulse-classes-group h4 { color:var(--ds-ink)!important; font-family:var(--ds-font-heading); font-weight:900; }
+.edu-classes-pulse .pulse-classes-group>div:first-child span { display:inline-flex; min-height:24px; align-items:center; padding:2px 8px; border-radius:999px; background:var(--ds-purple-soft)!important; color:var(--ds-purple-ink)!important; }
+.edu-classes-pulse .pulse-classes-group>div:nth-child(2),.edu-classes-pulse .pulse-classes-group>div:nth-child(2) svg { color:var(--ds-muted)!important; }
+.edu-classes-pulse .pulse-classes-group>div:last-child>.edu-ds-status[data-edu-accent='green'] { border:2px solid var(--ds-green)!important; background:var(--ds-green-soft)!important; color:var(--ds-green-ink)!important; font-family:var(--ds-font-heading); font-weight:900; }
+@media(max-width:800px) { .edu-classes-pulse .pulse-classes-facts { grid-template-columns:1fr 1fr; } .edu-classes-pulse .pulse-classes-facts>div:last-child { grid-column:1 / -1; } }
+
+/* Classes controls and access review share the canonical light/dark tokens. */
+.edu-classes-pulse .edu-classes-search { position:relative; width:100%; max-width:360px; }
+.edu-classes-pulse .edu-classes-search svg { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--ds-muted); pointer-events:none; }
+.edu-classes-pulse .edu-classes-search input { width:100%; min-height:44px; padding:9px 12px 9px 40px; border:2px solid var(--ds-border); border-radius:var(--ds-radius-control); background:var(--ds-surface); color:var(--ds-ink); }
+.edu-classes-pulse .edu-classes-search input::placeholder { color:var(--ds-muted); opacity:1; }
+.edu-classes-pulse .edu-classes-filters { display:flex; width:100%; gap:8px; overflow-x:auto; padding:2px 2px 5px; }
+.edu-classes-pulse .edu-classes-filters button { flex:0 0 auto; min-height:44px; padding:8px 12px; border:2px solid var(--ds-border); border-bottom:4px solid var(--ds-depth); border-radius:var(--ds-radius-control); background:var(--ds-surface); color:var(--ds-muted); font:900 13px var(--ds-font-heading); }
+.edu-classes-pulse .edu-classes-filters button[aria-pressed='true'] { border-color:var(--ds-blue-edge); background:var(--ds-blue); color:var(--ds-on-color); }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-classes-pulse .atlas-toolbar .edu-classes-filters button[aria-pressed='true'] { border-color:var(--ds-blue-edge)!important; background:var(--ds-blue)!important; color:var(--ds-on-color)!important; }
+.edu-classes-pulse .edu-classes-v1__mobile-roster-head .edu-ds-status { justify-self:end; }
+.edu-classes-pulse .edu-classes-v1__mobile-roster article>.edu-ds-status { margin-top:9px; }
+.edu-classes-pulse .edu-classes-v1__mobile-avatar { border-color:var(--ds-green); background:var(--ds-green-soft); color:var(--ds-green-ink); }
+.edu-classes-pulse .edu-classes-v1__mobile-contact { border-color:var(--ds-border); }
+.edu-classes-pulse .edu-classes-v1__mobile-roster article>button { border:2px solid var(--ds-border); border-bottom:4px solid var(--ds-depth); color:var(--ds-ink); background:var(--ds-surface); font:900 13px var(--ds-font-heading); }
+.edu-classes-pulse .edu-classes-v1__mobile-roster article { border:2px solid var(--ds-border); background:var(--ds-subtle); }
+.edu-classes-access { color:var(--ds-ink); }
+.edu-classes-access__intro { color:var(--ds-muted); font-size:14px; line-height:1.5; }
+.edu-classes-access__select-all { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:12px; border:2px solid var(--ds-border); border-radius:var(--ds-radius-control); background:var(--ds-subtle); }
+.edu-classes-access__select-all label,.edu-classes-access__row label { display:flex; min-width:0; align-items:center; gap:11px; cursor:pointer; }
+.edu-classes-access__select-all label { color:var(--ds-ink); font:900 14px var(--ds-font-heading); }
+.edu-classes-access__select-all span { color:var(--ds-muted); font-size:12px; }
+.edu-classes-access input[type='checkbox'] { width:20px; height:20px; flex:0 0 auto; accent-color:var(--ds-blue); }
+.edu-classes-access__list { max-height:50dvh; overflow-y:auto; border:2px solid var(--ds-border); border-radius:var(--ds-radius-control); }
+.edu-classes-access__row { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:12px; padding:12px; border-bottom:1px solid var(--ds-border); }
+.edu-classes-access__row:last-child { border-bottom:0; }
+.edu-classes-access__row:hover { background:var(--ds-blue-soft); }
+.edu-classes-access__row label { flex:1; }
+.edu-classes-access__row label>span { min-width:0; }
+.edu-classes-access__row strong,.edu-classes-access__row small { display:block; overflow-wrap:anywhere; }
+.edu-classes-access__row strong { color:var(--ds-ink); font-size:14px; }
+.edu-classes-access__row small { color:var(--ds-muted); font-size:12px; }
+.edu-classes-access__row[data-ready='false'] label { cursor:default; }
+.edu-classes-access__row .edu-ds-button { flex:0 0 auto; }
+.edu-classes-access__print { width:100%; }
+@media(max-width:640px) {
+ .edu-classes-pulse .edu-classes-search { max-width:none; }
+ .edu-classes-pulse .edu-classes-v1__mobile-roster-head { grid-template-columns:40px minmax(0,1fr); }
+ .edu-classes-pulse .edu-classes-v1__mobile-roster-head .edu-ds-status { grid-column:2; justify-self:start; }
+ .edu-classes-access__row { align-items:flex-start; flex-direction:column; }
+ .edu-classes-access__row .edu-ds-button { align-self:flex-end; }
+}
+@media(prefers-reduced-motion:reduce) { .edu-classes-pulse *, .edu-classes-access * { animation:none!important; transition:none!important; } }

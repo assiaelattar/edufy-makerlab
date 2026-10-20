@@ -7,7 +7,7 @@ import { collection, updateDoc, doc, serverTimestamp, writeBatch } from 'firebas
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
+import { EducationButton, EducationState, EducationStatusPill, EducationTabs } from '../components/education-ui/EducationPrimitives';
 import './school-day/education-school-day-v1.css';
 import './school-day/education-calendar-playful.css';
 import { Modal } from '../components/Modal';
@@ -299,40 +299,21 @@ export const CalendarView = () => {
     };
 
     return (
-        <div className={`space-y-6 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-calendar-v1' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-calendar-v1' : undefined}>
-            <AtlasCommandHeader
-                eyebrow="Daily operations"
-                title="School schedule"
-                description="Coordinate classes, workshops, and instructor coverage from one weekly schedule."
-                icon={CalendarIcon}
-                badges={
-                    <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-300">
-                        {format(weekStart, 'MMM d')} - {format(addDays(weekStart, 6), 'MMM d')}
-                    </span>
-                }
-                actions={
-                    <>
-                    {can('attendance.manage') && <button
-                        type="button"
-                        onClick={handleSyncWeek}
-                        disabled={isGenerating}
-                        title="Create missing sessions from active class groups and workshop slots"
-                        className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/25 bg-teal-400/10 px-4 py-2 text-sm font-bold text-teal-200 transition-colors hover:bg-teal-400/15 disabled:opacity-50"
-                    >
-                        <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
-                        Sync Week
-                    </button>}
-                    
-                    <div className="flex min-h-10 items-center rounded-lg border border-white/10 bg-slate-900 p-1">
-                        <button type="button" onClick={() => setCurrentDate(subWeeks(currentDate, 1))} className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white" title="Previous week" aria-label="Previous week"><ChevronLeft size={18} /></button>
-                        <button type="button" onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-xs font-bold text-slate-200 hover:text-white">
-                            Today
-                        </button>
-                        <button type="button" onClick={() => setCurrentDate(addWeeks(currentDate, 1))} className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white" title="Next week" aria-label="Next week"><ChevronRight size={18} /></button>
+        <div className="edu-v1 edu-calendar-v1 space-y-6 pb-24 md:pb-8" data-edu-system="1" data-testid="education-calendar-v1">
+            <header className="edu-calendar-header">
+                <div className="edu-calendar-header__identity"><CalendarIcon size={22} aria-hidden="true" /><span>Daily operations</span></div>
+                <h1>School schedule</h1>
+                <p>Coordinate classes, workshops, and instructor coverage from one weekly schedule.</p>
+                <div className="edu-calendar-header__actions">
+                    <EducationStatusPill status="success">{format(weekStart, 'MMM d')} – {format(addDays(weekStart, 6), 'MMM d')}</EducationStatusPill>
+                    <div className="edu-calendar-week-nav" role="group" aria-label="Week navigation">
+                        <EducationButton variant="secondary" onClick={() => setCurrentDate(subWeeks(currentDate, 1))} title="Previous week" aria-label="Previous week"><ChevronLeft size={18} /></EducationButton>
+                        <EducationButton variant="secondary" onClick={() => setCurrentDate(new Date())}>Today</EducationButton>
+                        <EducationButton variant="secondary" onClick={() => setCurrentDate(addWeeks(currentDate, 1))} title="Next week" aria-label="Next week"><ChevronRight size={18} /></EducationButton>
                     </div>
-                    </>
-                }
-            />
+                    {can('attendance.manage') && <EducationButton variant="primary" icon={RefreshCw} onClick={handleSyncWeek} disabled={isGenerating} title="Create missing sessions from active class groups and workshop slots">{isGenerating ? 'Syncing week…' : 'Sync week'}</EducationButton>}
+                </div>
+            </header>
 
             {showEducationSchoolDayV1 && <div className="edu-school-day-v1__focus" data-attention={Boolean(firstCoverageGap)} role="region" aria-label="Schedule priority">
                 <div className="edu-school-day-v1__focus-copy">
@@ -341,25 +322,22 @@ export const CalendarView = () => {
                     <p>{firstCoverageGap ? `${firstCoverageGap.date} · ${firstCoverageGap.startTime} · ${firstCoverageGap.title}` : nextSession ? `Next: ${nextSession.date} · ${nextSession.startTime} · ${nextSession.title}` : can('attendance.manage') ? 'Synchronize the week to create sessions from active groups and workshops.' : 'No class or workshop sessions are available for this week.'}</p>
                 </div>
                 <div className="edu-school-day-v1__focus-actions">
-                    {(firstCoverageGap || nextSession) && <button type="button" className="edu-school-day-v1__focus-primary" onClick={() => openSession((firstCoverageGap || nextSession)!)}>{firstCoverageGap && can('attendance.manage') ? 'Assign instructor' : 'Review session'} <ChevronRight size={16} /></button>}
-                    {!nextSession && can('attendance.manage') && <button type="button" className="edu-school-day-v1__focus-primary" onClick={handleSyncWeek} disabled={isGenerating}>Sync week</button>}
+                    {(firstCoverageGap || nextSession) && <EducationButton variant="primary" onClick={() => openSession((firstCoverageGap || nextSession)!)}>{firstCoverageGap && can('attendance.manage') ? 'Assign instructor' : 'Review session'} <ChevronRight size={16} /></EducationButton>}
+                    {!nextSession && can('attendance.manage') && <EducationButton variant="primary" onClick={handleSyncWeek} disabled={isGenerating}>Sync week</EducationButton>}
                 </div>
             </div>}
 
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <AtlasSignalCard label="Week sessions" value={calendarSignals.sessions} detail="Classes and workshops" icon={CalendarIcon} tone="teal" />
-                <AtlasSignalCard label="Assigned" value={calendarSignals.assigned} detail="Instructor assigned" icon={UserPlus} tone="emerald" />
-                <AtlasSignalCard label="Coverage gaps" value={calendarSignals.unassigned} detail="Needs an instructor" icon={AlertTriangle} tone={calendarSignals.unassigned > 0 ? 'amber' : 'slate'} onClick={showEducationSchoolDayV1 ? () => { setCoverageFilter('unassigned'); setScheduleView('agenda'); } : undefined} />
-                <AtlasSignalCard label="Workshops" value={calendarSignals.workshops} detail="Trial and Make & Go" icon={Users} tone="blue" />
+                <div className="edu-calendar-metric"><CalendarIcon aria-hidden="true"/><span>Week sessions</span><strong>{calendarSignals.sessions}</strong><small>Classes and workshops</small></div>
+                <div className="edu-calendar-metric"><UserPlus aria-hidden="true"/><span>Assigned</span><strong>{calendarSignals.assigned}</strong><small>Instructor assigned</small></div>
+                <button type="button" className="edu-calendar-metric" data-attention={calendarSignals.unassigned > 0} onClick={() => { setCoverageFilter('unassigned'); setScheduleView('agenda'); }}><AlertTriangle aria-hidden="true"/><span>Coverage gaps</span><strong>{calendarSignals.unassigned}</strong><small>View sessions needing an instructor</small></button>
+                <div className="edu-calendar-metric"><Users aria-hidden="true"/><span>Workshops</span><strong>{calendarSignals.workshops}</strong><small>Trial and Make & Go</small></div>
             </div>
 
             {showEducationSchoolDayV1 && <section className="edu-calendar-tools" aria-label="Schedule controls">
                 <div className="edu-calendar-tools__top">
                     <div><span className="edu-calendar-eyebrow">Your week at a glance</span><h3>{format(weekStart, 'd MMM')} – {format(addDays(weekStart, 6), 'd MMM yyyy')}</h3></div>
-                    <div className="edu-calendar-view" role="group" aria-label="Schedule view">
-                        <button type="button" aria-pressed={scheduleView === 'week'} onClick={() => setScheduleView('week')}><LayoutGrid size={16} />Week</button>
-                        <button type="button" aria-pressed={scheduleView === 'agenda'} onClick={() => setScheduleView('agenda')}><List size={16} />Agenda</button>
-                    </div>
+                    <EducationTabs label="Schedule view" value={scheduleView} onChange={value => setScheduleView(value as typeof scheduleView)} items={[{id:'week',label:'Week',icon:LayoutGrid},{id:'agenda',label:'Agenda',icon:List}]} />
                 </div>
                 <div className="edu-calendar-filters">
                     <label className="edu-calendar-search"><span>Find a session</span><div><Search size={17} /><input type="search" value={sessionQuery} onChange={event => setSessionQuery(event.target.value)} placeholder="Session, group or instructor" /></div></label>
@@ -370,8 +348,9 @@ export const CalendarView = () => {
                 <div className="edu-calendar-results"><span role="status">Showing {filteredEvents.length} of {events.length} sessions this week</span>{hasFilters && <button type="button" onClick={clearFilters}><X size={14} />Clear filters</button>}<span>Weekly totals above include all sessions.</span></div>
             </section>}
 
+            <section role={showEducationSchoolDayV1 ? 'tabpanel' : undefined} id={showEducationSchoolDayV1 ? `schedule-view-panel-${scheduleView}` : undefined} aria-labelledby={showEducationSchoolDayV1 ? `schedule-view-${scheduleView}` : undefined}>
             {showEducationSchoolDayV1 && filteredEvents.length === 0 ? (
-                <AtlasEmptyState icon={CalendarIcon} title={hasFilters && events.length ? 'No matching sessions' : 'No sessions this week'} description={hasFilters && events.length ? 'Try another session, instructor or filter.' : can('attendance.manage') ? 'Choose another week, or sync the timetable to create missing sessions from active groups and workshops.' : 'Choose another week, or ask an attendance manager to prepare the timetable.'} action={hasFilters ? <AtlasActionButton onClick={clearFilters}>Clear filters</AtlasActionButton> : <AtlasActionButton onClick={() => setCurrentDate(new Date())}>Go to this week</AtlasActionButton>} />
+                <EducationState title={hasFilters && events.length ? 'No matching sessions' : 'No sessions this week'} description={hasFilters && events.length ? 'Try another session, instructor or filter.' : can('attendance.manage') ? 'Choose another week, or sync the timetable to create missing sessions from active groups and workshops.' : 'Choose another week, or ask an attendance manager to prepare the timetable.'}>{hasFilters ? <EducationButton onClick={clearFilters}>Clear filters</EducationButton> : <EducationButton onClick={() => setCurrentDate(new Date())}>Go to this week</EducationButton>}</EducationState>
             ) : showEducationSchoolDayV1 && scheduleView === 'agenda' ? (
                 <div className="edu-calendar-agenda" aria-label="Weekly agenda">
                     {weekDays.filter(day => getEventsForDay(day).length > 0).map(day => (
@@ -417,25 +396,26 @@ export const CalendarView = () => {
             </div>
 
             )}
+            </section>
 
-            <Modal isOpen={Boolean(assignModalSession)} onClose={() => !isAssigning && setAssignModalSession(null)} title={can('attendance.manage') ? 'Assign instructor' : 'Session details'}>
+            <Modal designSystem isOpen={Boolean(assignModalSession)} onClose={() => !isAssigning && setAssignModalSession(null)} title={can('attendance.manage') ? 'Assign instructor' : 'Session details'}>
                 {assignModalSession && (
                     <div className="space-y-4">
-                        <div className="rounded-lg border border-white/10 bg-slate-950 p-4 text-sm text-slate-300">
-                            <div className="font-black text-white">{assignModalSession.title}</div>
-                            <div className="mt-1 font-mono text-xs text-slate-400">{assignModalSession.date} · {assignModalSession.startTime} - {assignModalSession.endTime}</div>
+                        <div className="edu-calendar-session-details">
+                            <strong>{assignModalSession.title}</strong>
+                            <time className="block mt-1" dateTime={assignModalSession.date}>{assignModalSession.date} · {assignModalSession.startTime} – {assignModalSession.endTime}</time>
                             <p className="mt-2">{assignModalSession.subTitle}</p>
                             <p className="mt-2">Current instructor: <strong>{assignModalSession.instructorName || (assignModalSession.instructorId ? 'Assigned' : 'Unassigned')}</strong></p>
                         </div>
                         {can('attendance.manage') && <div>
                             <label className="edu-calendar-instructor-search"><span>Find an instructor</span><input type="search" value={instructorQuery} onChange={event => setInstructorQuery(event.target.value)} placeholder="Name or role" /></label>
-                            <p className="mb-3 text-xs font-bold uppercase text-slate-500">Available instructors</p>
+                            <p className="mb-3 text-sm font-bold">Available instructors</p>
                             {assignableTeam.length === 0 ? (
-                                <AtlasEmptyState title="No instructors available" description="Add an instructor or administrator to the team before assigning coverage." icon={Users} />
+                                <EducationState title="No instructors available" description="Add an instructor or administrator to the team before assigning coverage." />
                             ) : visibleInstructors.length === 0 ? (
-                                <AtlasEmptyState title="No matching instructors" description="Try another name or clear the search." icon={Users} action={<AtlasActionButton onClick={() => setInstructorQuery('')}>Clear search</AtlasActionButton>} />
+                                <EducationState title="No matching instructors" description="Try another name or clear the search."><EducationButton onClick={() => setInstructorQuery('')}>Clear search</EducationButton></EducationState>
                             ) : (
-                            <div className="max-h-[300px] space-y-2 overflow-y-auto">
+                            <div className="edu-calendar-instructors">
                                 {visibleInstructors.map(teamMember => (
                                     <button
                                         type="button"
@@ -443,7 +423,7 @@ export const CalendarView = () => {
                                         disabled={isAssigning}
                                         aria-pressed={assignModalSession.instructorId === teamMember.uid}
                                         onClick={() => handleAssignInstructor(teamMember.uid)}
-                                        className={`w-full rounded-lg border px-4 py-3 text-left font-bold transition-colors disabled:cursor-wait disabled:opacity-50 ${assignModalSession.instructorId === teamMember.uid ? 'border-teal-300/50 bg-teal-400/10 text-teal-100' : 'border-white/10 bg-slate-900 text-slate-300 hover:border-white/20'}`}
+                                        className="w-full font-bold"
                                     >
                                         {teamMember.name} <span className="ml-2 text-xs font-normal opacity-70">({teamMember.role})</span>
                                     </button>
@@ -452,9 +432,9 @@ export const CalendarView = () => {
                             )}
                         </div>}
                         {can('attendance.manage') && <div className="flex justify-end border-t border-white/10 pt-4">
-                            <AtlasActionButton variant={assignModalSession.instructorId ? 'danger' : 'secondary'} disabled={isAssigning || !assignModalSession.instructorId} onClick={() => handleAssignInstructor('')}>
+                            <EducationButton variant="secondary" status={assignModalSession.instructorId ? 'danger' : 'neutral'} disabled={isAssigning || !assignModalSession.instructorId} onClick={() => handleAssignInstructor('')}>
                                 {isAssigning ? 'Saving...' : 'Remove assignment'}
-                            </AtlasActionButton>
+                            </EducationButton>
                         </div>}
                     </div>
                 )}

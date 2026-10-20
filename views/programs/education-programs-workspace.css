@@ -43,6 +43,17 @@
 [data-edu-system="1"] [role="tabpanel"] table :is(th,td) { padding:16px; border-bottom:1px solid var(--ds-border); }
 [data-edu-system="1"] [role="tabpanel"] table tbody tr { background:var(--ds-surface)!important; }
 [data-edu-system="1"] [role="tabpanel"] table tbody tr:hover { background:var(--ds-subtle)!important; }
+/* The older Programs stylesheet includes literal light colors. Keep its panel structure
+   while resolving those utility surfaces through the active Design System theme. */
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] :is(section,article,details),
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] :is(section,article,details)[class*="bg-slate"] { color:var(--ds-ink)!important; background:var(--ds-surface)!important; border-color:var(--ds-border)!important; }
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] [class*="bg-slate"]:not(section):not(article):not(details) { color:var(--ds-ink)!important; background:var(--ds-subtle)!important; border-color:var(--ds-border)!important; }
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] :is([class*="text-white"],[class*="text-slate-2"],[class*="text-slate-3"]) { color:var(--ds-ink)!important; }
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] :is([class*="text-slate-4"],[class*="text-slate-5"],[class*="text-slate-6"]) { color:var(--ds-muted)!important; }
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] :is([class*="border-white"],[class*="border-slate"]) { border-color:var(--ds-border)!important; }
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] [class*="divide-white"] > :not([hidden]) ~ :not([hidden]),
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] [class*="divide-slate"] > :not([hidden]) ~ :not([hidden]) { border-color:var(--ds-border)!important; }
+.edu-program-details-v1[data-edu-system="1"] [role="tabpanel"] thead { color:var(--ds-muted)!important; background:var(--ds-subtle)!important; }
 [data-edu-system="1"] [data-program-tab="financials"] .atlas-signal-card { background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-bottom-width:4px!important; border-radius:18px; }
 [data-edu-system="1"] [data-program-tab="financials"] .atlas-signal-icon-well { color:var(--ds-blue-ink)!important; background:var(--ds-blue-soft)!important; border-radius:12px; }
 [data-edu-system="1"] [data-program-tab="financials"] [data-atlas-tone="amber"] .atlas-signal-icon-well { color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; }
@@ -81,4 +92,116 @@
   [data-edu-system="1"] .program-roster-tools { padding:14px; }
   [data-edu-system="1"] .program-roster-tools label { flex:1 1 100%; }
   [data-edu-system="1"] [data-program-tab="resources"] section { padding:16px; }
+}
+
+/* Complete the color roles inside existing Programs panels and portal dialogs. */
+[data-edu-system="1"] .edu-programs-v1__program-attention .text-amber-100 { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] .edu-programs-v1__program[data-attention="true"] .edu-programs-v1__program-attention { background:var(--ds-orange-soft); border-color:var(--ds-orange-edge); }
+[data-edu-system="1"] .edu-programs-v1__program[data-attention="true"] .edu-programs-v1__program-attention > span:first-child { background:var(--ds-orange)!important; }
+
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority) {
+  color:var(--ds-ink)!important; background:var(--ds-surface)!important;
+  border-color:var(--ds-border)!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority) :is(strong,small,p,em) { color:var(--ds-ink)!important; }
+[data-edu-system="1"] :is(.edu-programs-v1__focus-icon,.edu-program-details-v1__priority-icon) {
+  color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; border-color:var(--ds-purple-edge)!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority)[data-attention="true"] {
+  color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important;
+}
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority)[data-attention="true"] :is(strong,small,p,em) { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] :is(.edu-programs-v1__focus,.edu-program-details-v1__priority)[data-attention="true"] :is(.edu-programs-v1__focus-icon,.edu-program-details-v1__priority-icon) {
+  color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important;
+}
+
+[data-edu-system="1"] [data-program-tab="overview"] .bg-slate-800 { background:var(--ds-subtle)!important; }
+[data-edu-system="1"] [data-program-tab="overview"] .bg-teal-400 { background:var(--ds-green)!important; }
+[data-edu-system="1"] [data-program-tab="overview"] .text-teal-300 { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] [data-program-tab="overview"] .text-emerald-300 { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] [data-program-tab="overview"] .bg-teal-400\/10 { background:var(--ds-green-soft)!important; }
+[data-edu-system="1"] [data-program-tab="overview"] .bg-slate-950 { background:var(--ds-subtle)!important; }
+[data-edu-system="1"] [data-program-tab="overview"] summary { border-radius:16px; }
+.edu-program-details-v1[data-edu-system="1"] [data-program-tab="overview"] :is(section,details) { color:var(--ds-ink)!important; background:var(--ds-surface)!important; border-color:var(--ds-border)!important; }
+.edu-program-details-v1[data-edu-system="1"] [data-program-tab="overview"] :is(section,details)[class*="bg-slate"] { background:var(--ds-surface)!important; }
+.edu-program-details-v1[data-edu-system="1"] [data-program-tab="overview"] [class*="bg-slate"]:not(section):not(details) { color:var(--ds-ink)!important; background:var(--ds-subtle)!important; border-color:var(--ds-border)!important; }
+.edu-program-details-v1[data-edu-system="1"] [data-program-tab="overview"] :is([class*="text-white"],[class*="text-slate-2"],[class*="text-slate-3"]) { color:var(--ds-ink)!important; }
+.edu-program-details-v1[data-edu-system="1"] [data-program-tab="overview"] :is([class*="text-slate-4"],[class*="text-slate-5"],[class*="text-slate-6"]) { color:var(--ds-muted)!important; }
+.edu-program-details-v1[data-edu-system="1"] [data-program-tab="overview"] :is([class*="border-white"],[class*="border-slate"]) { border-color:var(--ds-border)!important; }
+
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__preview { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; border-color:var(--ds-purple-edge)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__date { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__missing-offer { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__check { background:var(--ds-subtle)!important; border-color:var(--ds-border)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__check[data-ready="true"] svg { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__check[data-ready="false"] svg { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__guidance { background:var(--ds-blue-soft)!important; border-color:var(--ds-blue-edge)!important; }
+[data-edu-system="1"] [data-program-tab="operations"] .program-run-plan__guidance > div svg { color:var(--ds-blue-ink)!important; }
+
+[data-edu-system="1"] [data-program-tab="classes"] [data-group-status] { display:inline-flex; padding:4px 8px; border:1px solid var(--ds-green-edge); border-radius:10px; color:var(--ds-green-ink)!important; background:var(--ds-green-soft)!important; }
+[data-edu-system="1"] [data-program-tab="classes"] [data-group-status="attention"] { color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important; }
+[data-edu-system="1"] [data-program-tab="classes"] [data-group-status="full"] { color:var(--ds-blue-ink)!important; background:var(--ds-blue-soft)!important; border-color:var(--ds-blue-edge)!important; }
+[data-edu-system="1"] [data-program-tab="classes"] .text-amber-200 { color:var(--ds-orange-ink)!important; }
+
+[data-edu-system="1"] [data-program-tab="students"] article[data-placement="unplaced"] { background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important; }
+[data-edu-system="1"] [data-program-tab="students"] .text-amber-200 { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] [data-program-tab="students"] .text-teal-300 { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] [data-program-tab="students"] thead { background:var(--ds-subtle)!important; }
+
+[data-edu-system="1"] [data-program-tab="waiting-list"] .program-waiting-status { color:var(--ds-orange-ink)!important; background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important; border-radius:10px; }
+[data-edu-system="1"] [data-program-tab="waiting-list"] article > div:nth-child(2) { background:var(--ds-subtle)!important; border-color:var(--ds-border)!important; }
+[data-edu-system="1"] [data-program-tab="waiting-list"] [data-program-action="primary"] { min-height:44px; color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border:2px solid var(--ds-blue-edge)!important; border-bottom-width:4px!important; border-radius:var(--ds-radius-control)!important; }
+[data-edu-system="1"] [data-program-tab="waiting-list"] article .text-amber-500 { color:var(--ds-orange-ink)!important; }
+
+[data-edu-system="1"] [data-program-tab="financials"] .text-emerald-300 { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] [data-program-tab="financials"] .text-amber-200,
+[data-edu-system="1"] [data-program-tab="financials"] [data-tone="due"] { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] [data-program-tab="financials"] .edu-program-details-v1__mobile-balances [data-tone="paid"],
+[data-edu-system="1"] [data-program-tab="financials"] .edu-program-details-v1__mobile-balances [data-tone="clear"] { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"] [data-program-tab="financials"] table button,
+[data-edu-system="1"] [data-program-tab="financials"] .edu-program-details-v1__mobile-balances button { color:var(--ds-blue-ink)!important; background:var(--ds-blue-soft)!important; border:2px solid var(--ds-blue-edge)!important; border-bottom-width:4px!important; }
+[data-edu-system="1"] [data-program-tab="financials"] .edu-program-details-v1__mobile-balances article { background:var(--ds-surface)!important; }
+
+[data-edu-system="1"] [data-program-tab="resources"] section > div:first-child > div:first-child { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; }
+[data-edu-system="1"] [data-program-tab="resources"] section > div:first-child + div { background:var(--ds-subtle)!important; border-color:var(--ds-border)!important; }
+[data-edu-system="1"] [data-program-tab="resources"] section .space-y-3 > :is(button,a) { min-height:64px; color:var(--ds-ink)!important; background:var(--ds-subtle)!important; border:2px solid var(--ds-border)!important; border-bottom-width:4px!important; border-radius:14px!important; text-decoration:none; }
+[data-edu-system="1"] [data-program-tab="resources"] section .space-y-3 > :is(button,a):hover { border-color:var(--ds-blue)!important; }
+[data-edu-system="1"] [data-program-tab="resources"] section .space-y-3 > :is(button,a) svg { color:var(--ds-blue-ink)!important; }
+[data-edu-system="1"] [data-program-tab="resources"] section .space-y-3 > :is(button,a):disabled { opacity:.55; }
+
+[data-edu-system="1"].atlas-dialog-backdrop .program-qr-access > div:nth-child(2) { background:#fff!important; border:2px solid var(--ds-border)!important; border-radius:18px!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-qr-access button,
+[data-edu-system="1"].atlas-dialog-backdrop .program-quote-form button { min-height:44px; border:2px solid var(--ds-border); border-bottom-width:4px; border-radius:var(--ds-radius-control); color:var(--ds-ink)!important; background:var(--ds-surface)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-qr-access button:first-child,
+[data-edu-system="1"].atlas-dialog-backdrop .program-quote-form button:last-child { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border-color:var(--ds-blue-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-quote-form label { color:var(--ds-ink)!important; font-size:13px; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-quote-form label:has(input:checked) { color:var(--ds-purple-ink)!important; background:var(--ds-purple-soft)!important; border-color:var(--ds-purple-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-quote-form label:has(input:checked) > div > div { color:var(--ds-on-color)!important; background:var(--ds-purple)!important; border-color:var(--ds-purple-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-quote-form [role="alert"] { color:var(--ds-red-ink)!important; background:var(--ds-red-soft)!important; border-color:var(--ds-red-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form section { border:2px solid var(--ds-border)!important; background:var(--ds-surface)!important; border-radius:18px!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form section > div:first-child { border-color:var(--ds-border)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form label:has(input:checked) { background:var(--ds-purple-soft)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form label:has(input:checked) > span:first-child { color:var(--ds-on-color)!important; background:var(--ds-purple)!important; border-color:var(--ds-purple-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form > div:nth-last-child(2) { color:var(--ds-green-ink)!important; background:var(--ds-green-soft)!important; border-color:var(--ds-green-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form > div:nth-last-child(2) :is(p,svg) { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-dialog-footer { background:var(--ds-surface)!important; border-color:var(--ds-border)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form [class*="text-rose"],
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-red"] { color:var(--ds-red-ink)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form [class*="bg-rose"],
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="bg-red"] { background:var(--ds-red-soft)!important; border-color:var(--ds-red-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard footer { background:var(--ds-surface)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-teal-100"],
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-teal-200"] { color:var(--ds-green-ink)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-sky-100"],
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-sky-200"] { color:var(--ds-blue-ink)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-amber-100"],
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="text-amber-200"] { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="bg-sky-300/"] { background:var(--ds-blue-soft)!important; border-color:var(--ds-blue-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="bg-teal-300/"] { background:var(--ds-green-soft)!important; border-color:var(--ds-green-edge)!important; }
+[data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard [class*="bg-amber-300/"] { background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important; }
+
+@media (prefers-reduced-motion:reduce) {
+  [data-edu-system="1"] .program-run-plan *,
+  [data-edu-system="1"].atlas-dialog-backdrop .program-rollover-form *,
+  [data-edu-system="1"].atlas-dialog-backdrop .program-setup-wizard * { animation-duration:.01ms!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
 }

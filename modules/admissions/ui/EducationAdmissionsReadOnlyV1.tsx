@@ -291,7 +291,7 @@ export const EducationAdmissionsReadOnlyV1 = ({
 
           <div className="edu-admissions-v1__case-list" id="admissions-case-list" aria-live="polite">
             {visibleCases.length === 0 ? (
-              <div className="edu-admissions-v1__empty"><Search size={24} /><strong>No family matches this view</strong><span>Clear the search or choose another journey stage.</span><button type="button" onClick={resetCurrentView}>Reset this view</button></div>
+              <div className="edu-admissions-v1__empty"><Search size={24} /><strong>{projection.cases.length === 0 ? 'No family inquiries yet' : 'No family matches this view'}</strong><span>{projection.cases.length === 0 ? 'New inquiries will appear here after they are recorded in Marketing.' : 'Clear the search or choose another journey stage.'}</span>{projection.cases.length > 0 && <button type="button" onClick={resetCurrentView}>Reset this view</button>}</div>
             ) : visibleCases.map(admissionCase => (
               <button
                 key={admissionCase.id}

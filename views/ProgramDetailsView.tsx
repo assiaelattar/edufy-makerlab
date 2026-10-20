@@ -24,6 +24,7 @@ import './programs/education-programs-v1.css';
 import './programs/education-programs-playful.css';
 import './programs/education-programs-workspace.css';
 import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
+import { EducationTabs, type EducationTabItem } from '../components/education-ui/EducationPrimitives';
 
 interface ProgramDetailsViewProps {
     onEnrollLead?: (lead: Lead) => void;
@@ -451,7 +452,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                                     <div className="min-w-0">
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <p className="truncate text-sm font-black text-white">{item.group.name || 'Unnamed group'}</p>
-                                                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${needsAttention ? 'bg-amber-300/10 text-amber-200' : isFull ? 'bg-sky-400/10 text-sky-300' : 'bg-teal-400/10 text-teal-300'}`}>{needsAttention ? 'Setup needed' : isFull ? 'Full' : 'Ready'}</span>
+                                                            <span data-group-status={needsAttention ? 'attention' : isFull ? 'full' : 'ready'} className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${needsAttention ? 'bg-amber-300/10 text-amber-200' : isFull ? 'bg-sky-400/10 text-sky-300' : 'bg-teal-400/10 text-teal-300'}`}>{needsAttention ? 'Setup needed' : isFull ? 'Full' : 'Ready'}</span>
                                                         </div>
                                                         <p className={`mt-1 flex items-center gap-1.5 text-xs ${item.isScheduled ? 'text-slate-400' : 'text-amber-200'}`}><Clock size={13} />{item.isScheduled ? `${item.group.day} / ${item.group.time}` : 'Day or time missing'}</p>
                                                     </div>
@@ -562,7 +563,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                                 <div className="text-xs text-slate-400">{lead.phone}</div>
                                             </div>
                                         </div>
-                                        <span className="text-[10px] uppercase font-bold bg-amber-500/10 text-amber-500 px-2 py-1 rounded border border-amber-500/20">
+                                        <span className="program-waiting-status text-[10px] uppercase font-bold bg-amber-500/10 text-amber-500 px-2 py-1 rounded border border-amber-500/20">
                                             {lead.status}
                                         </span>
                                     </div>
@@ -853,7 +854,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                         ))}
                     </div>
                     {program.status === 'active' && (
-                        <div className="edu-program-details-v1__priority">
+                        <div className="edu-program-details-v1__priority" data-attention={readinessPercent < 100 || programLeads.length > 0}>
                             <span className="edu-program-details-v1__priority-icon"><NextActionIcon size={19} /></span>
                             <span className="edu-program-details-v1__priority-copy">
                                 <small>Next best action</small>
@@ -950,36 +951,24 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                 ))}
             </section>}
 
-            <div role="tablist" aria-label="Program workspace" className="custom-scrollbar sticky top-0 z-20 flex gap-1 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/95 p-1.5 shadow-lg shadow-slate-950/20 backdrop-blur">
-                {[
+            <EducationTabs
+                sticky
+                className="program-workspace-tabs custom-scrollbar"
+                label="Program workspace"
+                idPrefix="program-tab"
+                panelId="program-tab-panel"
+                value={activeTab}
+                onChange={id => setActiveTab(id as typeof activeTab)}
+                items={([
                     { id: 'overview', label: 'Overview', icon: LayoutGrid },
                     { id: 'operations', label: 'Run plan', icon: CalendarDays },
                     { id: 'classes', label: 'Groups & schedule', icon: CalendarDays, count: activeClassesCount },
                     { id: 'students', label: 'Roster', icon: Users, count: programEnrollments.length },
-                    { id: 'waiting-list', label: 'Waiting', icon: List, count: programLeads.length },
+                    { id: 'waiting-list', label: 'Waiting', icon: List, count: programLeads.length, status: programLeads.length ? 'attention' : 'complete' },
                     { id: 'financials', label: 'Finance', icon: DollarSign },
                     { id: 'resources', label: 'Sharing', icon: LinkIcon },
-                ].map(tab => (
-                    <button
-                        key={tab.id}
-                        type="button"
-                        role="tab"
-                        id={`program-tab-${tab.id}`}
-                        aria-selected={activeTab === tab.id}
-                        aria-controls="program-tab-panel"
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${activeTab === tab.id ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:bg-white/[0.05] hover:text-white'}`}
-                    >
-                        <tab.icon size={18} />
-                        {tab.label}
-                        {tab.count !== undefined && (
-                            <span className={`ml-1 rounded px-1.5 py-0.5 text-[10px] ${activeTab === tab.id ? 'bg-slate-950/20 text-slate-950' : 'bg-white/[0.06] text-slate-300'}`}>
-                                {tab.count}
-                            </span>
-                        )}
-                    </button>
-                ))}
-            </div>
+                ] satisfies EducationTabItem[])}
+            />
 
             <div id="program-tab-panel" role="tabpanel" aria-labelledby={`program-tab-${activeTab}`} data-program-tab={activeTab} className="min-w-0 flex-1">
                 {renderTabContent()}

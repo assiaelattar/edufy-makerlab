@@ -1,5 +1,11 @@
 # Education UI changelog
 
+## 2026-10-20 — Reviewed school module release cut
+
+- Selected the final reviewed Programs, Attendance desk, Classes, Calendar, Admissions/Workshops and shared confirmation presentation from the coordinator branch for a clean main-based release.
+- Added the small Education tab/register/status primitives required by those views, and formatted Programs roster start dates without changing stored dates or exports.
+- Combined production build and focused Education, membership, roster-print and agent checks pass. Finance, Expenses, Pickup, Student Details, Students, Communications, Learning/Portfolio, Team and Marketing remain queued.
+
 ## 2026-10-20 — Scoped Programs release candidate
 
 - Prepared a main-based, display-only fix for raw ISO start dates in desktop and mobile roster rows. It uses the existing date formatter; stored dates and exports are unchanged.

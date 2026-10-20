@@ -103,9 +103,25 @@
 [data-edu-system="1"] .pulse-attendance-marks button svg { color:var(--mark-edge)!important; }
 [data-edu-system="1"] .pulse-attendance-marks button[aria-pressed="true"] { color:var(--mark-ink)!important; background:var(--mark-soft)!important; border-color:var(--mark-edge)!important; border-bottom-color:var(--mark-edge)!important; }
 [data-edu-system="1"] .pulse-attendance-marks button[aria-pressed="true"] svg { color:var(--mark-ink)!important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse[data-edu-system="1"] .pulse-attendance-marks button { color:var(--ds-ink)!important; background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse[data-edu-system="1"] .pulse-attendance-marks button:hover:not(:disabled) { color:var(--mark-ink)!important; background:var(--mark-soft)!important; border-color:var(--mark-edge)!important; }
+.education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse[data-edu-system="1"] .pulse-attendance-marks button[aria-pressed="true"] { color:var(--mark-ink)!important; background:var(--mark-soft)!important; border-color:var(--mark-edge)!important; }
 [data-edu-system="1"] .pulse-attendance-row[aria-busy="true"] { border-left:4px solid var(--ds-yellow); }
 [data-edu-system="1"] .pulse-attendance-renewals { border:2px solid var(--ds-orange-edge)!important; border-radius:16px!important; }
 [data-edu-system="1"] .pulse-attendance-renewals summary { color:var(--ds-orange-ink)!important; }
+[data-edu-system="1"] .pulse-attendance-renewal-panel { overflow:hidden; color:var(--ds-ink); background:var(--ds-surface); border:2px solid var(--ds-border); border-radius:16px; }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:16px; background:var(--ds-subtle); border-bottom:2px solid var(--ds-border); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__head h2 { color:var(--ds-ink); font:900 18px var(--ds-font-heading); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__head p { max-width:65ch; margin-top:4px; color:var(--ds-muted); font:600 13px/1.5 var(--ds-font-body); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__icon,
+[data-edu-system="1"] .pulse-attendance-renewal-panel__student-icon { display:grid; flex:none; place-items:center; width:40px; height:40px; color:var(--ds-orange-ink); background:var(--ds-surface); border:2px solid var(--ds-orange-edge); border-radius:12px; }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__student-icon { width:36px; height:36px; color:var(--ds-blue-ink); border-color:var(--ds-blue-edge); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:12px 16px; }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__row + .pulse-attendance-renewal-panel__row { border-top:1px solid var(--ds-border); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__student-name { overflow-wrap:anywhere; color:var(--ds-ink); font:800 15px var(--ds-font-heading); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__detail { margin-top:2px; color:var(--ds-muted); font:600 12px/1.5 var(--ds-font-body); }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__overdue { color:var(--ds-orange-ink); font-weight:800; }
+[data-edu-system="1"] .pulse-attendance-renewal-panel__row .atlas-action { flex:none; }
 
 @media(max-width:800px) {
   .education-ui-v1-active[data-edu-theme] .edu-attendance-pulse[data-edu-system="1"] .atlas-command-header[data-edu-density="compact"] { padding:18px!important; }

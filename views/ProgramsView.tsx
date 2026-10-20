@@ -105,14 +105,17 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
   const generateQuote = () => {
     if (!devisConfig.parentName.trim()) {
       setDevisError('Enter the parent or client name for the quote.');
+      document.getElementById('quote-parent')?.focus();
       return;
     }
     if (devisConfig.selectedPacks.length === 0) {
       setDevisError('Select at least one pricing plan.');
+      document.querySelector<HTMLInputElement>('.program-quote-form input[type="checkbox"]')?.focus();
       return;
     }
     if (devisConfig.discount < 0) {
       setDevisError('The discount amount cannot be negative.');
+      document.getElementById('quote-discount')?.focus();
       return;
     }
     setDevisError('');
@@ -691,10 +694,10 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       {viewDetailProgramId ? (
       <ProgramDetailsView
         programIdProp={viewDetailProgramId}
-        onEnrollLead={(lead) => {
+        onEnrollLead={onEnrollLead ? (lead) => {
           setViewDetailProgramId(null);
-          if (onEnrollLead) onEnrollLead(lead);
-        }}
+          onEnrollLead(lead);
+        } : undefined}
         onClose={() => setViewDetailProgramId(null)}
         onPrintProgram={triggerPrint}
         onQuoteProgram={openDevisModal}
@@ -742,7 +745,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       />}
 
       {showEducationProgramsV1 && (
-        <section className="edu-programs-v1__focus" aria-label="Next program action">
+        <section className="edu-programs-v1__focus" data-attention={Boolean(portfolioFocus?.needsSetup || portfolioFocus?.openLeads.length)} aria-label="Next program action">
           <span className="edu-programs-v1__focus-icon"><Layers3 size={20} /></span>
           <div>
             <small>Next portfolio action</small>
@@ -845,6 +848,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                   layout
                   key={program.id}
                   data-needs-setup={needsSetup}
+                  data-attention={needsSetup || openLeads.length > 0}
                   data-program-status={program.status}
                   initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -880,7 +884,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                     </div>
 
                     <div className="edu-programs-v1__program-attention flex min-w-0 items-center gap-3">
-                      <span className={`h-2 w-2 shrink-0 rounded-full ${needsSetup ? 'bg-amber-300' : openLeads.length > 0 ? 'bg-sky-300' : 'bg-emerald-300'}`} />
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${needsSetup || openLeads.length > 0 ? 'bg-amber-300' : 'bg-emerald-300'}`} />
                       <span className="min-w-0 flex-1">
                         <span className={`block text-xs font-bold ${needsSetup ? 'text-amber-100' : 'text-slate-300'}`}>{attentionText}</span>
                         <span className="mt-0.5 block truncate text-[11px] text-slate-600">
@@ -1300,6 +1304,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       {/* QR Code Modal for Kiosk */}
       {qrProgram && (
         <Modal designSystem isOpen={!!qrProgram} onClose={() => setQrProgram(null)} title="Kiosk Access Link" size="md">
+          <div className="program-qr-access">
           <div className="text-center mb-6">
             <h3 className="text-xl font-bold text-white">{qrProgram.name}</h3>
             <p className="text-sm text-slate-400">Scan to open the public enrollment form</p>
@@ -1324,6 +1329,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
               {copiedProgramId === qrProgram.id ? 'Copied' : 'Copy Link'}
             </button>
           </div>
+          </div>
         </Modal>
       )}
 
@@ -1339,13 +1345,15 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
       {/* Devis Modal */}
       <Modal designSystem isOpen={isDevisModalOpen} onClose={() => setIsDevisModalOpen(false)} title={`Prepare a quote: ${devisTargetProgram?.name}`} size="md">
         {devisTargetProgram && (
-          <div className="space-y-4">
+          <div className="program-quote-form space-y-4">
             <div>
               <label htmlFor="quote-parent" className="block text-xs font-bold text-slate-400 mb-1">Parent / Client Name</label>
               <input id="quote-parent"
                 className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white outline-none focus:border-teal-400"
                 value={devisConfig.parentName}
                 onChange={e => setDevisConfig(prev => ({ ...prev, parentName: e.target.value }))}
+                aria-invalid={Boolean(devisError && !devisConfig.parentName.trim())}
+                aria-describedby={devisError && !devisConfig.parentName.trim() ? 'program-quote-error' : undefined}
                 placeholder="e.g., M. Dupont" 
                 autoFocus
               />
@@ -1380,7 +1388,7 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                   const isSelected = devisConfig.selectedPacks.includes(pack.name);
                   const price = devisTargetProgram.type === 'Regular Program' ? (pack.priceAnnual || pack.price || 0) : (pack.price || 0);
                   return (
-                    <label key={idx} className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${isSelected ? 'border-teal-400 bg-teal-400/10' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'}`}>
+                    <label key={idx} className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${isSelected ? 'border-teal-400 bg-teal-400/10' : 'border-slate-800 bg-slate-950 hover:bg-slate-900'}`}>
                       <div className="flex items-center gap-3">
                         <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-600'}`}>
                           {isSelected && <Check size={14} className="text-white" />}
@@ -1390,8 +1398,10 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                       <span className="text-sm font-mono text-slate-400">{formatCurrency(price)}</span>
                       <input 
                         type="checkbox" 
-                        className="hidden" 
+                        className="sr-only"
                         checked={isSelected} 
+                        aria-invalid={devisError === 'Select at least one pricing plan.'}
+                        aria-describedby={devisError === 'Select at least one pricing plan.' ? 'program-quote-error' : undefined}
                         onChange={(e) => {
                           if (e.target.checked) {
                             setDevisConfig(prev => ({ ...prev, selectedPacks: [...prev.selectedPacks, pack.name] }));
@@ -1413,11 +1423,13 @@ export const ProgramsView: React.FC<ProgramsViewProps> = ({ onEnrollLead }) => {
                 className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white outline-none focus:border-teal-400"
                 value={devisConfig.discount || ''}
                 onChange={e => setDevisConfig(prev => ({ ...prev, discount: Number(e.target.value) }))}
+                aria-invalid={devisError === 'The discount amount cannot be negative.'}
+                aria-describedby={devisError === 'The discount amount cannot be negative.' ? 'program-quote-error' : undefined}
                 placeholder="e.g., 500" 
               />
             </div>
             {devisError && (
-              <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-200">
+              <div id="program-quote-error" role="alert" className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-200">
                 <AlertCircle className="mt-0.5 shrink-0" size={15} /> {devisError}
               </div>
             )}
