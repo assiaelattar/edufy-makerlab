@@ -2078,7 +2078,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         )}
                     </div>
                     <div className="hidden overflow-x-auto md:block">
-                    <table className="w-full table-fixed border-collapse text-left text-sm">
+                    <table className="edu-finance-v1__balance-table w-full table-fixed border-collapse text-left text-sm">
                         <thead className="bg-slate-900 text-slate-400 text-xs uppercase tracking-wider">
                             <tr>
                                 <th className="p-4">{balanceGrouping === 'student' ? 'Student' : 'Family'}</th>
@@ -2136,22 +2136,23 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 parentAccounts.length === 0
                                     ? <tr><td colSpan={7} className="p-8 text-center"><div className="font-bold text-white">No parent accounts match</div><div className="mt-1 text-xs text-slate-500">Parent accounts are built from active tenant enrollments and normalized parent phone numbers.</div><button type="button" onClick={resetLedgerFilters} className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.05]">Reset filters</button></td></tr>
                                     : parentAccounts.map((account, index) => (
-                                        <tr key={index} className="hover:bg-slate-800/50 transition-colors group">
+                                        <tr key={index} className="edu-finance-v1__family-row hover:bg-slate-800/50 transition-colors group">
                                             <td className="p-4">
                                                 <div className="font-bold text-white flex items-center gap-2">
                                                     <Users size={16} className="text-blue-400" />
                                                     <span className="truncate">{account.parentName || account.children.map((child: any) => child.student.name).join(', ') || 'Family'}</span>
                                                 </div>
-                                                <div className="mt-1 truncate text-xs text-slate-500">{account.parentName ? account.children.map((child: any) => child.student.name).join(', ') : account.phone || 'No family phone'}</div>
+                                                <div className="mt-1 truncate text-xs text-slate-500">{account.phone || `${account.children.length} learner${account.children.length === 1 ? '' : 's'} linked`}</div>
                                             </td>
                                             <td className="hidden p-4 md:table-cell">
-                                                <div className="flex flex-col gap-1">
-                                                    {account.children.map((c: any, i: number) => (
-                                                        <div key={i} className="text-xs text-slate-300 bg-slate-900 px-2 py-1 rounded inline-flex w-max items-center gap-1">
+                                                <div className="edu-finance-v1__family-children">
+                                                    {account.children.slice(0, 2).map((c: any, i: number) => (
+                                                        <div key={i} className="edu-finance-v1__family-child">
                                                             <span className="font-bold">{c.student.name}</span>
                                                             <span className="text-[10px] text-slate-500">({c.enrollment.programName})</span>
                                                         </div>
                                                     ))}
+                                                    {account.children.length > 2 && <span className="edu-finance-v1__family-more">+{account.children.length - 2} more</span>}
                                                 </div>
                                             </td>
                                             <td className="hidden p-4 lg:table-cell"></td>

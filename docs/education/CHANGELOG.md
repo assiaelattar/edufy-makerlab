@@ -1,3 +1,7 @@
+## 2026-10-21 — Settings, Student Details and Attendance release candidate
+
+Promoted the reviewed quality passes and connected 011Y, Classes, Program detail, Finance and notification visual fixes through a clean main-based release. See `THREAD_RELEASE_2026-10-21.md` for scope and validation.
+
 # Education UI changelog
 
 ## 2026-10-21 — Workspace navigation v2 release cut

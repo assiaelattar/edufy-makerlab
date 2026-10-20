@@ -1,4 +1,3 @@
-import { ParentO11Y } from '../../sparkquest/components/ParentO11Y';
 import React, { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -25,6 +24,7 @@ import {
     EducationSectionHeader,
     EducationSurface
 } from '../../components/education-ui/EducationPrimitives';
+import { EducationGuide } from '../../components/education-ui/EducationGuide';
 import './education-dashboard-v1.css';
 import './education-dashboard-playful.css';
 
@@ -266,13 +266,24 @@ export const EducationDashboardV1 = ({
                         : `${academyName} has a clear schedule today. ${priorityActions.length > 0 ? 'Use the time to close the actions below and prepare the next school day.' : 'Use the time to prepare the next school day.'}`}
                     </p>
                 </div>
-                <div className="edu-ds-mascot"><ParentO11Y cue={0} mood="welcome" /></div>
                 <div className="edu-dashboard-v1__quick-actions" aria-label="Dashboard quick actions">
                     <EducationButton variant="primary" icon={CreditCard} onClick={onRecordPayment}>Record payment</EducationButton>
                     <EducationButton icon={Users} onClick={() => navigateTo('students')}>View students</EducationButton>
                     <EducationButton variant="quiet" icon={MessageCircle} onClick={() => navigateTo('communications')}>Message families</EducationButton>
                 </div>
             </header>
+
+            <EducationGuide
+                module="dashboard"
+                state={priorityActions.length > 0 ? 'attention' : 'complete'}
+                mode="compact"
+                message={priorityActions.length > 0
+                    ? `${priorityActions.length} ${priorityActions.length === 1 ? 'action is' : 'actions are'} ready. Start with the first item that can move forward today.`
+                    : 'Today is under control. Use the open time to prepare upcoming programs and support the team.'}
+                action={priorityActions.length > 0
+                    ? { label: 'Review next actions', onClick: () => document.getElementById('dashboard-actions')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }) }
+                    : { label: 'Review programs', onClick: () => navigateTo('programs') }}
+            />
 
             <section className="edu-dashboard-v1__command-grid" aria-label="Today’s command center">
 

@@ -478,34 +478,34 @@ export const FinanceDocumentsPanel: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
-      <section className="relative overflow-hidden rounded-[1.35rem] border border-sky-300/20 bg-[linear-gradient(135deg,rgba(14,116,144,.16),rgba(15,23,42,.45)_58%)] p-5">
-        <div className="pointer-events-none absolute -right-14 -top-20 h-52 w-52 rounded-full border-[26px] border-sky-200/[0.05]" />
-        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl"><p className="text-[10px] font-black uppercase tracking-[.18em] text-sky-200">Registre suivi</p><h3 className="mt-2 text-xl font-black text-white sm:text-2xl">Facturez vos formations et vos services.</h3><p className="mt-2 text-sm leading-6 text-slate-400">Choisissez une formation ou une prestation professionnelle. Retrouvez, corrigez et exportez vos factures dans le même historique.</p></div>
-          <div className="flex flex-wrap gap-2">
+    <div className="edu-finance-documents space-y-4">
+      <section className="edu-finance-documents__command">
+        <div className="edu-finance-documents__command-copy">
+          <span><ReceiptText size={16} /> Documents</span>
+          <div><h3>Factures et avoirs</h3><p>Créez un document, puis retrouvez son historique et ses actions au même endroit.</p></div>
+        </div>
+        <div className="edu-finance-documents__actions">
             {canExport && <button type="button" onClick={() => setIsExportOpen(true)} className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-slate-950/55 px-4 text-xs font-black text-white transition hover:border-sky-200/30 hover:bg-slate-900"><FileSpreadsheet size={17} className="text-sky-200" /> Export comptable</button>}
             {canUseServices && <button type="button" onClick={openSequences} className="flex min-h-11 items-center gap-2 rounded-lg border border-white/10 bg-slate-950/55 px-4 text-xs font-black text-white transition hover:border-teal-200/30 hover:bg-slate-900"><Settings2 size={17} className="text-teal-200" /> Séquences</button>}
-            {canManage && <button type="button" onClick={openInvoice} className="flex min-h-11 items-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><FilePlus2 size={17} /> Facture de formation</button>}
+            {canManage && <button type="button" onClick={openInvoice} className="is-primary flex min-h-11 items-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><FilePlus2 size={17} /> Facture de formation</button>}
             {canUseServices && <div className="service-workspace"><div className="service-actions"><button onClick={() => setCatalogueOpen(previous => !previous)} aria-expanded={catalogueOpen}>Catalogue de services</button><button className="primary" disabled={!servicesReady} onClick={() => setServiceInvoice({ organizationId })}>Nouvelle facture de services</button></div></div>}
-          </div>
         </div>
       </section>
       {canUseServices && catalogueState.organizationId === organizationId && catalogueState.error && <p role="alert" className="service-error">{catalogueState.error}</p>}
       {canUseServices && catalogueOpen && (servicesReady ? <ServiceCataloguePanel key={organizationId} organizationId={organizationId} services={services} currency={settings.currency || 'MAD'} onInvoice={initialService => setServiceInvoice({ organizationId, initialService })} /> : <p role="status">Chargement du catalogue…</p>)}
       {canUseServices && serviceInvoice?.organizationId === organizationId && <ServiceInvoiceModal key={`${organizationId}-${serviceInvoice.editingInvoice?.id || 'new'}`} organizationId={organizationId} services={services} documents={documents} settings={settings} initialService={serviceInvoice.initialService} editingInvoice={serviceInvoice.editingInvoice} onClose={() => setServiceInvoice(null)} onSaved={invoice => { if (currentOrgRef.current === invoice.organizationId) setDocuments(previous => [invoice, ...previous.filter(item => item.id !== invoice.id)]); }} />}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <section className="edu-finance-documents__stats grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Résumé des documents">
         {[
           { label: 'Factures conservées', value: stats.invoices, icon: ReceiptText, tone: 'text-teal-200' },
           { label: 'Entreprises', value: stats.companies, icon: Building2, tone: 'text-sky-200' },
           { label: 'Participants', value: stats.participants, icon: UsersRound, tone: 'text-amber-200' },
           { label: 'Net facturé', value: formatMoney(stats.issuedTotal, settings.currency || 'MAD'), icon: CheckCircle2, tone: 'text-emerald-200' },
-        ].map(item => <div key={item.label} className="rounded-lg border border-white/10 bg-slate-950/45 p-4"><item.icon size={17} className={item.tone} /><p className="mt-4 text-[10px] font-bold uppercase text-slate-500">{item.label}</p><p className="mt-1 truncate font-mono text-lg font-black text-white">{item.value}</p></div>)}
+        ].map(item => <div key={item.label} className="edu-finance-documents__stat"><item.icon size={18} className={item.tone} /><span>{item.label}</span><strong>{item.value}</strong></div>)}
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-white/10 bg-slate-950/45">
-        <div className="flex flex-col gap-3 border-b border-white/10 p-3 sm:flex-row sm:items-center">
+      <section className="edu-finance-documents__register overflow-hidden rounded-lg border border-white/10 bg-slate-950/45">
+        <div className="edu-finance-documents__filters flex flex-col gap-3 border-b border-white/10 p-3 sm:flex-row sm:items-center">
           <div className="relative min-w-0 flex-1"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} /><input className={`${fieldClass} pl-9`} value={query} onChange={event => setQuery(event.target.value)} placeholder="N° de facture, entreprise, programme, service ou participant" /></div>
           <select className={`${fieldClass} sm:w-44`} value={kindFilter} onChange={event => setKindFilter(event.target.value as typeof kindFilter)}><option value="all">Tous les documents</option><option value="invoice">Factures</option><option value="credit_note">Avoirs</option></select>
         </div>
@@ -514,7 +514,7 @@ export const FinanceDocumentsPanel: React.FC = () => {
           : loadError ? <div className="p-8 text-center"><FileText className="mx-auto text-amber-200" /><p className="mt-3 text-sm font-bold text-white">Registre non disponible</p><p className="mt-1 text-xs text-slate-500">{loadError}</p></div>
           : filteredDocuments.length === 0 ? <div className="p-10 text-center"><History className="mx-auto text-slate-600" size={30} /><p className="mt-3 text-sm font-black text-white">Aucune facture dans cette vue</p><p className="mt-1 text-xs text-slate-500">Émettez la première facture ou modifiez la recherche.</p></div>
           : <div className="divide-y divide-white/10">{filteredDocuments.map(document => (
-            <article key={document.id} className="grid gap-3 p-4 transition hover:bg-white/[0.025] lg:grid-cols-[8rem_minmax(0,1.3fr)_minmax(0,1fr)_9rem_auto] lg:items-center">
+            <article key={document.id} className="edu-finance-documents__row grid gap-3 p-4 transition hover:bg-white/[0.025] lg:grid-cols-[8rem_minmax(0,1.3fr)_minmax(0,1fr)_9rem_auto] lg:items-center">
               <div><span className={`inline-flex rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${document.kind === 'credit_note' ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : 'border-teal-300/20 bg-teal-300/10 text-teal-200'}`}>{document.kind === 'credit_note' ? 'Avoir' : 'Facture'}</span><p className="mt-2 font-mono text-sm font-black text-white">{document.number}</p><p className="mt-1 text-[10px] text-slate-500">{formatShortDate(document.issueDate)}</p></div>
               <div className="min-w-0"><p className="truncate text-sm font-black text-white">{document.customer.name}</p><p className="mt-1 truncate text-xs text-slate-500">{document.customer.type === 'company' ? document.customer.contactName || 'Entreprise facturée' : 'Particulier'} · {document.programName || document.lines[0]?.description || 'Prestation'}</p>{document.beneficiary?.name && <p className="mt-1 truncate text-[10px] font-bold text-sky-200">Formation réalisée pour {document.beneficiary.name}</p>}{document.originalInvoiceNumber && <p className="mt-1 text-[10px] font-bold text-amber-200">Réf. facture {document.originalInvoiceNumber}</p>}</div>
               <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-slate-600">Participants</p><p className="mt-1 truncate text-xs text-slate-300" title={document.participants.map(participant => participant.name).join(', ')}>{document.participants.map(participant => participant.name).join(', ') || '—'}</p></div>

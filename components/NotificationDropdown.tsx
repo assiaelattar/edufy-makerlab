@@ -72,7 +72,7 @@ export const NotificationDropdown = () => {
     };
 
     return (
-        <div className="relative" ref={dropdownRef}>
+        <div className="edu-notification relative" ref={dropdownRef}>
             <button
                 ref={triggerRef}
                 type="button"
@@ -81,7 +81,7 @@ export const NotificationDropdown = () => {
                 aria-expanded={isOpen}
                 aria-controls={panelId}
                 title="Notifications"
-                className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-slate-300 transition-colors duration-150 hover:border-white/10 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#08111F]"
+                className="edu-notification__trigger relative flex h-10 w-10 items-center justify-center rounded-lg border border-transparent text-slate-300 transition-colors duration-150 hover:border-white/10 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#08111F]"
             >
                 <Bell size={20} aria-hidden="true" />
                 {unreadNotificationsCount > 0 && (
@@ -92,7 +92,7 @@ export const NotificationDropdown = () => {
             {isOpen && (
                 <>
                     {/* Mobile Backdrop / Overlay */}
-                    <div className="fixed inset-0 z-40 bg-[#020711]/80 md:hidden" onClick={() => setIsOpen(false)} aria-hidden="true" />
+                    <div className="edu-notification__backdrop fixed inset-0 z-40 bg-[#020711]/80 md:hidden" onClick={() => setIsOpen(false)} aria-hidden="true" />
 
                     {/* Dropdown / Modal */}
                     <div
@@ -100,9 +100,9 @@ export const NotificationDropdown = () => {
                         role="dialog"
                         aria-modal="true"
                         aria-label="Notifications"
-                        className="fixed inset-x-3 bottom-3 top-16 z-50 flex flex-col overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D] shadow-2xl md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:h-auto md:max-h-[min(600px,calc(100vh-6rem))] md:w-96"
+                        className="edu-notification__panel fixed inset-x-3 bottom-3 top-16 z-50 flex flex-col overflow-hidden rounded-lg border border-white/10 bg-[#0F1B2D] shadow-2xl md:absolute md:inset-auto md:right-0 md:top-full md:mt-2 md:h-auto md:max-h-[min(600px,calc(100vh-6rem))] md:w-96"
                     >
-                        <div className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#08111F] px-3 py-2">
+                        <div className="edu-notification__header flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-[#08111F] px-3 py-2">
                             <h3 className="flex min-w-0 items-center gap-2 text-sm font-bold text-white">
                                 Notifications
                                 {unreadNotificationsCount > 0 && <span className="rounded-full bg-rose-400 px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#08111F]">{unreadNotificationsCount}</span>}
@@ -144,7 +144,7 @@ export const NotificationDropdown = () => {
                                             type="button"
                                             key={notification.id}
                                             onClick={() => handleNotificationClick(notification)}
-                                            className={`block w-full p-3 text-left transition-colors duration-150 hover:bg-white/5 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400 ${!notification.read ? 'bg-teal-400/5' : ''}`}
+                                    className={`edu-notification__item block w-full p-3 text-left transition-colors duration-150 hover:bg-white/5 focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400 ${!notification.read ? 'is-unread bg-teal-400/5' : ''}`}
                                         >
                                             <div className="flex gap-3">
                                                 <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#08111F]">

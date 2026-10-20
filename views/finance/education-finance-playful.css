@@ -114,6 +114,41 @@
 [data-edu-system="1"].edu-finance-v1 :is(.edu-finance-v1__ledger,.edu-finance-v1__documents) [class*="text-slate-5"],
 [data-edu-system="1"].edu-expenses-v1 :is(.edu-expenses-v1__ledger,.grid.lg\:grid-cols-3>div) [class*="text-slate-5"] { color:var(--ds-muted)!important; }
 
+/* Family accounts remain compact when one parent has several enrollments. */
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__balance-table th {
+  color:var(--ds-muted)!important;
+  background:var(--ds-subtle)!important;
+  font-family:var(--ds-font-heading);
+  font-weight:900;
+}
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-row td { vertical-align:middle; }
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-children { display:flex; flex-wrap:wrap; align-items:center; gap:6px; max-width:100%; }
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-child,
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-more {
+  display:inline-flex;
+  max-width:100%;
+  align-items:center;
+  gap:5px;
+  min-height:30px;
+  padding:4px 9px;
+  border:2px solid var(--ds-border)!important;
+  border-radius:999px;
+  background:var(--ds-surface)!important;
+  color:var(--ds-ink)!important;
+  font-size:11px;
+}
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-child span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-more { color:var(--ds-muted)!important; font-weight:900; }
+[data-edu-system="1"].edu-finance-v1 .edu-finance-v1__family-row button[title*="family" i] {
+  border:2px solid var(--ds-blue-edge)!important;
+  border-bottom:4px solid var(--ds-blue-edge)!important;
+  border-radius:var(--ds-radius-control)!important;
+  background:var(--ds-blue)!important;
+  color:var(--ds-on-color)!important;
+  font-family:var(--ds-font-heading);
+  font-weight:900;
+}
+
 /* Expenses: orange only means due/follow-up; blue means scheduled/action. */
 [data-edu-system="1"].edu-expenses-v1__focus {
   border:2px solid var(--ds-orange)!important;
@@ -130,6 +165,76 @@
 [data-edu-system="1"].edu-expenses-v1 .edu-expenses-v1__review { color:var(--ds-orange-ink)!important; }
 
 /* Finance documents and service catalogue inherit the same component contract. */
+[data-edu-system="1"] .edu-finance-documents__command {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  padding:16px 18px;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:var(--ds-radius-card);
+  background:var(--ds-surface)!important;
+}
+.edu-finance-v1 .edu-finance-v1__documents>div>.edu-finance-documents__command {
+  border-color:var(--ds-border)!important;
+  border-bottom-color:var(--ds-depth)!important;
+  background:var(--ds-surface)!important;
+}
+[data-edu-system="1"] .edu-finance-documents__command-copy { display:flex; align-items:center; gap:14px; min-width:0; }
+[data-edu-system="1"] .edu-finance-documents__command-copy>span {
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:38px;
+  padding:0 12px;
+  border-radius:999px;
+  background:var(--ds-purple-soft);
+  color:var(--ds-purple-ink);
+  font-family:var(--ds-font-heading);
+  font-size:12px;
+  font-weight:900;
+  white-space:nowrap;
+}
+[data-edu-system="1"] .edu-finance-documents__command h3 { margin:0; color:var(--ds-ink)!important; font-family:var(--ds-font-heading); font-size:18px; font-weight:900; }
+[data-edu-system="1"] .edu-finance-documents__command p { margin:3px 0 0; color:var(--ds-muted)!important; font-size:12px; }
+[data-edu-system="1"] .edu-finance-documents__actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; }
+[data-edu-system="1"] .edu-finance-documents__actions .service-workspace { display:block; }
+[data-edu-system="1"] .edu-finance-documents__actions button,
+[data-edu-system="1"] .edu-finance-documents__register button {
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:var(--ds-radius-control)!important;
+  background:var(--ds-surface)!important;
+  color:var(--ds-ink)!important;
+  font-family:var(--ds-font-heading);
+  font-weight:900;
+}
+[data-edu-system="1"] .edu-finance-documents__actions button.is-primary,
+[data-edu-system="1"] .edu-finance-documents__actions button.primary {
+  border-color:var(--ds-blue-edge)!important;
+  background:var(--ds-blue)!important;
+  color:var(--ds-on-color)!important;
+}
+[data-edu-system="1"] .edu-finance-documents__stats { gap:10px; }
+[data-edu-system="1"] .edu-finance-documents__stat {
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:center;
+  gap:3px 10px;
+  padding:14px;
+  border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:var(--ds-radius-control);
+  background:var(--ds-surface)!important;
+}
+[data-edu-system="1"] .edu-finance-documents__stat svg { grid-row:1 / span 2; color:var(--ds-purple-ink)!important; }
+[data-edu-system="1"] .edu-finance-documents__stat span { overflow:hidden; color:var(--ds-muted); font-size:10px; font-weight:900; text-overflow:ellipsis; text-transform:uppercase; white-space:nowrap; }
+[data-edu-system="1"] .edu-finance-documents__stat strong { overflow:hidden; color:var(--ds-ink); font-family:var(--ds-font-heading); font-size:18px; font-weight:900; text-overflow:ellipsis; white-space:nowrap; }
+[data-edu-system="1"] .edu-finance-documents__register { border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important; border-radius:var(--ds-radius-card)!important; background:var(--ds-surface)!important; }
+[data-edu-system="1"] .edu-finance-documents__filters { background:var(--ds-subtle)!important; }
+[data-edu-system="1"] .edu-finance-documents__row { border-color:var(--ds-border)!important; background:var(--ds-surface)!important; }
+[data-edu-system="1"] .edu-finance-documents__row:hover { background:var(--ds-blue-soft)!important; }
 [data-edu-system="1"] .service-workspace {
   --atlas-text:var(--ds-ink); --atlas-text-strong:var(--ds-ink); --atlas-text-muted:var(--ds-muted);
   --atlas-border:var(--ds-border); --atlas-border-strong:var(--ds-border);
@@ -164,6 +269,12 @@
   [data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog-body .grid.grid-cols-2 { grid-template-columns:1fr; }
   [data-edu-system="1"] .service-actions { align-items:stretch; flex-direction:column; }
   [data-edu-system="1"] .service-actions button { width:100%; }
+  [data-edu-system="1"] .edu-finance-documents__command { align-items:stretch; flex-direction:column; }
+  [data-edu-system="1"] .edu-finance-documents__command-copy { align-items:flex-start; }
+  [data-edu-system="1"] .edu-finance-documents__command-copy>span { display:none; }
+  [data-edu-system="1"] .edu-finance-documents__actions { align-items:stretch; flex-direction:column; }
+  [data-edu-system="1"] .edu-finance-documents__actions>button,
+  [data-edu-system="1"] .edu-finance-documents__actions .service-workspace { width:100%; }
   [data-edu-system="1"].atlas-dialog-backdrop .atlas-dialog-body form { padding-bottom:76px; }
 }
 
@@ -207,32 +318,6 @@ body.education-ui-v1-active [data-edu-system="1"].edu-expenses-v1 .edu-expenses-
   border:2px solid var(--ds-blue-edge)!important;
   border-bottom-width:4px!important;
   background:var(--ds-blue)!important;
-  color:var(--ds-on-color)!important;
-}
-body.education-ui-v1-active [data-edu-system="1"].edu-finance-v1 .edu-finance-v1__documents>div>section:first-child {
-  border:2px solid var(--ds-purple)!important;
-  border-bottom:5px solid var(--ds-purple-edge)!important;
-  border-radius:var(--ds-radius-card)!important;
-  background:var(--ds-purple-soft)!important;
-}
-body.education-ui-v1-active [data-edu-system="1"].edu-finance-v1 .edu-finance-v1__documents>div>section:first-child :is(h3,[class*="text-white"]) {
-  color:var(--ds-purple-ink)!important;
-}
-body.education-ui-v1-active [data-edu-system="1"].edu-finance-v1 .edu-finance-v1__documents>div>section:first-child button {
-  border:2px solid var(--ds-border)!important;
-  border-bottom:4px solid var(--ds-depth)!important;
-  border-radius:var(--ds-radius-control)!important;
-  background:var(--ds-surface)!important;
-  color:var(--ds-ink)!important;
-}
-body.education-ui-v1-active [data-edu-system="1"].edu-finance-v1 .edu-finance-v1__documents>div>section:first-child button[class*="bg-teal"] {
-  border-color:var(--ds-blue-edge)!important;
-  background:var(--ds-blue)!important;
-  color:var(--ds-on-color)!important;
-}
-body.education-ui-v1-active [data-edu-system="1"].edu-finance-v1 .edu-finance-v1__documents>div>section:first-child .service-actions button.primary {
-  border-color:var(--ds-purple-edge)!important;
-  background:var(--ds-purple)!important;
   color:var(--ds-on-color)!important;
 }
 body.education-ui-v1-active [data-edu-system="1"].edu-expenses-v1 .edu-expenses-v1__recurring [data-status="paid"] {

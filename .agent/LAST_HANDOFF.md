@@ -1,3 +1,9 @@
+## Edufy thread release candidate — 2026-10-21
+
+The user authorized pushing and deploying the work from this thread. A clean `origin/main` worktree contains the Settings, Student Details and Attendance quality passes plus connected 011Y and recorded visual fixes, while preserving navigation v2 and the newer Attendance renewal panel. Build, 27 Design System checks, membership checks and payment-edit smoke pass. See `docs/education/THREAD_RELEASE_2026-10-21.md`. Production role/write and physical-phone acceptance remain open; no production data was used for QA.
+
+---
+
 # Latest handoff — 2026-10-21 Edufy workspace navigation v2
 
 The user reported that the live application still displayed the older menu. This focused release promotes the completed compact rail, workspace panel, command search, pinned and recent destinations, mobile bottom navigation, and contextual page heading from the local Design System reference. It changes only the school shell presentation and its local preference handling; module logic, authentication, Firebase paths, and school records are unchanged. The remaining module-specific Design System candidates stay local pending their documented acceptance.

@@ -1,3 +1,7 @@
+## 2026-10-21 — Post-release acceptance remains open
+
+Synthetic checks and previous signed-in read-only tours do not establish real-role save or physical-phone acceptance. Settings needs real learner, restricted-role and super-admin checks; Student Details and Attendance need designated staff/learner and authorized persistence checks. Sequential payment creation/balance reconciliation, stored initial passwords, adjacent email matching, simultaneous-enrollment Attendance IDs, Activity Details proof overlay and certificate branding remain separate workflow issues.
+
 # Education UI known issues
 
 ## 2026-10-21 — Navigation v2 release boundary

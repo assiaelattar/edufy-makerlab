@@ -1,3 +1,7 @@
+## 2026-10-21 — Preserve newer main work during thread promotion
+
+Keep the already released navigation v2 and Attendance renewal panel when promoting this thread's Settings, Student Details, Attendance and connected visual corrections. Carry only the reviewed app delta; do not promote the long-lived feature branch or unrelated checkout changes.
+
 # Education UI decisions
 
 ## 2026-10-21 — Promote the global shell independently
