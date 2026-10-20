@@ -106,23 +106,6 @@ export const StudentDetailsView = ({
         }
     }, [student, isStudentRole, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments, can]);
 
-    const badgeTone: Record<string, string> = {
-        blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
-        purple: 'bg-purple-950/30 text-purple-300 border-purple-500/30',
-        amber: 'bg-amber-950/30 text-amber-300 border-amber-500/30',
-        yellow: 'bg-yellow-950/30 text-yellow-300 border-yellow-500/30',
-        sky: 'bg-sky-950/30 text-sky-300 border-sky-500/30',
-        violet: 'bg-violet-950/30 text-violet-300 border-violet-500/30',
-        pink: 'bg-pink-950/30 text-pink-300 border-pink-500/30',
-        emerald: 'bg-emerald-950/30 text-emerald-300 border-emerald-500/30',
-        slate: 'bg-slate-800 text-slate-300 border-slate-600',
-        indigo: 'bg-indigo-950/30 text-indigo-300 border-indigo-500/30',
-        cyan: 'bg-cyan-950/30 text-cyan-300 border-cyan-500/30',
-        rose: 'bg-rose-950/30 text-rose-300 border-rose-500/30',
-        green: 'bg-green-950/30 text-green-300 border-green-500/30',
-        teal: 'bg-teal-950/30 text-teal-300 border-teal-500/30'
-    };
-
     if (!student) return (
         <div className="p-4">
             <AtlasEmptyState
@@ -196,9 +179,9 @@ export const StudentDetailsView = ({
     const renderProjectModal = () => (
         <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!selectedProject} onClose={() => setSelectedProject(null)} title={selectedProject?.title || ''} size="lg">
             {selectedProject && (
-                <div className="space-y-6">
+                <div className="edu-student-project-detail space-y-6">
                     {/* RICH MEDIA DISPLAY */}
-                    <div className="w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
+                    <div className="edu-student-project-detail__media w-full overflow-hidden">
                         {selectedProject.embedUrl && getEmbedSrc(selectedProject.embedUrl) ? (
                             <div className="aspect-video w-full">
                                 <iframe
@@ -211,27 +194,27 @@ export const StudentDetailsView = ({
                         ) : selectedProject.mediaUrls?.[0] ? (
                             <img src={selectedProject.mediaUrls[0]} className="w-full max-h-[400px] object-cover" alt={`${selectedProject.title} project media`} />
                         ) : (
-                            <div className="h-48 flex items-center justify-center text-slate-600"><ImageIcon size={48} /></div>
+                            <div className="edu-student-project-detail__placeholder h-40 flex items-center justify-center gap-3"><ImageIcon size={32} /><span>Project media not added</span></div>
                         )}
                     </div>
 
                     <div className="flex gap-4 items-start">
                         <div className="flex-1">
-                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border mb-2 inline-block ${getTheme(selectedProject.station).bgSoft} ${getTheme(selectedProject.station).text} ${getTheme(selectedProject.station).border}`}>
+                            <span className="edu-student-project-detail__station text-[10px] font-bold uppercase tracking-wider px-2 py-1 mb-2 inline-block">
                                 {getTheme(selectedProject.station).label}
                             </span>
-                            <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
+                            <p className="edu-student-project-detail__description text-sm leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
                         </div>
                         {selectedProject.externalLink && (
-                            <a href={selectedProject.externalLink} target="_blank" rel="noopener noreferrer" aria-label={`Open ${selectedProject.title} external project`} className="shrink-0 p-3 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl transition-colors">
+                            <a href={selectedProject.externalLink} target="_blank" rel="noopener noreferrer" aria-label={`Open ${selectedProject.title} external project`} className="edu-student-project-detail__link shrink-0 p-3">
                                 <ExternalLink size={20} />
                             </a>
                         )}
                     </div>
 
                     {/* ENGINEERING PROCESS TIMELINE */}
-                    <div className="border-t border-slate-800 pt-6">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Engineering Journey</h4>
+                    <div className="edu-student-project-detail__journey border-t pt-6">
+                        <h4 className="text-xs font-bold uppercase tracking-wider mb-4">Engineering Journey</h4>
                         <div className="space-y-3 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
                             {selectedProject.steps?.map((step, idx) => {
                                 let statusColor = 'bg-slate-800 text-slate-500';
@@ -250,10 +233,10 @@ export const StudentDetailsView = ({
 
                                 return (
                                     <div key={step.id} className="relative flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-full border-4 border-slate-900 flex items-center justify-center shrink-0 z-10 ${statusColor}`}>
+                                        <div data-status={step.status} className={`edu-student-project-detail__step-icon w-10 h-10 rounded-full flex items-center justify-center shrink-0 z-10 ${statusColor}`}>
                                             {icon}
                                         </div>
-                                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex-1">
+                                        <div className="edu-student-project-detail__step p-3 flex-1">
                                             <div className="flex justify-between items-start">
                                                 <div className="text-sm font-medium text-slate-200">{step.title}</div>
                                                 {step.status === 'PENDING_REVIEW' && <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">In Review</span>}
@@ -268,7 +251,7 @@ export const StudentDetailsView = ({
 
                     {/* INSTRUCTOR FEEDBACK */}
                     {selectedProject.instructorFeedback && (
-                        <div className="bg-indigo-950/30 border border-indigo-900/50 p-4 rounded-xl flex gap-3">
+                        <div className="edu-student-project-detail__feedback p-4 flex gap-3">
                             <MessageCircle className="text-indigo-400 shrink-0" size={20} />
                             <div>
                                 <h4 className="text-xs font-bold text-indigo-400 uppercase mb-1">Instructor Feedback</h4>
@@ -302,7 +285,7 @@ export const StudentDetailsView = ({
                             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 p-1 shadow-xl shadow-cyan-500/20">
                                 <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-4xl font-bold text-white">{student.name.charAt(0)}</div>
                             </div>
-                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full border-4 border-slate-900 shadow-sm flex items-center gap-1"><Star size={12} fill="currentColor" /> Maker</div>
+                            <div className="edu-student-portal-v1__maker absolute -bottom-2 -right-2 text-xs font-bold px-3 py-1 flex items-center gap-1"><Star size={12} fill="currentColor" /> Maker</div>
                         </div>
                         <div className="flex-1">
                             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{student.name}</h1>
@@ -322,21 +305,21 @@ export const StudentDetailsView = ({
 
                 <div className="edu-student-portal-v1__content grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="space-y-6">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                        <div className="edu-student-portal-v1__card p-6">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Calendar className="text-blue-500" /> My Classes</h3>
                             {activeCourses.length === 0 ? <p className="text-slate-500 text-sm">No active classes.</p> :
                                 <div className="space-y-3">{activeCourses.map(e => (
-                                    <div key={e.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800/50">
+                                    <div key={e.id} className="edu-student-portal-v1__course p-4">
                                         <div className="font-bold text-white text-sm">{e.programName}</div>
                                         <div className="flex justify-between items-center mt-2">
                                             <div className="text-xs text-slate-400">{e.gradeName}</div>
-                                            <span className="text-xs font-bold text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-900/50 flex items-center gap-1"><Clock size={12} /> {e.groupTime?.split(' ')[0] || 'Weekly'}</span>
+                                            <span className="edu-student-portal-v1__schedule text-xs font-bold px-2 py-1 flex items-center gap-1"><Clock size={12} /> {e.groupTime?.split(' ')[0] || 'Weekly'}</span>
                                         </div>
                                     </div>
                                 ))}</div>
                             }
                         </div>
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                        <div className="edu-student-portal-v1__card p-6">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Award className="text-purple-500" /> Badges Earned</h3>
                             <div className="flex flex-wrap gap-3">
                                 {(!student.badges || student.badges.length === 0) ? <p className="text-slate-500 text-sm">Complete projects to earn badges!</p> :
@@ -345,7 +328,7 @@ export const StudentDetailsView = ({
                                         if (!badge) return null;
                                         const Icon = (LucideIcons[badge.icon as keyof typeof LucideIcons] || LucideIcons.Award) as React.ElementType;
                                         return (
-                                            <div key={badgeId} className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-2 ${badgeTone[badge.color] || badgeTone.slate}`} title={badge.description}>
+                                            <div key={badgeId} className="edu-student-portal-v1__badge px-3 py-2 text-xs font-bold flex items-center gap-2" title={badge.description}>
                                                 <Icon size={16} /> {badge.name}
                                             </div>
                                         );
@@ -353,18 +336,18 @@ export const StudentDetailsView = ({
                                 }
                             </div>
                         </div>
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                        <div className="edu-student-portal-v1__card p-6">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Zap className="text-amber-500" /> Skills Unlocked</h3>
                             <div className="flex flex-wrap gap-2">
                                 {skills.length === 0 ? <p className="text-slate-500 text-sm">Submit projects to earn skill badges!</p> : skills.map(skill => (
-                                    <span key={skill} className="px-3 py-1.5 bg-slate-800 text-cyan-300 text-xs font-bold rounded-lg border border-slate-700 flex items-center gap-1"><CheckCircle2 size={12} className="text-cyan-500" /> {skill}</span>
+                                    <span key={skill} className="edu-student-portal-v1__skill px-3 py-1.5 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={12} /> {skill}</span>
                                 ))}
                             </div>
                         </div>
                     </div>
 
                     <div className="lg:col-span-2">
-                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-full">
+                        <div className="edu-student-portal-v1__card p-6 h-full">
                             <div className="flex justify-between items-center mb-6">
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2"><BookOpen className="text-pink-500" /> My Project Portfolio</h3>
                                 <button onClick={() => navigateTo('learning')} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg transition-colors">Go to Studio</button>
@@ -379,15 +362,15 @@ export const StudentDetailsView = ({
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {publishedProjects.map(p => (
-                                        <button key={p.id} type="button" onClick={() => setSelectedProject(p)} className="group bg-slate-950 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer text-left" aria-label={`Open ${p.title} project`}>
-                                            <div className="h-40 bg-slate-900 relative overflow-hidden">
-                                                {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={p.title} /> : <div className="flex items-center justify-center h-full text-slate-700"><ImageIcon size={32} /></div>}
+                                        <button key={p.id} type="button" onClick={() => setSelectedProject(p)} className="edu-student-portal-v1__project group overflow-hidden text-left" aria-label={`Open ${p.title} project`}>
+                                            <div className="edu-student-portal-v1__project-media relative overflow-hidden">
+                                                {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 motion-reduce:transform-none" alt={p.title} /> : <div className="edu-student-project-card__placeholder"><ImageIcon size={28} /><span>Project media not added</span></div>}
                                                 {p.embedUrl ? <div className="absolute top-3 right-3 bg-red-600 text-white p-1.5 rounded-lg shadow-lg"><Zap size={14} /></div> : p.externalLink && <div className="absolute top-3 right-3 bg-black/60 text-white p-1.5 rounded-lg"><ExternalLink size={14} /></div>}
                                             </div>
                                             <div className="p-4">
                                                 <h4 className="font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">{p.title}</h4>
                                                 <p className="text-xs text-slate-500 line-clamp-2 mb-3">{p.description}</p>
-                                                <div className="flex flex-wrap gap-1">{p.skillsAcquired.slice(0, 3).map(s => <span key={s} className="text-[10px] bg-indigo-950/50 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-900/30">{s}</span>)}</div>
+                                                <div className="flex flex-wrap gap-1">{p.skillsAcquired.slice(0, 3).map(s => <span key={s} className="edu-student-portal-v1__skill text-[10px] px-1.5 py-0.5">{s}</span>)}</div>
                                             </div>
                                         </button>
                                     ))}

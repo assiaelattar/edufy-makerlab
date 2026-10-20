@@ -155,14 +155,14 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
     const stop = (event: React.MouseEvent) => { if (stopPropagation) event.stopPropagation(); };
     const receiptReady = isCleared(payment);
     return (
-      <div className="flex flex-wrap justify-end gap-1">
-        <button type="button" onClick={event => { stop(event); navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } }); }} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-teal-300" title="View payment audit details" aria-label="View payment audit details"><Eye size={16} /></button>
-        {payment.proofUrl && <button type="button" onClick={event => { stop(event); setProofUrl(payment.proofUrl!); }} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-sky-300" title="View payment proof" aria-label="View payment proof"><ImageIcon size={16} /></button>}
-        <button type="button" onClick={event => { stop(event); setInvoiceModal({ isOpen: true, payment }); }} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-amber-200" title="Open invoice" aria-label="Open invoice"><FileText size={16} /></button>
-        <button type="button" onClick={event => { stop(event); void printReceipt(payment); }} disabled={!receiptReady} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-30" title={receiptReady ? 'Print cleared payment receipt' : 'Available when payment clears'} aria-label="Print payment receipt"><ReceiptText size={16} /></button>
-        <button type="button" onClick={event => { stop(event); void shareReceipt(payment); }} disabled={!receiptReady} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-teal-300 disabled:cursor-not-allowed disabled:opacity-30" title={receiptReady ? 'Share cleared receipt on WhatsApp' : 'Available when payment clears'} aria-label="Share payment receipt"><Share2 size={16} /></button>
-        {canManagePayments && <button type="button" onClick={event => { stop(event); setEditPayment(payment); }} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white" title="Edit payment" aria-label="Edit payment"><Pencil size={16} /></button>}
-        {canManagePayments && <button type="button" onClick={event => { stop(event); initiateDeletePayment(payment); }} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-300" title="Delete payment and recalculate balance" aria-label="Delete payment"><Trash2 size={16} /></button>}
+      <div className="edu-student-payment-actions flex flex-wrap justify-end gap-1">
+        <button type="button" onClick={event => { stop(event); navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } }); }} className="edu-student-icon-action" title="View payment audit details" aria-label="View payment audit details"><Eye size={16} /></button>
+        {payment.proofUrl && <button type="button" onClick={event => { stop(event); setProofUrl(payment.proofUrl!); }} className="edu-student-icon-action" title="View payment proof" aria-label="View payment proof"><ImageIcon size={16} /></button>}
+        <button type="button" onClick={event => { stop(event); setInvoiceModal({ isOpen: true, payment }); }} className="edu-student-icon-action" title="Open invoice" aria-label="Open invoice"><FileText size={16} /></button>
+        <button type="button" onClick={event => { stop(event); void printReceipt(payment); }} disabled={!receiptReady} className="edu-student-icon-action" title={receiptReady ? 'Print cleared payment receipt' : 'Available when payment clears'} aria-label="Print payment receipt"><ReceiptText size={16} /></button>
+        <button type="button" onClick={event => { stop(event); void shareReceipt(payment); }} disabled={!receiptReady} className="edu-student-icon-action" title={receiptReady ? 'Share cleared receipt on WhatsApp' : 'Available when payment clears'} aria-label="Share payment receipt"><Share2 size={16} /></button>
+        {canManagePayments && <button type="button" onClick={event => { stop(event); setEditPayment(payment); }} className="edu-student-icon-action" title="Edit payment" aria-label="Edit payment"><Pencil size={16} /></button>}
+        {canManagePayments && <button type="button" onClick={event => { stop(event); initiateDeletePayment(payment); }} className="edu-student-icon-action edu-student-icon-action--danger" title="Delete payment and recalculate balance" aria-label="Delete payment"><Trash2 size={16} /></button>}
       </div>
     );
   };
@@ -212,9 +212,9 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
                   const overdue = !covered && promise.month < currentMonth;
                   const tone = covered ? 'text-emerald-300' : overdue ? 'text-red-300' : partial ? 'text-amber-300' : 'text-slate-400';
                   return (
-                    <div key={`${promise.month}-${index}`} className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950/60 p-3">
+                    <div key={`${promise.month}-${index}`} className="edu-student-promise flex items-center justify-between p-3">
                       <div><div className="mb-1 flex items-center gap-1 text-xs font-bold uppercase text-slate-500"><Calendar size={12} /> {promise.month}</div><div className="font-mono font-bold text-white">{formatCurrency(promise.amount)}</div></div>
-                      <span className={`text-[10px] font-bold uppercase ${tone}`}>{covered ? 'Covered' : overdue ? 'Overdue' : partial ? 'Partial' : 'Scheduled'}</span>
+                      <span data-tone={covered ? 'success' : overdue ? 'danger' : partial ? 'attention' : 'info'} className={`edu-student-status text-[10px] font-bold uppercase ${tone}`}>{covered ? 'Covered' : overdue ? 'Overdue' : partial ? 'Partial' : 'Scheduled'}</span>
                     </div>
                   );
                 })}
@@ -257,7 +257,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 
         <div className="grid grid-cols-1 gap-3 border-t border-white/10 p-4 md:hidden">
           {sortedPayments.map(payment => (
-            <div key={payment.id} className="rounded-lg border border-slate-800 bg-slate-950/55 p-4" onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })}>
+            <div key={payment.id} className="edu-student-payment-card p-4" onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })}>
               <div className="mb-3 flex items-start justify-between gap-3"><div><div className={`font-mono text-lg font-bold ${isCleared(payment) ? 'text-emerald-300' : payment.status === 'check_bounced' ? 'text-red-300' : 'text-amber-300'}`}>{formatCurrency(payment.amount)}</div><div className="mt-1 text-xs text-slate-500">{formatDate(payment.date)} / {payment.method === 'virement' ? 'Bank transfer' : payment.method}</div></div><span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${isCleared(payment) ? 'border-emerald-400/20 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 text-red-300' : 'border-amber-400/20 text-amber-300'}`}>{getStatusLabel(payment.status)}</span></div>
               <div className="border-t border-white/10 pt-2">{renderPaymentActions(payment, true)}</div>
             </div>

@@ -381,4 +381,174 @@
 [data-edu-system='1'].edu-student-portal-v1 button { min-height:44px; border:2px solid var(--ds-blue-edge)!important; border-bottom:4px solid var(--ds-blue-edge)!important; border-radius:13px!important; background:var(--ds-blue)!important; color:var(--ds-on-color)!important; box-shadow:none!important; }
 [data-edu-system='1'].edu-student-portal-v1 button[aria-label^='Open '] { width:100%; border-color:var(--ds-border)!important; border-bottom-color:var(--ds-depth)!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; }
 [data-edu-system='1'].edu-student-portal-v1 button[aria-label^='Open ']:hover { border-color:var(--ds-purple)!important; background:var(--ds-purple-soft)!important; }
-@media(max-width:700px) { [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .relative.z-10 { padding:22px; } }
+@media(max-width:700px) { [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero>.relative.z-10 { padding:22px; } }
+
+/* Student Details workspaces: explicit components replace remaining legacy color utilities. */
+[data-edu-system='1'].edu-student-details-v1 .edu-student-icon-action {
+    display:inline-grid; width:44px; height:44px; min-width:44px; min-height:44px;
+    place-items:center; padding:0; border:2px solid var(--ds-border)!important;
+    border-bottom:4px solid var(--ds-depth)!important; border-radius:12px;
+    background:var(--ds-surface)!important; color:var(--ds-blue-ink)!important;
+    transition:background .15s ease,border-color .15s ease;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-icon-action:hover {
+    border-color:var(--ds-blue)!important; border-bottom-color:var(--ds-blue-edge)!important;
+    background:var(--ds-blue-soft)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-icon-action--danger { color:var(--ds-red-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-icon-action--danger:hover {
+    border-color:var(--ds-red)!important; border-bottom-color:var(--ds-red-edge)!important;
+    background:var(--ds-red-soft)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-icon-action:focus-visible,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card:focus-visible,
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project:focus-visible {
+    outline:3px solid var(--ds-blue)!important; outline-offset:2px;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-icon-action:disabled { opacity:.45; cursor:not-allowed; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-record__actions,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-payment-actions { gap:6px; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-record__schedule {
+    border:1px solid var(--ds-purple); border-radius:10px;
+    background:var(--ds-purple-soft); color:var(--ds-purple-ink);
+    font-family:var(--ds-font-body); font-weight:750;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-record__schedule>span:first-child { background:var(--ds-purple)!important; }
+
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-grid {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; padding:14px;
+    border-color:var(--ds-border)!important; background:var(--ds-surface);
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card,
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project {
+    overflow:hidden; border:2px solid var(--ds-border)!important;
+    border-bottom:5px solid var(--ds-depth)!important; border-radius:18px;
+    background:var(--ds-surface)!important; color:var(--ds-ink)!important;
+    transition:border-color .15s ease,background .15s ease;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card:hover,
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project:hover {
+    border-color:var(--ds-purple)!important; border-bottom-color:var(--ds-purple-edge)!important;
+    background:var(--ds-purple-soft)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card__media,
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-media {
+    height:148px; border-bottom:2px solid var(--ds-border);
+    background:var(--ds-purple-soft)!important;
+}
+[data-edu-system='1'] .edu-student-project-card__placeholder {
+    display:flex; width:100%; height:100%; flex-direction:column; align-items:center; justify-content:center;
+    gap:7px; background:var(--ds-purple-soft)!important; color:var(--ds-purple-ink)!important;
+    font:800 11px var(--ds-font-body);
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card__interactive {
+    border:2px solid var(--ds-purple); background:var(--ds-surface); color:var(--ds-purple-ink);
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card__body h4,
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project h4 { color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-card__body p { min-height:0; color:var(--ds-muted)!important; }
+[data-edu-system='1'] :is(.edu-student-project-card__skill,.edu-student-portal-v1__skill) {
+    display:inline-flex; align-items:center; gap:5px; padding:4px 8px;
+    border:1px solid var(--ds-purple); border-radius:9px;
+    background:var(--ds-purple-soft)!important; color:var(--ds-purple-ink)!important;
+    font-family:var(--ds-font-body); font-weight:800;
+}
+[data-edu-system='1'] .edu-student-project-card__muted { color:var(--ds-muted); font-size:10px; }
+
+[data-edu-system='1'].edu-student-details-v1 .edu-student-promise,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-payment-card {
+    min-width:0; border:2px solid var(--ds-border)!important; border-radius:14px;
+    background:var(--ds-subtle)!important; color:var(--ds-ink)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-promise .font-mono,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-payment-card .font-mono { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance .edu-student-status {
+    padding:4px 8px; border-radius:999px; white-space:nowrap;
+}
+
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card button {
+    border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important;
+    border-radius:12px!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important;
+    font-family:var(--ds-font-heading); font-weight:900;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card button:hover { background:var(--ds-blue-soft)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card .edu-parent-access-action--credentials,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card .edu-student-quick-access__issue {
+    border-color:var(--ds-blue-edge)!important; border-bottom-color:var(--ds-blue-edge)!important;
+    background:var(--ds-blue)!important; color:var(--ds-on-color)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card .edu-parent-access-action--primary {
+    border-color:var(--ds-green-edge)!important; border-bottom-color:var(--ds-green-edge)!important;
+    background:var(--ds-green)!important; color:var(--ds-on-color)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card :is(.edu-parent-access-action--secondary,.edu-student-quick-access__manual) {
+    border-color:var(--ds-blue)!important; border-bottom-color:var(--ds-blue-edge)!important;
+    background:var(--ds-blue-soft)!important; color:var(--ds-blue-ink)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card .edu-parent-access-action--whatsapp {
+    border-color:var(--ds-green)!important; border-bottom-color:var(--ds-green-edge)!important;
+    background:var(--ds-green-soft)!important; color:var(--ds-green-ink)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card button:disabled { opacity:.55!important; cursor:not-allowed; }
+
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__media {
+    border:2px solid var(--ds-purple); border-radius:18px; background:var(--ds-purple-soft)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__placeholder { color:var(--ds-purple-ink)!important; font-weight:800; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__station {
+    border:2px solid var(--ds-purple); border-radius:9px; background:var(--ds-purple-soft); color:var(--ds-purple-ink);
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__description { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__link {
+    display:grid; place-items:center; border:2px solid var(--ds-blue); border-radius:12px;
+    background:var(--ds-blue-soft); color:var(--ds-blue-ink);
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__journey { border-color:var(--ds-border)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__journey h4 { color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__step {
+    border:2px solid var(--ds-border)!important; border-radius:12px; background:var(--ds-surface)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__step-icon { border:3px solid var(--ds-surface)!important; background:var(--ds-subtle)!important; color:var(--ds-muted)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__step-icon[data-status='done'] { background:var(--ds-green)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__step-icon[data-status='PENDING_REVIEW'] { background:var(--ds-orange)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__step-icon[data-status='REJECTED'] { background:var(--ds-red)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-project-detail__feedback {
+    border:2px solid var(--ds-purple); border-radius:14px; background:var(--ds-purple-soft)!important;
+    color:var(--ds-purple-ink)!important;
+}
+
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__card {
+    min-width:0; border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important;
+    border-radius:22px; background:var(--ds-surface)!important; color:var(--ds-ink)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__course {
+    border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important;
+    border-radius:14px; background:var(--ds-subtle)!important; color:var(--ds-ink)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__schedule,
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__badge {
+    border:1px solid var(--ds-green)!important; border-radius:10px; background:var(--ds-green-soft)!important;
+    color:var(--ds-green-ink)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__maker {
+    border:2px solid var(--ds-green-edge)!important; border-radius:999px;
+    background:var(--ds-green)!important; color:var(--ds-on-color)!important; box-shadow:none!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-media { height:142px; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project p { color:var(--ds-muted)!important; }
+@media(max-width:700px) {
+    [data-edu-system='1'].edu-student-details-v1 .edu-student-project-grid { grid-template-columns:minmax(0,1fr); }
+    [data-edu-system='1'].edu-student-details-v1 .edu-student-payment-actions { justify-content:flex-start; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content { grid-template-columns:minmax(0,1fr); }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero>.relative.z-10 {
+        display:grid; grid-template-columns:70px minmax(0,1fr); gap:14px;
+        align-items:center; padding:22px; text-align:left;
+    }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .w-32 { width:70px; height:70px; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .w-32>div { font-size:25px; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero h1 { font-size:26px; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .justify-center { justify-content:flex-start; gap:6px; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .justify-center>span { font-size:11px; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero>.relative.z-10>div:last-child { grid-column:1 / -1; }
+    [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero>.relative.z-10>div:last-child button { width:100%; justify-content:center; }
+}

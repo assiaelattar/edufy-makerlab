@@ -108,17 +108,17 @@ export const RecipientQuickAccess: React.FC<{ student: Student; role: 'parent' |
 
   if (!account?.email) return null;
   return <>
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-      <button type="button" onClick={() => { setMode('manual'); setQuickLink(null); }} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-teal-300/35 bg-teal-500/10 px-3 py-2 text-sm font-bold text-teal-100 hover:bg-teal-500/20">
+    <div className="edu-student-quick-access grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <button type="button" onClick={() => { setMode('manual'); setQuickLink(null); }} className="edu-student-quick-access__manual flex min-h-11 items-center justify-center gap-2 px-3 py-2 text-sm font-bold">
         <QrCode size={17} /> Manual link & QR
       </button>
-      <button type="button" disabled={!canIssue || busy} onClick={() => { setMode('quick'); setQuickLink(null); setVerified(false); }} className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-teal-400 disabled:opacity-50">
+      <button type="button" disabled={!canIssue || busy} onClick={() => { setMode('quick'); setQuickLink(null); setVerified(false); }} className="edu-student-quick-access__issue flex min-h-11 items-center justify-center gap-2 px-3 py-2 text-sm font-bold disabled:opacity-50">
         <Link2 size={17} /> One-click access
       </button>
     </div>
     {!canIssue && <p className="text-xs text-amber-200">One-click access needs an active linked account and an Edufy administrator in this organization.</p>}
     <Modal designSystem isOpen={mode !== null} onClose={() => { setMode(null); setQuickLink(null); }} title={mode === 'quick' ? 'One-click SparkQuest access' : 'Manual SparkQuest access'}>
-      <div className="space-y-4 text-sm text-slate-200">
+      <div className="edu-student-quick-access__dialog space-y-4 text-sm">
         {mode === 'quick' && !quickLink && <>
           <p>This creates a single-use link for the exact {role} account linked to <strong>{student.name}</strong>. It expires after five minutes. Anyone holding it before use can open that account.</p>
           <label className="flex items-start gap-2 leading-5"><input type="checkbox" checked={verified} onChange={event => setVerified(event.target.checked)} className="mt-1" />I verified the recipient’s identity and their relationship to this learner. I will share the link privately.</label>

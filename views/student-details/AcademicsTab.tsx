@@ -145,12 +145,12 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1 text-xs font-mono text-slate-300">
+                  <div className="edu-student-record__schedule flex items-center gap-2 px-2.5 py-1 text-xs">
                     <span className="h-1.5 w-1.5 rounded-full bg-teal-400"></span>
                     {e.groupTime}
                   </div>
                   {e.secondGroupTime && (
-                    <div className="flex items-center gap-2 rounded-lg border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-xs font-mono text-sky-300">
+                    <div className="edu-student-record__schedule flex items-center gap-2 px-2.5 py-1 text-xs">
                       <span className="h-1.5 w-1.5 rounded-full bg-sky-400"></span>
                       + {e.secondGroupName}
                     </div>
@@ -166,10 +166,10 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                     )}
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1">
+                  <div className="edu-student-record__actions flex flex-wrap items-center gap-1">
                     {canEdit && <button
                       onClick={() => setEditEnrollment(e)}
-                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
+                      className="edu-student-icon-action"
                       title="Edit Enrollment"
                       aria-label={`Edit ${e.programName} enrollment`}
                     >
@@ -177,7 +177,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                     </button>}
                     <button
                       onClick={() => navigateTo('activity-details', { activityId: { type: 'enrollment', id: e.id } })}
-                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
+                      className="edu-student-icon-action"
                       title="View Details"
                       aria-label={`View ${e.programName} enrollment details`}
                     >
@@ -187,7 +187,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       onClick={() => {
                         handleOpenAttestationModal(e);
                       }}
-                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors"
+                      className="edu-student-icon-action"
                       title="Attestation d'inscription"
                       aria-label={`Registration certificate for ${e.programName}`}
                     >
@@ -197,7 +197,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       onClick={() => {
                         setCompletionModal({ isOpen: true, enrollment: e });
                       }}
-                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
+                      className="edu-student-icon-action"
                       title="Attestation de réussite"
                       aria-label={`Completion certificate for ${e.programName}`}
                     >
@@ -208,7 +208,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                         evt.stopPropagation();
                         initiateDeleteEnrollment(e.id);
                       }}
-                      className="p-2 hover:bg-red-900/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
+                      className="edu-student-icon-action edu-student-icon-action--danger"
                       title="Delete Enrollment"
                       aria-label={`Delete ${e.programName} enrollment`}
                     >

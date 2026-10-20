@@ -592,4 +592,6 @@ The isolated Student Details candidate now covers its five workspaces, local dia
 
 Follow-up: `/forms` now mounts the real enrollment wizard and App payment modal JSX with synthetic callbacks. The Student Details fixture now renders synthetic proof and the actual Activity Details audit route. Editor, enrollment edit, both certificate generators, App-owned forms and all 13 Student Details dialog families received desktop/390 px light/dark browser checks. Mobile wizard overflow, payment choice contrast and certificate failure feedback were fixed. Build, 27 Design System checks and diff check pass. Remaining gates: signed-in school record/route/submit review, physical phone, downstream audit proof overlay Close/focus, and the separately documented financial validation/security issues. No push, deployment or production write.
 
+Continued lower workspace visual pass: enrollment chips/actions, portfolio and project detail, Finance payment/promise controls, Access quick links and student preview cards now use scoped Design System styling. Synthetic desktop and narrow mobile review is captured in the Student Details audit and refined screenshots; the preview mobile action grid was corrected. Existing domain, permission and write handlers are unchanged. Signed-in and physical-phone acceptance remain open. No push, deployment or production write.
+
 ---
