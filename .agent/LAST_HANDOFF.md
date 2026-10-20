@@ -1,4 +1,10 @@
-# Latest handoff — Edufy sign-in loading
+# Latest handoff — 2026-10-20 scoped release review
+
+Current `origin/main` is `c71d873`. A clean main-based candidate formats Programs roster start dates in desktop and mobile display using the existing `formatDate` helper. The production build, Education System check, repository agent check and diff check pass. The full school Design System rollout remains queued: its final physical-phone and designated-role acceptance is open, and the school-operations bridge `d92be59` is unreviewed. No push or deployment occurred in this review.
+
+---
+
+# Previous handoff — Edufy sign-in loading
 
 On 2026-10-16 the school workspace startup gate was reduced from fourteen role-dependent Firestore snapshots to academy settings, students, programs and enrollments. Other module listeners begin after those first records; add-on request status loads separately from required entitlement checks. An eight-second wait no longer offers a reload unless an actual error occurs. The existing role, tenant and required-read failure gates remain. Build and scoped TypeScript validation are recorded in `docs/education/KNOWN_ISSUES.md`; designated signed-in phone/desktop timing and data acceptance remain pending. No production data or rules changed.
 

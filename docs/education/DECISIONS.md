@@ -1,5 +1,9 @@
 # Education UI decisions
 
+## 2026-10-20 — Release scope
+
+- Carry only the reviewed Programs roster date display fix from the UI coordinator branch into a clean current-main candidate. Keep the unfinished school-operations bridge and module work with open acceptance gates out of this release cut.
+
 ## 2026-10-16 — Startup readiness
 
 - Keep the first successful Firestore snapshots for settings, students, programs and enrollments as the school workspace gate. A successful empty collection is valid.

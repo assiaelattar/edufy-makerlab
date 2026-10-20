@@ -1,5 +1,10 @@
 # Education UI changelog
 
+## 2026-10-20 — Scoped Programs release candidate
+
+- Prepared a main-based, display-only fix for raw ISO start dates in desktop and mobile roster rows. It uses the existing date formatter; stored dates and exports are unchanged.
+- Build, Education System and agent checks pass. This candidate is local and unreleased.
+
 ## 2026-10-16 — School sign-in loading
 
 - Reduced the operational startup gate to academy settings, students, programs and enrollments.

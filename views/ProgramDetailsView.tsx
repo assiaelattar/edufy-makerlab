@@ -4,7 +4,7 @@ import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, FileSpreadsheet, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { Program, Lead } from '../types';
-import { formatCurrency } from '../utils/helpers';
+import { formatCurrency, formatDate } from '../utils/helpers';
 import { useConfirm } from '../context/ConfirmContext';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../services/firebase';
@@ -512,7 +512,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                                     <div className="min-w-0"><p className="truncate text-sm font-black text-white">{enrollment.studentName}</p><p className={`mt-1 text-xs ${isPlaced ? 'text-slate-500' : 'text-amber-200'}`}>{isPlaced ? enrollment.groupName : 'Group not assigned'}</p></div>
                                                     <span className={`shrink-0 rounded px-2 py-1 text-[10px] font-bold ${isPlaced ? 'bg-teal-400/10 text-teal-300' : 'bg-amber-300/10 text-amber-200'}`}>{isPlaced ? 'Placed' : 'Needs placement'}</span>
                                                 </div>
-                                                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-xs"><div><p className="text-slate-500">Plan</p><p className="mt-1 truncate font-bold text-slate-200">{enrollment.packName || 'Not set'}</p></div><div><p className="text-slate-500">Started</p><p className="mt-1 font-bold text-slate-200">{enrollment.startDate || 'Not set'}</p></div></div>
+                                                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-xs"><div><p className="text-slate-500">Plan</p><p className="mt-1 truncate font-bold text-slate-200">{enrollment.packName || 'Not set'}</p></div><div><p className="text-slate-500">Started</p><p className="mt-1 font-bold text-slate-200">{enrollment.startDate ? formatDate(enrollment.startDate) : 'Not set'}</p></div></div>
                                                 <AtlasActionButton icon={ArrowRight} variant="quiet" className="mt-3 w-full" onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })}>Open learner</AtlasActionButton>
                                             </article>
                                         );
@@ -531,7 +531,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                                         <td className="p-4 font-bold text-white">{enrollment.studentName}</td>
                                                         <td className="p-4"><span data-placement={isPlaced ? 'placed' : 'unplaced'} className={`text-sm font-bold ${isPlaced ? 'text-slate-300' : 'text-amber-200'}`}>{isPlaced ? enrollment.groupName : 'Needs placement'}</span></td>
                                                         <td className="p-4 text-sm text-slate-300">{enrollment.packName || 'Not set'}</td>
-                                                        <td className="p-4 text-sm text-slate-400">{enrollment.startDate || 'Not set'}</td>
+                                                        <td className="p-4 text-sm text-slate-400">{enrollment.startDate ? formatDate(enrollment.startDate) : 'Not set'}</td>
                                                         <td className="p-4 text-right"><AtlasActionButton icon={ArrowRight} variant="quiet" onClick={() => navigateTo('student-details', { studentId: enrollment.studentId })}>Open learner</AtlasActionButton></td>
                                                     </tr>
                                                 );
