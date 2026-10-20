@@ -1,0 +1,134 @@
+/* Learner preview: compact identity, recorded learning, and published work. */
+[data-edu-system='1'].edu-student-portal-v1 {
+  gap:16px;
+}
+[data-edu-system='1'].edu-student-portal-v1 > :not([hidden]) ~ :not([hidden]) { margin-top:0; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__preview {
+  gap:12px;
+  padding:10px 14px;
+  font-family:var(--ds-font-heading);
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__return {
+  min-height:44px;
+  padding:0 12px;
+  border-color:var(--ds-blue)!important;
+  border-bottom-color:var(--ds-blue-edge)!important;
+  background:var(--ds-surface)!important;
+  color:var(--ds-blue-ink)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero {
+  min-height:0;
+  background:var(--ds-purple-soft)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero>.relative.z-10 {
+  gap:20px;
+  padding:22px 26px;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__avatar {
+  width:82px;
+  height:82px;
+  padding:4px;
+  border:2px solid var(--ds-green-edge);
+  border-radius:22px;
+  background:var(--ds-green)!important;
+  box-shadow:0 5px 0 var(--ds-green-edge)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__avatar>div {
+  border-radius:16px;
+  font:950 30px var(--ds-font-heading);
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero h1 {
+  margin-bottom:9px;
+  font:950 clamp(27px,3vw,39px)/1.12 var(--ds-font-heading);
+  letter-spacing:-.03em;
+  overflow-wrap:anywhere;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .mb-4 { margin-bottom:8px; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__stat {
+  min-height:35px;
+  padding:5px 10px;
+  border:2px solid var(--ds-purple)!important;
+  border-radius:999px;
+  background:var(--ds-surface)!important;
+  color:var(--ds-purple-ink)!important;
+  font:900 12px var(--ds-font-heading);
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__stat svg { color:var(--ds-purple-ink); }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__resume {
+  min-width:155px;
+  justify-content:center;
+  background:var(--ds-blue)!important;
+  color:var(--ds-on-color)!important;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content {
+  grid-template-columns:minmax(260px,.8fr) minmax(0,1.8fr);
+  gap:12px;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content>div:first-child { display:grid; align-content:start; gap:12px; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content>div:last-child { grid-column:2; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content>div:first-child>.space-y-6 { margin:0; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__card { padding:18px; border-radius:20px; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__card h3 {
+  margin-bottom:13px;
+  font:950 17px/1.25 var(--ds-font-heading);
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__card h3 svg { width:19px; height:19px; color:var(--ds-purple-ink); }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__course { padding:11px; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__course>div:first-child { color:var(--ds-ink)!important; font:900 14px var(--ds-font-heading); }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-grid[data-single='true'] {
+  grid-template-columns:minmax(0,1fr);
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-grid[data-single='true'] .edu-student-portal-v1__project {
+  display:grid;
+  min-height:260px;
+  grid-template-columns:minmax(180px,.8fr) minmax(0,1fr);
+  align-items:stretch;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-grid[data-single='true'] .edu-student-portal-v1__project>div:last-child {
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-grid[data-single='true'] .edu-student-portal-v1__project-media {
+  height:100%;
+  min-height:180px;
+}
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project h4 {
+  color:var(--ds-ink)!important;
+  font:950 16px/1.25 var(--ds-font-heading);
+}
+[data-edu-system='1'].edu-student-portal-v1 button:focus-visible {
+  outline:3px solid var(--ds-blue);
+  outline-offset:2px;
+}
+@media(max-width:900px) {
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content {
+    grid-template-columns:minmax(0,1fr);
+  }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content>div:last-child { grid-column:auto; }
+}
+@media(max-width:700px) {
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__preview { flex-wrap:wrap; }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__return { width:100%; justify-content:center; }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero>.relative.z-10 {
+    grid-template-columns:64px minmax(0,1fr);
+    gap:12px;
+    padding:18px;
+  }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__avatar { width:64px; height:64px; }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__avatar>div { font-size:25px; }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero h1 { font-size:clamp(23px,6vw,29px); }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__stat { font-size:11px; }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__card { padding:15px; }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-grid[data-single='true'] .edu-student-portal-v1__project {
+    min-height:0;
+    grid-template-columns:minmax(0,1fr);
+  }
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project-grid[data-single='true'] .edu-student-portal-v1__project-media {
+    height:150px;
+    min-height:0;
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__project img { transition-duration:.01ms; }
+}

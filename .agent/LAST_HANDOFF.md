@@ -595,3 +595,8 @@ Follow-up: `/forms` now mounts the real enrollment wizard and App payment modal 
 Continued lower workspace visual pass: enrollment chips/actions, portfolio and project detail, Finance payment/promise controls, Access quick links and student preview cards now use scoped Design System styling. Synthetic desktop and narrow mobile review is captured in the Student Details audit and refined screenshots; the preview mobile action grid was corrected. Existing domain, permission and write handlers are unchanged. Signed-in and physical-phone acceptance remain open. No push, deployment or production write.
 
 ---
+## Student Details section quality pass — 2026-10-20
+
+The reviewed Overview benchmark now extends through Learning/Portfolio, Attendance, Finance, Access, the learner preview and connected dialogs. Section-owned `--ds-*` styles replace the obsolete opening local-color/blanket-override block. Synthetic populated, empty/no-access, read-only, long-data and failed-save states were checked at desktop and 390 CSS px in light/dark; screenshots and limits are in `docs/education/STUDENT_DETAILS_DESIGN_SYSTEM_V1_2026-10-20.md`. The editor failure retained its draft, mobile dialog scroll worked, and 390 px overflow checks passed. Build, 27 Design System checks and diff check pass. The separate signed-in/physical-phone acceptance and workflow debt listed in that document remain open. No production write, push or deployment. Stop at this Student Details handoff before the broader Settings/Expenses visual backlog.
+
+---

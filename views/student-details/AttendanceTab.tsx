@@ -4,7 +4,8 @@ import { AppSettings, AttendanceRecord, Student } from '../../types';
 import { formatDate, generateAttendanceReportPrint } from '../../utils/helpers';
 import { normalizePhoneForWhatsApp } from '../../utils/whatsappPhone';
 import { useConfirm } from '../../context/ConfirmContext';
-import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader } from '../../components/atlas/AtlasSurface';
+import { EducationButton, EducationIcon, EducationNotice } from '../../components/education-ui/EducationPrimitives';
+import './education-student-attendance-polish.css';
 
 interface AttendanceTabProps {
   studentAttendance: AttendanceRecord[];
@@ -14,12 +15,13 @@ interface AttendanceTabProps {
   settings: AppSettings;
 }
 
-const statusStyles: Record<string, { label: string; icon: React.ElementType; className: string }> = {
-  absent: { label: 'Absent', icon: XCircle, className: 'border-red-400/25 bg-red-500/10 text-red-300' },
-  late: { label: 'Late', icon: AlertCircle, className: 'border-amber-300/25 bg-amber-400/10 text-amber-200' },
-  present: { label: 'Present', icon: CheckCircle2, className: 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' },
-  excused: { label: 'Excused', icon: Clock3, className: 'border-sky-400/20 bg-sky-500/10 text-sky-300' }
+const statusStyles: Record<string, { label: string; icon: React.ElementType; tone: 'attention' | 'success' | 'info' }> = {
+  absent: { label: 'Absent', icon: XCircle, tone: 'attention' },
+  late: { label: 'Late', icon: AlertCircle, tone: 'attention' },
+  present: { label: 'Present', icon: CheckCircle2, tone: 'success' },
+  excused: { label: 'Excused', icon: Clock3, tone: 'info' }
 };
+const unknownStatus = { label: 'Unrecognized', icon: AlertCircle, tone: 'info' } as const;
 
 export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   studentAttendance,
@@ -29,6 +31,8 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   settings
 }) => {
   const { alert: showAlert } = useConfirm();
+  const hasRecords = studentAttendance.length > 0;
+  const parentPhoneReady = Boolean(normalizePhoneForWhatsApp(student.parentPhone));
 
   const handleWhatsApp = async () => {
     const phone = normalizePhoneForWhatsApp(student.parentPhone);
@@ -47,48 +51,51 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   };
 
   return (
-    <section className="edu-student-surface edu-student-surface--attendance overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
-      <div className="p-4">
-        <AtlasSectionHeader
-          title="Attendance history"
-          description={`${studentAttendance.length} recorded session${studentAttendance.length === 1 ? '' : 's'} for this student`}
-          icon={Calendar}
-          meta={(
-            <div className="flex items-center gap-1.5">
-              {absenceCount > 0 && <span className="edu-student-status" data-tone="attention">{absenceCount} absent</span>}
-              {lateCount > 0 && <span className="edu-student-status" data-tone="attention">{lateCount} late</span>}
-            </div>
-          )}
-          actions={(
-            <>
-              <AtlasActionButton icon={Printer} disabled={studentAttendance.length === 0} title={studentAttendance.length === 0 ? 'A report needs at least one attendance record' : 'Print attendance report'} onClick={() => generateAttendanceReportPrint(student, studentAttendance, absenceCount, lateCount, settings)}>Print report</AtlasActionButton>
-              <AtlasActionButton icon={MessageCircle} variant="primary" disabled={studentAttendance.length === 0} title={studentAttendance.length === 0 ? 'An attendance summary needs at least one record' : 'Share attendance summary'} onClick={handleWhatsApp}>Share</AtlasActionButton>
-            </>
-          )}
-        />
-      </div>
-
-      {studentAttendance.length === 0 ? (
-        <div className="p-4 pt-0">
-          <AtlasEmptyState icon={Calendar} title="No attendance recorded" description="Attendance entries will appear here after this student joins a marked session." />
+    <section className="edu-student-surface edu-student-surface--attendance edu-student-attendance" aria-labelledby="student-attendance-title">
+      <header className="edu-student-attendance__header">
+        <div className="edu-student-attendance__heading">
+          <EducationIcon icon={Calendar} accent="blue" />
+          <div>
+            <h3 id="student-attendance-title">Attendance history</h3>
+            <p>{studentAttendance.length} recorded session{studentAttendance.length === 1 ? '' : 's'} for this learner</p>
+          </div>
         </div>
-      ) : (
-        <div className="divide-y divide-white/5 border-t border-white/10">
+        <div className="edu-student-attendance__actions" role="group" aria-label="Attendance actions">
+          <EducationButton icon={Printer} disabled={!hasRecords} title={!hasRecords ? 'A report needs at least one attendance record' : 'Print attendance report'} onClick={() => generateAttendanceReportPrint(student, studentAttendance, absenceCount, lateCount, settings)}>Print report</EducationButton>
+          <EducationButton icon={MessageCircle} variant="primary" disabled={!hasRecords} title={!hasRecords ? 'An attendance summary needs at least one record' : 'Share attendance summary'} onClick={handleWhatsApp}>Share summary</EducationButton>
+        </div>
+      </header>
+
+      {hasRecords && <div className="edu-student-attendance__summary" role="group" aria-label="Attendance follow-up">
+        <div data-tone={absenceCount > 0 ? 'attention' : 'success'}><span>Absences</span><strong>{absenceCount}</strong></div>
+        <div data-tone={lateCount > 0 ? 'attention' : 'success'}><span>Late arrivals</span><strong>{lateCount}</strong></div>
+        <p>{absenceCount || lateCount ? 'Review the marked sessions below before contacting the family.' : 'All recorded sessions are on track.'}</p>
+      </div>}
+
+      {hasRecords && !parentPhoneReady && <div className="edu-student-attendance__notice"><EducationNotice status="warning">Add a valid parent phone in the learner record before sharing this summary.</EducationNotice></div>}
+
+      {hasRecords ? (
+        <ol className="edu-student-attendance__history" aria-label="Recorded sessions">
           {studentAttendance.map(record => {
-            const status = statusStyles[record.status] || statusStyles.present;
+            const status = statusStyles[record.status] || unknownStatus;
             const StatusIcon = status.icon;
             return (
-              <div key={record.id} className="flex min-h-16 items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-white/[0.025]">
-                <div className="min-w-0">
-                  <div className="text-sm font-bold text-slate-200">{formatDate(record.date)}</div>
-                  <div className="mt-0.5 text-xs text-slate-500">{new Date(record.date).toLocaleDateString('en-US', { weekday: 'long' })}</div>
+              <li key={record.id} className="edu-student-attendance__session">
+                <span className="edu-student-attendance__date-icon"><Calendar size={18} aria-hidden="true" /></span>
+                <div className="edu-student-attendance__date">
+                  <strong>{formatDate(record.date)}</strong>
+                  <small>{new Date(record.date).toLocaleDateString('en-US', { weekday: 'long' })}</small>
                 </div>
-                <span data-tone={record.status === 'absent' || record.status === 'late' ? 'attention' : record.status === 'present' ? 'success' : 'info'} className={`edu-student-status inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${status.className}`}>
-                  <StatusIcon size={13} /> {status.label}
-                </span>
-              </div>
+                <span data-tone={status.tone} className="edu-student-status edu-student-attendance__status"><StatusIcon size={16} aria-hidden="true" />{status.label}</span>
+              </li>
             );
           })}
+        </ol>
+      ) : (
+        <div className="edu-student-attendance__empty" role="status">
+          <EducationIcon icon={Calendar} accent="blue" />
+          <h4>No attendance recorded</h4>
+          <p>Sessions will appear here after this learner joins a marked class.</p>
         </div>
       )}
     </section>

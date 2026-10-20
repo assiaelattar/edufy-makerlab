@@ -27,6 +27,7 @@ import { EducationButton, EducationNotice } from '../components/education-ui/Edu
 import { createVerifiedStudentIdentity, projectBelongsToStudent, verifyStudentRecord } from '../sparkquest/domain/studentIdentity';
 import '../components/education-ui/education-system-v1.css';
 import './student-details/education-student-details-v1.css';
+import './student-details/education-student-preview-polish.css';
 
 export const StudentDetailsView = ({
     onEditStudent,
@@ -294,17 +295,15 @@ export const StudentDetailsView = ({
             <div data-edu-system={showEducationStudentDetailsV1 ? '1' : undefined} className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-portal-v1' : ''}`}>
                 {!isStudentRole && (
                     <div className="edu-student-portal-v1__preview bg-indigo-600 text-white px-4 py-3 rounded-xl flex justify-between items-center shadow-lg border border-indigo-400/50">
-                        <div className="flex items-center gap-2 text-sm font-bold"><Eye size={18} /> Preview Mode: Viewing as Student</div>
-                        <button onClick={() => setViewMode('admin')} className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2"><ArrowLeft size={14} /> Exit Preview</button>
+                        <div className="flex items-center gap-2 text-sm font-bold"><Eye size={18} /> Learner view preview</div>
+                        <button type="button" onClick={() => setViewMode('admin')} className="edu-student-portal-v1__return bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2"><ArrowLeft size={14} /> Return to record</button>
                     </div>
                 )}
 
                 <div className="edu-student-portal-v1__hero relative rounded-3xl overflow-hidden border border-indigo-500/30 shadow-2xl">
-                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900"></div>
-                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                     <div className="relative z-10 p-8 md:p-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
                         <div className="relative">
-                            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 p-1 shadow-xl shadow-cyan-500/20">
+                            <div className="edu-student-portal-v1__avatar w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 p-1 shadow-xl shadow-cyan-500/20">
                                 <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-4xl font-bold text-white">{student.name.charAt(0)}</div>
                             </div>
                             <div className="edu-student-portal-v1__maker absolute -bottom-2 -right-2 text-xs font-bold px-3 py-1 flex items-center gap-1"><Star size={12} fill="currentColor" /> Maker</div>
@@ -312,13 +311,13 @@ export const StudentDetailsView = ({
                         <div className="flex-1">
                             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{student.name}</h1>
                             <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-4">
-                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Trophy size={14} className="text-amber-400" /> {skills.length} recorded skills</span>
-                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Rocket size={14} className="text-cyan-400" /> {publishedProjects.length} published projects</span>
+                                <span className="edu-student-portal-v1__stat px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Trophy size={14} className="text-amber-400" /> {skills.length} recorded skills</span>
+                                <span className="edu-student-portal-v1__stat px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Rocket size={14} className="text-cyan-400" /> {publishedProjects.length} published projects</span>
                             </div>
                             <p className="text-indigo-200 max-w-xl">Explore your classes and published work.</p>
                         </div>
                         <div className="relative z-10">
-                            <button onClick={() => generateMakerResume(student, publishedProjects, settings)} className="px-5 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-white/10 transition-all active:scale-95">
+                            <button type="button" onClick={() => generateMakerResume(student, publishedProjects, settings)} className="edu-student-portal-v1__resume px-5 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-white/10 transition-all active:scale-95">
                                 <Printer size={18} /> Maker Resume
                             </button>
                         </div>
@@ -342,9 +341,9 @@ export const StudentDetailsView = ({
                             }
                         </div>
                         <div className="edu-student-portal-v1__card p-6">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Award className="text-purple-500" /> Badges Earned</h3>
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Award className="text-purple-500" /> Awarded badges</h3>
                             <div className="flex flex-wrap gap-3">
-                                {(!student.badges || student.badges.length === 0) ? <p className="text-slate-500 text-sm">Complete projects to earn badges!</p> :
+                                {(!student.badges || student.badges.length === 0) ? <p className="text-slate-500 text-sm">Badges appear here when awarded.</p> :
                                     student.badges.map(badgeId => {
                                         const badge = badges.find(b => b.id === badgeId);
                                         if (!badge) return null;
@@ -359,9 +358,9 @@ export const StudentDetailsView = ({
                             </div>
                         </div>
                         <div className="edu-student-portal-v1__card p-6">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Zap className="text-amber-500" /> Skills Unlocked</h3>
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Zap className="text-amber-500" /> Recorded skills</h3>
                             <div className="flex flex-wrap gap-2">
-                                {skills.length === 0 ? <p className="text-slate-500 text-sm">Submit projects to earn skill badges!</p> : skills.map(skill => (
+                                {skills.length === 0 ? <p className="text-slate-500 text-sm">Skills from published projects appear here.</p> : skills.map(skill => (
                                     <span key={skill} className="edu-student-portal-v1__skill px-3 py-1.5 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={12} /> {skill}</span>
                                 ))}
                             </div>
@@ -371,18 +370,18 @@ export const StudentDetailsView = ({
                     <div className="lg:col-span-2">
                         <div className="edu-student-portal-v1__card p-6 h-full">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-white flex items-center gap-2"><BookOpen className="text-pink-500" /> My Project Portfolio</h3>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2"><BookOpen className="text-pink-500" /> Published projects</h3>
                                 <button onClick={() => navigateTo('learning')} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg transition-colors">Go to Studio</button>
                             </div>
                             {publishedProjects.length === 0 ? (
                                 <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl">
                                     <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600"><Target size={32} /></div>
                                     <h4 className="text-white font-bold">No projects yet</h4>
-                                    <p className="text-slate-500 text-sm mt-1 mb-4">Go to the Learning Studio to start building!</p>
-                                    <button onClick={() => navigateTo('learning')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/20">Start a Project</button>
+                                    <p className="text-slate-500 text-sm mt-1 mb-4">Projects appear here when they are published.</p>
+                                    <button type="button" onClick={() => navigateTo('learning')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/20">Open Studio</button>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="edu-student-portal-v1__project-grid grid grid-cols-1 sm:grid-cols-2 gap-4" data-single={publishedProjects.length === 1}>
                                     {publishedProjects.map(p => (
                                         <button key={p.id} type="button" onClick={() => setSelectedProject(p)} className="edu-student-portal-v1__project group overflow-hidden text-left" aria-label={`Open ${p.title} project`}>
                                             <div className="edu-student-portal-v1__project-media relative overflow-hidden">

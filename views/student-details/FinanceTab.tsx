@@ -21,7 +21,8 @@ import { useConfirm } from '../../context/ConfirmContext';
 import { useAuth } from '../../context/AuthContext';
 import { InvoiceModal } from '../../components/finance/InvoiceModal';
 import { Modal } from '../../components/Modal';
-import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard } from '../../components/atlas/AtlasSurface';
+import { EducationActionMenu, EducationButton, EducationNotice, EducationState, EducationStatusPill } from '../../components/education-ui/EducationPrimitives';
+import './education-student-finance-polish.css';
 
 interface FinanceTabProps {
   studentPayments: Payment[];
@@ -157,29 +158,32 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
     generateReceipt(payment, enrollment, student, settings, programs);
   };
 
-  const renderPaymentActions = (payment: Payment, stopPropagation = false) => {
-    const stop = (event: React.MouseEvent) => { if (stopPropagation) event.stopPropagation(); };
+  const renderPaymentActions = (payment: Payment) => {
     const receiptReady = isCleared(payment);
     return (
-      <div className="edu-student-payment-actions flex flex-wrap justify-end gap-1">
-        <button type="button" onClick={event => { stop(event); navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } }); }} className="edu-student-icon-action" title="View payment audit details" aria-label="View payment audit details"><Eye size={16} /></button>
-        {payment.proofUrl && <button type="button" onClick={event => { stop(event); setProofUrl(payment.proofUrl!); }} className="edu-student-icon-action" title="View payment proof" aria-label="View payment proof"><ImageIcon size={16} /></button>}
-        <button type="button" onClick={event => { stop(event); setInvoiceModal({ isOpen: true, payment }); }} className="edu-student-icon-action" title="Open invoice" aria-label="Open invoice"><FileText size={16} /></button>
-        <button type="button" onClick={event => { stop(event); void printReceipt(payment); }} disabled={!receiptReady} className="edu-student-icon-action" title={receiptReady ? 'Print cleared payment receipt' : 'Available when payment clears'} aria-label="Print payment receipt"><ReceiptText size={16} /></button>
-        <button type="button" onClick={event => { stop(event); void shareReceipt(payment); }} disabled={!receiptReady} className="edu-student-icon-action" title={receiptReady ? 'Share cleared receipt on WhatsApp' : 'Available when payment clears'} aria-label="Share payment receipt"><Share2 size={16} /></button>
-        {canManagePayments && <button type="button" onClick={event => { stop(event); setEditPayment(payment); }} className="edu-student-icon-action" title="Edit payment" aria-label="Edit payment"><Pencil size={16} /></button>}
-        {canManagePayments && <button type="button" onClick={event => { stop(event); initiateDeletePayment(payment); }} className="edu-student-icon-action edu-student-icon-action--danger" title="Delete payment and recalculate balance" aria-label="Delete payment"><Trash2 size={16} /></button>}
+      <div className="edu-student-finance__payment-actions" role="group" aria-label={`Actions for ${formatCurrency(payment.amount)} payment on ${formatDate(payment.date)}`}>
+        <EducationButton icon={Eye} variant="secondary" onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })}>Audit</EducationButton>
+        <EducationButton icon={FileText} variant="quiet" onClick={() => setInvoiceModal({ isOpen: true, payment })}>Invoice</EducationButton>
+        <EducationActionMenu label="More payment actions">
+          {payment.proofUrl && <button type="button" aria-label="View payment proof" onClick={() => setProofUrl(payment.proofUrl!)}><ImageIcon size={16} />View proof</button>}
+          <button type="button" aria-label="Print payment receipt" onClick={() => void printReceipt(payment)} disabled={!receiptReady} title={receiptReady ? undefined : 'Available when payment clears'}><ReceiptText size={16} />Print receipt</button>
+          <button type="button" aria-label="Share payment receipt" onClick={() => void shareReceipt(payment)} disabled={!receiptReady} title={receiptReady ? undefined : 'Available when payment clears'}><Share2 size={16} />Share receipt</button>
+          {canManagePayments && <button type="button" aria-label="Edit payment" onClick={() => setEditPayment(payment)}><Pencil size={16} />Edit payment</button>}
+          {canManagePayments && <button type="button" aria-label="Delete payment" className="edu-student-finance__delete" onClick={() => initiateDeletePayment(payment)}><Trash2 size={16} />Delete payment</button>}
+        </EducationActionMenu>
       </div>
     );
   };
 
   return (
-    <div className="edu-student-finance space-y-5">
-      <div className="edu-student-finance__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <AtlasSignalCard label="Open balance" value={formatCurrency(openBalance)} detail={openBalance > 0 ? 'Across active tenant enrollments' : 'Account settled'} icon={Wallet} tone={openBalance > 0 ? 'amber' : 'emerald'} />
-        <AtlasSignalCard label="Cleared payments" value={formatCurrency(clearedTotal)} detail={`${sortedPayments.filter(isCleared).length} cleared record${sortedPayments.filter(isCleared).length === 1 ? '' : 's'}`} icon={CheckCircle2} tone="emerald" />
-        <AtlasSignalCard label="In transit" value={formatCurrency(pendingTotal)} detail="Transfers and checks not cleared" icon={Clock} tone={pendingTotal > 0 ? 'amber' : 'slate'} />
-        <AtlasSignalCard label="Rejected checks" value={bouncedCount} detail={bouncedCount > 0 ? 'Review before collecting again' : 'No bounced checks'} icon={AlertTriangle} tone={bouncedCount > 0 ? 'red' : 'slate'} />
+    <div className="edu-student-finance">
+      <div className="edu-student-finance__signals" aria-label="Payment summary">
+        {[
+          { label:'Open balance', value:formatCurrency(openBalance), detail:openBalance > 0 ? 'Across active enrollments' : 'Account settled', icon:Wallet, tone:openBalance > 0 ? 'orange' : 'green' },
+          { label:'Cleared payments', value:formatCurrency(clearedTotal), detail:`${sortedPayments.filter(isCleared).length} cleared record${sortedPayments.filter(isCleared).length === 1 ? '' : 's'}`, icon:CheckCircle2, tone:'green' },
+          { label:'In transit', value:formatCurrency(pendingTotal), detail:'Transfers and checks awaiting clearance', icon:Clock, tone:pendingTotal > 0 ? 'orange' : 'blue' },
+          { label:'Rejected checks', value:String(bouncedCount), detail:bouncedCount > 0 ? 'Review before collecting again' : 'No bounced checks', icon:AlertTriangle, tone:bouncedCount > 0 ? 'red' : 'blue' }
+        ].map(item => { const Icon=item.icon; return <div key={item.label} className="edu-student-finance__metric" data-tone={item.tone}><span className="edu-student-finance__metric-icon"><Icon size={20} aria-hidden="true" /></span><span className="edu-student-finance__metric-label">{item.label}</span><strong>{item.value}</strong><small>{item.detail}</small></div>; })}
       </div>
 
       {tenantEnrollments.filter(enrollment => enrollment.paymentPromises?.length).map(enrollment => {
@@ -189,38 +193,32 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
         let cumulative = 0;
         const currentMonth = new Date().toISOString().slice(0, 7);
         return (
-          <section key={`contract-${enrollment.id}`} className="edu-student-surface edu-student-surface--contract overflow-hidden rounded-lg border border-amber-300/15 bg-amber-400/[0.035]">
-            <div className="p-4">
-              <AtlasSectionHeader
-                title={enrollment.programName}
-                description="Payment promise schedule"
-                icon={FileText}
-                actions={<AtlasActionButton icon={Share2} onClick={() => void shareContract(enrollment)}>Send contract</AtlasActionButton>}
-              />
+          <section key={`contract-${enrollment.id}`} className="edu-student-finance__contract">
+            <div className="edu-student-finance__section-head">
+              <span className="edu-student-finance__head-icon"><FileText size={20} aria-hidden="true" /></span>
+              <div><span className="edu-student-finance__eyebrow">Payment plan</span><h3>{enrollment.programName}</h3><p>Payment promise schedule</p></div>
+              <EducationButton icon={Share2} variant="secondary" onClick={() => void shareContract(enrollment)}>Send contract</EducationButton>
             </div>
-            <div className="border-t border-white/10 p-4">
-              <div className="mb-4 flex flex-wrap gap-x-8 gap-y-3 text-sm">
-                <div><span className="mb-1 block text-xs font-bold text-slate-500">Promised</span><span className="font-mono text-white">{formatCurrency(totalPromised)}</span></div>
-                <div><span className="mb-1 block text-xs font-bold text-slate-500">Cleared</span><span className="font-mono font-bold text-emerald-300">{formatCurrency(paidForEnrollment)}</span></div>
-                <div><span className="mb-1 block text-xs font-bold text-slate-500">Current balance</span><span className={`font-mono font-bold ${enrollment.balance > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>{formatCurrency(enrollment.balance)}</span></div>
+            <div className="edu-student-finance__contract-body">
+              <div className="edu-student-finance__contract-totals">
+                <div><span>Promised</span><strong>{formatCurrency(totalPromised)}</strong></div>
+                <div><span>Cleared</span><strong data-tone="green">{formatCurrency(paidForEnrollment)}</strong></div>
+                <div><span>Current balance</span><strong data-tone={enrollment.balance > 0 ? 'orange' : 'green'}>{formatCurrency(enrollment.balance)}</strong></div>
               </div>
               {Math.abs(totalPromised - Number(enrollment.totalAmount || 0)) > 0.01 && (
-                <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300/20 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
-                  <AlertTriangle size={15} className="mt-0.5 shrink-0" /> Promise total differs from the enrollment fee by {formatCurrency(Math.abs(totalPromised - Number(enrollment.totalAmount || 0)))}. Review the contract before sharing it.
-                </div>
+                <EducationNotice status="warning"><AlertTriangle size={17} aria-hidden="true" /> Promise total differs from the enrollment fee by {formatCurrency(Math.abs(totalPromised - Number(enrollment.totalAmount || 0)))}. Review the contract before sharing it.</EducationNotice>
               )}
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="edu-student-finance__promises">
                 {schedule.map((promise, index) => {
                   const previousCumulative = cumulative;
                   cumulative += Number(promise.amount || 0);
                   const covered = paidForEnrollment + 0.005 >= cumulative;
                   const partial = !covered && paidForEnrollment > previousCumulative;
                   const overdue = !covered && promise.month < currentMonth;
-                  const tone = covered ? 'text-emerald-300' : overdue ? 'text-red-300' : partial ? 'text-amber-300' : 'text-slate-400';
                   return (
-                    <div key={`${promise.month}-${index}`} className="edu-student-promise flex items-center justify-between p-3">
-                      <div><div className="mb-1 flex items-center gap-1 text-xs font-bold uppercase text-slate-500"><Calendar size={12} /> {promise.month}</div><div className="font-mono font-bold text-white">{formatCurrency(promise.amount)}</div></div>
-                      <span data-tone={covered ? 'success' : overdue ? 'danger' : partial ? 'attention' : 'info'} className={`edu-student-status text-[10px] font-bold uppercase ${tone}`}>{covered ? 'Covered' : overdue ? 'Overdue' : partial ? 'Partial' : 'Scheduled'}</span>
+                    <div key={`${promise.month}-${index}`} className="edu-student-finance__promise" data-tone={covered ? 'green' : overdue ? 'red' : partial ? 'orange' : 'blue'}>
+                      <div><span className="edu-student-finance__promise-month"><Calendar size={14} aria-hidden="true" /> {promise.month}</span><strong>{formatCurrency(promise.amount)}</strong></div>
+                      <EducationStatusPill status={covered ? 'success' : overdue ? 'danger' : partial ? 'warning' : 'info'}>{covered ? 'Covered' : overdue ? 'Overdue' : partial ? 'Partial' : 'Scheduled'}</EducationStatusPill>
                     </div>
                   );
                 })}
@@ -230,49 +228,40 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
         );
       })}
 
-      <section className="edu-student-surface edu-student-surface--finance overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
-        <div className="p-4">
-          <AtlasSectionHeader
-            title="Payment history"
-            description="Clearing status, proof, receipts, and account audit activity"
-            icon={Wallet}
-            meta={<span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-400">{sortedPayments.length}</span>}
-            actions={canManagePayments ? <AtlasActionButton icon={CreditCard} variant="primary" onClick={() => void handleRecordPayment()}>Record payment</AtlasActionButton> : undefined}
-          />
+      <section className="edu-student-finance__history">
+        <div className="edu-student-finance__section-head">
+          <span className="edu-student-finance__head-icon"><Wallet size={20} aria-hidden="true" /></span>
+          <div><span className="edu-student-finance__eyebrow">{sortedPayments.length} payment {sortedPayments.length === 1 ? 'record' : 'records'}</span><h3>Payment history</h3><p>Clearing status, documents, and account audit</p></div>
+          {canManagePayments && <EducationButton icon={CreditCard} variant="primary" disabled={activeEnrollments.length === 0} title={activeEnrollments.length === 0 ? 'An active enrollment is required' : undefined} onClick={() => void handleRecordPayment()}>Record payment</EducationButton>}
         </div>
 
-        <div className="hidden overflow-x-auto border-t border-white/10 md:block">
-          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
-            <thead className="bg-slate-950/50 text-[10px] font-bold uppercase text-slate-500">
-              <tr><th className="p-3 pl-4">Date</th><th className="p-3">Method / reference</th><th className="p-3 text-right">Amount</th><th className="p-3">Status</th><th className="p-3">Shared</th><th className="p-3 text-right">Actions</th></tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/70">
-              {sortedPayments.map(payment => (
-                <tr key={payment.id} className="transition-colors hover:bg-white/[0.025]">
-                  <td className="p-3 pl-4 font-medium text-slate-300">{formatDate(payment.date)}</td>
-                  <td className="p-3"><div className="capitalize text-slate-300">{payment.method === 'virement' ? 'Bank transfer' : payment.method}</div><div className="font-mono text-[10px] text-slate-600">{payment.checkNumber ? `#${payment.checkNumber}` : payment.bankName || payment.id.slice(0, 8).toUpperCase()}</div></td>
-                  <td className={`p-3 text-right font-mono font-bold ${isCleared(payment) ? 'text-emerald-300' : payment.status === 'check_bounced' ? 'text-red-300' : 'text-amber-300'}`}>{formatCurrency(payment.amount)}</td>
-                  <td className="p-3"><span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${isCleared(payment) ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 bg-red-400/10 text-red-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300'}`}>{getStatusLabel(payment.status)}</span></td>
-                  <td className="p-3">{payment.receiptSharedAt ? <span className="flex items-center gap-1 text-xs font-medium text-emerald-300" title={`Shared on ${formatDate(((payment.receiptSharedAt as any).toDate ? (payment.receiptSharedAt as any).toDate() : payment.receiptSharedAt) as any)}`}><CheckCircle2 size={13} /> Shared</span> : <span className="text-xs text-slate-600">Not shared</span>}</td>
-                  <td className="p-3">{renderPaymentActions(payment)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 border-t border-white/10 p-4 md:hidden">
-          {sortedPayments.map(payment => (
-            <div key={payment.id} className="edu-student-payment-card p-4">
-              <div className="mb-3 flex items-start justify-between gap-3"><div><div className={`font-mono text-lg font-bold ${isCleared(payment) ? 'text-emerald-300' : payment.status === 'check_bounced' ? 'text-red-300' : 'text-amber-300'}`}>{formatCurrency(payment.amount)}</div><div className="mt-1 text-xs text-slate-500">{formatDate(payment.date)} / {payment.method === 'virement' ? 'Bank transfer' : payment.method}</div></div><span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${isCleared(payment) ? 'border-emerald-400/20 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 text-red-300' : 'border-amber-400/20 text-amber-300'}`}>{getStatusLabel(payment.status)}</span></div>
-              <div className="border-t border-white/10 pt-2">{renderPaymentActions(payment, true)}</div>
-            </div>
-          ))}
-        </div>
-
+        {sortedPayments.length > 0 && <div className="edu-student-finance__payment-list">
+          {sortedPayments.map(payment => {
+            const status = isCleared(payment) ? 'success' : payment.status === 'check_bounced' ? 'danger' : 'warning';
+            const enrollment = tenantEnrollments.find(item => item.id === payment.enrollmentId);
+            return <article key={payment.id} className="edu-student-finance__payment" data-tone={status}>
+              <div className="edu-student-finance__payment-main">
+                <div className="edu-student-finance__payment-amount">
+                  <span>{formatDate(payment.date)}</span>
+                  <strong>{formatCurrency(payment.amount)}</strong>
+                </div>
+                <EducationStatusPill status={status}>{getStatusLabel(payment.status)}</EducationStatusPill>
+              </div>
+              <div className="edu-student-finance__payment-meta">
+                <span>{payment.method === 'virement' ? 'Bank transfer' : payment.method}</span>
+                <span>{enrollment?.programName || 'Enrollment'}</span>
+                <span>{payment.checkNumber ? 'Check #' + payment.checkNumber : payment.bankName || `Reference ${payment.id.slice(-8).toUpperCase()}`}</span>
+                <span>{payment.receiptSharedAt ? <><CheckCircle2 size={14} aria-hidden="true" /> Shared {formatDate(((payment.receiptSharedAt as any).toDate ? (payment.receiptSharedAt as any).toDate() : payment.receiptSharedAt) as any)}</> : 'Receipt not shared'}</span>
+              </div>
+              {renderPaymentActions(payment)}
+            </article>;
+          })}
+        </div>}
         {sortedPayments.length === 0 && (
-          <div className="border-t border-white/10 p-4">
-            <AtlasEmptyState icon={Wallet} title="No payments recorded" description={activeEnrollments.length > 0 ? 'Record the first payment to start the tenant-scoped financial history.' : 'An active enrollment is required before a payment can be recorded.'} action={canManagePayments && activeEnrollments.length > 0 ? <AtlasActionButton icon={CreditCard} variant="primary" onClick={() => void handleRecordPayment()}>Record first payment</AtlasActionButton> : undefined} />
+          <div className="edu-student-finance__empty">
+            <EducationState kind={canManagePayments ? 'empty' : 'restricted'} title="No payments recorded" description={activeEnrollments.length > 0 ? canManagePayments ? 'Record the first payment to start this learner’s financial history.' : 'You can review this record, but your role cannot record payments.' : 'An active enrollment is required before a payment can be recorded.'}>
+              {canManagePayments && activeEnrollments.length > 0 && <EducationButton icon={CreditCard} variant="primary" onClick={() => void handleRecordPayment()}>Record first payment</EducationButton>}
+            </EducationState>
           </div>
         )}
       </section>
@@ -288,7 +277,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
         />
       )}
       <Modal designSystem isOpen={!!proofUrl} onClose={() => setProofUrl(null)} title="Payment proof" size="lg">
-        {proofUrl && <img src={proofUrl} alt="Payment proof" className="max-h-[70vh] w-full rounded-lg bg-slate-950 object-contain" />}
+        {proofUrl && <img src={proofUrl} alt="Payment proof" className="edu-student-finance__proof" />}
       </Modal>
     </div>
   );
