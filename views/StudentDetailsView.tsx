@@ -16,14 +16,14 @@ import { config } from '../utils/config';
 
 const parentSparkQuestUrl = () => new URL('?role=parent', config.sparkQuestUrl).toString();
 import { normalizePhoneForWhatsApp } from '../utils/whatsappPhone';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState } from '../components/atlas/AtlasSurface';
 import { AcademicsTab } from './student-details/AcademicsTab';
 import { FinanceTab } from './student-details/FinanceTab';
 import { PortfolioTab } from './student-details/PortfolioTab';
 import { AttendanceTab } from './student-details/AttendanceTab';
 import { AccessAndAccountsTab } from './student-details/AccessAndAccountsTab';
 import { EducationGuide, educationGuideRegistry, type GuideState } from '../components/education-ui/EducationGuide';
-import { EducationNotice } from '../components/education-ui/EducationPrimitives';
+import { EducationButton, EducationNotice } from '../components/education-ui/EducationPrimitives';
 import { createVerifiedStudentIdentity, projectBelongsToStudent, verifyStudentRecord } from '../sparkquest/domain/studentIdentity';
 import '../components/education-ui/education-system-v1.css';
 import './student-details/education-student-details-v1.css';
@@ -867,12 +867,16 @@ export const StudentDetailsView = ({
         ...(absenceCount > 0 ? [{ id: 'attendance', title: 'Review attendance', detail: `${absenceCount} absence${absenceCount === 1 ? '' : 's'} recorded.`, icon: Calendar, action: () => setActiveTab('Attendance') }] : []),
         ...(!student.loginInfo?.email || (!isAdult && !student.parentLoginInfo?.email) ? [{ id: 'access', title: 'Finish portal access', detail: !student.loginInfo?.email ? 'Learner access is not ready.' : 'Family access is not ready.', icon: Key, action: () => setActiveTab('Access') }] : [])
     ];
-    const guideState: GuideState = studentGuideState || (activeTab === 'Overview' ? (attentionItems.length ? 'attention' : 'welcome') : 'context');
+    const guideState: GuideState = studentGuideState || (attentionItems.length ? 'attention' : 'complete');
     const guideMessage = studentGuideState
         ? educationGuideRegistry.students[studentGuideState]
-        : activeTab === 'Overview'
-            ? (attentionItems[0]?.detail || educationGuideRegistry.students.welcome)
-            : ({ Learning: 'See current enrollments and published work in one learning workspace.', Attendance: 'Review the attendance pattern before acting on an individual record.', Finance: 'Start with the balance, then inspect the payment history.', Access: 'Manage learner and family access in this protected workspace.' } as const)[activeTab];
+        : attentionItems[0]?.detail || 'No urgent follow-up. This learner record is ready for the next school day.';
+    const overviewSignals = [
+        { label: 'Active learning', value: String(activeEnrollments.length), detail: `${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`, icon: GraduationCap, tone: 'green', action: () => setActiveTab('Learning') },
+        { label: 'Balance due', value: formatCurrency(outstandingBalance), detail: outstandingBalance > 0 ? 'Review payment history' : 'Account settled', icon: Wallet, tone: outstandingBalance > 0 ? 'orange' : 'green', action: () => setActiveTab('Finance') },
+        { label: 'Attendance', value: attendanceRate === null ? 'No data' : `${attendanceRate}%`, detail: `${absenceCount} absent · ${lateCount} late`, icon: Calendar, tone: absenceCount > 0 ? 'orange' : 'blue', action: () => setActiveTab('Attendance') },
+        { label: 'Published work', value: String(publishedProjects.length), detail: 'Portfolio projects', icon: FolderKanban, tone: 'purple', action: () => { setLearningView('portfolio'); setActiveTab('Learning'); } }
+    ];
 
     return (
         <div className={`flex flex-col gap-5 pb-8 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-details-v1' : ''}`} data-edu-system={showEducationStudentDetailsV1 ? '1' : undefined} data-testid={showEducationStudentDetailsV1 ? 'education-student-details-v1' : undefined}>
@@ -894,10 +898,10 @@ export const StudentDetailsView = ({
                             {membershipEndStr && <span className="edu-student-details-v1__membership">STEM program until {membershipEndStr}</span>}
                         </div>
                     </div>
-                    <div className="edu-student-details-v1__actions">
-                        <button type="button" onClick={openSchedulePrint}><Printer size={17} />Schedule</button>
-                        {can('students.edit') && <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>}
-                        {can('students.edit') && <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>}
+                    <div className="edu-student-details-v1__actions" aria-label="Learner actions">
+                        {can('students.edit') && <EducationButton icon={Pencil} variant={attentionItems.length ? 'secondary' : 'primary'} className="edu-student-details-v1__edit" onClick={handleEditClick}>Edit record</EducationButton>}
+                        <EducationButton icon={Printer} className="edu-student-details-v1__schedule" onClick={openSchedulePrint}>Schedule</EducationButton>
+                        {can('students.edit') && <EducationButton icon={student.lastScheduleSharedAt ? CheckCircle2 : Share2} className="edu-student-details-v1__share" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</EducationButton>}
                     </div>
                 </section>
             ) : <AtlasCommandHeader
@@ -920,10 +924,6 @@ export const StudentDetailsView = ({
                     <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('students')} title="Back to students" aria-label="Back to students" />
                 </>}
             />}
-
-            <EducationGuide module="students" state={guideState} mode="compact" message={guideMessage} dismissible={activeTab !== 'Overview'} action={guideState === 'attention' && attentionItems[0] ? { label: attentionItems[0].title, onClick: attentionItems[0].action } : undefined} />
-
-            {attentionItems.length > 1 && activeTab === 'Overview' && <section className="edu-student-details-v1__attention" aria-labelledby="student-attention-title"><header><span><AlertTriangle size={18} /></span><div><h3 id="student-attention-title">Also needs attention</h3><p>Review these after the next step above.</p></div></header><div>{attentionItems.slice(1).map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={item.action}><span><Icon size={17} /></span><span><strong>{item.title}</strong><small>{item.detail}</small></span><ChevronRight size={17} /></button>; })}</div></section>}
 
             <div className="edu-student-details-v1__workspace min-w-0">
                 <main className="min-w-0">
@@ -967,15 +967,16 @@ export const StudentDetailsView = ({
 
                     <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="edu-student-details-v1__panel min-w-0" tabIndex={0}>
                         {activeTab === 'Overview' && <div className="edu-student-details-v1__overview">
-                            <div className="edu-student-details-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
-                                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Learning')} />
-                                <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
-                                <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'amber' : 'blue'} onClick={() => setActiveTab('Attendance')} />
-                                <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => { setLearningView('portfolio'); setActiveTab('Learning'); }} />
+                            <div className="edu-student-details-v1__priority">
+                                <EducationGuide module="students" state={guideState} mode="inline" message={guideMessage} action={guideState === 'attention' && attentionItems[0] ? { label: attentionItems[0].title, onClick: attentionItems[0].action } : undefined} />
+                                {attentionItems.length > 1 && <div className="edu-student-details-v1__attention" aria-label="More items to review"><span>Also to review</span>{attentionItems.slice(1).map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={item.action} title={item.detail}><Icon size={15} /><strong>{item.title}</strong><ChevronRight size={15} /></button>; })}</div>}
+                            </div>
+                            <div className="edu-student-details-v1__signals" aria-label="Learner record summary">
+                                {overviewSignals.map(signal => { const Icon = signal.icon; return <button key={signal.label} type="button" className="edu-student-details-v1__signal" data-tone={signal.tone} onClick={signal.action} aria-label={`${signal.label}: ${signal.value}. ${signal.detail}`}><span className="edu-student-details-v1__signal-icon"><Icon size={20} aria-hidden="true" /></span><span className="edu-student-details-v1__signal-label">{signal.label}</span><strong>{signal.value}</strong><small>{signal.detail}</small><ChevronRight className="edu-student-details-v1__signal-arrow" size={17} aria-hidden="true" /></button>; })}
                             </div>
                             <div className="edu-student-details-v1__overview-grid">
-                                <section><header><span><Users size={18} /></span><div><h3>Learner and family</h3><p>Essential contact and care information</p></div>{can('students.edit') && <button type="button" onClick={handleEditClick}>Edit</button>}</header><dl><div><dt><Mail size={15} />Learner email</dt><dd>{student.email || 'Not added'}</dd></div><div><dt><Phone size={15} />Parent phone</dt><dd>{student.parentPhone || 'Not added'}</dd></div><div><dt><Calendar size={15} />Birth date</dt><dd>{student.birthDate || 'Not added'}</dd></div><div data-alert={Boolean(student.medicalInfo)}><dt><Shield size={15} />Medical notes</dt><dd>{student.medicalInfo || 'No medical alerts'}</dd></div></dl></section>
-                                <section><header><span><GraduationCap size={18} /></span><div><h3>Current learning</h3><p>Programs and weekly delivery</p></div><button type="button" onClick={() => setActiveTab('Learning')}>Open</button></header>{activeEnrollments.length ? <div className="edu-student-details-v1__program-list">{activeEnrollments.slice(0, 3).map(enrollment => <button type="button" key={enrollment.id} onClick={() => setActiveTab('Learning')}><span><strong>{enrollment.programName}</strong><small>{enrollment.gradeName || 'Level not set'} · {enrollment.groupName || 'Group not set'}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="edu-student-details-v1__overview-empty"><BookOpen size={24} /><p>No active enrollment.</p>{can('students.enroll') && <button type="button" onClick={() => onQuickEnroll(student.id)}>Add enrollment</button>}</div>}</section>
+                                <section className="edu-student-details-v1__family"><header><span><Users size={19} /></span><div><h3>Learner and family</h3><p>Contact and care at a glance</p></div>{can('students.edit') && <EducationButton variant="quiet" onClick={handleEditClick}>Edit</EducationButton>}</header><dl><div><dt><Mail size={16} />Learner email</dt><dd data-missing={!student.email}>{student.email || 'Not added'}</dd></div><div><dt><Phone size={16} />Parent phone</dt><dd data-missing={!student.parentPhone}>{student.parentPhone || 'Not added'}</dd></div><div><dt><Calendar size={16} />Birth date</dt><dd data-missing={!student.birthDate}>{student.birthDate || 'Not added'}</dd></div><div data-alert={Boolean(student.medicalInfo)}><dt><Shield size={16} />Medical notes</dt><dd>{student.medicalInfo || 'No medical alerts'}</dd></div></dl></section>
+                                <section className="edu-student-details-v1__current-learning"><header><span><GraduationCap size={19} /></span><div><h3>Current learning</h3><p>Programs and weekly schedule</p></div><EducationButton variant="quiet" onClick={() => setActiveTab('Learning')}>View all</EducationButton></header>{activeEnrollments.length ? <div className="edu-student-details-v1__program-list">{activeEnrollments.slice(0, 3).map(enrollment => <button type="button" key={enrollment.id} onClick={() => setActiveTab('Learning')}><span><strong>{enrollment.programName}</strong><small>{enrollment.gradeName || 'Level not set'} · {enrollment.groupName || 'Group not set'}{enrollment.groupTime ? ` · ${enrollment.groupTime}` : ''}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="edu-student-details-v1__overview-empty"><BookOpen size={24} /><p>No active enrollment yet.</p>{can('students.enroll') && <EducationButton variant="primary" onClick={() => onQuickEnroll(student.id)}>Add enrollment</EducationButton>}</div>}</section>
                             </div>
                         </div>}
                         {activeTab === 'Learning' && <div className="edu-student-details-v1__learning"><div className="edu-student-details-v1__subtabs" role="group" aria-label="Learning workspace"><button type="button" aria-pressed={learningView === 'enrollments'} onClick={() => setLearningView('enrollments')}><GraduationCap size={16} />Enrollments <span>{studentEnrollments.length}</span></button><button type="button" aria-pressed={learningView === 'portfolio'} onClick={() => setLearningView('portfolio')}><FolderKanban size={16} />Portfolio <span>{publishedProjects.length}</span></button></div>{learningView === 'enrollments' ? <AcademicsTab studentEnrollments={studentEnrollments} onQuickEnroll={onQuickEnroll} navigateTo={navigateTo as any} setEditEnrollment={setEditEnrollment} initiateDeleteEnrollment={initiateDeleteEnrollment} studentId={student.id} canEnroll={can('students.enroll')} canEdit={can('students.enroll')} canDelete={can('students.delete')} /> : <PortfolioTab publishedProjects={publishedProjects} setSelectedProject={setSelectedProject} />}</div>}

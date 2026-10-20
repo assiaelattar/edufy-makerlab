@@ -1,5 +1,13 @@
 # Student Details — Design System v1 completion audit
 
+## Overview benchmark for visual review — 2026-10-20
+
+The Overview now has a compact green learner identity header, one contextual 011Y next step, a short secondary attention row, four quieter tactile record links, and clearer family and current-learning panels. At 390 px the edit action spans the header while Schedule and Share sit on one row. The 011Y guide appears on Overview only; it no longer repeats above every tab. This is the **review checkpoint** for the remaining Learning, Attendance, Finance and Access visual polish. Their earlier migration and workflow behavior remain in place; this benchmark has not been propagated to them.
+
+The header, signal tiles and Overview-specific controls use existing `--ds-*` tokens and `EducationButton`; obsolete hero and signal overrides were removed. No selector, stored schema, permission or save handler changed. Synthetic captures: `evidence/student-details/overview-benchmark-desktop-light.png`, `overview-benchmark-desktop-dark.png`, `overview-benchmark-mobile-390-light.png`, `overview-benchmark-mobile-390-dark.png`, and complete mobile captures `overview-benchmark-mobile-390-light-full.png` and `overview-benchmark-mobile-390-dark-full.png`.
+
+The actual component was checked in the isolated preview at 1440 px and 390 px, light and dark. The 390 px document had `scrollWidth=390`; keyboard Tab reached the theme control. The empty fixture exposed the no-enrollment action, and the restricted fixture omitted Edit and Share while retaining read-only links. A long-name/missing-parent-phone fixture exposed avatar shrinkage, which was fixed; its 390 px capture is `overview-benchmark-mobile-390-long-data.png`. With reduced motion, the signal transition and animation computed to `1e-05s`. `npm.cmd run build`, all 27 Design System checks, and `git diff --check` passed. This is synthetic visual evidence only; signed-in school and physical-phone acceptance remain open. No school write, push or deployment occurred.
+
 Date: 2026-10-20. Scope: the Student Details route and its local child workspaces, forms and dialogs. This is an isolated local candidate; it has not been pushed or deployed.
 
 ## What changed

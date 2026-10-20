@@ -20,9 +20,17 @@ const student = {
 };
 if (scenario === 'no-access') { delete student.loginInfo; delete student.parentLoginInfo; }
 if (scenario === 'verified-parent') student.parentLoginInfo.email='p.morgan@makerlab.academy';
+if (scenario === 'long') {
+  student.name='Alexandria-Morgan Example-Synthetic-Learner';
+  student.school='Example International School of Creative Science and Robotics';
+  student.email='alexandria.morgan.synthetic.learner@example.invalid';
+  student.parentPhone='';
+  student.medicalInfo='Synthetic note: bring the signed care form to every off-site robotics activity.';
+}
 
 const program = {id:'program-synthetic',name:'Creative Robotics',status:'active',grades:[{id:'level-synthetic',name:'Explorer',groups:[{id:'group-synthetic',name:'Tuesday makers',day:'Tuesday',time:'16:00'}]}]};
 const enrollment = {id:'enrollment-synthetic',studentId:student.id,organizationId:'synthetic-only',programId:program.id,programName:program.name,gradeId:'level-synthetic',gradeName:'Explorer',groupId:'group-synthetic',groupName:'Tuesday makers',groupTime:'Tuesday 16:00',status:'active',totalAmount:1200,paidAmount:700,balance:500,paymentPlan:'monthly',paymentPromises:[{month:'2026-10',amount:500},{month:'2026-11',amount:700}],startDate:'2026-09-01'};
+if (scenario === 'long') { enrollment.programName='Creative Robotics and Future Systems Laboratory'; enrollment.groupName='Tuesday makers and advanced prototype studio'; }
 if(scenario==='missing-certificate-date')enrollment.startDate='';
 const proofUrl = 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540" viewBox="0 0 900 540"><rect width="900" height="540" fill="#eef6ff"/><rect x="75" y="75" width="750" height="390" rx="24" fill="white" stroke="#5495d4" stroke-width="6"/><text x="125" y="185" font-family="Arial" font-size="42" fill="#17324d">Synthetic payment proof</text><text x="125" y="250" font-family="Arial" font-size="27" fill="#415a70">Example School · MAD 700.00</text><text x="125" y="315" font-family="Arial" font-size="24" fill="#415a70">No real bank or school document</text></svg>');
 const payment = {id:'payment-synthetic',studentId:student.id,enrollmentId:enrollment.id,organizationId:'synthetic-only',studentName:student.name,date:'2026-10-01',amount:700,method:'cash',status:'paid',proofUrl};
