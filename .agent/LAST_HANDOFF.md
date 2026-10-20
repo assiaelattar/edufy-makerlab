@@ -1,4 +1,10 @@
-# Latest handoff — 2026-10-20 reviewed school modules
+# Latest handoff — 2026-10-21 Edufy workspace navigation v2
+
+The user reported that the live application still displayed the older menu. This focused release promotes the completed compact rail, workspace panel, command search, pinned and recent destinations, mobile bottom navigation, and contextual page heading from the local Design System reference. It changes only the school shell presentation and its local preference handling; module logic, authentication, Firebase paths, and school records are unchanged. The remaining module-specific Design System candidates stay local pending their documented acceptance.
+
+---
+
+# Previous handoff — 2026-10-20 reviewed school modules
 
 The user requested publication of the completed, polished Edufy app modules. This clean `origin/main` release cut includes Programs, the Attendance desk, Classes, Calendar, Admissions/Workshops, and the shared confirmation modal. The Programs roster also formats start dates with the existing helper. It carries only their final reviewed files plus the Education tab/register/status primitives required for integration. The production build, Education System check, membership check, roster-print smoke, repository agent check and diff check pass. Repository-wide TypeScript remains red from existing diagnostics; none match the changed release files.
 

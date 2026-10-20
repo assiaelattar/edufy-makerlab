@@ -1,5 +1,10 @@
 # Education UI decisions
 
+## 2026-10-21 — Promote the global shell independently
+
+- Release the reviewed navigation v2 as a focused presentation cut after the user identified the older live menu. Preserve module handlers and leave module-specific acceptance candidates outside the cut.
+
+
 ## 2026-10-20 — Selective release promotion
 
 - Promote reviewed school modules by explicit final file delta from the coordinator branch into current `main`; never merge its complete history. Preserve business handlers, record shapes and permission sources.

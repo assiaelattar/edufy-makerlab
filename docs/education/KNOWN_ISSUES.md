@@ -1,5 +1,9 @@
 # Education UI known issues
 
+## 2026-10-21 — Navigation v2 release boundary
+
+This shell cut does not promote the remaining local module-specific Design System changes. Their signed-in role, persistence, and physical-phone acceptance remains tracked in each module handoff.
+
 ## 2026-10-20 — Reviewed module follow-ups
 
 The released visual scope has synthetic action checks and read-only signed-in evidence where recorded in its module reports. Production writes were not exercised for design QA. A physical-phone and designated-role pass, populated Calendar week, real waiting list, actual print paths, and FaceID recognition remain follow-ups. Finance/Expenses real ledger acceptance, Pickup cross-product persistence, Student Details and Students signed-in checks, Communications bridge review, and the active Learning/Portfolio, Team and Marketing work are separate queued release candidates.

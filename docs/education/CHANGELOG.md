@@ -1,5 +1,9 @@
 # Education UI changelog
 
+## 2026-10-21 — Workspace navigation v2 release cut
+
+- Promoted the reviewed compact rail, searchable workspace panel, command palette, pinned/recent destinations, and mobile bottom navigation into a focused main-based release. Module-specific candidates remain queued.
+
 ## 2026-10-20 — Reviewed school module release cut
 
 - Selected the final reviewed Programs, Attendance desk, Classes, Calendar, Admissions/Workshops and shared confirmation presentation from the coordinator branch for a clean main-based release.

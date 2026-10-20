@@ -20,14 +20,12 @@ import {
     EyeOff,
     X
 } from 'lucide-react';
-import { arrayMove } from '@dnd-kit/sortable';
 import { useAppContext } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { NotificationDropdown } from '../NotificationDropdown';
 import { Logo } from '../Logo';
 import { ModuleConfig } from '../../services/moduleRegistry';
 import { getAppById } from '../../services/appRegistry';
-import { AtlasWorkspaceTabs } from '../atlas/AtlasWorkspaceTabs';
 import { useModuleContext } from '../../context/ModuleContext';
 import { EducationAdminShellV1 } from './EducationAdminShellV1';
 
@@ -124,11 +122,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         }
     });
     const theme = showEducationShellV1 ? selectedTheme : 'dark';
-    const [workspaceTabIds, setWorkspaceTabIds] = useState<string[]>([]);
+    const [recentModuleIds, setRecentModuleIds] = useState<string[]>([]);
     const [hiddenModuleIds, setHiddenModuleIds] = useState<string[]>([]);
     const [favoriteModuleIds, setFavoriteModuleIds] = useState<string[]>([]);
     const [preferencesReady, setPreferencesReady] = useState(false);
     const moduleContentRef = useRef<HTMLDivElement>(null);
+    const scrollPositionsRef = useRef<Record<string, number>>({});
     const loadedPreferenceScopeRef = useRef<string | null>(null);
 
     const modules = useMemo(() => {
@@ -152,28 +151,36 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
 
     const favoriteModules = visibleModules.filter(module => favoriteModuleIds.includes(module.id));
 
-    const activeModule = modules.find(module => module.id === currentView);
+    const contextualModuleId = currentView === 'student-details'
+        ? 'students'
+        : currentView === 'activity-details'
+            ? 'marketing'
+            : currentView === 'app-details'
+                ? 'dashboard'
+                : currentView;
+    const activeModule = modules.find(module => module.id === contextualModuleId);
     const activeTone = getTone(activeModule?.color);
     const visibleInstalledApps = installedApps.filter(appId => getEntitlement(appId)?.entitled !== false);
     const tenantName = settings.academyName || currentOrganization?.name || 'Atlas';
     const roleLabel = userProfile?.role?.replace('_', ' ') || 'member';
-    const preferenceScope = currentOrganization?.id || 'default';
+    const organizationPreferenceScope = currentOrganization?.id || 'default';
+    const preferenceScope = `${organizationPreferenceScope}:${user?.uid || userProfile?.email || 'member'}`;
 
     useEffect(() => {
         setPreferencesReady(false);
         loadedPreferenceScopeRef.current = null;
         try {
-            const storedTabs = JSON.parse(localStorage.getItem(`atlas:workspace-tabs:${preferenceScope}`) || '[]');
-            setWorkspaceTabIds(Array.isArray(storedTabs) ? storedTabs : []);
-            const storedHiddenModules = JSON.parse(localStorage.getItem(`atlas:hidden-modules:${preferenceScope}`) || '[]');
-            const storedFavoriteModules = JSON.parse(localStorage.getItem(`atlas:favorite-modules:${preferenceScope}`) || '[]');
+            const storedRecents = JSON.parse(localStorage.getItem(`edufy:recent-modules:${preferenceScope}`) || '[]');
+            setRecentModuleIds(Array.isArray(storedRecents) ? storedRecents : []);
+            const storedHiddenModules = JSON.parse(localStorage.getItem(`atlas:hidden-modules:${preferenceScope}`) || localStorage.getItem(`atlas:hidden-modules:${organizationPreferenceScope}`) || '[]');
+            const storedFavoriteModules = JSON.parse(localStorage.getItem(`atlas:favorite-modules:${preferenceScope}`) || localStorage.getItem(`atlas:favorite-modules:${organizationPreferenceScope}`) || '[]');
             setHiddenModuleIds(Array.isArray(storedHiddenModules) ? storedHiddenModules : []);
             setFavoriteModuleIds(Array.isArray(storedFavoriteModules) ? storedFavoriteModules : []);
             setIsSidebarCompact(localStorage.getItem(`atlas:sidebar-compact:${preferenceScope}`) === 'true');
             setDensity(localStorage.getItem(`atlas:density:${preferenceScope}`) === 'compact' ? 'compact' : 'comfortable');
             setSelectedTheme(localStorage.getItem(`atlas:theme:${preferenceScope}`) === 'dark' ? 'dark' : 'light');
         } catch {
-            setWorkspaceTabIds([]);
+            setRecentModuleIds([]);
             setHiddenModuleIds([]);
             setFavoriteModuleIds([]);
             setIsSidebarCompact(false);
@@ -182,7 +189,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         }
         loadedPreferenceScopeRef.current = preferenceScope;
         setPreferencesReady(true);
-    }, [preferenceScope]);
+    }, [organizationPreferenceScope, preferenceScope]);
 
     useEffect(() => {
         document.documentElement.dataset.atlasTheme = theme;
@@ -196,60 +203,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     }, [theme]);
 
     useEffect(() => {
-        if (!modules.some(module => module.id === currentView)) return;
-        setWorkspaceTabIds(previous => {
-            const available = previous.filter(id => modules.some(module => module.id === id));
-            if (available.includes(currentView)) {
-                const unchanged = available.length === previous.length && available.every((id, index) => id === previous[index]);
-                return unchanged ? previous : available;
-            }
-            return [...available, currentView].slice(-8);
-        });
-    }, [currentView, modules]);
+        if (!modules.some(module => module.id === contextualModuleId)) return;
+        setRecentModuleIds(previous => [contextualModuleId, ...previous.filter(id => id !== contextualModuleId && modules.some(module => module.id === id))].slice(0, 6));
+    }, [contextualModuleId, modules]);
 
     useEffect(() => {
         if (!preferencesReady || loadedPreferenceScopeRef.current !== preferenceScope) return;
-        localStorage.setItem(`atlas:workspace-tabs:${preferenceScope}`, JSON.stringify(workspaceTabIds));
+        localStorage.setItem(`edufy:recent-modules:${preferenceScope}`, JSON.stringify(recentModuleIds));
         localStorage.setItem(`atlas:hidden-modules:${preferenceScope}`, JSON.stringify(hiddenModuleIds));
         localStorage.setItem(`atlas:favorite-modules:${preferenceScope}`, JSON.stringify(favoriteModuleIds));
         localStorage.setItem(`atlas:sidebar-compact:${preferenceScope}`, String(isSidebarCompact));
         localStorage.setItem(`atlas:density:${preferenceScope}`, density);
         localStorage.setItem(`atlas:theme:${preferenceScope}`, selectedTheme);
-    }, [density, favoriteModuleIds, hiddenModuleIds, isSidebarCompact, preferenceScope, preferencesReady, selectedTheme, workspaceTabIds]);
+    }, [density, favoriteModuleIds, hiddenModuleIds, isSidebarCompact, preferenceScope, preferencesReady, recentModuleIds, selectedTheme]);
 
     useEffect(() => {
         const content = moduleContentRef.current;
         if (!content) return;
-
-        content.scrollTop = 0;
-        requestAnimationFrame(() => content.focus({ preventScroll: true }));
-    }, [currentView, viewParams]);
-
-    const workspaceTabs = workspaceTabIds
-        .map(id => modules.find(module => module.id === id))
-        .filter((module): module is ModuleConfig => Boolean(module))
-        .map(module => ({
-            id: module.id,
-            label: module.label,
-            icon: module.icon,
-            accent: getTone(module.color).accent
-        }));
-
-    const reorderWorkspaceTabs = (activeId: string, overId: string) => {
-        setWorkspaceTabIds(previous => {
-            const activeIndex = previous.indexOf(activeId);
-            const overIndex = previous.indexOf(overId);
-            if (activeIndex < 0 || overIndex < 0) return previous;
-            return arrayMove(previous, activeIndex, overIndex);
+        const viewKey = currentView;
+        requestAnimationFrame(() => {
+            content.scrollTop = scrollPositionsRef.current[viewKey] || 0;
+            content.focus({ preventScroll: true });
         });
-    };
-
-    const closeWorkspaceTab = (id: string) => {
-        const remaining = workspaceTabIds.filter(tabId => tabId !== id);
-        if (remaining.length === 0) return;
-        setWorkspaceTabIds(remaining);
-        if (id === currentView) navigateTo(remaining[remaining.length - 1] as any);
-    };
+        return () => {
+            scrollPositionsRef.current[viewKey] = content.scrollTop;
+        };
+    }, [currentView]);
 
     const closeMobileMenu = () => setIsMobileMenuOpen(false);
 
@@ -287,9 +266,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 setHiddenModuleIds={setHiddenModuleIds}
                 favoriteModuleIds={favoriteModuleIds}
                 setFavoriteModuleIds={setFavoriteModuleIds}
-                workspaceTabs={workspaceTabs}
-                onCloseWorkspaceTab={closeWorkspaceTab}
-                onReorderWorkspaceTabs={reorderWorkspaceTabs}
+                recentModuleIds={recentModuleIds}
                 moduleContentRef={moduleContentRef}
                 signOut={signOut}
                 signOutLabel={t('menu.signout')}
@@ -611,18 +588,6 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                         </div>
                     </div>
 
-                    <div className="atlas-school-divider mt-1.5 flex min-h-9 min-w-0 items-center gap-2 border-t pt-1.5">
-                        <span className="atlas-text-subtle hidden shrink-0 px-1 text-[9px] font-black uppercase lg:block">Open pages</span>
-                        {workspaceTabs.length > 0 && (
-                            <AtlasWorkspaceTabs
-                                tabs={workspaceTabs}
-                                activeId={currentView}
-                                onActivate={id => navigateTo(id as any)}
-                                onClose={closeWorkspaceTab}
-                                onReorder={reorderWorkspaceTabs}
-                            />
-                        )}
-                    </div>
                 </header>
 
                 <div
