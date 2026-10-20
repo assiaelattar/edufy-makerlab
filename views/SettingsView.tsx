@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import './admin/education-admin-tools-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import './settings/education-settings-v1.css';
 import { Settings, FileText, FileSpreadsheet, Download, Upload, RefreshCw, AlertTriangle, Save, CheckCircle2, ToggleLeft, ToggleRight, Users, Shield, Trash2, UserPlus, CheckSquare, Square, Wand2, Key, Loader2, Pencil, Copy, Image as ImageIcon, Globe, User, Lock, Fingerprint, Zap, Printer, Clock, Calendar, Building2, CreditCard, Database, Plug, Boxes, HardDrive, BadgeCheck } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -13,13 +14,12 @@ import { AppSettings, UserProfile, RoleDefinition } from '../types';
 import { Modal } from '../components/Modal';
 import { compressImage } from '../utils/helpers';
 import { isBiometricAvailable, registerBiometric, isBiometricEnabled, clearBiometric } from '../utils/biometrics';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState } from '../components/atlas/AtlasSurface';
+import { EducationButton, EducationBadge, EducationNotice, EducationState, EducationStatusPill } from '../components/education-ui/EducationPrimitives';
 import { SettingsField, SettingsMetric, SettingsNavigation, SettingsPanel, SettingsToggle, settingsInputClass, type SettingsNavigationItem } from '../components/settings/SettingsUI';
 
 type SettingsSection = 'general' | 'plan' | 'documents' | 'forms' | 'data' | 'api' | 'team' | 'maintenance';
 
 export const SettingsView = () => {
-    const showEducationAdminToolsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { settings: globalSettings, teamMembers, students, programs, enrollments, payments } = useAppContext();
     const { can, roles: authRoles, createSecondaryUser: createAuthUser, userProfile, user, currentOrganization, isSuperAdmin } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
@@ -27,7 +27,10 @@ export const SettingsView = () => {
     const [isDirty, setIsDirty] = useState(false);
     const [activeTab, setActiveTab] = useState<SettingsSection>('general');
     const [isImporting, setIsImporting] = useState(false);
+    const [importFeedback, setImportFeedback] = useState<{ status: 'info' | 'success' | 'danger'; message: string } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [saveFeedback, setSaveFeedback] = useState<{ status: 'success' | 'danger'; message: string } | null>(null);
+    const [integrationError, setIntegrationError] = useState(false);
     const justSaved = useRef(false);
     const [logoPreview, setLogoPreview] = useState<string | null>(globalSettings.logoUrl || null);
     const canManageSettings = ['owner', 'admin', 'super_admin'].includes(userProfile?.role || '');
@@ -83,10 +86,11 @@ export const SettingsView = () => {
     useEffect(() => {
         if (!db || !currentOrganization?.id || !canManageIntegrations) return;
         return onSnapshot(doc(db, 'organizations', currentOrganization.id, 'integrations', 'secrets'), snapshot => {
+            setIntegrationError(false);
             if (!snapshot.exists()) return;
             const data = snapshot.data() as Pick<AppSettings, 'apiConfig'>;
             setSettings(current => ({ ...current, apiConfig: data.apiConfig || current.apiConfig }));
-        });
+        }, () => setIntegrationError(true));
     }, [canManageIntegrations, currentOrganization?.id]);
 
     useEffect(() => {
@@ -103,14 +107,19 @@ export const SettingsView = () => {
         if (!canManageSettings) return;
         setSettings(newSettings);
         setIsDirty(true);
+        setSaveFeedback(null);
     };
 
     // Team & Access State
     const [roles, setRoles] = useState<RoleDefinition[]>([]);
     const [selectedRoleId, setSelectedRoleId] = useState('admission_officer');
+    const [selectedMemberUid, setSelectedMemberUid] = useState<string | null>(null);
+    const [roleLoadState, setRoleLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+    const [roleFeedback, setRoleFeedback] = useState<{ status: 'success' | 'danger'; message: string } | null>(null);
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
     const [isEditingUser, setIsEditingUser] = useState(false);
     const [isProcessingTeam, setIsProcessingTeam] = useState(false);
+    const [teamError, setTeamError] = useState('');
     const [newUser, setNewUser] = useState({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
 
     // Result Modal
@@ -127,6 +136,7 @@ export const SettingsView = () => {
     const [isRepairing, setIsRepairing] = useState(false);
 
     const openCreateTeamMember = () => {
+        setTeamError('');
         setIsEditingUser(false);
         setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
         setIsUserModalOpen(true);
@@ -167,10 +177,12 @@ export const SettingsView = () => {
 
     useEffect(() => {
         if (activeTab !== 'team' || !db || isStudent || !currentOrganization?.id) return;
+        setRoleLoadState('loading');
         const unsubRoles = onSnapshot(collection(db, 'organizations', currentOrganization.id, 'roles'), (snap) => {
             const tenantOverrides = snap.docs.map(d => ({ ...d.data(), id: d.id } as RoleDefinition));
             setRoles(authRoles.map(baseRole => tenantOverrides.find(role => role.id === baseRole.id) || baseRole));
-        }, () => setRoles(authRoles));
+            setRoleLoadState('ready');
+        }, () => { setRoles(authRoles); setRoleLoadState('error'); });
         return () => { unsubRoles(); };
     }, [activeTab, authRoles, currentOrganization?.id, isStudent]);
 
@@ -181,10 +193,12 @@ export const SettingsView = () => {
         const academyName = settings.academyName.trim();
         const academicYear = settings.academicYear.trim().replace('/', '-');
         if (!academyName) {
+            setSaveFeedback({ status: 'danger', message: 'Enter the academy name before saving.' });
             await showAlert('Academy name required', 'Enter the name families and staff should see across the workspace.', 'warning');
             return;
         }
         if (!/^\d{4}-\d{4}$/.test(academicYear)) {
+            setSaveFeedback({ status: 'danger', message: 'Use an academic year such as 2026-2027 before saving.' });
             await showAlert('Check the academic year', 'Use a year range such as 2026-2027.', 'warning');
             return;
         }
@@ -208,9 +222,11 @@ export const SettingsView = () => {
             justSaved.current = true;
             setSettings(normalizedSettings);
             setIsDirty(false);
+            setSaveFeedback({ status: 'success', message: 'Workspace changes saved and active.' });
             await showAlert('Workspace updated', 'Your organization settings are now active across Edufy.', 'success');
         } catch (err: any) {
             console.error(err);
+            setSaveFeedback({ status: 'danger', message: 'Settings were not saved. Your edits are still here; check the connection and try again.' });
             await showAlert('Settings not saved', err.message || 'Check your connection and organization access, then try again.', 'danger');
         } finally {
             setIsSaving(false);
@@ -226,9 +242,10 @@ export const SettingsView = () => {
             setLogoPreview(compressed);
             updateSettings({ ...settings, logoUrl: compressed });
         } catch (err: any) {
-
             console.error(err);
-            showAlert('Error', `Failed to process or save logo image: ${err.message}`, 'danger');
+            const message = err?.message || 'The selected file is not a supported image.';
+            setSaveFeedback({ status: 'danger', message: `Academy logo could not be processed. ${message}` });
+            showAlert('Logo not updated', message, 'danger');
         }
     };
 
@@ -241,13 +258,16 @@ export const SettingsView = () => {
             updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, logoUrl: compressed } });
         } catch (err: any) {
             console.error(err);
-            showAlert('Error', `Failed to process or save logo image: ${err.message}`, 'danger');
+            const message = err?.message || 'The selected file is not a supported image.';
+            setSaveFeedback({ status: 'danger', message: `Document logo could not be processed. ${message}` });
+            showAlert('Document logo not updated', message, 'danger');
         }
     };
 
     const handleAddUser = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db || !currentOrganization?.id || !canManageTeam) return;
+        setTeamError('');
         setIsProcessingTeam(true);
 
         try {
@@ -282,6 +302,7 @@ export const SettingsView = () => {
             setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } });
         } catch (err: any) {
             console.error(err);
+            setTeamError(err.message || 'Team member could not be saved. Your draft is still here.');
             showAlert("Error", `Error: ${err.message}`, "danger");
         } finally {
             setIsProcessingTeam(false);
@@ -418,7 +439,14 @@ export const SettingsView = () => {
         const updatedRoles = roles.map(r => r.id === roleId ? { ...r, permissions: newPermissions } : r);
         setRoles(updatedRoles);
 
-        await setDoc(doc(db, 'organizations', currentOrganization.id, 'roles', roleId), { ...role, id: roleId, permissions: newPermissions, updatedAt: serverTimestamp() }, { merge: true });
+        setRoleFeedback(null);
+        try {
+            await setDoc(doc(db, 'organizations', currentOrganization.id, 'roles', roleId), { ...role, id: roleId, permissions: newPermissions, updatedAt: serverTimestamp() }, { merge: true });
+            setRoleFeedback({ status: 'success', message: `${role.label} permissions saved.` });
+        } catch (error) {
+            setRoles(roles);
+            setRoleFeedback({ status: 'danger', message: 'Role permissions could not be saved. Your change was reverted; try again.' });
+        }
     };
 
     const downloadCSVTemplate = () => {
@@ -460,12 +488,14 @@ export const SettingsView = () => {
         const file = e.target.files?.[0];
         if (!file || !currentOrganization?.id || !canManageSettings) return;
         setIsImporting(true);
+        setImportFeedback({ status: 'info', message: `Importing ${file.name}…` });
         const reader = new FileReader();
         reader.onload = async (event) => {
-            if (!db) { setIsImporting(false); return; }
+            if (!db) { setIsImporting(false); setImportFeedback({ status: 'danger', message: 'Import is unavailable. Check the connection and try again.' }); e.target.value = ''; return; }
             const text = event.target?.result as string;
-            if (!text) { setIsImporting(false); return; }
+            if (!text) { setIsImporting(false); setImportFeedback({ status: 'danger', message: 'The selected file is empty or could not be read.' }); e.target.value = ''; return; }
             const lines = text.split('\n');
+            if (!lines.slice(1).some(line => line.trim())) { setIsImporting(false); setImportFeedback({ status: 'danger', message: 'The CSV has no learner rows to import.' }); e.target.value = ''; return; }
             let successCount = 0;
             let errorCount = 0;
             for (let i = 1; i < lines.length; i++) {
@@ -482,9 +512,11 @@ export const SettingsView = () => {
                 } catch (err) { errorCount++; }
             }
             setIsImporting(false);
+            setImportFeedback({ status: errorCount ? 'danger' : 'success', message: `${successCount} imported · ${errorCount} failed or skipped. Review the source file before retrying.` });
             showAlert("Import Complete", `Success: ${successCount}\nFailed/Skipped: ${errorCount}`, "info");
             e.target.value = '';
         };
+        reader.onerror = () => { setIsImporting(false); setImportFeedback({ status: 'danger', message: 'The file could not be read. Choose the CSV again.' }); e.target.value = ''; };
         reader.readAsText(file);
     };
 
@@ -743,83 +775,21 @@ export const SettingsView = () => {
     // --- RENDER: STUDENT SETTINGS ---
     if (isStudent) {
         return (
-            <div className="max-w-2xl mx-auto space-y-6 pb-24 md:pb-8 h-full animate-in fade-in slide-in-from-bottom-4">
-                <AtlasCommandHeader
-                    eyebrow="Personal settings"
-                    title="My Account"
-                    description="Manage your sign-in, profile information, and account security."
-                    icon={User}
-                />
-
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white text-sm">Profile Information</h3></div>
-                    <div className="p-6 space-y-4">
-                        <div>
-                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Full Name</label>
-                            <div className="text-white font-medium">{userProfile?.name}</div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1">Email (Login)</label>
-                            <div className="text-white font-mono">{userProfile?.email}</div>
-                        </div>
-                        <div className="text-xs text-slate-500 italic pt-2">
-                            To update these details, please contact your academy administrator.
-                        </div>
-                    </div>
-                </div>
-
-                {/* Biometric Setup for Student */}
-                {canUseBiometrics && (
-                    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex items-center gap-2"><Fingerprint size={16} className="text-cyan-500" /><h3 className="font-bold text-white text-sm">Biometric Login</h3></div>
-                        <div className="p-6 flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-white font-medium">FaceID / TouchID</p>
-                                <p className="text-xs text-slate-500">Use biometric authentication to log in faster.</p>
-                            </div>
-                            <button
-                                onClick={handleToggleBiometric}
-                                className={`min-h-10 px-4 py-2 rounded-lg text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${biometricActive ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-teal-500 hover:bg-teal-400 text-slate-950'}`}
-                            >
-                                {biometricActive ? 'Disable' : 'Setup FaceID'}
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                    <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex items-center gap-2"><Lock size={16} className="text-amber-500" /><h3 className="font-bold text-white text-sm">Security</h3></div>
-                    <div className="p-6">
-                        <form onSubmit={handleStudentChangePassword} className="space-y-4">
-                            {passwordError && <div className="bg-red-950/30 text-red-400 p-3 rounded text-xs border border-red-900/50">{passwordError}</div>}
-                            {passwordSuccess && <div className="bg-emerald-950/30 text-emerald-400 p-3 rounded text-xs border border-emerald-900/50">{passwordSuccess}</div>}
-
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">New Password</label>
-                                <input
-                                    type="password"
-                                    required
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-teal-400 outline-none"
-                                    value={passwordForm.new}
-                                    onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })}
-                                    placeholder="At least 6 characters"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Confirm New Password</label>
-                                <input
-                                    type="password"
-                                    required
-                                    className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-teal-400 outline-none"
-                                    value={passwordForm.confirm}
-                                    onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
-                                    placeholder="Repeat password"
-                                />
-                            </div>
-                            <button type="submit" className="w-full min-h-10 py-3 bg-teal-500 hover:bg-teal-400 text-slate-950 rounded-lg font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">Update password</button>
-                        </form>
-                    </div>
-                </div>
+            <div className="edu-settings-v1 edu-settings-personal" data-edu-system="1">
+                <header className="edu-settings-hero"><span className="edu-settings-hero__icon"><User size={22} /></span><div><span className="edu-settings-kicker">Personal settings</span><h1>My account</h1><p>Manage sign-in and account security.</p></div></header>
+                <SettingsPanel title="Profile information" description="Your academy administrator manages these details." icon={User} accent="purple">
+                    <dl className="edu-settings-facts"><div><dt>Full name</dt><dd>{userProfile?.name || 'Not provided'}</dd></div><div><dt>Email login</dt><dd>{userProfile?.email || 'Not provided'}</dd></div></dl>
+                </SettingsPanel>
+                {canUseBiometrics && <SettingsPanel title="Biometric sign-in" description="Use the device authenticator for faster login." icon={Fingerprint} accent="blue"><SettingsToggle checked={biometricActive} onChange={handleToggleBiometric} label="Face ID or Touch ID" description={biometricActive ? 'Enabled on this device' : 'Available on this device'} /></SettingsPanel>}
+                <SettingsPanel title="Password" description="Choose a new password for your account." icon={Lock} accent="yellow">
+                    <form onSubmit={handleStudentChangePassword} className="edu-settings-form">
+                        {passwordError && <EducationNotice status="danger">{passwordError}</EducationNotice>}
+                        {passwordSuccess && <EducationNotice status="success">{passwordSuccess}</EducationNotice>}
+                        <SettingsField label="New password" required><input type="password" autoComplete="new-password" className={settingsInputClass} value={passwordForm.new} onChange={e => setPasswordForm({ ...passwordForm, new: e.target.value })} placeholder="At least 6 characters" /></SettingsField>
+                        <SettingsField label="Confirm new password" required><input type="password" autoComplete="new-password" className={settingsInputClass} value={passwordForm.confirm} onChange={e => setPasswordForm({ ...passwordForm, confirm: e.target.value })} placeholder="Repeat password" /></SettingsField>
+                        <EducationButton type="submit" variant="primary" icon={Save}>Update password</EducationButton>
+                    </form>
+                </SettingsPanel>
             </div>
         );
     }
@@ -830,144 +800,107 @@ export const SettingsView = () => {
     const configurableRoles = roles.filter(role => !['super_admin', 'owner', 'admin', 'student', 'parent'].includes(role.id));
     const assignableRoles = roles.filter(role => canAssignRole(role.id));
     const selectedRole = configurableRoles.find(role => role.id === selectedRoleId) || configurableRoles[0];
+    const selectedMember = team.find(member => (member.uid || member.email) === selectedMemberUid) || null;
+    const sectionInsight: Record<SettingsSection, { status: 'success' | 'info' | 'attention' | 'warning' | 'neutral'; label: string; action: string }> = {
+        general: !settings.academyName?.trim() || !settings.academicYear?.trim()
+            ? { status: 'attention', label: 'Needs setup', action: 'Add the academy name and academic year.' }
+            : { status: 'success', label: 'Configured', action: 'Review identity and operating defaults when your school changes.' },
+        plan: { status: 'info', label: currentOrganization?.subscription?.status || currentOrganization?.status || 'Workspace plan', action: 'Review limits and enabled apps for this organization.' },
+        documents: settings.documentConfig?.headerName || settings.documentConfig?.taxId
+            ? { status: 'success', label: 'Configured', action: 'Check printed identity and registration details before issuing documents.' }
+            : { status: 'attention', label: 'Needs setup', action: 'Add the legal identity used on invoices and certificates.' },
+        forms: { status: 'info', label: 'Family intake', action: 'Review which optional fields families can see and which are required.' },
+        data: { status: 'info', label: 'Ready to export', action: 'Download a backup or review the CSV format before importing.' },
+        api: settings.apiConfig?.googleApiKey || settings.apiConfig?.openaiApiKey
+            ? { status: 'success', label: 'Connected', action: 'Review the configured service keys and save any changes.' }
+            : { status: 'neutral', label: 'Optional', action: 'Add a service key only when this organization needs that integration.' },
+        team: { status: team.length ? 'success' : 'attention', label: `${team.length} staff account${team.length === 1 ? '' : 's'}`, action: team.length ? 'Select a member for access details or review role permissions.' : 'Add the first staff account with a job-appropriate role.' },
+        maintenance: { status: 'warning', label: 'Platform access', action: 'Use diagnostics only when investigating a specific support issue.' }
+    };
     const settingsSections: SettingsNavigationItem<SettingsSection>[] = [
-        { id: 'general', label: 'Workspace', description: 'Identity and operations', icon: Building2 },
+        { id: 'general', label: 'Workspace', description: 'Identity and operations', icon: Building2, badge: sectionInsight.general.label, status: sectionInsight.general.status },
         { id: 'plan', label: 'Plan & apps', description: 'Subscription and limits', icon: CreditCard },
-        { id: 'documents', label: 'Documents', description: 'Invoices and certificates', icon: Printer },
+        { id: 'documents', label: 'Documents', description: 'Invoices and certificates', icon: Printer, badge: sectionInsight.documents.label, status: sectionInsight.documents.status },
         { id: 'forms', label: 'Enrollment form', description: 'Family information', icon: FileText },
         { id: 'data', label: 'Data', description: 'Import and portability', icon: Database },
         { id: 'api', label: 'Integrations', description: 'Connected services', icon: Plug },
-        ...(canManageTeam ? [{ id: 'team' as const, label: 'Team & access', description: 'People and permissions', icon: Users, badge: `${team.length}` }] : []),
+        ...(canManageTeam ? [{ id: 'team' as const, label: 'Team & access', description: 'People and permissions', icon: Users, badge: `${team.length}`, status: sectionInsight.team.status }] : []),
         ...(isSuperAdmin ? [{ id: 'maintenance' as const, label: 'Platform tools', description: 'Diagnostics and repair', icon: AlertTriangle }] : [])
     ];
+    const selectSettingsSection = (section: SettingsSection) => {
+        setActiveTab(section);
+        requestAnimationFrame(() => {
+            window.scrollTo(0, 0);
+            document.getElementById('settings-content')?.closest('.edu-shell-v1__content-inner')?.scrollTo(0, 0);
+        });
+    };
 
     // --- RENDER: ADMIN SETTINGS ---
     return (
-        <div className={`atlas-settings-workspace mx-auto flex w-full max-w-[1320px] min-w-0 flex-col gap-4 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-settings-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-settings-v1' : undefined}>
-            <div className="atlas-settings-commandbar sticky top-0 z-20 flex min-w-0 flex-col gap-4 border-b px-1 py-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+        <div className="edu-settings-v1" data-edu-system="1" data-testid="education-settings-v1">
+            <div className="edu-settings-hero">
                 <div className="flex min-w-0 items-start gap-3">
-                    <span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-md border"><Settings size={17} /></span>
+                    <span className="edu-settings-hero__icon"><Settings size={22} /></span>
                     <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="atlas-data-label atlas-text-accent">Workspace controls</span>
-                            <span className={`inline-flex items-center gap-1.5 text-[10px] font-bold ${isDirty ? 'text-amber-200' : 'text-emerald-300'}`}>
-                                <span className={`h-1.5 w-1.5 rounded-full ${isDirty ? 'bg-amber-300' : 'bg-emerald-400'}`} />
-                                {isDirty ? 'Unsaved changes' : 'Up to date'}
-                            </span>
-                        </div>
-                        <h2 className="atlas-text-strong mt-1 truncate text-lg font-black leading-tight">
-                            {settings.academyName || currentOrganization?.name || 'Academy workspace'}
-                        </h2>
-                        <p className="atlas-text-subtle mt-1 text-xs">Identity, operating defaults, documents, and access.</p>
+                        <span className="edu-settings-kicker">Workspace controls</span>
+                        <h1>Settings</h1>
+                        <p>{settings.academyName || currentOrganization?.name || 'Academy workspace'} · Identity, operations and access</p>
                     </div>
                 </div>
-                <AtlasActionButton
+                <EducationButton
                     icon={isSaving ? Loader2 : Save}
                     variant="primary"
                     onClick={handleSaveSettings}
                     disabled={isSaving || !isDirty || !canManageSettings}
-                    className={`shrink-0 self-start sm:self-center ${isSaving ? '[&_svg]:animate-spin' : ''}`}
                 >
                     {isSaving ? 'Saving...' : 'Save changes'}
-                </AtlasActionButton>
+                </EducationButton>
+            </div>
+            <div className="edu-settings-save" role="status" aria-live="polite">
+                <EducationStatusPill status={saveFeedback?.status || (isDirty ? 'warning' : 'success')}>{isSaving ? 'Saving' : isDirty ? 'Unsaved changes' : saveFeedback?.status === 'danger' ? 'Needs attention' : saveFeedback?.status === 'success' ? 'Saved' : 'Up to date'}</EducationStatusPill>
+                <span>{saveFeedback?.message || (isDirty ? 'Your edits stay on this page until you save.' : 'Select a category to review its configuration.')}</span>
             </div>
 
-            <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={setActiveTab} mode="mobile" />
+            <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={selectSettingsSection} mode="mobile" />
 
             <div className="flex min-h-[480px] min-w-0 items-start gap-5 xl:gap-7">
-                <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={setActiveTab} mode="desktop" />
-                <main className="min-w-0 flex-1">
+                <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={selectSettingsSection} mode="desktop" />
+                <main id="settings-content" className="edu-settings-main">
+                <div className="edu-settings-category-heading"><div><span className="edu-settings-kicker">{settingsSections.find(section => section.id === activeTab)?.description}</span><h2>{settingsSections.find(section => section.id === activeTab)?.label}</h2><p>{sectionInsight[activeTab].action}</p></div><EducationStatusPill status={sectionInsight[activeTab].status}>{sectionInsight[activeTab].label}</EducationStatusPill></div>
 
                 {/* API TAB */}
                 {activeTab === 'api' && (
                     <div className="space-y-4">
-                        <SettingsPanel title="Connected services" description="Organization credentials are stored separately from everyday workspace settings." icon={Plug} status={<span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">Admin only</span>}>
+                        <SettingsPanel title="Connected services" description="Organization credentials are stored separately from everyday workspace settings." icon={Plug} accent="blue" status={<EducationStatusPill status="info">Admin only</EducationStatusPill>}>
+                            {integrationError && <EducationNotice status="danger">Integration status could not be loaded. Check your connection and reopen this category.</EducationNotice>}
                             <div className="space-y-3">
-                                <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
+                                <div className="edu-settings-service">
                                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                         <div className="flex min-w-0 items-start gap-3">
-                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-sky-300/20 bg-sky-300/10 text-sky-300"><Wand2 size={17} /></span>
-                                            <div><p className="atlas-text-strong text-sm font-bold">Google Gemini</p><p className="atlas-text-subtle mt-0.5 text-xs">Image and creative generation</p></div>
+                                            <span className="edu-settings-icon-well flex h-9 w-9 shrink-0 items-center justify-center"><Wand2 size={17} /></span>
+                                            <div><p className="edu-settings-text-strong text-sm font-bold">Google Gemini</p><p className="edu-settings-text-subtle mt-0.5 text-xs">Image and creative generation</p></div>
                                         </div>
-                                        <span className={`flex items-center gap-1.5 text-xs font-bold ${settings.apiConfig?.googleApiKey ? 'text-emerald-300' : 'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${settings.apiConfig?.googleApiKey ? 'bg-emerald-400' : 'bg-slate-600'}`} />{settings.apiConfig?.googleApiKey ? 'Configured' : 'Not connected'}</span>
+                                        <EducationStatusPill status={settings.apiConfig?.googleApiKey ? 'success' : 'neutral'}>{settings.apiConfig?.googleApiKey ? 'Configured' : 'Not connected'}</EducationStatusPill>
                                     </div>
-                                    <div className="mt-4"><SettingsField label="API key" hint="Saved in the active organization integration vault."><input type="password" autoComplete="off" disabled={!canManageIntegrations} className={`${settingsInputClass} font-mono`} value={settings.apiConfig?.googleApiKey || ''} onChange={event => updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, googleApiKey: event.target.value } })} placeholder="AIza..." /></SettingsField></div>
+                                    <div className="mt-4"><SettingsField label="API key" hint="Saved in the active organization integration vault."><input type="password" autoComplete="off" disabled={!canManageIntegrations} className={`${settingsInputClass} font-mono`} value={settings.apiConfig?.googleApiKey || ''} onChange={event => { if (document.activeElement === event.currentTarget) updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, googleApiKey: event.target.value } }); }} placeholder="AIza..." /></SettingsField></div>
                                 </div>
-                                <div className="rounded-lg border border-white/10 bg-white/[0.025] p-4">
+                                <div className="edu-settings-service">
                                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                                        <div className="flex min-w-0 items-start gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-300/10 text-teal-300"><Zap size={17} /></span><div><p className="atlas-text-strong text-sm font-bold">OpenAI</p><p className="atlas-text-subtle mt-0.5 text-xs">Assistant and automation services</p></div></div>
-                                        <span className={`flex items-center gap-1.5 text-xs font-bold ${settings.apiConfig?.openaiApiKey ? 'text-emerald-300' : 'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${settings.apiConfig?.openaiApiKey ? 'bg-emerald-400' : 'bg-slate-600'}`} />{settings.apiConfig?.openaiApiKey ? 'Configured' : 'Optional'}</span>
+                                        <div className="flex min-w-0 items-start gap-3"><span className="edu-settings-icon-well flex h-9 w-9 shrink-0 items-center justify-center"><Zap size={17} /></span><div><p className="edu-settings-text-strong text-sm font-bold">OpenAI</p><p className="edu-settings-text-subtle mt-0.5 text-xs">Assistant and automation services</p></div></div>
+                                        <EducationStatusPill status={settings.apiConfig?.openaiApiKey ? 'success' : 'neutral'}>{settings.apiConfig?.openaiApiKey ? 'Configured' : 'Optional'}</EducationStatusPill>
                                     </div>
-                                    <div className="mt-4"><SettingsField label="API key"><input type="password" autoComplete="off" disabled={!canManageIntegrations} className={`${settingsInputClass} font-mono`} value={settings.apiConfig?.openaiApiKey || ''} onChange={event => updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, openaiApiKey: event.target.value } })} placeholder="sk-..." /></SettingsField></div>
+                                    <div className="mt-4"><SettingsField label="API key"><input type="password" autoComplete="off" disabled={!canManageIntegrations} className={`${settingsInputClass} font-mono`} value={settings.apiConfig?.openaiApiKey || ''} onChange={event => { if (document.activeElement === event.currentTarget) updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, openaiApiKey: event.target.value } }); }} placeholder="sk-..." /></SettingsField></div>
                                 </div>
                             </div>
                         </SettingsPanel>
-                        <div className="flex items-start gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.06] px-4 py-3 text-xs text-amber-100/80"><Shield size={16} className="mt-0.5 shrink-0 text-amber-300" /><span>Only organization owners and authorized administrators can load or change integration credentials.</span></div>
-                    </div>
-                )}
-
-                {false && activeTab === 'api' && (
-                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">API Integrations</h3></div>
-                        <div className="p-6 space-y-6">
-                            <div className="bg-blue-950/20 border border-blue-900/50 p-4 rounded-lg flex gap-3">
-                                <AlertTriangle className="text-blue-400 shrink-0 mt-0.5" size={18} />
-                                <div className="text-sm text-blue-200/80">
-                                    <p className="font-bold text-blue-400 mb-1">Security Note</p>
-                                    These keys are stored in the database. Ensure your Firestore security rules restrict access to the 'settings' collection to admins only.
-                                </div>
-                            </div>
-
-                            {/* Google AI Image Gen */}
-                            <div className="space-y-4">
-                                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                    <Globe size={16} className="text-emerald-500" /> Google Nano Banana (Gemini)
-                                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-normal">For Thumbnail Generation</span>
-                                </h4>
-                                <div className="grid gap-4">
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1">Google API Key</label>
-                                        <div className="relative">
-                                            <input
-                                                type="password"
-                                                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-emerald-500 outline-none font-mono text-sm"
-                                                value={settings.apiConfig?.googleApiKey || ''}
-                                                onChange={e => updateSettings({ ...settings, apiConfig: { ...settings.apiConfig, googleApiKey: e.target.value } })}
-                                                placeholder="AIzaSy..."
-                                            />
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 mt-1">Used for Gemini Image Generation (Nano Banana).</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="h-px bg-slate-800"></div>
-
-                            {/* OpenAI */}
-                            <div className="space-y-4 opacity-50 pointer-events-none grayscale">
-                                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                    <Wand2 size={16} className="text-teal-400" /> OpenAI (Coming Soon)
-                                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-normal">For Chatbot Persona</span>
-                                </h4>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">API Key</label>
-                                    <input
-                                        type="password"
-                                        className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white focus:border-teal-400 outline-none font-mono text-sm"
-                                        value={settings.apiConfig?.openaiApiKey || ''}
-                                        onChange={e => setSettings({ ...settings, apiConfig: { ...settings.apiConfig, openaiApiKey: e.target.value } })}
-                                        placeholder="sk-..."
-                                    />
-                                </div>
-                            </div>
-                        </div>
+                        <EducationNotice status="info">Only organization owners and authorized administrators can load or change integration credentials.</EducationNotice>
                     </div>
                 )}
 
                 {activeTab === 'general' && (
                     <div>
-                        {!canManageSettings && <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-xs text-amber-200">You can review workspace settings. An organization owner can make changes.</div>}
-                        <div className="atlas-settings-summary mb-5 grid grid-cols-2 overflow-hidden rounded-lg border md:grid-cols-4">
+                        {!canManageSettings && <EducationNotice status="warning">You can review workspace settings. An organization owner can make changes.</EducationNotice>}
+                        <div className="edu-settings-summary mb-5 grid grid-cols-2 overflow-hidden rounded-lg border md:grid-cols-4">
                             <SettingsMetric label="Workspace" value={currentOrganization?.status || 'Active'} detail={currentOrganization?.slug} icon={BadgeCheck} />
                             <SettingsMetric label="Academic year" value={settings.academicYear} detail="Operating year" icon={Calendar} />
                             <SettingsMetric label="Team" value={team.length} detail="Staff accounts" icon={Users} />
@@ -977,11 +910,11 @@ export const SettingsView = () => {
                         <SettingsPanel title="Workspace identity" description="The name and mark shown to staff and families." icon={Building2}>
                             <div className="grid gap-5 sm:grid-cols-[112px_minmax(0,1fr)]">
                                 <div>
-                                    <span className="atlas-text-muted mb-1.5 block text-xs font-bold">Academy logo</span>
-                                    <label className={`group relative flex aspect-square w-28 items-center justify-center overflow-hidden rounded-lg border border-dashed border-white/15 bg-slate-950/55 transition-colors ${canManageSettings ? 'cursor-pointer hover:border-teal-300/45' : 'cursor-not-allowed opacity-60'}`}>
-                                        {logoPreview ? <img src={logoPreview} alt={`${settings.academyName} logo`} className="h-full w-full object-contain p-2" /> : <ImageIcon className="text-slate-600" size={28} />}
-                                        {canManageSettings && <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-slate-950/85 py-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition-opacity group-hover:opacity-100"><Upload size={11} /> Replace</span>}
-                                        <input type="file" accept="image/*" disabled={!canManageSettings} onChange={handleLogoUpload} className="hidden" />
+                                    <span className="edu-settings-text-muted mb-1.5 block text-xs font-bold">Academy logo</span>
+                                    <label className="edu-settings-logo-picker">
+                                        {logoPreview ? <img src={logoPreview} alt={`${settings.academyName} logo`} /> : <ImageIcon size={28} />}
+                                        <span>Change logo</span>
+                                        <input type="file" accept="image/*" aria-label="Upload academy logo" disabled={!canManageSettings} onChange={handleLogoUpload} className="edu-settings-file-input" />
                                     </label>
                                 </div>
                                 <div className="grid content-start gap-x-4 gap-y-5 lg:grid-cols-2">
@@ -998,8 +931,8 @@ export const SettingsView = () => {
                         <SettingsPanel title="Regional operations" description="Defaults used by schedules, finance, and reports." icon={Globe}>
                             <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
                                 <SettingsField label="Language">
-                                    <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-slate-950/55 p-1">
-                                        {([['en', 'English'], ['fr', 'Francais']] as const).map(([value, label]) => <button key={value} type="button" disabled={!canManageSettings} onClick={() => updateSettings({ ...settings, language: value })} className={`h-8 rounded-md text-xs font-bold transition-colors ${settings.language === value ? 'bg-teal-400 text-slate-950' : 'text-slate-500 hover:bg-white/[0.05] hover:text-white'}`}>{label}</button>)}
+                                    <div className="edu-settings-segmented" role="group" aria-label="Language">
+                                        {([['en', 'English'], ['fr', 'Français']] as const).map(([value, label]) => <button key={value} type="button" disabled={!canManageSettings} aria-pressed={settings.language === value} onClick={() => updateSettings({ ...settings, language: value })}>{label}</button>)}
                                     </div>
                                 </SettingsField>
                                 <SettingsField label="Currency">
@@ -1033,116 +966,21 @@ export const SettingsView = () => {
                 )}
 
                 {/* Legacy general markup retained temporarily for data compatibility. */}
-                {false && activeTab === 'general' && (
-                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">General Configuration</h3></div>
-                        <div className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">System Language</label>
-                                <div className="flex gap-3">
-                                    <button onClick={() => updateSettings({ ...settings, language: 'en' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-colors ${settings.language === 'en' ? 'bg-teal-500 border-teal-400 text-slate-950' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
-                                        <span className="text-lg">🇺🇸</span> English
-                                    </button>
-                                    <button onClick={() => updateSettings({ ...settings, language: 'fr' })} className={`flex-1 p-3 rounded-lg border flex items-center justify-center gap-2 transition-colors ${settings.language === 'fr' ? 'bg-teal-500 border-teal-400 text-slate-950' : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-800'}`}>
-                                        <span className="text-lg">🇫🇷</span> Français
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Admin Biometric Setup */}
-                            {canUseBiometrics && (
-                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
-                                    <div>
-                                        <h4 className="text-sm font-bold text-white flex items-center gap-2"><Fingerprint size={16} className="text-cyan-500" /> Admin FaceID</h4>
-                                        <p className="text-xs text-slate-500">Enable biometric login for this device.</p>
-                                    </div>
-                                    <button
-                                        onClick={handleToggleBiometric}
-                                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${biometricActive ? 'bg-red-900/20 text-red-400 border border-red-900/50' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}
-                                    >
-                                        {biometricActive ? 'Disable' : 'Setup'}
-                                    </button>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Academy Name</label>
-                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.academyName} onChange={e => updateSettings({ ...settings, academyName: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Academic Year</label>
-                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.academicYear} onChange={e => updateSettings({ ...settings, academicYear: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Academy Logo</label>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-16 h-16 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                                        {logoPreview ? <img src={logoPreview || undefined} alt="Preview" className="w-full h-full object-contain" /> : <ImageIcon className="text-slate-700" />}
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm border border-slate-700 transition-colors w-fit">
-                                            <Upload size={16} /> Upload Logo (Image)
-                                            <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                                        </label>
-                                        <p className="text-[10px] text-slate-500 mt-2">Recommended: Square PNG/JPG, max 500KB. This logo will appear on receipts and the dashboard.</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-2 flex items-center gap-2">
-                                    <Clock size={14} className="text-red-400" /> Standard Work Hours
-                                </label>
-                                <div className="flex items-center gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                                    <div className="flex-1">
-                                        <label className="block text-[10px] text-slate-500 uppercase font-black mb-1">Start Time</label>
-                                        <input 
-                                            type="time" 
-                                            className="w-full bg-transparent text-white font-bold outline-none"
-                                            value={settings.defaultWorkHours?.start || '09:00'}
-                                            onChange={e => updateSettings({ ...settings, defaultWorkHours: { ...settings.defaultWorkHours, start: e.target.value, end: settings.defaultWorkHours?.end || '18:00' } })}
-                                        />
-                                    </div>
-                                    <div className="w-px h-8 bg-slate-800"></div>
-                                    <div className="flex-1">
-                                        <label className="block text-[10px] text-slate-500 uppercase font-black mb-1">End Time</label>
-                                        <input 
-                                            type="time" 
-                                            className="w-full bg-transparent text-white font-bold outline-none"
-                                            value={settings.defaultWorkHours?.end || '18:00'}
-                                            onChange={e => updateSettings({ ...settings, defaultWorkHours: { ...settings.defaultWorkHours, start: settings.defaultWorkHours?.start || '09:00', end: e.target.value } })}
-                                        />
-                                    </div>
-                                </div>
-                                <p className="text-[10px] text-slate-500 mt-2">Default schedule for all team members unless overridden individually.</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Receipt Contact Info</label>
-                                <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.receiptContact} onChange={e => updateSettings({ ...settings, receiptContact: e.target.value })} />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Receipt Footer</label>
-                                <textarea className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white h-20 focus:border-blue-500 outline-none" value={settings.receiptFooter} onChange={e => updateSettings({ ...settings, receiptFooter: e.target.value })} />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {activeTab === 'plan' && (
                     <div className="space-y-4">
                         <SettingsPanel
                             title="Subscription"
                             description="Your Edufy plan and workspace standing."
                             icon={CreditCard}
-                            status={<span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-2 py-0.5 text-[10px] font-bold capitalize text-emerald-300">{currentOrganization?.subscription?.status || currentOrganization?.status || 'active'}</span>}
+                            status={<EducationStatusPill status="success">{currentOrganization?.subscription?.status || currentOrganization?.status || 'active'}</EducationStatusPill>}
                         >
-                            <div className="atlas-settings-summary atlas-settings-summary--two-column grid grid-cols-2 overflow-hidden rounded-lg border">
+                            <div className="edu-settings-summary edu-settings-summary--two-column grid grid-cols-2 overflow-hidden rounded-lg border">
                                 <SettingsMetric label="Plan" value={planName} detail={currentOrganization?.subscription?.interval ? `Billed ${currentOrganization.subscription.interval}ly` : 'Workspace plan'} icon={BadgeCheck} />
                                 <SettingsMetric label="Students" value={currentOrganization?.limits?.students || 'Flexible'} detail="Plan allowance" icon={Users} />
                                 <SettingsMetric label="Storage" value={currentOrganization?.limits?.storage ? `${currentOrganization.limits.storage} GB` : 'Flexible'} detail="Plan allowance" icon={HardDrive} />
                                 <SettingsMetric label="Apps" value={enabledModules} detail="Currently enabled" icon={Boxes} />
                             </div>
-                            {currentOrganization?.subscription?.nextBillingDate && <div className="atlas-text-muted mt-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-xs"><Calendar size={14} className="text-teal-300" /> Next billing date: {currentOrganization.subscription.nextBillingDate.toDate?.().toLocaleDateString() || 'Available in billing'}</div>}
+                            {currentOrganization?.subscription?.nextBillingDate && <div className="edu-settings-inline-note"><Calendar size={16} /> Next billing date: {currentOrganization.subscription.nextBillingDate.toDate?.().toLocaleDateString() || 'Available in billing'}</div>}
                         </SettingsPanel>
 
                         <SettingsPanel title="Enabled apps" description="Products available inside this organization." icon={Boxes}>
@@ -1150,13 +988,13 @@ export const SettingsView = () => {
                                 {Object.entries(currentOrganization?.modules || {}).filter(([, enabled]) => enabled === true).map(([moduleId]) => (
                                     <div key={moduleId} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
                                         <div className="flex min-w-0 items-center gap-3">
-                                            <span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><Boxes size={16} /></span>
-                                            <div className="min-w-0"><p className="atlas-text-strong truncate text-sm font-bold">{moduleId === 'erp' ? 'Edufy ERP' : moduleId === 'makerPro' ? 'Maker Pro' : moduleId === 'sparkQuest' ? 'SparkQuest' : moduleId.replace(/[-_]/g, ' ')}</p><p className="atlas-text-subtle text-xs">Available to this workspace</p></div>
+                                            <span className="edu-settings-icon-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><Boxes size={16} /></span>
+                                            <div className="min-w-0"><p className="edu-settings-text-strong truncate text-sm font-bold">{moduleId === 'erp' ? 'Edufy ERP' : moduleId === 'makerPro' ? 'Maker Pro' : moduleId === 'sparkQuest' ? 'SparkQuest' : moduleId.replace(/[-_]/g, ' ')}</p><p className="edu-settings-text-subtle text-xs">Available to this workspace</p></div>
                                         </div>
-                                        <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-300"><CheckCircle2 size={14} /> Active</span>
+                                        <EducationStatusPill status="success">Active</EducationStatusPill>
                                     </div>
                                 ))}
-                                {enabledModules === 0 && <AtlasEmptyState title="No apps enabled" description="The workspace owner can manage products from the Edufy app catalog." icon={Boxes} />}
+                                {enabledModules === 0 && <EducationState title="No apps enabled" description="The workspace owner can manage products from the Edufy app catalog." />}
                             </div>
                         </SettingsPanel>
 
@@ -1175,11 +1013,11 @@ export const SettingsView = () => {
                         <SettingsPanel title="Document identity" description="The legal identity used on invoices, receipts, attestations, and certificates." icon={Printer}>
                             <div className="grid gap-5 md:grid-cols-[128px_minmax(0,1fr)]">
                                 <div>
-                                    <span className="atlas-text-muted mb-1.5 block text-xs font-bold">Print logo</span>
-                                    <label className={`group relative flex aspect-square w-28 items-center justify-center overflow-hidden rounded-lg border border-dashed border-white/15 bg-slate-950/55 ${canManageSettings ? 'cursor-pointer hover:border-teal-300/45' : 'cursor-not-allowed opacity-60'}`}>
-                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig.logoUrl} alt="Document logo" className="h-full w-full object-contain p-2" /> : <Printer className="text-slate-600" size={26} />}
-                                        {canManageSettings && <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-slate-950/85 py-1.5 text-[10px] font-bold text-slate-300 opacity-0 transition-opacity group-hover:opacity-100"><Upload size={11} /> Replace</span>}
-                                        <input type="file" accept="image/*" disabled={!canManageSettings} onChange={handleDocumentLogoUpload} className="hidden" />
+                                    <span className="edu-settings-text-muted mb-1.5 block text-xs font-bold">Print logo</span>
+                                    <label className="edu-settings-logo-picker">
+                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig.logoUrl} alt="Document logo" /> : <Printer size={26} />}
+                                        <span>Change print logo</span>
+                                        <input type="file" accept="image/*" aria-label="Upload document logo" disabled={!canManageSettings} onChange={handleDocumentLogoUpload} className="edu-settings-file-input" />
                                     </label>
                                 </div>
                                 <div className="grid gap-4 sm:grid-cols-2">
@@ -1202,84 +1040,6 @@ export const SettingsView = () => {
                     </div>
                 )}
 
-                {false && activeTab === 'documents' && (
-                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Document Settings</h3></div>
-                        <div className="p-6 space-y-4">
-                            <p className="text-sm text-slate-500 mb-4">Configure the details that appear on formal documents (Invoices, Certificates).</p>
-
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Legal Organization Name</label>
-                                <input
-                                    className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none"
-                                    value={settings.documentConfig?.headerName || ''}
-                                    onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, headerName: e.target.value } })}
-                                    placeholder={settings.academyName}
-                                />
-                                <p className="text-[10px] text-slate-500 mt-1">Leave empty to use Academy Name.</p>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-medium text-slate-400 mb-1">Document Logo</label>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-16 h-16 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                                        {settings.documentConfig?.logoUrl ? <img src={settings.documentConfig?.logoUrl} alt="Doc Logo" className="w-full h-full object-contain" /> : <Printer className="text-slate-700" />}
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="flex items-center gap-2 cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-lg text-sm border border-slate-700 transition-colors w-fit">
-                                            <Upload size={16} /> Upload Document Logo
-                                            <input type="file" accept="image/*" onChange={handleDocumentLogoUpload} className="hidden" />
-                                        </label>
-                                        <p className="text-[10px] text-slate-500 mt-2">Specific logo for invoices/certificates (e.g. higher resolution or black & white).</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Address</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.address || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, address: e.target.value } })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Website</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.website || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, website: e.target.value } })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Email</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.email || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, email: e.target.value } })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Phone</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.phone || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, phone: e.target.value } })} />
-                                </div>
-                            </div>
-
-                            <div className="h-px bg-slate-800 my-4"></div>
-                            <h4 className="text-sm font-bold text-white mb-2">Legal Identifiers (For Invoices)</h4>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">ICE (Tax ID)</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.taxId || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, taxId: e.target.value } })} placeholder="e.g. 002798577000063" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">RC (Reg ID)</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.regId || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, regId: e.target.value } })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Patente</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.patente || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, patente: e.target.value } })} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">CNSS</label>
-                                    <input className="w-full p-2 bg-slate-950 border border-slate-800 rounded text-white focus:border-blue-500 outline-none" value={settings.documentConfig?.cnss || ''} onChange={e => updateSettings({ ...settings, documentConfig: { ...settings.documentConfig, cnss: e.target.value } })} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* FORMS TAB */}
                 {activeTab === 'forms' && (
                     <SettingsPanel title="Enrollment form" description="Choose what families provide when registering a learner." icon={FileText}>
                         <div className="space-y-3">
@@ -1293,37 +1053,18 @@ export const SettingsView = () => {
                             ] as const).map(([field, label, description]) => {
                                 const config = settings.studentFormConfig[field];
                                 return (
-                                    <div key={field} className="grid gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3 sm:grid-cols-[minmax(0,1fr)_150px_150px] sm:items-center">
-                                        <div><p className="atlas-text-strong text-sm font-bold">{label}</p><p className="atlas-text-subtle mt-0.5 text-xs leading-5">{description}</p></div>
+                                    <div key={field} className="edu-settings-form-row">
+                                        <div><p className="edu-settings-text-strong text-sm font-bold">{label}</p><p className="edu-settings-text-subtle mt-0.5 text-xs leading-5">{description}</p></div>
                                         <SettingsToggle checked={config.active} disabled={!canManageSettings} onChange={() => updateSettings({ ...settings, studentFormConfig: { ...settings.studentFormConfig, [field]: { active: !config.active, required: config.active ? false : config.required } } })} label="Visible" />
                                         <SettingsToggle checked={config.required} disabled={!canManageSettings || !config.active} tone="amber" onChange={() => updateSettings({ ...settings, studentFormConfig: { ...settings.studentFormConfig, [field]: { ...config, required: !config.required } } })} label="Required" />
                                     </div>
                                 );
                             })}
                         </div>
-                        <div className="mt-4 flex items-start gap-2 rounded-lg border border-teal-300/15 bg-teal-300/[0.06] px-3 py-2.5 text-xs text-teal-100/80"><CheckCircle2 size={15} className="mt-0.5 shrink-0 text-teal-300" /><span>Name and parent phone remain part of the core registration flow so every learner can be identified and contacted.</span></div>
+                        <EducationNotice status="info">Name and parent phone remain part of the core registration flow so every learner can be identified and contacted.</EducationNotice>
                     </SettingsPanel>
                 )}
 
-                {false && activeTab === 'forms' && (
-                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Admission Form Fields</h3></div>
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-slate-950 text-slate-500 font-medium text-xs uppercase tracking-wider"><tr><th className="p-4">Field</th><th className="p-4 text-center">Visible</th><th className="p-4 text-center">Required</th></tr></thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {(Object.keys(settings.studentFormConfig) as Array<keyof AppSettings['studentFormConfig']>).map((field) => (
-                                    <tr key={field} className="hover:bg-slate-800/30">
-                                        <td className="p-4 font-medium text-slate-300 capitalize">{field.replace(/([A-Z])/g, ' $1').trim()}</td>
-                                        <td className="p-4 text-center"><button onClick={() => setSettings({ ...settings, studentFormConfig: { ...settings.studentFormConfig, [field]: { ...settings.studentFormConfig[field], active: !settings.studentFormConfig[field].active } } })} className={`transition-colors ${settings.studentFormConfig[field].active ? 'text-emerald-400' : 'text-slate-600'}`}>{settings.studentFormConfig[field].active ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}</button></td>
-                                        <td className="p-4 text-center"><button onClick={() => setSettings({ ...settings, studentFormConfig: { ...settings.studentFormConfig, [field]: { ...settings.studentFormConfig[field], required: !settings.studentFormConfig[field].required } } })} className={`transition-colors ${settings.studentFormConfig[field].required ? 'text-amber-400' : 'text-slate-600'}`}>{settings.studentFormConfig[field].required ? <CheckCircle2 size={18} /> : <div className="w-4 h-4 rounded-full border-2 border-slate-600 mx-auto"></div>}</button></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-
-                {/* DATA TAB */}
                 {activeTab === 'data' && (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -1332,82 +1073,68 @@ export const SettingsView = () => {
                             <SettingsMetric label="Enrollments" value={enrollments.length} icon={FileText} />
                             <SettingsMetric label="Payments" value={payments.length} icon={CreditCard} />
                         </div>
-                        <SettingsPanel title="Import students" description="Add learner records to this organization from a structured CSV file." icon={Upload} actions={<AtlasActionButton icon={Download} onClick={downloadCSVTemplate}>CSV template</AtlasActionButton>}>
-                            <label className={`relative flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed border-white/15 bg-white/[0.02] p-6 text-center transition-colors ${canManageSettings ? 'cursor-pointer hover:border-teal-300/45 hover:bg-teal-300/[0.04]' : 'cursor-not-allowed opacity-60'}`}>
+                        <SettingsPanel title="Import students" description="Add learner records to this organization from a structured CSV file." icon={Upload} accent="blue" actions={<EducationButton icon={Download} onClick={downloadCSVTemplate}>CSV template</EducationButton>}>
+                            {importFeedback && <EducationNotice status={importFeedback.status}>{importFeedback.message}</EducationNotice>}
+                            <EducationNotice status="warning">Check names and parent phone numbers in the CSV before importing. Each accepted row creates a learner record.</EducationNotice>
+                            <label className={`edu-settings-upload ${canManageSettings ? '' : 'edu-settings-upload--disabled'}`}>
                                 <input type="file" accept=".csv" onChange={handleBulkImport} disabled={isImporting || !canManageSettings} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed" />
-                                <span className="atlas-accent-well flex h-11 w-11 items-center justify-center rounded-lg border">{isImporting ? <Loader2 className="animate-spin" size={20} /> : <Upload size={20} />}</span>
-                                <span className="atlas-text-strong mt-3 text-sm font-bold">{isImporting ? 'Importing students...' : 'Choose a CSV file'}</span>
-                                <span className="atlas-text-subtle mt-1 text-xs">Name and parent phone are required.</span>
+                                <span className="edu-settings-icon-well flex h-11 w-11 items-center justify-center rounded-lg border">{isImporting ? <Loader2 className="animate-spin" size={20} /> : <Upload size={20} />}</span>
+                                <span className="edu-settings-text-strong mt-3 text-sm font-bold">{isImporting ? 'Importing students...' : 'Choose a CSV file'}</span>
+                                <span className="edu-settings-text-subtle mt-1 text-xs">Name and parent phone are required.</span>
                             </label>
                         </SettingsPanel>
-                        <SettingsPanel title="Workspace export" description="Download the current tenant data for portability and controlled backups." icon={FileSpreadsheet} actions={<AtlasActionButton icon={Download} onClick={downloadWorkspaceExport}>Export JSON</AtlasActionButton>}>
-                            <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-4">
-                                <Shield size={18} className="mt-0.5 shrink-0 text-teal-300" />
-                                <div><p className="atlas-text-strong text-sm font-bold">Organization-scoped export</p><p className="atlas-text-subtle mt-1 text-xs leading-5">Includes workspace settings, students, programs, enrollments, and payments currently loaded for {settings.academyName}.</p></div>
+                        <SettingsPanel title="Workspace export" description="Download the current tenant data for portability and controlled backups." icon={FileSpreadsheet} accent="blue" actions={<EducationButton icon={Download} onClick={downloadWorkspaceExport}>Export JSON</EducationButton>}>
+                            <div className="edu-settings-inline-note">
+                                <Shield size={18} />
+                                <div><p className="edu-settings-text-strong text-sm font-bold">Organization-scoped export</p><p className="edu-settings-text-subtle mt-1 text-xs leading-5">Includes workspace settings, students, programs, enrollments, and payments currently loaded for {settings.academyName}.</p></div>
                             </div>
                         </SettingsPanel>
                     </div>
                 )}
 
-                {false && activeTab === 'data' && (
-                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30"><h3 className="font-bold text-white">Data Management</h3></div>
-                        <div className="p-6 space-y-4">
-                            <div className="flex justify-between items-center">
-                                <div><h4 className="text-sm font-medium text-white mb-1">Bulk Student Upload</h4><p className="text-xs text-slate-500">Import students via CSV.</p></div>
-                                <button onClick={downloadCSVTemplate} className="text-xs flex items-center gap-1 text-teal-300 border border-slate-700 px-3 py-1.5 rounded-lg bg-slate-800 hover:border-teal-400/40"><Download size={12} /> Download template</button>
-                            </div>
-                            <div className="border-2 border-dashed border-slate-700 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:border-teal-400/60 hover:bg-slate-800/30 transition-colors cursor-pointer relative">
-                                <input type="file" accept=".csv" onChange={handleBulkImport} disabled={isImporting} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
-                                {isImporting ? <RefreshCw className="w-8 h-8 text-teal-400 animate-spin" /> : <Upload className="w-8 h-8 text-slate-500" />}
-                                <span className="text-sm font-medium text-slate-300 mt-2">{isImporting ? 'Importing...' : 'Upload CSV'}</span>
-                            </div>
-                            <div className="bg-amber-950/10 border border-amber-900/30 p-3 rounded flex gap-3 items-start"><AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" /><p className="text-xs text-amber-200/80">Ensure CSV matches template. Required: Name, ParentPhone.</p></div>
-                        </div>
-                    </div>
-                )}
-
-                {/* TEAM TAB (RBAC) */}
                 {activeTab === 'team' && (
                     <div className="space-y-4">
-                        <SettingsPanel title="Team members" description="Staff accounts with access to this organization." icon={Users} actions={<AtlasActionButton icon={UserPlus} variant="primary" onClick={openCreateTeamMember}>Add member</AtlasActionButton>}>
+                        <SettingsPanel title="Team members" description="Select a staff member to inspect their access and available actions." icon={Users} accent="blue" actions={<EducationButton icon={UserPlus} variant="primary" onClick={openCreateTeamMember}>Add member</EducationButton>}>
                             {team.length === 0 ? (
-                                <AtlasEmptyState title="No staff accounts yet" description="Add the first team member and choose the role that matches their work." icon={Users} action={<AtlasActionButton icon={UserPlus} variant="primary" onClick={openCreateTeamMember}>Add member</AtlasActionButton>} />
+                                <EducationState title="No staff accounts yet" description="Add the first team member and choose the role that matches their work."><EducationButton icon={UserPlus} variant="primary" onClick={openCreateTeamMember}>Add member</EducationButton></EducationState>
                             ) : (
-                                <div className="divide-y divide-white/10">
-                                    {team.map(member => (
-                                        <div key={member.uid || member.email} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-sm font-black text-teal-200">{member.name?.slice(0, 1).toUpperCase() || 'U'}</span>
-                                                <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="atlas-text-strong truncate text-sm font-bold">{member.name}</p>{member.uid === user?.uid && <span className="rounded bg-teal-300/10 px-1.5 py-0.5 text-[10px] font-bold text-teal-200">You</span>}</div><p className="atlas-text-subtle truncate text-xs">{member.email}</p></div>
+                                <div className="edu-settings-team-layout">
+                                    <div className="edu-settings-team-register" aria-label="Staff register">
+                                        {team.map(member => <button key={member.uid || member.email} type="button" className="edu-settings-team-row" aria-pressed={(member.uid || member.email) === selectedMemberUid} onClick={() => setSelectedMemberUid(member.uid || member.email)}>
+                                            <span className="edu-settings-team-avatar">{member.name?.slice(0, 1).toUpperCase() || 'U'}</span>
+                                            <span className="edu-settings-team-row__copy"><strong>{member.name || member.email}</strong><small>{member.email}</small></span>
+                                            <EducationStatusPill status={member.status === 'active' ? 'success' : 'neutral'}>{member.status || 'unknown'}</EducationStatusPill>
+                                        </button>)}
+                                    </div>
+                                    <aside className="edu-settings-member-detail" aria-label="Team member details">
+                                        {selectedMember ? <>
+                                            <div className="edu-settings-member-detail__heading"><h3>{selectedMember.name || selectedMember.email}</h3><EducationBadge status={selectedMember.status === 'active' ? 'success' : 'neutral'}>{selectedMember.role.replace(/_/g, ' ')}</EducationBadge></div>
+                                            <dl className="edu-settings-facts"><div><dt>Email</dt><dd>{selectedMember.email}</dd></div><div><dt>Work hours</dt><dd>{selectedMember.workHours?.start && selectedMember.workHours?.end ? `${selectedMember.workHours.start}–${selectedMember.workHours.end}` : 'Organization default'}</dd></div><div><dt>Account</dt><dd>{selectedMember.uid === user?.uid ? 'Your account' : 'Staff account'}</dd></div></dl>
+                                            <div className="edu-settings-member-actions">
+                                                {canAssignRole(selectedMember.role) && <EducationButton icon={Pencil} onClick={() => { setTeamError(''); setNewUser({ uid: selectedMember.uid || '', email: selectedMember.email, name: selectedMember.name, role: selectedMember.role, password: '', workHours: selectedMember.workHours || { start: '', end: '' } }); setIsEditingUser(true); setIsUserModalOpen(true); }}>Edit member</EducationButton>}
+                                                <EducationButton icon={Key} onClick={() => handleResetPassword(selectedMember.email)}>Send password reset</EducationButton>
                                             </div>
-                                            <div className="flex items-center justify-between gap-3 sm:justify-end">
-                                                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-bold capitalize text-slate-300">{member.role.replace(/_/g, ' ')}</span>
-                                                <span className={`hidden items-center gap-1.5 text-xs font-bold md:flex ${member.status === 'active' ? 'text-emerald-300' : 'text-slate-500'}`}><span className={`h-1.5 w-1.5 rounded-full ${member.status === 'active' ? 'bg-emerald-400' : 'bg-slate-600'}`} />{member.status}</span>
-                                                <div className="flex items-center gap-1">
-                                                    {canAssignRole(member.role) && <button type="button" onClick={() => { setNewUser({ uid: member.uid || '', email: member.email, name: member.name, role: member.role, password: '', workHours: member.workHours || { start: '', end: '' } }); setIsEditingUser(true); setIsUserModalOpen(true); }} aria-label={`Edit ${member.name}`} title="Edit member" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white"><Pencil size={15} /></button>}
-                                                    <button type="button" onClick={() => handleResetPassword(member.email)} aria-label={`Reset password for ${member.name}`} title="Send password reset" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-amber-300"><Key size={15} /></button>
-                                                    {!['owner', 'admin', 'super_admin'].includes(member.role) && member.uid !== user?.uid && <button type="button" onClick={() => handleDeleteUser(member.uid!, member.email)} aria-label={`Delete ${member.name}`} title="Delete member" className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-slate-500 transition-colors hover:border-rose-300/25 hover:bg-rose-300/10 hover:text-rose-300"><Trash2 size={15} /></button>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                            {!['owner', 'admin', 'super_admin'].includes(selectedMember.role) && selectedMember.uid !== user?.uid && <details className="edu-settings-disclosure"><summary>Danger zone · profile removal</summary><div className="edu-settings-disclosure__body"><EducationNotice status="danger">Removing this profile does not remove the Firebase login account. Confirm the account separately before continuing.</EducationNotice><EducationButton icon={Trash2} status="danger" onClick={() => handleDeleteUser(selectedMember.uid!, selectedMember.email)}>Delete profile</EducationButton></div></details>}
+                                        </> : <EducationState title="Select a team member" description="Choose a staff account to see its role, hours and available actions." />}
+                                    </aside>
                                 </div>
                             )}
-                            {isSuperAdmin && <div className="mt-4 border-t border-white/10 pt-4"><AtlasActionButton icon={Wand2} variant="quiet" disabled={isProcessingTeam} onClick={handleSeedTeam}>{isProcessingTeam ? 'Creating demo team...' : 'Create demo team'}</AtlasActionButton></div>}
+                            {isSuperAdmin && <details className="edu-settings-disclosure"><summary>Advanced team tools</summary><EducationButton icon={Wand2} variant="quiet" disabled={isProcessingTeam} onClick={handleSeedTeam}>{isProcessingTeam ? 'Creating demo team...' : 'Create demo team'}</EducationButton></details>}
                         </SettingsPanel>
 
-                        <SettingsPanel title="Role permissions" description="Choose one role, then set only the access needed for that job." icon={Shield} status={<span className="rounded-full border border-teal-300/20 bg-teal-300/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">Organization policy</span>}>
-                            {configurableRoles.length === 0 ? <AtlasEmptyState title="Roles are loading" icon={Loader2} /> : <>
-                                <div className="no-scrollbar flex gap-2 overflow-x-auto pb-2">
-                                    {configurableRoles.map(role => <button key={role.id} type="button" onClick={() => setSelectedRoleId(role.id)} className={`h-9 shrink-0 rounded-lg border px-3 text-xs font-bold transition-colors ${selectedRole?.id === role.id ? 'border-teal-300/30 bg-teal-300/10 text-teal-200' : 'border-white/10 bg-white/[0.025] text-slate-400 hover:text-white'}`}>{role.label}</button>)}
+                        <SettingsPanel title="Role permissions" description="Choose one role, then set only the access needed for that job." icon={Shield} status={<EducationStatusPill status="info">Organization policy</EducationStatusPill>}>
+                            {roleFeedback && <EducationNotice status={roleFeedback.status}>{roleFeedback.message}</EducationNotice>}
+                            {roleLoadState === 'error' && <EducationNotice status="warning">Live role overrides could not load. Showing the standard roles; reopen this category to retry.</EducationNotice>}
+                            {roleLoadState === 'loading' ? <EducationState kind="loading" title="Loading roles" description="Reading this organization's access policy." /> : configurableRoles.length === 0 ? <EducationState title="No configurable roles" description="There are no staff roles available to edit for this organization." /> : <>
+                                <div className="edu-settings-role-rail" aria-label="Roles">
+                                    {configurableRoles.map(role => <button key={role.id} type="button" onClick={() => setSelectedRoleId(role.id)} aria-pressed={selectedRole?.id === role.id} className="edu-settings-role-chip">{role.label}</button>)}
                                 </div>
                                 {selectedRole && <div className="mt-3">
-                                    <div className="mb-4 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2.5"><p className="atlas-text-strong text-sm font-bold">{selectedRole.label}</p><p className="atlas-text-subtle mt-0.5 text-xs">{selectedRole.description}</p></div>
+                                    <div className="edu-settings-role-intro"><strong>{selectedRole.label}</strong><p>{selectedRole.description}</p></div>
                                     <div className="space-y-4">
                                         {Array.from(new Set(AVAILABLE_PERMISSIONS.map(permission => permission.group))).map(group => (
                                             <div key={group}>
-                                                <p className="atlas-text-subtle mb-2 text-[10px] font-bold uppercase tracking-wider">{group}</p>
+                                                <p className="edu-settings-text-subtle mb-2 text-[10px] font-bold uppercase tracking-wider">{group}</p>
                                                 <div className="grid gap-2 md:grid-cols-2">
                                                     {AVAILABLE_PERMISSIONS.filter(permission => permission.group === group).map(permission => {
                                                         const isAllowed = selectedRole.permissions.includes('*') || selectedRole.permissions.includes(permission.id) || selectedRole.permissions.includes(`${permission.id.split('.')[0]}.*`);
@@ -1423,197 +1150,31 @@ export const SettingsView = () => {
                     </div>
                 )}
 
-                {false && activeTab === 'team' && (
-                    <div className="col-span-12 space-y-8">
-                        {/* Team Members Section */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                            <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                <div><h3 className="font-bold text-white">Team Members</h3><p className="text-xs text-slate-500">Manage user access and roles.</p></div>
-                                <div className="flex gap-2">
-                                    <button onClick={handleSeedTeam} disabled={isProcessingTeam} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border border-slate-700 transition-colors">
-                                        {isProcessingTeam ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                                        Seed Demo Team
-                                    </button>
-                                    <button onClick={() => { setIsEditingUser(false); setNewUser({ uid: '', email: '', name: '', role: 'admission_officer', password: '', workHours: { start: '', end: '' } }); setIsUserModalOpen(true); }} className="bg-teal-500 hover:bg-teal-400 text-slate-950 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-colors">
-                                        <UserPlus size={14} /> Add User
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-900 text-slate-500 font-medium text-xs uppercase tracking-wider">
-                                        <tr><th className="p-4">User</th><th className="p-4">Role</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800">
-                                        {teamMembers.filter(u => !['student', 'parent'].includes(u.role)).length === 0 ? <tr><td colSpan={4} className="p-8 text-center text-slate-500">No team members found. Click "Add User" or "Seed Demo Team".</td></tr> :
-                                            teamMembers.filter(u => !['student', 'parent'].includes(u.role)).map(u => (
-                                                <tr key={u.email} className="hover:bg-slate-800/30 group">
-                                                    <td className="p-4">
-                                                        <div className="font-bold text-white">{u.name}</div>
-                                                        <div className="text-xs text-slate-500">{u.email}</div>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${u.role === 'admin' ? 'bg-teal-950/50 text-teal-300 border border-teal-900' :
-                                                            u.role === 'accountant' ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-900' :
-                                                                'bg-blue-950/50 text-blue-400 border border-blue-900'
-                                                            }`}>{u.role.replace('_', ' ')}</span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className={`flex items-center gap-1.5 text-xs font-medium ${u.status === 'active' ? 'text-emerald-400' : 'text-slate-500'}`}>
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${u.status === 'active' ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
-                                                            {u.status === 'active' ? 'Active' : 'Disabled'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => { setNewUser({ ...u, password: '' } as any); setIsEditingUser(true); setIsUserModalOpen(true); }} className="text-slate-400 hover:text-blue-400 p-1.5 hover:bg-slate-800 rounded transition-colors" title="Edit User"><Pencil size={14} /></button>
-                                                            <button onClick={() => handleResetPassword(u.email)} className="text-slate-400 hover:text-amber-400 p-1.5 hover:bg-slate-800 rounded transition-colors" title="Send Password Reset"><Key size={14} /></button>
-                                                            {u.role !== 'admin' && (
-                                                                <button onClick={() => handleDeleteUser(u.uid!, u.email)} className="text-slate-400 hover:text-red-400 p-1.5 hover:bg-slate-800 rounded transition-colors" title="Delete User"><Trash2 size={14} /></button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* Roles Matrix Section */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                            <div className="p-4 border-b border-slate-800 bg-slate-950/30">
-                                <h3 className="font-bold text-white flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-400" /> Role Configuration</h3>
-                                <p className="text-xs text-slate-500">Fine-tune permissions for each role.</p>
-                            </div>
-                            <div className="overflow-x-auto custom-scrollbar">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="bg-slate-900 text-slate-500 font-medium text-xs uppercase tracking-wider sticky top-0">
-                                        <tr>
-                                            <th className="p-4 min-w-[200px] bg-slate-950 sticky left-0 z-10">Permission / Access</th>
-                                            {roles.filter(r => r.id !== 'admin').map(r => (
-                                                <th key={r.id} className="p-4 text-center min-w-[100px]">{r.label}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800">
-                                        {AVAILABLE_PERMISSIONS.map(perm => (
-                                            <tr key={perm.id} className="hover:bg-slate-800/30">
-                                                <td className="p-4 font-medium text-slate-300 bg-slate-900/50 sticky left-0 z-10 border-r border-slate-800">
-                                                    {perm.label}
-                                                    <div className="text-[10px] text-slate-600 font-mono font-normal">{perm.id}</div>
-                                                </td>
-                                                {roles.filter(r => r.id !== 'admin').map(role => {
-                                                    const isAllowed = role.permissions.includes('*') || role.permissions.includes(perm.id) || role.permissions.includes(perm.id.split('.')[0] + '.*');
-                                                    return (
-                                                        <td key={`${role.id}-${perm.id}`} className="p-4 text-center">
-                                                            <button
-                                                                onClick={() => togglePermission(role.id, perm.id)}
-                                                                className={`p-1 rounded transition-colors ${isAllowed ? 'text-emerald-400 hover:text-emerald-300' : 'text-slate-700 hover:text-slate-500'}`}
-                                                            >
-                                                                {isAllowed ? <CheckSquare size={20} /> : <Square size={20} />}
-                                                            </button>
-                                                        </td>
-                                                    );
-                                                })}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className="p-3 bg-slate-950 border-t border-slate-800 text-xs text-center text-slate-500">
-                                * Admin role has full system access by default and cannot be modified here.
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* SYSTEM MAINTENANCE TAB (SUPER ADMIN ONLY) */}
                 {activeTab === 'maintenance' && isSuperAdmin && (
                     <div className="space-y-4">
-                        <SettingsPanel title="Workspace diagnostics" description="Connection and repair tools for the active organization." icon={Zap} status={<span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">Platform access</span>}>
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <button type="button" onClick={handleTestConnection} className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-left transition-colors hover:border-teal-300/25 hover:bg-teal-300/[0.04]"><span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><RefreshCw size={16} /></span><span><span className="atlas-text-strong block text-sm font-bold">Test database</span><span className="atlas-text-subtle mt-0.5 block text-xs">Verify an authenticated tenant write.</span></span></button>
-                                <button type="button" disabled={isRepairing} onClick={handleRepairFinancials} className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-left transition-colors hover:border-teal-300/25 hover:bg-teal-300/[0.04] disabled:opacity-50"><span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border">{isRepairing ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}</span><span><span className="atlas-text-strong block text-sm font-bold">Recalculate financials</span><span className="atlas-text-subtle mt-0.5 block text-xs">Repair enrollment totals from tenant payments.</span></span></button>
-                            </div>
-                            <div className="mt-4 grid gap-2 rounded-lg border border-white/10 bg-slate-950/45 p-3 font-mono text-[11px] text-slate-400 sm:grid-cols-2"><span>User: {user?.uid || 'N/A'}</span><span>Organization: {currentOrganization?.id || 'N/A'}</span></div>
-                            {migrationResult && <div className="mt-3 rounded-lg border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 font-mono text-xs text-emerald-300">{migrationResult}</div>}
+                        <SettingsPanel title="Workspace diagnostics" description="Connection and repair tools for the active organization." icon={Zap} status={<EducationStatusPill status="warning">Platform access</EducationStatusPill>}>
+                            <details className="edu-settings-disclosure"><summary>Show diagnostics and repair tools</summary><div className="edu-settings-disclosure__body grid gap-3 sm:grid-cols-2">
+                                <button type="button" onClick={handleTestConnection} className="edu-settings-tool"><span className="edu-settings-icon-well flex h-9 w-9 shrink-0 items-center justify-center"><RefreshCw size={16} /></span><span><span className="edu-settings-text-strong block text-sm font-bold">Test database</span><span className="edu-settings-text-subtle mt-0.5 block text-xs">Verify an authenticated tenant write.</span></span></button>
+                                <button type="button" disabled={isRepairing} onClick={handleRepairFinancials} className="edu-settings-tool"><span className="edu-settings-icon-well flex h-9 w-9 shrink-0 items-center justify-center">{isRepairing ? <Loader2 className="animate-spin" size={16} /> : <Wand2 size={16} />}</span><span><span className="edu-settings-text-strong block text-sm font-bold">Recalculate financials</span><span className="edu-settings-text-subtle mt-0.5 block text-xs">Repair enrollment totals from tenant payments.</span></span></button>
+                            </div></details>
+                            <div className="edu-settings-debug"><span>User: {user?.uid || 'N/A'}</span><span>Organization: {currentOrganization?.id || 'N/A'}</span></div>
+                            {migrationResult && <EducationNotice status="info">{migrationResult}</EducationNotice>}
                         </SettingsPanel>
-                        <SettingsPanel title="Legacy recovery" description="One-time migration tools for pre-SaaS MakerLab data." icon={AlertTriangle}>
-                            <div className="flex flex-wrap gap-2">
-                                <AtlasActionButton icon={RefreshCw} disabled={isMigrating} onClick={handleMigrateData}>{isMigrating ? 'Migrating...' : 'Analyze legacy data'}</AtlasActionButton>
-                                <AtlasActionButton icon={Building2} onClick={handleRecreateOrg}>Recreate default organization</AtlasActionButton>
-                            </div>
+                        <SettingsPanel title="Legacy recovery" description="One-time migration tools for pre-SaaS MakerLab data." icon={AlertTriangle} accent="orange">
+                            <details className="edu-settings-disclosure"><summary>Show legacy recovery actions</summary><div className="edu-settings-disclosure__body"><EducationNotice status="warning">These tools can change organization ownership. Use them only for a documented support case.</EducationNotice><div className="edu-settings-action-row"><EducationButton icon={RefreshCw} disabled={isMigrating} onClick={handleMigrateData}>{isMigrating ? 'Migrating...' : 'Analyze legacy data'}</EducationButton><EducationButton icon={Building2} status="danger" onClick={handleRecreateOrg}>Recreate default organization</EducationButton></div></div></details>
                         </SettingsPanel>
                     </div>
                 )}
 
-                {false && activeTab === 'maintenance' && isSuperAdmin && (
-                    <div className="col-span-12 lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-                        <div className="p-4 border-b border-slate-800 bg-slate-950/30 flex items-center justify-between">
-                            <div>
-                                <h3 className="font-bold text-white flex items-center gap-2"><Zap className="text-amber-500" size={18} /> System Maintenance</h3>
-                                <p className="text-xs text-slate-500">Tools for system migration and repairs.</p>
-                            </div>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <div className="bg-amber-950/15 border border-amber-900/40 p-5 rounded-lg">
-                                <h4 className="font-bold text-amber-300 mb-2 flex items-center gap-2">Data migration tools</h4>
-                                <p className="text-sm text-slate-400 mb-4">
-                                    Migrate legacy Single-Tenant data to the new 'Makerlab Academy' Organization.
-                                    This will scan all collections and assign `organizationId: 'makerlab-academy'` to any orphaned documents.
-                                </p>
-
-                                <div className="flex items-center gap-4">
-                                    <button
-                                        onClick={handleMigrateData}
-                                        disabled={isMigrating}
-                                        className="bg-teal-500 hover:bg-teal-400 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors"
-                                    >
-                                        {isMigrating ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-                                        {isMigrating ? 'Migrating Data...' : 'Start Legacy Data Migration'}
-                                    </button>
-
-                                    <button onClick={handleTestConnection} className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded border border-slate-700">Test DB Connection</button>
-
-                                    <button onClick={handleRecreateOrg} className="text-xs bg-amber-900/30 hover:bg-amber-900/50 text-amber-500 border border-amber-900/50 px-3 py-2 rounded">
-                                        Recreate Default Org
-                                    </button>
-
-                                    <button onClick={handleRepairFinancials} disabled={isRepairing} className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors shadow-lg shadow-emerald-900/20">
-                                        {isRepairing ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-                                        {isRepairing ? 'Fixing...' : 'Recalculate Financials'}
-                                    </button>
-
-                                    <button onClick={handleMigrateAcademicYear} disabled={isMigrating} className="bg-slate-800 hover:bg-slate-700 disabled:text-slate-600 text-slate-200 border border-white/10 px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-colors">
-                                        <Calendar size={16} /> Shift to 25/26
-                                    </button>
-
-
-                                    {migrationResult && (
-                                        <div className="text-xs font-mono text-emerald-400 bg-emerald-950/30 px-3 py-2 rounded border border-emerald-900/50">
-                                            {migrationResult}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="mt-4 p-4 bg-black/30 rounded border border-slate-800 text-xs font-mono text-slate-400">
-                                    <div className="font-bold text-slate-300 mb-1">Debug Info:</div>
-                                    <div>User ID: {user?.uid}</div>
-                                    <div>Organization ID: {currentOrganization?.id || 'N/A'}</div>
-                                    <div>Is Super Admin: {isSuperAdmin ? 'YES' : 'NO'}</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
                 </main>
             </div>
 
 
             {/* Add/Edit User Modal */}
-            <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={isEditingUser ? "Edit team member" : "Add team member"}>
-                <form onSubmit={handleAddUser} className="space-y-4">
-                    <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-white/[0.025] p-3"><span className="atlas-accent-well flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"><Users size={16} /></span><div><p className="atlas-text-strong text-sm font-bold">{currentOrganization?.name}</p><p className="atlas-text-subtle mt-0.5 text-xs">This account will only access the active organization.</p></div></div>
+            <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={isEditingUser ? "Edit team member" : "Add team member"} designSystem={true}>
+                <form onSubmit={handleAddUser} className="edu-settings-dialog-form">
+                    <EducationNotice status="info">This account will only access {currentOrganization?.name || 'the active organization'}.</EducationNotice>
+                    {teamError && <EducationNotice status="danger">{teamError} Your entered details remain available for correction or retry.</EducationNotice>}
 
                     <SettingsField label="Full name" required><input required className={settingsInputClass} value={newUser.name} onChange={event => setNewUser({ ...newUser, name: event.target.value })} placeholder="Jane Doe" /></SettingsField>
                     <SettingsField label="Email address" required><input required type="email" disabled={isEditingUser} className={settingsInputClass} value={newUser.email} onChange={event => setNewUser({ ...newUser, email: event.target.value })} placeholder="jane@academy.com" /></SettingsField>
@@ -1621,8 +1182,8 @@ export const SettingsView = () => {
                     {!isEditingUser && (
                         <SettingsField label="Temporary password" hint="Leave empty and Edufy will generate one.">
                             <div className="relative">
-                                <input type="text" className={`${settingsInputClass} pr-12 font-mono`} value={newUser.password} onChange={event => setNewUser({ ...newUser, password: event.target.value })} placeholder="Auto-generated" />
-                                <button type="button" onClick={() => setNewUser({ ...newUser, password: Math.random().toString(36).slice(-8) })} aria-label="Generate temporary password" title="Generate password" className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-white/[0.06] hover:text-teal-200"><Wand2 size={15} /></button>
+                                <input type="text" aria-label="Temporary password" className={`${settingsInputClass} pr-12 font-mono`} value={newUser.password} onChange={event => setNewUser({ ...newUser, password: event.target.value })} placeholder="Auto-generated" />
+                                <button type="button" onClick={() => setNewUser({ ...newUser, password: Math.random().toString(36).slice(-8) })} aria-label="Generate temporary password" title="Generate password" className="edu-settings-generate"><Wand2 size={15} /></button>
                             </div>
                         </SettingsField>
                     )}
@@ -1633,42 +1194,18 @@ export const SettingsView = () => {
                         </select>
                     </SettingsField>
 
-                    <div className="rounded-lg border border-white/10 bg-white/[0.025] p-3">
-                        <div className="mb-3 flex items-center gap-2"><Clock size={14} className="text-teal-300" /><span className="atlas-text-strong text-xs font-bold">Custom work hours</span><span className="atlas-text-subtle text-[10px]">Optional</span></div>
-                        <div className="grid grid-cols-2 gap-3">
+                    <details className="edu-settings-disclosure"><summary>Custom work hours · optional</summary><div className="edu-settings-disclosure__body grid grid-cols-2 gap-3">
                             <SettingsField label="Starts"><input type="time" className={settingsInputClass} value={newUser.workHours?.start || ''} onChange={event => setNewUser({ ...newUser, workHours: { start: event.target.value, end: newUser.workHours?.end || '' } })} /></SettingsField>
                             <SettingsField label="Ends"><input type="time" className={settingsInputClass} value={newUser.workHours?.end || ''} onChange={event => setNewUser({ ...newUser, workHours: { start: newUser.workHours?.start || '', end: event.target.value } })} /></SettingsField>
-                        </div>
-                    </div>
+                        </div></details>
 
-                    <div className="flex justify-end gap-2 border-t border-white/10 pt-4"><AtlasActionButton onClick={() => setIsUserModalOpen(false)}>Cancel</AtlasActionButton><AtlasActionButton type="submit" variant="primary" icon={isProcessingTeam ? Loader2 : isEditingUser ? Save : UserPlus} disabled={isProcessingTeam} className={isProcessingTeam ? '[&_svg]:animate-spin' : ''}>{isProcessingTeam ? 'Saving...' : isEditingUser ? 'Save member' : 'Create member'}</AtlasActionButton></div>
+                    <div className="edu-settings-dialog-actions"><EducationButton onClick={() => setIsUserModalOpen(false)}>Cancel</EducationButton><EducationButton type="submit" variant="primary" icon={isProcessingTeam ? Loader2 : isEditingUser ? Save : UserPlus} disabled={isProcessingTeam}>{isProcessingTeam ? 'Saving...' : isEditingUser ? 'Save member' : 'Create member'}</EducationButton></div>
                 </form>
             </Modal>
 
             {/* Credentials Display Modal */}
-            <Modal isOpen={!!showCredentials} onClose={() => setShowCredentials(null)} title="User Created Successfully">
-                <div className="text-center space-y-4">
-                    <div className="w-12 h-12 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-2">
-                        <CheckCircle2 size={32} />
-                    </div>
-                    <p className="text-sm text-slate-400">Please copy these credentials and share them with the user securely.</p>
-
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-left space-y-3">
-                        <div>
-                            <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Email</label>
-                            <div className="font-mono text-white text-sm select-all">{showCredentials?.email}</div>
-                        </div>
-                        <div>
-                            <label className="text-[10px] uppercase text-slate-500 font-bold tracking-wider">Password</label>
-                            <div className="flex items-center justify-between">
-                                <div className="font-mono text-emerald-400 text-lg font-bold select-all">{showCredentials?.password}</div>
-                                <button onClick={async () => { await navigator.clipboard.writeText(`Email: ${showCredentials?.email}\nPassword: ${showCredentials?.password}`); showAlert('Credentials copied', 'The email and temporary password are ready to share securely.', 'success'); }} aria-label="Copy credentials" title="Copy credentials" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><Copy size={16} /></button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button onClick={() => setShowCredentials(null)} className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Done</button>
-                </div>
+            <Modal isOpen={!!showCredentials} onClose={() => setShowCredentials(null)} title="Team member created" designSystem={true}>
+                <div className="edu-settings-dialog-form"><EducationNotice status="success">The account is ready. Copy the credentials and share them securely.</EducationNotice><dl className="edu-settings-facts"><div><dt>Email</dt><dd className="select-all">{showCredentials?.email}</dd></div><div><dt>Temporary password</dt><dd className="select-all">{showCredentials?.password}</dd></div></dl><div className="edu-settings-dialog-actions"><EducationButton icon={Copy} onClick={async () => { await navigator.clipboard.writeText(`Email: ${showCredentials?.email}\nPassword: ${showCredentials?.password}`); showAlert('Credentials copied', 'The email and temporary password are ready to share securely.', 'success'); }}>Copy credentials</EducationButton><EducationButton variant="primary" onClick={() => setShowCredentials(null)}>Done</EducationButton></div></div>
             </Modal>
         </div >
     );

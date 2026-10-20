@@ -1,6 +1,8 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Check, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { EducationField, EducationIcon, EducationStatusPill, EducationSurface } from '../education-ui/EducationPrimitives';
+import type { EducationAccent, EducationStatus } from '../education-ui/EducationPrimitives';
 
 export interface SettingsNavigationItem<SectionId extends string> {
   id: SectionId;
@@ -8,6 +10,7 @@ export interface SettingsNavigationItem<SectionId extends string> {
   description: string;
   icon: LucideIcon;
   badge?: string;
+  status?: EducationStatus;
 }
 
 interface SettingsNavigationProps<SectionId extends string> {
@@ -17,55 +20,21 @@ interface SettingsNavigationProps<SectionId extends string> {
   mode?: 'responsive' | 'mobile' | 'desktop';
 }
 
-export const SettingsNavigation = <SectionId extends string>({ items, activeId, onChange, mode = 'responsive' }: SettingsNavigationProps<SectionId>) => (
-  <>
-    {mode !== 'desktop' && <div className="no-scrollbar flex w-full gap-1.5 overflow-x-auto pb-1 lg:hidden">
-      {items.map(item => {
-        const Icon = item.icon;
-        const active = item.id === activeId;
-        return (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onChange(item.id)}
-            aria-current={active ? 'page' : undefined}
-            className={`flex h-9 shrink-0 items-center gap-2 rounded-md border px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${active ? 'border-teal-300/30 bg-teal-300/10 text-teal-100' : 'atlas-text-muted border-transparent bg-transparent hover:border-white/10 hover:bg-white/[0.035] hover:text-white'}`}
-          >
-            <Icon size={14} />
-            {item.label}
-            {item.badge && <span className="atlas-text-subtle text-[10px]">{item.badge}</span>}
-          </button>
-        );
-      })}
-    </div>}
-
-    {mode !== 'mobile' && <aside className="hidden w-52 shrink-0 border-r border-white/[0.08] pr-4 lg:block">
-      <nav aria-label="Settings sections" className="sticky top-28 space-y-0.5">
-        {items.map(item => {
-          const Icon = item.icon;
-          const active = item.id === activeId;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onChange(item.id)}
-              aria-current={active ? 'page' : undefined}
-              className={`group relative flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${active ? 'bg-white/[0.055]' : 'hover:bg-white/[0.035]'}`}
-            >
-              {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-teal-300" />}
-              <Icon size={16} className={active ? 'text-teal-200' : 'atlas-text-subtle group-hover:text-slate-300'} />
-              <span className="min-w-0 flex-1">
-                <span className={`block truncate text-[13px] font-bold ${active ? 'atlas-text-strong' : 'atlas-text-muted'}`}>{item.label}</span>
-                <span className="atlas-text-subtle mt-0.5 block truncate text-[10px] leading-4">{item.description}</span>
-              </span>
-              {item.badge ? <span className="atlas-text-subtle text-[10px] font-bold">{item.badge}</span> : <ChevronRight size={13} className={active ? 'text-teal-300' : 'text-slate-700'} />}
-            </button>
-          );
-        })}
-      </nav>
-    </aside>}
-  </>
-);
+export const SettingsNavigation = <SectionId extends string>({ items, activeId, onChange, mode = 'responsive' }: SettingsNavigationProps<SectionId>) => {
+  const renderItem = (item: SettingsNavigationItem<SectionId>) => {
+    const Icon = item.icon;
+    return <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={item.id === activeId ? 'page' : undefined} className="edu-settings-nav-item">
+      <Icon size={19} aria-hidden="true" />
+      <span className="edu-settings-nav-item__copy"><strong>{item.label}</strong><small>{item.description}</small></span>
+      {item.badge && <EducationStatusPill status={item.status || 'neutral'}>{item.badge}</EducationStatusPill>}
+      {!item.badge && <ChevronRight size={15} aria-hidden="true" />}
+    </button>;
+  };
+  return <>
+    {mode !== 'desktop' && <nav aria-label="Settings categories" className="edu-settings-nav edu-settings-nav--mobile">{items.map(renderItem)}</nav>}
+    {mode !== 'mobile' && <aside className="edu-settings-nav-wrap"><nav aria-label="Settings categories" className="edu-settings-nav edu-settings-nav--desktop">{items.map(renderItem)}</nav></aside>}
+  </>;
+};
 
 interface SettingsPanelProps {
   title: string;
@@ -74,95 +43,32 @@ interface SettingsPanelProps {
   children: React.ReactNode;
   actions?: React.ReactNode;
   status?: React.ReactNode;
+  accent?: EducationAccent;
 }
 
-export const SettingsPanel = ({ title, description, icon: Icon, children, actions, status }: SettingsPanelProps) => (
-  <section className="atlas-settings-section border-t border-white/[0.08] py-6 first:border-t-0 first:pt-1">
-    <div className="grid min-w-0 gap-5 xl:grid-cols-[184px_minmax(0,1fr)] xl:gap-8">
-      <header className="min-w-0">
-        <div className="flex items-start gap-2.5">
-          <span className="atlas-accent-well mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border"><Icon size={14} /></span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="atlas-text-strong text-sm font-black leading-5">{title}</h2>
-              {status}
-            </div>
-            <p className="atlas-text-subtle mt-1 text-[11px] leading-[1.55]">{description}</p>
-          </div>
-        </div>
-        {actions && <div className="mt-3 flex flex-wrap items-center gap-2 pl-9">{actions}</div>}
-      </header>
-      <div className="min-w-0">{children}</div>
-    </div>
-  </section>
-);
+export const SettingsPanel = ({ title, description, icon, children, actions, status, accent = 'purple' }: SettingsPanelProps) => <EducationSurface className="edu-settings-panel">
+  <header className="edu-settings-panel__header">
+    <EducationIcon icon={icon} accent={accent} />
+    <div className="edu-settings-panel__copy"><div className="edu-settings-panel__title"><h2>{title}</h2>{status}</div><p>{description}</p></div>
+    {actions && <div className="edu-settings-panel__actions">{actions}</div>}
+  </header>
+  <div className="edu-settings-panel__body">{children}</div>
+</EducationSurface>;
 
-interface SettingsFieldProps {
-  label: string;
-  hint?: string;
-  required?: boolean;
-  children: React.ReactNode;
-}
+interface SettingsFieldProps { label: string; hint?: string; required?: boolean; children: React.ReactElement<any>; }
+export const SettingsField = ({ label, hint, required, children }: SettingsFieldProps) => {
+  if (['input', 'select', 'textarea'].includes(String(children.type))) {
+    return <EducationField label={label} hint={hint}>{React.cloneElement(children, { required: required || children.props.required })}</EducationField>;
+  }
+  return <div className="edu-ds-field"><span className="edu-settings-field-label">{label}{required && ' *'}</span>{children}{hint && <small>{hint}</small>}</div>;
+};
 
-export const SettingsField = ({ label, hint, required, children }: SettingsFieldProps) => (
-  <label className="block min-w-0">
-    <span className="atlas-text-muted mb-1.5 flex items-center gap-1 text-xs font-bold">
-      {label}
-      {required && <span className="text-rose-400">*</span>}
-    </span>
-    {children}
-    {hint && <span className="atlas-text-subtle mt-1.5 block text-[11px] leading-4">{hint}</span>}
-  </label>
-);
+interface SettingsToggleProps { checked: boolean; onChange: () => void; label: string; description?: string; disabled?: boolean; tone?: 'teal' | 'amber'; }
+export const SettingsToggle = ({ checked, onChange, label, description, disabled, tone = 'teal' }: SettingsToggleProps) => <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={onChange} className="edu-settings-toggle" data-tone={tone === 'amber' ? 'yellow' : 'blue'}>
+  <span><strong>{label}</strong>{description && <small>{description}</small>}</span><span aria-hidden="true" className="edu-settings-toggle__track"><span /></span>
+</button>;
 
-interface SettingsToggleProps {
-  checked: boolean;
-  onChange: () => void;
-  label: string;
-  description?: string;
-  disabled?: boolean;
-  tone?: 'teal' | 'amber';
-}
+interface SettingsMetricProps { label: string; value: React.ReactNode; detail?: string; icon: LucideIcon; }
+export const SettingsMetric = ({ label, value, detail, icon: Icon }: SettingsMetricProps) => <div className="edu-settings-metric"><Icon size={19} aria-hidden="true" /><div><small>{label}</small><strong>{value}</strong>{detail && <span>{detail}</span>}</div></div>;
 
-export const SettingsToggle = ({ checked, onChange, label, description, disabled, tone = 'teal' }: SettingsToggleProps) => (
-  <button
-    type="button"
-    role="switch"
-    aria-checked={checked}
-    disabled={disabled}
-    onClick={onChange}
-    className="group flex min-h-14 w-full items-center justify-between gap-4 border-y border-white/[0.08] py-3 text-left transition-colors hover:border-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 disabled:cursor-not-allowed disabled:opacity-50"
-  >
-    <span className="min-w-0">
-      <span className="atlas-text-strong block text-sm font-bold">{label}</span>
-      {description && <span className="atlas-text-subtle mt-0.5 block text-xs leading-5">{description}</span>}
-    </span>
-    <span className={`flex h-6 w-11 shrink-0 items-center rounded-full border p-0.5 transition-colors ${checked ? tone === 'amber' ? 'border-amber-300/40 bg-amber-400/25' : 'border-teal-300/40 bg-teal-400/25' : 'border-white/10 bg-slate-950/70'}`}>
-      <span className={`flex h-4 w-4 items-center justify-center rounded-full transition-transform ${checked ? `translate-x-4 ${tone === 'amber' ? 'bg-amber-300 text-slate-950' : 'bg-teal-300 text-slate-950'}` : 'translate-x-0 bg-slate-600 text-transparent'}`}>
-        <Check size={11} strokeWidth={3} />
-      </span>
-    </span>
-  </button>
-);
-
-interface SettingsMetricProps {
-  label: string;
-  value: React.ReactNode;
-  detail?: string;
-  icon: LucideIcon;
-}
-
-export const SettingsMetric = ({ label, value, detail, icon: Icon }: SettingsMetricProps) => (
-  <div className="flex min-w-0 items-center gap-3 px-3 py-2.5">
-    <span className="atlas-accent-well flex h-7 w-7 shrink-0 items-center justify-center rounded-md border">
-      <Icon size={13} />
-    </span>
-    <div className="min-w-0">
-      <span className="atlas-text-subtle block truncate text-[9px] font-bold uppercase tracking-normal">{label}</span>
-      <div className="atlas-text-strong mt-0.5 truncate text-sm font-black capitalize">{value}</div>
-      {detail && <p className="atlas-text-subtle truncate text-[10px]">{detail}</p>}
-    </div>
-  </div>
-);
-
-export const settingsInputClass = 'atlas-settings-input atlas-text-strong min-h-10 w-full rounded-md border px-3 py-2 text-sm outline-none transition-colors placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-55';
+export const settingsInputClass = 'edu-settings-input';
