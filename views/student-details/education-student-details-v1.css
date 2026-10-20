@@ -169,3 +169,216 @@
     .edu-student-details-v1 *::before,
     .edu-student-details-v1 *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Experience restructure: one focused learner workspace, shared DS tokens, no permanent access sidebar. */
+[data-edu-system='1'].edu-student-details-v1 { color:var(--ds-ink); }
+[data-edu-system='1'] .edu-student-details-v1__hero {
+    min-height:218px;
+    overflow:clip;
+    grid-template-columns:minmax(0,1fr) minmax(330px,.48fr);
+    padding:72px 28px 24px;
+    border:2px solid var(--ds-green);
+    border-bottom:7px solid var(--ds-green-edge);
+    border-radius:28px;
+    background:
+        radial-gradient(circle at 82% 8%,color-mix(in srgb,var(--ds-yellow) 18%,transparent) 0 17%,transparent 17.5%),
+        linear-gradient(130deg,var(--ds-green-soft),var(--ds-blue-soft));
+    box-shadow:none;
+}
+[data-edu-system='1'] .edu-student-details-v1__hero::after { border-color:color-mix(in srgb,var(--ds-surface) 55%,transparent); }
+[data-edu-system='1'] .edu-student-details-v1__back,
+[data-edu-system='1'] .edu-student-details-v1__student-view,
+[data-edu-system='1'] .edu-student-details-v1__actions button {
+    border:2px solid var(--ds-border);
+    border-bottom:5px solid var(--ds-depth);
+    background:var(--ds-surface);
+    color:var(--ds-ink);
+}
+[data-edu-system='1'] .edu-student-details-v1__actions .edu-student-details-v1__edit { border-color:var(--ds-blue-edge); border-bottom-color:var(--ds-blue-edge); background:var(--ds-blue); color:var(--ds-on-color); }
+[data-edu-system='1'] .edu-student-details-v1__avatar { border-color:var(--ds-surface); background:var(--ds-green); color:var(--ds-on-color); box-shadow:0 7px 0 var(--ds-green-edge); }
+[data-edu-system='1'] .edu-student-details-v1__eyebrow,[data-edu-system='1'] .edu-student-details-v1__identity p { color:var(--ds-muted); }
+[data-edu-system='1'] .edu-student-details-v1__title-line h2 { color:var(--ds-ink); font-family:var(--ds-font-heading); font-size:clamp(30px,4vw,50px); font-weight:950; }
+[data-edu-system='1'] .edu-student-details-v1__title-line>span { border:2px solid var(--ds-green); background:var(--ds-green-soft); color:var(--ds-green-ink); }
+[data-edu-system='1'] .edu-student-details-v1__membership { background:var(--ds-purple-soft); color:var(--ds-purple-ink); }
+
+[data-edu-system='1'] .edu-student-details-v1__attention { padding:17px; border:2px solid var(--ds-orange); border-bottom:6px solid var(--ds-orange-edge); border-radius:22px; background:var(--ds-orange-soft); }
+[data-edu-system='1'] .edu-student-details-v1__attention>header { display:flex; align-items:center; gap:11px; }
+[data-edu-system='1'] .edu-student-details-v1__attention>header>span { display:grid; width:42px; height:42px; place-items:center; border-radius:13px; background:var(--ds-orange); color:var(--ds-on-color); }
+[data-edu-system='1'] .edu-student-details-v1__attention h3,[data-edu-system='1'] .edu-student-details-v1__attention p { margin:0; }
+[data-edu-system='1'] .edu-student-details-v1__attention h3 { color:var(--ds-orange-ink); font-size:17px; }
+[data-edu-system='1'] .edu-student-details-v1__attention p { margin-top:2px; color:var(--ds-muted); font-size:11px; }
+[data-edu-system='1'] .edu-student-details-v1__attention>div { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:9px; margin-top:14px; }
+[data-edu-system='1'] .edu-student-details-v1__attention>div>button { display:grid; min-height:66px; grid-template-columns:38px minmax(0,1fr) 18px; align-items:center; gap:9px; padding:8px 10px; border:2px solid color-mix(in srgb,var(--ds-orange) 55%,var(--ds-border)); border-bottom:4px solid var(--ds-orange-edge); border-radius:15px; background:var(--ds-surface); color:var(--ds-ink); text-align:left; }
+[data-edu-system='1'] .edu-student-details-v1__attention>div>button>span:first-child { display:grid; width:38px; height:38px; place-items:center; border-radius:12px; background:var(--ds-orange-soft); color:var(--ds-orange-ink); }
+[data-edu-system='1'] .edu-student-details-v1__attention strong,[data-edu-system='1'] .edu-student-details-v1__attention small { display:block; }
+[data-edu-system='1'] .edu-student-details-v1__attention strong { font-family:var(--ds-font-heading); font-size:12px; font-weight:900; }
+[data-edu-system='1'] .edu-student-details-v1__attention small { margin-top:2px; color:var(--ds-muted); font-size:10px; }
+
+[data-edu-system='1'] .edu-student-details-v1__tabs { position:sticky; z-index:16; top:-20px; padding:6px!important; border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important; border-radius:18px!important; background:color-mix(in srgb,var(--ds-surface) 96%,transparent)!important; box-shadow:none; backdrop-filter:blur(16px); }
+[data-edu-system='1'] .edu-student-details-v1__tabs button { border:2px solid transparent; color:var(--ds-muted)!important; }
+[data-edu-system='1'] .edu-student-details-v1__tabs button:hover { background:var(--ds-subtle)!important; color:var(--ds-ink)!important; }
+[data-edu-system='1'] .edu-student-details-v1__tabs button[aria-selected='true'] { border-color:var(--ds-blue); border-bottom-color:var(--ds-blue-edge); background:var(--ds-blue-soft)!important; color:var(--ds-blue-ink)!important; }
+[data-edu-system='1'] .edu-student-details-v1__tabs button span { background:color-mix(in srgb,var(--ds-ink) 8%,transparent)!important; }
+
+[data-edu-system='1'] .edu-student-details-v1__signals>.atlas-signal-card { min-height:118px; border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; box-shadow:none!important; }
+[data-edu-system='1'] .edu-student-details-v1__signals>.atlas-signal-card:first-child { border-color:var(--ds-green)!important; border-bottom-color:var(--ds-green-edge)!important; background:var(--ds-green-soft)!important; }
+[data-edu-system='1'] .edu-student-details-v1__signals>.atlas-signal-card:nth-child(2) { background:var(--ds-orange-soft)!important; }
+[data-edu-system='1'] .edu-student-details-v1__signals>.atlas-signal-card:nth-child(3) { background:var(--ds-blue-soft)!important; color:var(--ds-blue-ink)!important; }
+[data-edu-system='1'] .edu-student-details-v1__signals>.atlas-signal-card:nth-child(4) { background:var(--ds-purple-soft)!important; }
+[data-edu-system='1'] .edu-student-details-v1__signals>.atlas-signal-card:nth-child(3) :is(.atlas-text-subtle,.atlas-signal-detail) { color:var(--ds-blue-ink)!important; }
+
+[data-edu-system='1'] .edu-student-details-v1__overview { display:grid; gap:15px; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid>section { overflow:hidden; padding:18px; border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important; border-radius:22px!important; background:var(--ds-surface)!important; box-shadow:none!important; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid>section>header,[data-edu-system='1'] .edu-student-details-v1__section-heading { display:grid; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:10px; padding-bottom:13px; border-bottom:2px solid var(--ds-border); }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid>section>header>span,[data-edu-system='1'] .edu-student-details-v1__section-heading>span { display:grid; width:42px; height:42px; place-items:center; border-radius:13px; background:var(--ds-purple-soft); color:var(--ds-purple-ink); }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid h3,[data-edu-system='1'] .edu-student-details-v1__overview-grid p,[data-edu-system='1'] .edu-student-details-v1__section-heading h3,[data-edu-system='1'] .edu-student-details-v1__section-heading p { margin:0; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid h3,[data-edu-system='1'] .edu-student-details-v1__section-heading h3 { color:var(--ds-ink); font-size:15px; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid p,[data-edu-system='1'] .edu-student-details-v1__section-heading p { margin-top:2px; color:var(--ds-muted); font-size:10px; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid header>button { min-height:40px; padding:0 12px; border:2px solid var(--ds-blue); border-bottom:4px solid var(--ds-blue-edge); border-radius:12px; background:var(--ds-blue-soft); color:var(--ds-blue-ink); font-weight:900; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid dl { margin:12px 0 0; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid dl>div { display:grid; grid-template-columns:minmax(130px,.7fr) minmax(0,1fr); gap:12px; padding:10px 3px; border-bottom:1px solid var(--ds-border); }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid dt { display:flex; align-items:center; gap:7px; color:var(--ds-muted); font-size:11px; font-weight:800; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid dd { margin:0; overflow-wrap:anywhere; color:var(--ds-ink); font-size:12px; font-weight:800; }
+[data-edu-system='1'] .edu-student-details-v1__overview-grid [data-alert='true'] dd { color:var(--ds-red-ink); }
+[data-edu-system='1'] .edu-student-details-v1__program-list { display:grid; gap:8px; margin-top:12px; }
+[data-edu-system='1'] .edu-student-details-v1__program-list>button { display:flex; min-height:58px; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border:2px solid var(--ds-border); border-radius:14px; background:var(--ds-subtle); color:var(--ds-ink); text-align:left; }
+[data-edu-system='1'] .edu-student-details-v1__program-list strong,[data-edu-system='1'] .edu-student-details-v1__program-list small { display:block; }
+[data-edu-system='1'] .edu-student-details-v1__program-list small { margin-top:3px; color:var(--ds-muted); font-size:10px; }
+[data-edu-system='1'] .edu-student-details-v1__overview-empty { display:grid; min-height:160px; place-items:center; align-content:center; gap:8px; color:var(--ds-muted); text-align:center; }
+[data-edu-system='1'] .edu-student-details-v1__overview-empty p { font-size:12px; }
+[data-edu-system='1'] .edu-student-details-v1__overview-empty button { min-height:42px; padding:0 13px; border:2px solid var(--ds-blue-edge); border-bottom:4px solid var(--ds-blue-edge); border-radius:13px; background:var(--ds-blue); color:var(--ds-on-color); font-weight:900; }
+
+[data-edu-system='1'] .edu-student-details-v1__subtabs { display:flex; gap:8px; margin-bottom:13px; overflow-x:auto; }
+[data-edu-system='1'] .edu-student-details-v1__subtabs button { display:flex; min-height:44px; align-items:center; gap:7px; padding:0 13px; border:2px solid var(--ds-border); border-bottom:4px solid var(--ds-depth); border-radius:14px; background:var(--ds-surface); color:var(--ds-muted); font-weight:900; }
+[data-edu-system='1'] .edu-student-details-v1__subtabs button[aria-pressed='true'] { border-color:var(--ds-purple); border-bottom-color:var(--ds-purple-edge); background:var(--ds-purple-soft); color:var(--ds-purple-ink); }
+[data-edu-system='1'] .edu-student-details-v1__subtabs button span { display:grid; min-width:22px; height:22px; place-items:center; border-radius:99px; background:color-mix(in srgb,var(--ds-ink) 8%,transparent); font-size:9px; }
+
+[data-edu-system='1'] .edu-student-details-v1__panel>div,[data-edu-system='1'] .edu-student-details-v1__panel>section,[data-edu-system='1'] .edu-student-details-v1__panel section { border-color:var(--ds-border)!important; color:var(--ds-ink)!important; background:var(--ds-surface)!important; box-shadow:none; }
+[data-edu-system='1'] .edu-student-details-v1__panel [class*='border-white'],[data-edu-system='1'] .edu-student-details-v1__panel [class*='border-slate'] { border-color:var(--ds-border)!important; }
+[data-edu-system='1'] .edu-student-details-v1__panel [class*='bg-slate-950'],[data-edu-system='1'] .edu-student-details-v1__panel [class*='bg-slate-900'],[data-edu-system='1'] .edu-student-details-v1__access [class*='bg-slate'] { background:var(--ds-subtle)!important; color:var(--ds-ink)!important; }
+[data-edu-system='1'] .edu-student-details-v1__panel [class*='text-white'],[data-edu-system='1'] .edu-student-details-v1__panel [class*='text-slate-2'],[data-edu-system='1'] .edu-student-details-v1__panel [class*='text-slate-3'] { color:var(--ds-ink)!important; }
+[data-edu-system='1'] .edu-student-details-v1__panel [class*='text-slate-4'],[data-edu-system='1'] .edu-student-details-v1__panel [class*='text-slate-5'],[data-edu-system='1'] .edu-student-details-v1__panel [class*='text-slate-6'] { color:var(--ds-muted)!important; }
+[data-edu-system='1'] .edu-student-details-v1__access { padding:18px; border:2px solid var(--ds-border); border-bottom:5px solid var(--ds-depth); border-radius:22px; background:var(--ds-surface); }
+[data-edu-system='1'] .edu-student-details-v1__section-heading { margin-bottom:14px; grid-template-columns:42px minmax(0,1fr); }
+
+@media(max-width:900px) {
+    [data-edu-system='1'] .edu-student-details-v1__hero { grid-template-columns:1fr; padding-top:70px; }
+    [data-edu-system='1'] .edu-student-details-v1__overview-grid { grid-template-columns:1fr; }
+    [data-edu-system='1'] .edu-student-details-v1__tabs { top:-12px; }
+}
+@media(max-width:700px) {
+    [data-edu-system='1'] .edu-student-details-v1__hero { padding:65px 15px 17px; border-radius:22px; }
+    [data-edu-system='1'] .edu-student-details-v1__actions { grid-template-columns:1fr; }
+    [data-edu-system='1'] .edu-student-details-v1__attention>div { grid-template-columns:1fr; }
+    [data-edu-system='1'] .edu-student-details-v1__overview-grid dl>div { grid-template-columns:1fr; gap:5px; }
+    [data-edu-system='1'] .edu-student-details-v1__overview-grid>section,[data-edu-system='1'] .edu-student-details-v1__access { padding:14px; border-radius:19px!important; }
+    [data-edu-system='1'] .edu-student-details-v1__tabs>div { min-width:max-content; }
+}
+
+/* Nested Student Details workspaces retain their domain components and use the shared v1 ramps. */
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card {
+  min-width:0; border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important;
+  border-radius:22px!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important;
+}
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--contract { border-color:var(--ds-orange)!important; border-bottom-color:var(--ds-orange-edge)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--portfolio { border-color:var(--ds-purple)!important; border-bottom-color:var(--ds-purple-edge)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--learning { border-color:var(--ds-purple)!important; border-bottom-color:var(--ds-purple-edge)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--learning [class*='text-amber'] { color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card:first-child { border-color:var(--ds-blue)!important; border-bottom-color:var(--ds-blue-edge)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface :is(h3,h4,strong),
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card :is(h3,h4,strong) { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card) [class*='bg-slate'],
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance [class*='bg-slate'] { background:var(--ds-subtle)!important; color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='text-white'],
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='text-slate-2'],
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='text-slate-3'] { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='text-slate-4'],
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='text-slate-5'],
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='text-slate-6'] { color:var(--ds-muted)!important; }
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='border-slate'],
+[data-edu-system='1'].edu-student-details-v1 :is(.edu-student-surface,.edu-student-access-card,.edu-student-finance) [class*='border-white'] { border-color:var(--ds-border)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-record:hover,
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface button:hover { background:var(--ds-blue-soft); }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--portfolio button { background:var(--ds-surface)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--portfolio button:hover { background:var(--ds-purple-soft)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--portfolio button h4 { color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--portfolio button span[class*='teal'] { border-color:var(--ds-purple)!important; background:var(--ds-purple-soft)!important; color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-status { border:2px solid var(--student-status-edge)!important; background:var(--student-status-soft)!important; color:var(--student-status-ink)!important; border-radius:999px!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-status[data-tone='success'] { --student-status-edge:var(--ds-green); --student-status-soft:var(--ds-green-soft); --student-status-ink:var(--ds-green-ink); }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-status[data-tone='attention'] { --student-status-edge:var(--ds-orange); --student-status-soft:var(--ds-orange-soft); --student-status-ink:var(--ds-orange-ink); }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-status[data-tone='info'] { --student-status-edge:var(--ds-blue); --student-status-soft:var(--ds-blue-soft); --student-status-ink:var(--ds-blue-ink); }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-status[data-tone='danger'] { --student-status-edge:var(--ds-red); --student-status-soft:var(--ds-red-soft); --student-status-ink:var(--ds-red-ink); }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance table { color:var(--ds-ink); }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance thead { background:var(--ds-subtle)!important; color:var(--ds-muted)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance tbody tr:hover { background:var(--ds-blue-soft)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance :is(td,th) { border-color:var(--ds-border)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance [class*='text-emerald'] { color:var(--ds-green-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance [class*='text-amber'] { color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-finance [class*='text-red'] { color:var(--ds-red-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access [class*='text-teal'],
+[data-edu-system='1'].edu-student-details-v1 .edu-student-surface--learning [class*='text-teal'] { color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access [class*='text-emerald'] { color:var(--ds-green-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access [class*='text-amber'] { color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access .edu-parent-access-action--credentials { background:var(--ds-blue)!important; border-color:var(--ds-blue-edge)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access .edu-parent-access-action--secondary { background:var(--ds-blue-soft)!important; border-color:var(--ds-blue-edge)!important; color:var(--ds-blue-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access .edu-parent-access-action--primary { background:var(--ds-green)!important; border-color:var(--ds-green-edge)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access .edu-parent-access-action--whatsapp { background:var(--ds-green-soft)!important; border-color:var(--ds-green)!important; color:var(--ds-green-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access button { min-height:44px; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card > div:first-child h3 { color:var(--ds-blue-ink)!important; font:900 16px var(--ds-font-heading); text-transform:none; letter-spacing:0; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card:not(:first-child) > div:first-child h3 { color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card [class*='bg-amber'] { background:var(--ds-orange-soft)!important; border-color:var(--ds-orange)!important; color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .edu-student-access-card [class*='bg-emerald'] { background:var(--ds-green-soft)!important; border-color:var(--ds-green)!important; color:var(--ds-green-ink)!important; }
+
+/* Dialog bodies live under this page, including certificate, invoice, proof and access dialogs. */
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body { color:var(--ds-ink); font-family:var(--ds-font-body); }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='bg-slate'] { background:var(--ds-subtle)!important; color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='border-slate'] { border-color:var(--ds-border)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-white'],
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-slate-2'],
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-slate-3'] { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-slate-4'],
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-slate-5'] { color:var(--ds-muted)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body :is(input:not([type='checkbox']),select,textarea) { width:100%; min-height:46px; border:2px solid var(--ds-border)!important; border-radius:12px!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; font:500 16px var(--ds-font-body); }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body input[type='checkbox'] { width:18px; height:18px; accent-color:var(--ds-blue); }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body label { color:var(--ds-ink)!important; font-size:13px; font-weight:800; text-transform:none; letter-spacing:0; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button { min-height:44px; border:2px solid var(--ds-border); border-bottom:4px solid var(--ds-depth); border-radius:12px!important; background:var(--ds-surface); color:var(--ds-ink); font-family:var(--ds-font-heading); font-weight:900; box-shadow:none!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button[class*='bg-teal'],
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button[class*='bg-sky'],
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button[class*='bg-blue'] { background:var(--ds-blue)!important; border-color:var(--ds-blue-edge)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button[class*='bg-emerald'] { background:var(--ds-green)!important; border-color:var(--ds-green-edge)!important; color:var(--ds-on-color)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button[class*='bg-amber'] { background:var(--ds-orange-soft)!important; border-color:var(--ds-orange-edge)!important; color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button[class*='bg-red'] { background:var(--ds-red-soft)!important; border-color:var(--ds-red-edge)!important; color:var(--ds-red-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body button:disabled { opacity:.55; cursor:not-allowed; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='bg-amber'] { background:var(--ds-orange-soft)!important; color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-emerald'] { color:var(--ds-green-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-teal'] { color:var(--ds-blue-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-amber'] { color:var(--ds-orange-ink)!important; }
+[data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body [class*='text-red'] { color:var(--ds-red-ink)!important; }
+@media(max-width:700px) {
+  [data-edu-system='1'].edu-student-details-v1 .edu-student-surface :is(.grid-cols-2,.sm\:grid-cols-2) { min-width:0; }
+  [data-edu-system='1'].edu-student-details-v1 .atlas-dialog { max-height:100dvh; border-radius:0; }
+  [data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body { overflow-x:hidden; }
+  [data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body .grid-cols-2 { grid-template-columns:1fr; }
+  [data-edu-system='1'].edu-student-details-v1 .atlas-dialog-body form > .edu-ds-notice[role='alert'] { position:sticky; bottom:84px; z-index:3; box-shadow:0 4px 0 var(--ds-red-edge); }
+}
+
+/* The learner-facing preview is reachable from the profile and uses real project counts. */
+[data-edu-system='1'].edu-student-portal-v1 { color:var(--ds-ink); font-family:var(--ds-font-body); }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__preview { border:2px solid var(--ds-blue)!important; border-bottom:5px solid var(--ds-blue-edge)!important; border-radius:18px; background:var(--ds-blue-soft)!important; color:var(--ds-blue-ink)!important; box-shadow:none!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero { border:2px solid var(--ds-purple)!important; border-bottom:6px solid var(--ds-purple-edge)!important; border-radius:24px!important; background:var(--ds-purple-soft)!important; box-shadow:none!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero > div:first-child { background:var(--ds-purple-soft)!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero > div:nth-child(2) { display:none; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero :is(h1,p) { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero span { border-color:var(--ds-purple)!important; background:var(--ds-surface)!important; color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .w-32 { background:var(--ds-green)!important; box-shadow:none!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .w-32 > div { background:var(--ds-surface)!important; color:var(--ds-green-ink)!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content :is(.bg-slate-900,.bg-slate-950) { border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important; border-radius:22px!important; background:var(--ds-surface)!important; box-shadow:none!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content :is(h3,h4,.text-white,.text-slate-200) { color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content :is(.text-slate-400,.text-slate-500,.text-slate-600) { color:var(--ds-muted)!important; }
+[data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__content :is(.text-indigo-300,.text-cyan-300,.text-purple-500) { color:var(--ds-purple-ink)!important; }
+[data-edu-system='1'].edu-student-portal-v1 button { min-height:44px; border:2px solid var(--ds-blue-edge)!important; border-bottom:4px solid var(--ds-blue-edge)!important; border-radius:13px!important; background:var(--ds-blue)!important; color:var(--ds-on-color)!important; box-shadow:none!important; }
+[data-edu-system='1'].edu-student-portal-v1 button[aria-label^='Open '] { width:100%; border-color:var(--ds-border)!important; border-bottom-color:var(--ds-depth)!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important; }
+[data-edu-system='1'].edu-student-portal-v1 button[aria-label^='Open ']:hover { border-color:var(--ds-purple)!important; background:var(--ds-purple-soft)!important; }
+@media(max-width:700px) { [data-edu-system='1'].edu-student-portal-v1 .edu-student-portal-v1__hero .relative.z-10 { padding:22px; } }

@@ -9,7 +9,7 @@ interface PortfolioTabProps {
 }
 
 export const PortfolioTab: React.FC<PortfolioTabProps> = ({ publishedProjects, setSelectedProject }) => (
-  <section className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+  <section className="edu-student-surface edu-student-surface--portfolio overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
     <div className="p-4">
       <AtlasSectionHeader
         title="Published portfolio"

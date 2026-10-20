@@ -117,7 +117,7 @@ export const RecipientQuickAccess: React.FC<{ student: Student; role: 'parent' |
       </button>
     </div>
     {!canIssue && <p className="text-xs text-amber-200">One-click access needs an active linked account and an Edufy administrator in this organization.</p>}
-    <Modal isOpen={mode !== null} onClose={() => { setMode(null); setQuickLink(null); }} title={mode === 'quick' ? 'One-click SparkQuest access' : 'Manual SparkQuest access'}>
+    <Modal designSystem isOpen={mode !== null} onClose={() => { setMode(null); setQuickLink(null); }} title={mode === 'quick' ? 'One-click SparkQuest access' : 'Manual SparkQuest access'}>
       <div className="space-y-4 text-sm text-slate-200">
         {mode === 'quick' && !quickLink && <>
           <p>This creates a single-use link for the exact {role} account linked to <strong>{student.name}</strong>. It expires after five minutes. Anyone holding it before use can open that account.</p>

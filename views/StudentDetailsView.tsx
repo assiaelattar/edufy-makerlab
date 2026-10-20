@@ -1,6 +1,6 @@
 import { StudentDetailsForm } from '../components/students/StudentDetailsForm';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog } from 'lucide-react';
+import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -22,6 +22,8 @@ import { FinanceTab } from './student-details/FinanceTab';
 import { PortfolioTab } from './student-details/PortfolioTab';
 import { AttendanceTab } from './student-details/AttendanceTab';
 import { AccessAndAccountsTab } from './student-details/AccessAndAccountsTab';
+import { EducationGuide, educationGuideRegistry, type GuideState } from '../components/education-ui/EducationGuide';
+import '../components/education-ui/education-system-v1.css';
 import './student-details/education-student-details-v1.css';
 
 export const StudentDetailsView = ({
@@ -34,7 +36,7 @@ export const StudentDetailsView = ({
     onRecordPayment: (id: string) => void;
 }) => {
     const { students, enrollments, programs, payments, attendanceRecords, studentProjects, navigateTo, settings, viewParams, sendNotification, badges } = useAppContext();
-    const { createSecondaryUser, userProfile, currentOrganization } = useAuth();
+    const { createSecondaryUser, userProfile, currentOrganization, can } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
 
     const { studentId } = viewParams;
@@ -62,7 +64,9 @@ export const StudentDetailsView = ({
     const [isSchedulePrintOpen, setIsSchedulePrintOpen] = useState(false);
     const [selectedScheduleProgramId, setSelectedScheduleProgramId] = useState('');
     const [confirmModal, setConfirmModal] = useState<any>({ isOpen: false, title: '', message: '', type: 'danger', isLoading: false, action: async () => { } });
-    const [activeTab, setActiveTab] = useState('Academics');
+    const [activeTab, setActiveTab] = useState<'Overview' | 'Learning' | 'Attendance' | 'Finance' | 'Access'>('Overview');
+    const [learningView, setLearningView] = useState<'enrollments' | 'portfolio'>('enrollments');
+    const [studentGuideState, setStudentGuideState] = useState<GuideState | null>(null);
     const [isEditingStudent, setIsEditingStudent] = useState(false);
     const [isSavingStudent, setIsSavingStudent] = useState(false);
     const [studentSaveError, setStudentSaveError] = useState('');
@@ -75,7 +79,7 @@ export const StudentDetailsView = ({
 
     useEffect(() => {
         if (!student || isStudentRole) return;
-        if (viewParams.studentEditField) {
+        if (viewParams.studentEditField && can('students.edit')) {
             const intent = `${student.id}:edit:${viewParams.studentEditField}`;
             if (openedRouteIntent.current === intent) return;
             openedRouteIntent.current = intent;
@@ -91,16 +95,16 @@ export const StudentDetailsView = ({
             });
             setFocusedEditField(viewParams.studentEditField);
             setIsEditingStudent(true);
-        } else if (viewParams.studentEnrollmentId) {
+        } else if (viewParams.studentEnrollmentId && can('students.enroll')) {
             const intent = `${student.id}:enrollment:${viewParams.studentEnrollmentId}`;
             if (openedRouteIntent.current === intent) return;
             const enrollment = enrollments.find(item => item.id === viewParams.studentEnrollmentId && item.studentId === student.id);
             if (!enrollment) return;
             openedRouteIntent.current = intent;
-            setActiveTab('Academics');
+            setActiveTab('Learning');
             setEditEnrollment(enrollment);
         }
-    }, [student, isStudentRole, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments]);
+    }, [student, isStudentRole, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments, can]);
 
     const badgeTone: Record<string, string> = {
         blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
@@ -131,6 +135,7 @@ export const StudentDetailsView = ({
     );
 
     const handleEditClick = () => {
+        if (!can('students.edit')) return;
         setFocusedEditField(null);
         setEditFormData({
             name: student.name,
@@ -147,7 +152,7 @@ export const StudentDetailsView = ({
 
     const handleSaveStudent = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || !student.id || isSavingStudent) return;
+        if (!db || !student.id || isSavingStudent || !can('students.edit')) return;
         setIsSavingStudent(true);
         setStudentSaveError('');
         try {
@@ -162,10 +167,12 @@ export const StudentDetailsView = ({
 
             await updateDoc(doc(db, 'students', student.id), cleanData);
             setIsEditingStudent(false);
+            setStudentGuideState('success');
             await showAlert('Student updated', 'Student details were saved successfully.', 'success');
         } catch (err: any) {
             console.error("Error updating student:", err);
             setStudentSaveError('Student details were not saved. Your changes are still here. Please try again.');
+            setStudentGuideState('validation');
             await showAlert('Could not update student', 'Student details were not saved. Please try again.', 'danger');
         } finally {
             setIsSavingStudent(false);
@@ -187,7 +194,7 @@ export const StudentDetailsView = ({
 
     // ... [renderProjectModal same as before] ...
     const renderProjectModal = () => (
-        <Modal isOpen={!!selectedProject} onClose={() => setSelectedProject(null)} title={selectedProject?.title || ''} size="lg">
+        <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!selectedProject} onClose={() => setSelectedProject(null)} title={selectedProject?.title || ''} size="lg">
             {selectedProject && (
                 <div className="space-y-6">
                     {/* RICH MEDIA DISPLAY */}
@@ -202,7 +209,7 @@ export const StudentDetailsView = ({
                                 ></iframe>
                             </div>
                         ) : selectedProject.mediaUrls?.[0] ? (
-                            <img src={selectedProject.mediaUrls[0]} className="w-full max-h-[400px] object-cover" />
+                            <img src={selectedProject.mediaUrls[0]} className="w-full max-h-[400px] object-cover" alt={`${selectedProject.title} project media`} />
                         ) : (
                             <div className="h-48 flex items-center justify-center text-slate-600"><ImageIcon size={48} /></div>
                         )}
@@ -216,7 +223,7 @@ export const StudentDetailsView = ({
                             <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
                         </div>
                         {selectedProject.externalLink && (
-                            <a href={selectedProject.externalLink} target="_blank" rel="noopener noreferrer" className="shrink-0 p-3 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl transition-colors">
+                            <a href={selectedProject.externalLink} target="_blank" rel="noopener noreferrer" aria-label={`Open ${selectedProject.title} external project`} className="shrink-0 p-3 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl transition-colors">
                                 <ExternalLink size={20} />
                             </a>
                         )}
@@ -278,19 +285,16 @@ export const StudentDetailsView = ({
     if (isStudentRole || viewMode === 'student_preview') {
         const skills = Array.from(new Set(publishedProjects.flatMap(p => p.skillsAcquired)));
         const activeCourses = studentEnrollments.filter(e => e.status === 'active');
-        const level = Math.floor(publishedProjects.length / 3) + 1;
-        const xp = publishedProjects.length * 100;
-
         return (
-            <div className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-portal-v1' : ''}`}>
+            <div data-edu-system={showEducationStudentDetailsV1 ? '1' : undefined} className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-portal-v1' : ''}`}>
                 {!isStudentRole && (
-                    <div className="bg-indigo-600 text-white px-4 py-3 rounded-xl flex justify-between items-center shadow-lg border border-indigo-400/50">
+                    <div className="edu-student-portal-v1__preview bg-indigo-600 text-white px-4 py-3 rounded-xl flex justify-between items-center shadow-lg border border-indigo-400/50">
                         <div className="flex items-center gap-2 text-sm font-bold"><Eye size={18} /> Preview Mode: Viewing as Student</div>
                         <button onClick={() => setViewMode('admin')} className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2"><ArrowLeft size={14} /> Exit Preview</button>
                     </div>
                 )}
 
-                <div className="relative rounded-3xl overflow-hidden border border-indigo-500/30 shadow-2xl">
+                <div className="edu-student-portal-v1__hero relative rounded-3xl overflow-hidden border border-indigo-500/30 shadow-2xl">
                     <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900"></div>
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                     <div className="relative z-10 p-8 md:p-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
@@ -298,15 +302,15 @@ export const StudentDetailsView = ({
                             <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 p-1 shadow-xl shadow-cyan-500/20">
                                 <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-4xl font-bold text-white">{student.name.charAt(0)}</div>
                             </div>
-                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full border-4 border-slate-900 shadow-sm flex items-center gap-1"><Star size={12} fill="currentColor" /> Lvl {level}</div>
+                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full border-4 border-slate-900 shadow-sm flex items-center gap-1"><Star size={12} fill="currentColor" /> Maker</div>
                         </div>
                         <div className="flex-1">
                             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{student.name}</h1>
                             <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-4">
-                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Trophy size={14} className="text-amber-400" /> {xp} XP Earned</span>
-                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Rocket size={14} className="text-cyan-400" /> {publishedProjects.length} Projects Shipped</span>
+                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Trophy size={14} className="text-amber-400" /> {skills.length} recorded skills</span>
+                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Rocket size={14} className="text-cyan-400" /> {publishedProjects.length} published projects</span>
                             </div>
-                            <p className="text-indigo-200 max-w-xl italic">"Creativity is intelligence having fun."</p>
+                            <p className="text-indigo-200 max-w-xl">Explore your classes and published work.</p>
                         </div>
                         <div className="relative z-10">
                             <button onClick={() => generateMakerResume(student, publishedProjects, settings)} className="px-5 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-white/10 transition-all active:scale-95">
@@ -316,7 +320,7 @@ export const StudentDetailsView = ({
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="edu-student-portal-v1__content grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="space-y-6">
                         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Calendar className="text-blue-500" /> My Classes</h3>
@@ -375,7 +379,7 @@ export const StudentDetailsView = ({
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {publishedProjects.map(p => (
-                                        <div key={p.id} onClick={() => setSelectedProject(p)} className="group bg-slate-950 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer">
+                                        <button key={p.id} type="button" onClick={() => setSelectedProject(p)} className="group bg-slate-950 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer text-left" aria-label={`Open ${p.title} project`}>
                                             <div className="h-40 bg-slate-900 relative overflow-hidden">
                                                 {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={p.title} /> : <div className="flex items-center justify-center h-full text-slate-700"><ImageIcon size={32} /></div>}
                                                 {p.embedUrl ? <div className="absolute top-3 right-3 bg-red-600 text-white p-1.5 rounded-lg shadow-lg"><Zap size={14} /></div> : p.externalLink && <div className="absolute top-3 right-3 bg-black/60 text-white p-1.5 rounded-lg"><ExternalLink size={14} /></div>}
@@ -385,7 +389,7 @@ export const StudentDetailsView = ({
                                                 <p className="text-xs text-slate-500 line-clamp-2 mb-3">{p.description}</p>
                                                 <div className="flex flex-wrap gap-1">{p.skillsAcquired.slice(0, 3).map(s => <span key={s} className="text-[10px] bg-indigo-950/50 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-900/30">{s}</span>)}</div>
                                             </div>
-                                        </div>
+                                        </button>
                                     ))}
                                 </div>
                             )}
@@ -738,14 +742,27 @@ export const StudentDetailsView = ({
     const attendedSessions = studentAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
     const attendanceRate = studentAttendance.length > 0 ? Math.round((attendedSessions / studentAttendance.length) * 100) : null;
     const studentTabs = [
-        { label: 'Academics', icon: GraduationCap, count: studentEnrollments.length },
-        { label: 'Finance', icon: Wallet, count: studentPayments.length },
-        { label: 'Portfolio', icon: FolderKanban, count: publishedProjects.length },
-        { label: 'Attendance', icon: Calendar, count: studentAttendance.length }
+        { label: 'Overview' as const, icon: Users },
+        { label: 'Learning' as const, icon: GraduationCap, count: studentEnrollments.length + publishedProjects.length },
+        { label: 'Attendance' as const, icon: Calendar, count: studentAttendance.length },
+        { label: 'Finance' as const, icon: Wallet, count: studentPayments.length },
+        { label: 'Access' as const, icon: UserRoundCog, count: Number(Boolean(student.loginInfo?.email)) + Number(Boolean(student.parentLoginInfo?.email)) }
     ];
+    const attentionItems = [
+        ...(can('students.edit') && (!student.parentPhone || !student.birthDate) ? [{ id: 'profile', title: 'Complete learner information', detail: !student.parentPhone ? 'Parent phone is missing.' : 'Birth date is missing.', icon: Pencil, action: handleEditClick }] : []),
+        ...(outstandingBalance > 0 ? [{ id: 'balance', title: 'Review outstanding balance', detail: `${formatCurrency(outstandingBalance)} remains due.`, icon: Wallet, action: () => setActiveTab('Finance') }] : []),
+        ...(absenceCount > 0 ? [{ id: 'attendance', title: 'Review attendance', detail: `${absenceCount} absence${absenceCount === 1 ? '' : 's'} recorded.`, icon: Calendar, action: () => setActiveTab('Attendance') }] : []),
+        ...(!student.loginInfo?.email || (!isAdult && !student.parentLoginInfo?.email) ? [{ id: 'access', title: 'Finish portal access', detail: !student.loginInfo?.email ? 'Learner access is not ready.' : 'Family access is not ready.', icon: Key, action: () => setActiveTab('Access') }] : [])
+    ];
+    const guideState: GuideState = studentGuideState || (activeTab === 'Overview' ? (attentionItems.length ? 'attention' : 'welcome') : 'context');
+    const guideMessage = studentGuideState
+        ? educationGuideRegistry.students[studentGuideState]
+        : activeTab === 'Overview'
+            ? (attentionItems[0]?.detail || educationGuideRegistry.students.welcome)
+            : ({ Learning: 'See current enrollments and published work in one learning workspace.', Attendance: 'Review the attendance pattern before acting on an individual record.', Finance: 'Start with the balance, then inspect the payment history.', Access: 'Manage learner and family access in this protected workspace.' } as const)[activeTab];
 
     return (
-        <div className={`flex flex-col gap-5 pb-8 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-details-v1' : ''}`} data-testid={showEducationStudentDetailsV1 ? 'education-student-details-v1' : undefined}>
+        <div className={`flex flex-col gap-5 pb-8 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-details-v1' : ''}`} data-edu-system={showEducationStudentDetailsV1 ? '1' : undefined} data-testid={showEducationStudentDetailsV1 ? 'education-student-details-v1' : undefined}>
             {showEducationStudentDetailsV1 ? (
                 <section className="edu-student-details-v1__hero" aria-labelledby="education-student-name">
                     <div className="edu-student-details-v1__leading-actions">
@@ -755,7 +772,7 @@ export const StudentDetailsView = ({
                     <div className="edu-student-details-v1__identity">
                         <div className="edu-student-details-v1__avatar" aria-hidden="true">{student.name.charAt(0)}</div>
                         <div className="min-w-0">
-                            <span className="edu-student-details-v1__eyebrow"><GraduationCap size={15} />Learner command center</span>
+                            <span className="edu-student-details-v1__eyebrow"><GraduationCap size={15} />Learner profile</span>
                             <div className="edu-student-details-v1__title-line">
                                 <h2 id="education-student-name">{student.name}</h2>
                                 <span data-status={student.status === 'inactive' ? 'inactive' : 'active'}>{student.status === 'inactive' ? 'Inactive' : 'Active'}</span>
@@ -766,8 +783,8 @@ export const StudentDetailsView = ({
                     </div>
                     <div className="edu-student-details-v1__actions">
                         <button type="button" onClick={openSchedulePrint}><Printer size={17} />Schedule</button>
-                        <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>
-                        <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>
+                        {can('students.edit') && <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>}
+                        {can('students.edit') && <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>}
                     </div>
                 </section>
             ) : <AtlasCommandHeader
@@ -783,29 +800,19 @@ export const StudentDetailsView = ({
                 </>}
                 actions={<>
                     <AtlasActionButton icon={Printer} onClick={openSchedulePrint}>Schedule</AtlasActionButton>
-                    <AtlasActionButton icon={student.lastScheduleSharedAt ? CheckCircle2 : Share2} onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>
+                    {can('students.edit') && <AtlasActionButton icon={student.lastScheduleSharedAt ? CheckCircle2 : Share2} onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>
                         {student.lastScheduleSharedAt ? 'Shared' : 'Share'}
-                    </AtlasActionButton>
-                    <AtlasActionButton icon={Pencil} onClick={handleEditClick}>Edit</AtlasActionButton>
+                    </AtlasActionButton>}
+                    {can('students.edit') && <AtlasActionButton icon={Pencil} onClick={handleEditClick}>Edit</AtlasActionButton>}
                     <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('students')} title="Back to students" aria-label="Back to students" />
                 </>}
             />}
 
-            <div className="edu-student-details-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Academics')} />
-                <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
-                <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'red' : 'blue'} onClick={() => setActiveTab('Attendance')} />
-                <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => setActiveTab('Portfolio')} />
-            </div>
+            <EducationGuide module="students" state={guideState} mode="compact" message={guideMessage} dismissible={activeTab !== 'Overview'} action={guideState === 'attention' && attentionItems[0] ? { label: attentionItems[0].title, onClick: attentionItems[0].action } : undefined} />
 
-            <div className="edu-student-details-v1__contact flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-white/10 py-3 text-xs text-slate-400">
-                <span className="flex min-w-0 items-center gap-2"><Mail size={14} className="shrink-0 text-teal-300" /><span className="truncate">{student.email || 'No email added'}</span></span>
-                <span className="flex items-center gap-2"><Phone size={14} className="text-teal-300" />{student.parentPhone || 'No parent phone'}</span>
-                <span className="flex items-center gap-2"><Calendar size={14} className="text-teal-300" />{student.birthDate || 'No birth date'}</span>
-                <span className={`flex items-center gap-2 ${student.medicalInfo ? 'text-red-300' : 'text-slate-500'}`}><Shield size={14} />{student.medicalInfo ? `Medical: ${student.medicalInfo}` : 'No medical alerts'}</span>
-            </div>
+            {attentionItems.length > 1 && activeTab === 'Overview' && <section className="edu-student-details-v1__attention" aria-labelledby="student-attention-title"><header><span><AlertTriangle size={18} /></span><div><h3 id="student-attention-title">Also needs attention</h3><p>Review these after the next step above.</p></div></header><div>{attentionItems.slice(1).map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={item.action}><span><Icon size={17} /></span><span><strong>{item.title}</strong><small>{item.detail}</small></span><ChevronRight size={17} /></button>; })}</div></section>}
 
-            <div className="edu-student-details-v1__workspace grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="edu-student-details-v1__workspace min-w-0">
                 <main className="min-w-0">
                     <div className="edu-student-details-v1__tabs mb-4 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/55 p-1.5">
                         <div className="flex min-w-max items-center gap-1" role="tablist" aria-label="Student record sections">
@@ -838,7 +845,7 @@ export const StudentDetailsView = ({
                                     >
                                         <Icon size={16} />
                                         {tab.label}
-                                        <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${selected ? 'bg-slate-950/15 text-slate-900' : 'bg-white/[0.06] text-slate-500'}`}>{tab.count}</span>
+                                        {typeof tab.count === 'number' && <span className={`rounded-full px-1.5 py-0.5 font-mono text-[10px] ${selected ? 'bg-slate-950/15 text-slate-900' : 'bg-white/[0.06] text-slate-500'}`}>{tab.count}</span>}
                                     </button>
                                 );
                             })}
@@ -846,14 +853,19 @@ export const StudentDetailsView = ({
                     </div>
 
                     <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="edu-student-details-v1__panel min-w-0" tabIndex={0}>
-                        {activeTab === 'Academics' && <AcademicsTab
-                            studentEnrollments={studentEnrollments}
-                            onQuickEnroll={onQuickEnroll}
-                            navigateTo={navigateTo as any}
-                            setEditEnrollment={setEditEnrollment}
-                            initiateDeleteEnrollment={initiateDeleteEnrollment}
-                            studentId={student.id}
-                        />}
+                        {activeTab === 'Overview' && <div className="edu-student-details-v1__overview">
+                            <div className="edu-student-details-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
+                                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Learning')} />
+                                <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
+                                <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'amber' : 'blue'} onClick={() => setActiveTab('Attendance')} />
+                                <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => { setLearningView('portfolio'); setActiveTab('Learning'); }} />
+                            </div>
+                            <div className="edu-student-details-v1__overview-grid">
+                                <section><header><span><Users size={18} /></span><div><h3>Learner and family</h3><p>Essential contact and care information</p></div>{can('students.edit') && <button type="button" onClick={handleEditClick}>Edit</button>}</header><dl><div><dt><Mail size={15} />Learner email</dt><dd>{student.email || 'Not added'}</dd></div><div><dt><Phone size={15} />Parent phone</dt><dd>{student.parentPhone || 'Not added'}</dd></div><div><dt><Calendar size={15} />Birth date</dt><dd>{student.birthDate || 'Not added'}</dd></div><div data-alert={Boolean(student.medicalInfo)}><dt><Shield size={15} />Medical notes</dt><dd>{student.medicalInfo || 'No medical alerts'}</dd></div></dl></section>
+                                <section><header><span><GraduationCap size={18} /></span><div><h3>Current learning</h3><p>Programs and weekly delivery</p></div><button type="button" onClick={() => setActiveTab('Learning')}>Open</button></header>{activeEnrollments.length ? <div className="edu-student-details-v1__program-list">{activeEnrollments.slice(0, 3).map(enrollment => <button type="button" key={enrollment.id} onClick={() => setActiveTab('Learning')}><span><strong>{enrollment.programName}</strong><small>{enrollment.gradeName || 'Level not set'} · {enrollment.groupName || 'Group not set'}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="edu-student-details-v1__overview-empty"><BookOpen size={24} /><p>No active enrollment.</p>{can('students.enroll') && <button type="button" onClick={() => onQuickEnroll(student.id)}>Add enrollment</button>}</div>}</section>
+                            </div>
+                        </div>}
+                        {activeTab === 'Learning' && <div className="edu-student-details-v1__learning"><div className="edu-student-details-v1__subtabs" role="group" aria-label="Learning workspace"><button type="button" aria-pressed={learningView === 'enrollments'} onClick={() => setLearningView('enrollments')}><GraduationCap size={16} />Enrollments <span>{studentEnrollments.length}</span></button><button type="button" aria-pressed={learningView === 'portfolio'} onClick={() => setLearningView('portfolio')}><FolderKanban size={16} />Portfolio <span>{publishedProjects.length}</span></button></div>{learningView === 'enrollments' ? <AcademicsTab studentEnrollments={studentEnrollments} onQuickEnroll={onQuickEnroll} navigateTo={navigateTo as any} setEditEnrollment={setEditEnrollment} initiateDeleteEnrollment={initiateDeleteEnrollment} studentId={student.id} canEnroll={can('students.enroll')} canEdit={can('students.enroll')} canDelete={can('students.delete')} /> : <PortfolioTab publishedProjects={publishedProjects} setSelectedProject={setSelectedProject} />}</div>}
                         {activeTab === 'Finance' && <FinanceTab
                             studentPayments={studentPayments}
                             studentEnrollments={studentEnrollments}
@@ -866,10 +878,6 @@ export const StudentDetailsView = ({
                             settings={settings}
                             onShareReceipt={handleShareReceipt}
                         />}
-                        {activeTab === 'Portfolio' && <PortfolioTab
-                            publishedProjects={publishedProjects}
-                            setSelectedProject={setSelectedProject}
-                        />}
                         {activeTab === 'Attendance' && <AttendanceTab
                             studentAttendance={studentAttendance}
                             absenceCount={absenceCount}
@@ -877,33 +885,12 @@ export const StudentDetailsView = ({
                             student={student}
                             settings={settings}
                         />}
+                        {activeTab === 'Access' && <section className="edu-student-details-v1__access"><div className="edu-student-details-v1__section-heading"><span><UserRoundCog size={18} /></span><div><h3>Access and accounts</h3><p>Portal, kiosk and verified family access</p></div></div><AccessAndAccountsTab student={student} handleGenerateAccess={handleGenerateAccess} handleCreateParentAccess={handleCreateParentAccess} isGeneratingAccess={isGeneratingAccess} generateAccessCardPrint={generateAccessCardPrint} shareAccount={shareAccount} hasLatestParentCredentials={credentialsModal.data?.role === 'Parent' && credentialsModal.data.studentId === student.id} showLatestParentCredentials={() => setCredentialsModal(previous => previous.data?.role === 'Parent' && previous.data.studentId === student.id ? { ...previous, isOpen: true } : previous)} settings={settings} isAdult={isAdult} /></section>}
                     </div>
                 </main>
-
-                <aside className="edu-student-details-v1__access min-w-0 space-y-4 xl:sticky xl:top-28 xl:self-start">
-                    <div className="flex items-center gap-2 border-b border-white/10 pb-3">
-                        <UserRoundCog size={17} className="text-teal-300" />
-                        <div>
-                            <h3 className="text-sm font-black text-white">Access and accounts</h3>
-                            <p className="text-[11px] text-slate-500">Portal, kiosk, and family access</p>
-                        </div>
-                    </div>
-                    <AccessAndAccountsTab
-                        student={student}
-                        handleGenerateAccess={handleGenerateAccess}
-                        handleCreateParentAccess={handleCreateParentAccess}
-                        isGeneratingAccess={isGeneratingAccess}
-                        generateAccessCardPrint={generateAccessCardPrint}
-                        shareAccount={shareAccount}
-                        hasLatestParentCredentials={credentialsModal.data?.role === 'Parent' && credentialsModal.data.studentId === student.id}
-                        showLatestParentCredentials={() => setCredentialsModal(previous => previous.data?.role === 'Parent' && previous.data.studentId === student.id ? { ...previous, isOpen: true } : previous)}
-                        settings={settings}
-                        isAdult={isAdult}
-                    />
-                </aside>
             </div>
             {renderProjectModal()}
-            <Modal isOpen={isSchedulePrintOpen} onClose={() => setIsSchedulePrintOpen(false)} title="Print learner schedule">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={isSchedulePrintOpen} onClose={() => setIsSchedulePrintOpen(false)} title="Print learner schedule">
                 <div className="space-y-4">
                     <p className="text-sm text-slate-300">Choose the program to include in {student.name}'s weekly schedule.</p>
                     {schedulePrograms.length > 0 ? (
@@ -918,7 +905,7 @@ export const StudentDetailsView = ({
                     ) : <p className="text-sm text-amber-200">This learner has no active program to print.</p>}
                 </div>
             </Modal>
-            <Modal isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
                 <form onSubmit={handleSaveEnrollment} className="space-y-4">
                     <div className="bg-slate-950 p-3 rounded border border-slate-800 mb-4">
                         <div className="text-xs text-slate-500 uppercase font-bold mb-1">Program</div>
@@ -933,6 +920,7 @@ export const StudentDetailsView = ({
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Level / Grade</label>
                                 <select
+                                    aria-label="Level or grade"
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.gradeId || ''}
                                     onChange={(e) => {
@@ -967,6 +955,7 @@ export const StudentDetailsView = ({
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Group / Schedule</label>
                                 <select
+                                    aria-label="Group or schedule"
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.groupId || ''}
                                     autoFocus={Boolean(viewParams.studentEnrollmentId)}
@@ -1004,6 +993,7 @@ export const StudentDetailsView = ({
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Extra Workshop / DIY (Optional)</label>
                                 <select
+                                    aria-label="Extra workshop or DIY"
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.secondGroupId || ''}
                                     onChange={(e) => {
@@ -1054,6 +1044,7 @@ export const StudentDetailsView = ({
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Payment Plan</label>
                             <select
+                                aria-label="Payment plan"
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editEnrollment?.paymentPlan || 'full'}
                                 onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, paymentPlan: e.target.value as any }) : null)}
@@ -1068,6 +1059,7 @@ export const StudentDetailsView = ({
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label>
                             <input
+                                aria-label="Negotiated price"
                                 type="number"
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg"
                                 value={editEnrollment?.totalAmount || 0}
@@ -1081,24 +1073,24 @@ export const StudentDetailsView = ({
                     </button>
                 </form>
             </Modal>
-            <Modal isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Edit Payment Record">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Edit Payment Record">
                 <form onSubmit={handleSavePayment} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input type="text" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input aria-label="Student name on receipt" type="text" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input aria-label="Payment date" type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
                     </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input aria-label="Payment amount" type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select aria-label="Payment method" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
                     {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
                     <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400"><Save size={16} /> Save changes</button>
                 </form>
             </Modal>
-            <Modal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal((prev: any) => ({ ...prev, isOpen: false }))} title={confirmModal.title} size="md">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={confirmModal.isOpen} onClose={() => setConfirmModal((prev: any) => ({ ...prev, isOpen: false }))} title={confirmModal.title} size="md">
                 <div className="space-y-6"><div className="flex items-start gap-4"><div className={`p-3 rounded-full ${confirmModal.type === 'danger' ? 'bg-red-900/20 text-red-500' : 'bg-amber-900/20 text-amber-500'}`}><AlertTriangle size={24} /></div><div><p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line">{confirmModal.message}</p></div></div><div className="flex justify-end gap-3 pt-2"><button onClick={() => setConfirmModal((prev: any) => ({ ...prev, isOpen: false }))} className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium transition-colors">Cancel</button><button onClick={handleExecuteConfirm} disabled={confirmModal.isLoading} className={`px-5 py-2 rounded-lg text-white text-sm font-bold flex items-center gap-2 shadow-lg transition-all ${confirmModal.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-900/20' : 'bg-amber-600 hover:bg-amber-500 shadow-amber-900/20'}`}>{confirmModal.isLoading && <Loader2 size={16} className="animate-spin" />} Confirm</button></div></div>
             </Modal>
 
             {/* CREDENTIALS POPUP */}
-            <Modal isOpen={credentialsModal.isOpen} onClose={() => setCredentialsModal(previous => ({ ...previous, isOpen: false }))} title={credentialsModal.data?.role === 'Parent' ? 'Parent access card' : 'Access credentials'}>
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={credentialsModal.isOpen} onClose={() => setCredentialsModal(previous => ({ ...previous, isOpen: false }))} title={credentialsModal.data?.role === 'Parent' ? 'Parent access card' : 'Access credentials'}>
                 {credentialsModal.data && (
                     <div className="space-y-6">
                         <div className="text-center">
@@ -1152,7 +1144,7 @@ export const StudentDetailsView = ({
             </Modal>
 
             {/* EDIT STUDENT MODAL */}
-            <Modal designSystem size="lg" isOpen={isEditingStudent} onClose={() => { if (!isSavingStudent) setIsEditingStudent(false); }} title="Edit student details">
+            <Modal designSystem={showEducationStudentDetailsV1} size="lg" isOpen={isEditingStudent} onClose={() => { if (!isSavingStudent) setIsEditingStudent(false); }} title="Edit student details">
                 <StudentDetailsForm value={editFormData} onChange={setEditFormData} onSubmit={handleSaveStudent} onCancel={() => setIsEditingStudent(false)} busy={isSavingStudent} error={studentSaveError} focusedField={focusedEditField || 'name'} />
             </Modal>
         </div >

@@ -1,0 +1,18 @@
+// Isolated, synthetic Student Details review. No production service is imported.
+import {build} from 'esbuild';
+import {createServer} from 'node:http';
+import {readFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import {resolve,basename} from 'node:path';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const adapter=resolve(root,'scripts/fixtures/student-details-adapter.jsx');
+let assets=new Map();
+const rebuild=async()=>{
+ const result=await build({absWorkingDir:root,entryPoints:['scripts/fixtures/student-details.jsx'],outdir:'node_modules/.cache/student-details',bundle:true,write:false,format:'esm',jsx:'automatic',loader:{'.wasm':'file'},define:{'process.env.NODE_ENV':'"development"','import.meta.env':'{}'},plugins:[{name:'synthetic-boundaries',setup(b){
+  b.onResolve({filter:/AppContext$|AuthContext$|ConfirmContext$|services\/firebase$|services\/parentAccess$|services\/recipientQuickAccess$|services\/financeDocuments$|^firebase\/firestore$/},()=>({path:adapter}));
+  b.onResolve({filter:/rive\.wasm\?url$/},()=>({path:resolve(root,'node_modules/@rive-app/webgl2/rive.wasm')}));
+ }}]});
+ assets=new Map(result.outputFiles.map(file=>['/'+basename(file.path),file.contents]));
+};
+const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Student Details · synthetic review</title><script src="https://cdn.tailwindcss.com"></script><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="/index.css"><link rel="stylesheet" href="/student-details.css"><style>body{margin:0}.student-fixture-page{min-height:100dvh;max-width:1420px;margin:auto;padding:24px;background:var(--ds-canvas);color:var(--ds-ink)}.student-fixture-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;padding:12px 16px;border:2px solid var(--ds-border);border-radius:18px;background:var(--ds-surface)}.student-fixture-toolbar strong,.student-fixture-toolbar small{display:block}.student-fixture-toolbar button{min-height:44px;padding:0 14px;border:2px solid var(--ds-blue-edge);border-radius:12px;background:var(--ds-blue);color:var(--ds-on-color);font-weight:900}.student-fixture-status,.student-fixture-notice{display:flex;gap:12px;margin-top:16px;padding:12px;border:2px solid var(--ds-border);border-radius:14px;background:var(--ds-surface)}@media(max-width:700px){.student-fixture-page{padding:12px}.student-fixture-toolbar{align-items:flex-start}.student-fixture-toolbar small{font-size:11px}}</style></head><body><div id="root"></div><script type="module" src="/student-details.js"></script></body></html>`;
+createServer(async(req,res)=>{try{const path=new URL(req.url,'http://localhost').pathname;res.setHeader('Cache-Control','no-store');if(path==='/'){await rebuild();res.setHeader('Content-Type','text/html');return res.end(html);}if(path==='/index.css'){res.setHeader('Content-Type','text/css');return res.end(await readFile(resolve(root,'index.css')));}if(path==='/mascot/011y.riv'){res.setHeader('Content-Type','application/octet-stream');return res.end(await readFile(resolve(root,'public/mascot/011y.riv')));}const asset=assets.get(path);if(!asset){res.writeHead(404);return res.end();}res.setHeader('Content-Type',path.endsWith('.css')?'text/css':path.endsWith('.wasm')?'application/wasm':'text/javascript');res.end(asset);}catch(error){console.error(error);res.writeHead(500);res.end('Student Details preview build failed. See the terminal.');}}).listen(5271,'127.0.0.1',()=>console.log('Student Details synthetic review: http://127.0.0.1:5271/'));

@@ -45,7 +45,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   };
 
   return (
-    <section className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+    <section className="edu-student-surface edu-student-surface--attendance overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
       <div className="p-4">
         <AtlasSectionHeader
           title="Attendance history"
@@ -53,8 +53,8 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
           icon={Calendar}
           meta={(
             <div className="flex items-center gap-1.5">
-              {absenceCount > 0 && <span className="rounded-full border border-red-400/20 bg-red-500/10 px-2 py-0.5 text-[10px] font-bold text-red-300">{absenceCount} absent</span>}
-              {lateCount > 0 && <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{lateCount} late</span>}
+              {absenceCount > 0 && <span className="edu-student-status" data-tone="attention">{absenceCount} absent</span>}
+              {lateCount > 0 && <span className="edu-student-status" data-tone="attention">{lateCount} late</span>}
             </div>
           )}
           actions={(
@@ -81,7 +81,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                   <div className="text-sm font-bold text-slate-200">{formatDate(record.date)}</div>
                   <div className="mt-0.5 text-xs text-slate-500">{new Date(record.date).toLocaleDateString('en-US', { weekday: 'long' })}</div>
                 </div>
-                <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${status.className}`}>
+                <span data-tone={record.status === 'absent' || record.status === 'late' ? 'attention' : record.status === 'present' ? 'success' : 'info'} className={`edu-student-status inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${status.className}`}>
                   <StatusIcon size={13} /> {status.label}
                 </span>
               </div>

@@ -47,7 +47,8 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   settings,
   isAdult = false,
 }) => {
-  const { currentOrganization, userProfile } = useAuth();
+  const { currentOrganization, userProfile, can } = useAuth();
+  const canManageStudentAccess = can('students.edit');
   const canManageParentAccess = ['super_admin', 'owner', 'admin'].includes(userProfile?.role || '');
   const { confirm, alert: showAlert } = useConfirm();
   const [showPassword, setShowPassword] = useState(false);
@@ -119,6 +120,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   };
 
   const handleGeneratePin = async () => {
+    if (!canManageStudentAccess) return;
     if (student.organizationId && currentOrganization?.id && student.organizationId !== currentOrganization.id) {
       await showAlert('Record is outside this organization', 'Refresh the student directory before changing this classroom PIN.', 'danger');
       return;
@@ -152,9 +154,9 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="edu-student-access space-y-3">
       {/* STUDENT ACCESS CARD */}
-      <div className="relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/55 p-4">
+      <div className="edu-student-access-card relative overflow-hidden rounded-lg border border-white/10 bg-slate-900/55 p-4">
         <div className="flex justify-between items-start mb-4">
           <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-300">
             <Key size={14} /> Learner portal access
@@ -208,7 +210,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               </button>
             </div>
             <p className="text-[11px] text-slate-400">Choose a channel to open a ready message. Review the recipient before sending.</p>
-            <RecipientQuickAccess student={student} role="student" />
+            {canManageStudentAccess && <RecipientQuickAccess student={student} role="student" />}
             <button
               disabled
               title="Secure password reset requires the server-side account administration service"
@@ -220,21 +222,21 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
         ) : (
           <div className="text-center py-4">
             <p className="text-slate-500 text-xs italic mb-3">Account not generated yet.</p>
-            <button
+            {canManageStudentAccess && <button
               onClick={handleGenerateAccess}
               disabled={isGeneratingAccess}
               className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-3 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-teal-400"
             >
               {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Generate
               Access
-            </button>
+            </button>}
           </div>
         )}
 
       </div>
 
       {/* NEW: CLASSROOM PIN (KIOSK MODE) */}
-      <div className="rounded-lg border border-white/10 bg-slate-900/55 p-4">
+      <div className="edu-student-access-card rounded-lg border border-white/10 bg-slate-900/55 p-4">
         <div className="flex justify-between items-start mb-4">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <Key size={14} /> Classroom PIN (Kiosk Mode)
@@ -255,10 +257,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             <button onClick={() => setShowPin(!showPin)} className="flex min-h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 transition-colors hover:text-white" title={showPin ? 'Hide PIN' : 'Show PIN'} aria-label={showPin ? 'Hide PIN' : 'Show PIN'}>
               {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
-            <button onClick={handleGeneratePin} disabled={isUpdatingPin} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700 sm:flex-none">
+            {canManageStudentAccess && <button onClick={handleGeneratePin} disabled={isUpdatingPin} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700 sm:flex-none">
               {isUpdatingPin ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {student.pinCode ? 'Regenerate PIN' : 'Generate PIN'}
-            </button>
+            </button>}
           </div>
         </div>
         <p className="text-[10px] text-slate-500 mt-2">
@@ -268,7 +270,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
 
       {/* NEW: PARENT ACCESS SECTION */}
       {!isAdult && (
-        <div className="rounded-lg border border-white/10 bg-slate-900/55 p-4">
+        <div className="edu-student-access-card rounded-lg border border-white/10 bg-slate-900/55 p-4">
           <div className="flex justify-between items-start mb-4">
             <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-teal-300">
               <UserPlus size={14} /> Parent Access
@@ -334,7 +336,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. The previous password stops working and the learner’s work stays linked to this login.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="edu-parent-access-action edu-parent-access-action--whatsapp flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-bold"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
               <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
-              <RecipientQuickAccess student={student} role="parent" />
+              {canManageParentAccess && <RecipientQuickAccess student={student} role="parent" />}
             </div>
           ) : (
             <div className="text-center py-4">
@@ -352,7 +354,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
 
         </div>
       )}
-      <Modal isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Issue new parent password">
+      <Modal designSystem isOpen={isPasswordModalOpen} onClose={() => setIsPasswordModalOpen(false)} title="Issue new parent password">
         <div className="space-y-4 text-sm text-slate-200">
           <p>This keeps <strong className="break-all text-white">{student.parentLoginInfo?.email}</strong> as the SparkQuest login ID. The current password will stop working. If the old ID has no Auth account, you will be guided to create a new MakerLab login.</p>
           <p className="rounded-lg bg-slate-800 p-3 text-xs leading-5 text-slate-200">Family display label: <strong>{student.parentName || suggestedFamily.label || 'Add one below'}</strong>. This label is inferred from the learner’s name when no parent name is recorded. It does not verify the parent’s identity.</p>
@@ -370,7 +372,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             className="min-h-11 w-full rounded-lg bg-sky-500 px-4 py-2.5 font-bold text-slate-950 disabled:opacity-50">{isGeneratingAccess ? 'Issuing…' : 'Issue new one-time password'}</button>
         </div>
       </Modal>
-      <Modal isOpen={isParentChoiceModalOpen} onClose={() => setIsParentChoiceModalOpen(false)} title="Parent access">
+      <Modal designSystem isOpen={isParentChoiceModalOpen} onClose={() => setIsParentChoiceModalOpen(false)} title="Parent access">
         <div className="space-y-4">
           <p className="text-sm text-slate-300">Enter the verified parent’s real name and choose their MakerLab login ID. A learner surname alone does not verify a parent. Choosing an existing parent links this learner to that exact account.</p>
           {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">This replaces a recorded parent account for all of its linked learners. If the recorded login belongs to staff, Edufy will ask separately before detaching this learner; the staff account stays active.</p>}

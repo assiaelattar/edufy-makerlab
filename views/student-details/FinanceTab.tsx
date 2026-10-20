@@ -168,7 +168,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="edu-student-finance space-y-5">
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <AtlasSignalCard label="Open balance" value={formatCurrency(openBalance)} detail={openBalance > 0 ? 'Across active tenant enrollments' : 'Account settled'} icon={Wallet} tone={openBalance > 0 ? 'amber' : 'emerald'} />
         <AtlasSignalCard label="Cleared payments" value={formatCurrency(clearedTotal)} detail={`${sortedPayments.filter(isCleared).length} cleared record${sortedPayments.filter(isCleared).length === 1 ? '' : 's'}`} icon={CheckCircle2} tone="emerald" />
@@ -183,7 +183,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
         let cumulative = 0;
         const currentMonth = new Date().toISOString().slice(0, 7);
         return (
-          <section key={`contract-${enrollment.id}`} className="overflow-hidden rounded-lg border border-amber-300/15 bg-amber-400/[0.035]">
+          <section key={`contract-${enrollment.id}`} className="edu-student-surface edu-student-surface--contract overflow-hidden rounded-lg border border-amber-300/15 bg-amber-400/[0.035]">
             <div className="p-4">
               <AtlasSectionHeader
                 title={enrollment.programName}
@@ -224,7 +224,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
         );
       })}
 
-      <section className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+      <section className="edu-student-surface edu-student-surface--finance overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
         <div className="p-4">
           <AtlasSectionHeader
             title="Payment history"
@@ -281,7 +281,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
           settings={settings}
         />
       )}
-      <Modal isOpen={!!proofUrl} onClose={() => setProofUrl(null)} title="Payment proof" size="lg">
+      <Modal designSystem isOpen={!!proofUrl} onClose={() => setProofUrl(null)} title="Payment proof" size="lg">
         {proofUrl && <img src={proofUrl} alt="Payment proof" className="max-h-[70vh] w-full rounded-lg bg-slate-950 object-contain" />}
       </Modal>
     </div>

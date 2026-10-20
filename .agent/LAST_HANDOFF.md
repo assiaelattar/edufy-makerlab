@@ -585,3 +585,9 @@ The Edufy parent API and Student Details flow now handle a historical contact em
 The user approved deployment of the completed school workspace UI after aligning the left and top menus. This release carries the Design System v1 module surfaces and shell only. It preserves the current `origin/main` tenant provisioning, authentication, schedule write guards, API, Firestore rules, schemas and financial logic. Build and signed-in read-only checks passed for desktop/mobile and light/dark. See `docs/education/DESIGN_SYSTEM_V1_CONSOLIDATED_HANDOFF_2026-10-19.md` and `docs/education/DESIGN_SYSTEM_NAVIGATION_RELEASE_2026-10-19.md`.
 
 ---
+
+## Student Details Design System v1 audit — 2026-10-20
+
+The isolated Student Details candidate now covers its five workspaces, local dialogs, permission-aware controls, 390 px behavior and synthetic failed-save state. Read `docs/education/STUDENT_DETAILS_DESIGN_SYSTEM_V1_2026-10-20.md` for the row-by-row inventory, evidence and exact acceptance boundary. The fixture is `node scripts/preview-student-details.mjs` at `http://127.0.0.1:5271/`. Build, focused Design System checks and whitespace checks pass. This browser session had no signed-in school account; actual records and route restoration remain a read-only acceptance gate. No push, deployment or production write.
+
+---

@@ -18,6 +18,9 @@ interface AcademicsTabProps {
   setEditEnrollment: (enrollment: Enrollment) => void;
   initiateDeleteEnrollment: (id: string) => void;
   studentId: string;
+  canEnroll: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 export const AcademicsTab: React.FC<AcademicsTabProps> = ({
@@ -27,6 +30,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
   setEditEnrollment,
   initiateDeleteEnrollment,
   studentId,
+  canEnroll,
+  canEdit,
+  canDelete,
 }) => {
   const { students, settings } = useAppContext();
   const { alert: showAlert } = useConfirm();
@@ -89,14 +95,14 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
   };
 
   return (
-    <div className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+    <div className="edu-student-surface edu-student-surface--learning overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
       <div className="p-4">
         <AtlasSectionHeader
           title="Enrollments"
           description="Programs, schedules, tuition, and certificates"
           icon={BookOpen}
           meta={<span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-400">{studentEnrollments.length}</span>}
-          actions={<AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>New enrollment</AtlasActionButton>}
+          actions={canEnroll ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>New enrollment</AtlasActionButton> : undefined}
         />
       </div>
       <div className="border-t border-white/10">
@@ -106,13 +112,13 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
               icon={BookOpen}
               title="No enrollments yet"
               description="Add the student's first program to connect schedules, attendance, and billing."
-              action={<AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>Enroll student</AtlasActionButton>}
+              action={canEnroll ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>Enroll student</AtlasActionButton> : undefined}
             />
           </div>
         ) : (
           <div className="divide-y divide-white/5">
             {studentEnrollments.map((e) => (
-              <div key={e.id} className="group px-4 py-4 transition-colors hover:bg-white/[0.025]">
+              <div key={e.id} className="edu-student-record group px-4 py-4 transition-colors hover:bg-white/[0.025]">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-400/20 bg-teal-400/10 text-teal-300">
@@ -125,7 +131,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className={`w-fit rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${e.balance > 0 ? 'bg-amber-500/10 text-amber-300 border-amber-400/20' : 'bg-emerald-500/10 text-emerald-300 border-emerald-400/20'}`}>
+                  <div data-tone={e.balance > 0 ? 'attention' : 'success'} className={`edu-student-status w-fit rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${e.balance > 0 ? 'bg-amber-500/10 text-amber-300 border-amber-400/20' : 'bg-emerald-500/10 text-emerald-300 border-emerald-400/20'}`}>
                       {e.balance > 0 ? 'Payment Due' : 'Paid'}
                   </div>
                 </div>
@@ -153,17 +159,19 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-1">
-                    <button
+                    {canEdit && <button
                       onClick={() => setEditEnrollment(e)}
                       className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
                       title="Edit Enrollment"
+                      aria-label={`Edit ${e.programName} enrollment`}
                     >
                       <Pencil size={16} />
-                    </button>
+                    </button>}
                     <button
                       onClick={() => navigateTo('activity-details', { activityId: { type: 'enrollment', id: e.id } })}
                       className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
                       title="View Details"
+                      aria-label={`View ${e.programName} enrollment details`}
                     >
                       <ArrowRightLeft size={16} />
                     </button>
@@ -173,6 +181,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       }}
                       className="p-2 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors"
                       title="Attestation d'inscription"
+                      aria-label={`Registration certificate for ${e.programName}`}
                     >
                       <BookOpen size={16} />
                     </button>
@@ -182,19 +191,21 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
                       }}
                       className="p-2 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
                       title="Attestation de réussite"
+                      aria-label={`Completion certificate for ${e.programName}`}
                     >
                       <Award size={16} />
                     </button>
-                    <button
+                    {canDelete && <button
                       onClick={(evt) => {
                         evt.stopPropagation();
                         initiateDeleteEnrollment(e.id);
                       }}
                       className="p-2 hover:bg-red-900/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
                       title="Delete Enrollment"
+                      aria-label={`Delete ${e.programName} enrollment`}
                     >
                       <Trash2 size={16} />
-                    </button>
+                    </button>}
                   </div>
                 </div>
               </div>
@@ -206,6 +217,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
 
       {/* ATTESTATION DATE MODAL */}
       <Modal
+        designSystem
         isOpen={attestationModal.isOpen}
         onClose={() => setAttestationModal({ isOpen: false, enrollment: null })}
         title="Configuration de l'Attestation"
@@ -217,8 +229,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Date d'admission / Début</label>
+              <label htmlFor="student-admission-date" className="block text-sm font-medium text-slate-300 mb-1">Date d'admission / Début</label>
               <input
+                id="student-admission-date"
                 type="date"
                 value={customAdmissionDate}
                 onChange={(e) => setCustomAdmissionDate(e.target.value)}
@@ -228,8 +241,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
+              <label htmlFor="student-registration-issue-date" className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
               <input
+                id="student-registration-issue-date"
                 type="date"
                 value={customIssueDate}
                 onChange={(e) => setCustomIssueDate(e.target.value)}
@@ -259,6 +273,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
 
       {/* COMPLETION ATTESTATION MODAL */}
       <Modal
+        designSystem
         isOpen={completionModal.isOpen}
         onClose={() => setCompletionModal({ isOpen: false, enrollment: null })}
         title="Attestation de réussite / Programme"
@@ -270,8 +285,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Nom de l'Académie</label>
+              <label htmlFor="student-completion-academy" className="block text-sm font-medium text-slate-300 mb-1">Nom de l'Académie</label>
               <input
+                id="student-completion-academy"
                 type="text"
                 value={completionAcademyName}
                 onChange={(e) => setCompletionAcademyName(e.target.value)}
@@ -281,8 +297,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">URL du Logo (optionnel)</label>
+              <label htmlFor="student-completion-logo" className="block text-sm font-medium text-slate-300 mb-1">URL du Logo (optionnel)</label>
               <input
+                id="student-completion-logo"
                 type="text"
                 value={completionLogoUrl}
                 onChange={(e) => setCompletionLogoUrl(e.target.value)}
@@ -292,8 +309,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
+              <label htmlFor="student-completion-date" className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
               <input
+                id="student-completion-date"
                 type="date"
                 value={completionIssueDate}
                 onChange={(e) => setCompletionIssueDate(e.target.value)}
@@ -302,8 +320,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Modules / Compétences acquises (1 par ligne)</label>
+              <label htmlFor="student-completion-modules" className="block text-sm font-medium text-slate-300 mb-1">Modules / Compétences acquises (1 par ligne)</label>
               <textarea
+                id="student-completion-modules"
                 value={completionModules}
                 onChange={(e) => setCompletionModules(e.target.value)}
                 rows={4}
