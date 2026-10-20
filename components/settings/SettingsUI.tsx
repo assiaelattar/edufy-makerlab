@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { ChevronRight } from 'lucide-react';
 import { EducationField, EducationIcon, EducationStatusPill, EducationSurface } from '../education-ui/EducationPrimitives';
@@ -21,6 +21,22 @@ interface SettingsNavigationProps<SectionId extends string> {
 }
 
 export const SettingsNavigation = <SectionId extends string>({ items, activeId, onChange, mode = 'responsive' }: SettingsNavigationProps<SectionId>) => {
+  const mobileNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (mode === 'desktop') return;
+    const revealActive = () => {
+      const nav = mobileNavRef.current;
+      const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!nav || !active || nav.clientWidth === 0) return;
+      const navRect = nav.getBoundingClientRect();
+      const activeRect = active.getBoundingClientRect();
+      if (activeRect.left >= navRect.left && activeRect.right <= navRect.right) return;
+      nav.scrollLeft += activeRect.left - navRect.left - (nav.clientWidth - active.clientWidth) / 2;
+    };
+    revealActive();
+    window.addEventListener('resize', revealActive);
+    return () => window.removeEventListener('resize', revealActive);
+  }, [activeId, mode]);
   const renderItem = (item: SettingsNavigationItem<SectionId>) => {
     const Icon = item.icon;
     return <button key={item.id} type="button" onClick={() => onChange(item.id)} aria-current={item.id === activeId ? 'page' : undefined} className="edu-settings-nav-item">
@@ -31,7 +47,7 @@ export const SettingsNavigation = <SectionId extends string>({ items, activeId, 
     </button>;
   };
   return <>
-    {mode !== 'desktop' && <nav aria-label="Settings categories" className="edu-settings-nav edu-settings-nav--mobile">{items.map(renderItem)}</nav>}
+    {mode !== 'desktop' && <nav ref={mobileNavRef} aria-label="Settings categories" className="edu-settings-nav edu-settings-nav--mobile">{items.map(renderItem)}</nav>}
     {mode !== 'mobile' && <aside className="edu-settings-nav-wrap"><nav aria-label="Settings categories" className="edu-settings-nav edu-settings-nav--desktop">{items.map(renderItem)}</nav></aside>}
   </>;
 };
