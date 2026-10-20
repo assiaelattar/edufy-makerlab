@@ -69,11 +69,15 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
       await showAlert('Certificate dates required', 'Choose both the admission date and issue date.', 'warning');
       return;
     }
+    try {
       generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
         admissionDate: customAdmissionDate,
         issueDate: customIssueDate
       });
       setAttestationModal({ isOpen: false, enrollment: null });
+    } catch {
+      await showAlert('Certificate could not be prepared', 'Review the dates and try again. The enrollment is unchanged.', 'danger');
+    }
   };
 
   const handleGenerateCompletion = async () => {
@@ -85,6 +89,7 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
       await showAlert('Certificate details required', 'Enter the academy name and issue date.', 'warning');
       return;
     }
+    try {
       generateCompletionCertificate(student, completionModal.enrollment, settings, {
         academyName: completionAcademyName.trim(),
         logoUrl: completionLogoUrl.trim(),
@@ -92,6 +97,9 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
         modules: completionModules.split('\n').map(m => m.trim()).filter(m => m.length > 0)
       });
       setCompletionModal({ isOpen: false, enrollment: null });
+    } catch {
+      await showAlert('Certificate could not be prepared', 'Review the details and try again. The enrollment is unchanged.', 'danger');
+    }
   };
 
   return (

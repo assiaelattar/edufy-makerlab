@@ -23,6 +23,7 @@
 [data-edu-system="1"] .edu-enrollment-system [role="alert"] { background:var(--ds-red-soft); color:var(--ds-red-ink); border:2px solid var(--ds-red); }
 [data-edu-system="1"] .edu-enrollment-system footer { background:var(--ds-surface); }
 @media(max-width:700px) { [data-edu-system="1"] .edu-enrollment-system aside { padding-right:0; } }
+@media(max-width:700px) { [data-edu-system="1"] .edu-enrollment-system { grid-template-columns:minmax(0,1fr); } [data-edu-system="1"] .edu-enrollment-system :is(aside,section) { min-width:0; } }
 
 [data-edu-system="1"] .edu-enrollment-system button[aria-pressed="true"] { background:var(--ds-blue-soft); color:var(--ds-blue-ink); outline:2px solid var(--ds-blue); }
 [data-edu-system="1"] .edu-enrollment-system input::placeholder { color:var(--ds-muted); opacity:1; }

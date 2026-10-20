@@ -174,6 +174,8 @@ body.education-ui-v1-active[data-edu-theme] :is(.edu-dashboard-followup-form,.ed
 
 body.education-ui-v1-active[data-edu-theme] .edu-dashboard-payment-form [role="radio"][aria-checked="true"] { background:#d7ffb8!important; color:#263c44!important; border-color:#58cc02!important; box-shadow:0 3px 0 #4eaf06; }
 body.education-ui-v1-active[data-edu-theme] .edu-dashboard-payment-form [role="radio"][aria-checked="true"] svg { color:#397d08!important; }
+body.education-ui-v1-active[data-edu-theme] .edu-dashboard-payment-form :is([role="radio"][aria-checked="false"],[aria-pressed="false"]) { background:var(--dash-form-field)!important; color:var(--dash-form-ink)!important; border:1px solid var(--dash-form-border)!important; }
+body.education-ui-v1-active[data-edu-theme] .edu-dashboard-payment-form :is([role="radio"][aria-checked="false"],[aria-pressed="false"]) svg { color:var(--dash-form-ink)!important; }
 
 body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__welcome { display:grid; grid-template-columns:minmax(0,1fr) 150px; gap:12px 24px; padding:24px; border:2px solid var(--ds-green); border-bottom:5px solid var(--ds-green-edge); border-radius:24px; background:var(--ds-green-soft); }
 body.education-ui-v1-active[data-edu-theme] .edu-shell-v1 .edu-shell-v1__content-inner .edu-dashboard-v1 .edu-dashboard-v1__quick-actions { grid-column:1 / -1; display:flex; flex-wrap:wrap; }
