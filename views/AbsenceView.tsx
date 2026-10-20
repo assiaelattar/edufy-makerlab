@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { addDays, format, parseISO } from 'date-fns';
 import { AlertCircle, Calendar, CheckCircle2, ChevronRight, ClipboardCheck, Clock, Filter, MessageCircle, RotateCcw, Search, ShieldCheck, UserRound, Users, XCircle } from 'lucide-react';
 import { deleteDoc, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
@@ -22,7 +22,12 @@ export const AbsenceView = () => {
     const { enrollments, students, programs, attendanceRecords, attendanceLoading, attendanceError, navigateTo } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
-    const today = format(new Date(), 'yyyy-MM-dd');
+    const [currentTime, setCurrentTime] = useState(() => new Date());
+    useEffect(() => {
+        const intervalId = window.setInterval(() => setCurrentTime(new Date()), 30_000);
+        return () => window.clearInterval(intervalId);
+    }, []);
+    const today = format(currentTime, 'yyyy-MM-dd');
     const workspaceScope = `attendance:${currentOrganization?.id || 'none'}:${userProfile?.uid || 'guest'}`;
     useWorkspaceScroll(workspaceScope);
     const [selectedDate, setSelectedDate] = useWorkspaceViewState(workspaceScope, 'selectedDate', today);
@@ -41,10 +46,7 @@ export const AbsenceView = () => {
     }, [selectedDate]);
     const selectedWeekday = parseISO(selectedDate).getDay();
 
-    const currentTimeMinutes = useMemo(() => {
-        const now = new Date();
-        return now.getHours() * 60 + now.getMinutes();
-    }, []);
+    const currentTimeMinutes = currentTime.getHours() * 60 + currentTime.getMinutes();
 
     const isToday = selectedDate === today;
     const isFutureDate = selectedDate > today;
@@ -73,11 +75,13 @@ export const AbsenceView = () => {
             return mainHasClass || secondaryHasClass;
         }).flatMap(enrollment => {
             const slots = [];
+            const studentName = enrollment.studentName?.trim() || students.find(student => student.id === enrollment.studentId)?.name || 'Unnamed student';
 
             const mainSlot = getScheduledSlotForWeekday(enrollment.groupTime, selectedWeekday);
             if (mainSlot !== null) {
                 slots.push({
                     ...enrollment,
+                    studentName,
                     displayTime: mainSlot,
                     displayGroup: enrollment.groupName || ''
                 });
@@ -87,6 +91,7 @@ export const AbsenceView = () => {
             if (secondarySlot !== null) {
                 slots.push({
                     ...enrollment,
+                    studentName,
                     displayTime: secondarySlot,
                     displayGroup: enrollment.secondGroupName || ''
                 });
@@ -405,17 +410,17 @@ export const AbsenceView = () => {
                 )}
             />
 
-            {showEducationSchoolDayV1 && <div className="pulse-attendance-progress" aria-label="Daily attendance progress">
+            {showEducationSchoolDayV1 && (dailyStats.total > 0 || renewalsDue.length > 0) && <div className="pulse-attendance-progress" aria-label="Daily attendance progress">
                 <div className="pulse-attendance-progress__line">
                     <strong>{isFutureDate ? 'Schedule preview' : dailyStats.total === 0 ? 'No sessions scheduled' : dailyStats.unmarked === 0 && !isWorking ? 'Attendance complete' : `${dailyStats.total - dailyStats.unmarked} of ${dailyStats.total} recorded`}</strong>
-                    <span>{isFutureDate ? 'Marking opens on the session date' : `${dailyStats.unmarked} remaining · ${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`}</span>
+                    <span>{dailyStats.total === 0 ? 'Choose another date or review classes' : isFutureDate ? 'Marking opens on the session date' : `${dailyStats.unmarked} remaining · ${sessionCount} ${sessionCount === 1 ? 'session' : 'sessions'}`}</span>
                 </div>
-                <progress aria-label="Recorded attendance" value={dailyStats.total - dailyStats.unmarked} max={dailyStats.total || 1} />
-                <div className="pulse-attendance-progress__summary">
+                {dailyStats.total > 0 && <progress aria-label="Recorded attendance" value={dailyStats.total - dailyStats.unmarked} max={dailyStats.total} />}
+                {dailyStats.total > 0 && <div className="pulse-attendance-progress__summary">
                     <span data-summary="present"><b>{dailyStats.present}</b> present</span><span data-summary="late"><b>{dailyStats.late}</b> late</span><span data-summary="absent"><b>{dailyStats.absent}</b> absent</span><span data-summary="excused"><b>{dailyStats.excused}</b> excused</span>
-                </div>
+                </div>}
                 <p className="pulse-attendance-feedback" role="status" aria-live="polite" data-error={saveFeedback?.date === selectedDate && saveFeedback.error ? 'true' : undefined}>
-                    {isWorking ? 'Saving attendance… Please wait for confirmation.' : isFutureDate ? 'This date is read-only. Choose today or an earlier date to mark attendance.' : saveFeedback?.date === selectedDate ? saveFeedback.text : 'Choose a status for each student. Changes save individually.'}
+                    {isWorking ? 'Saving attendance… Please wait for confirmation.' : dailyStats.total === 0 ? 'No attendance marks are due for this date.' : isFutureDate ? 'This date is read-only. Choose today or an earlier date to mark attendance.' : saveFeedback?.date === selectedDate ? saveFeedback.text : 'Choose a status. Each mark saves automatically.'}
                 </p>
                 {renewalsDue.length > 0 && <a className="pulse-attendance-renewal-link" href="#pulse-attendance-renewals">{renewalsDue.length} {renewalsDue.length === 1 ? 'learner needs' : 'learners need'} a membership renewal · Review</a>}
             </div>}
@@ -431,7 +436,7 @@ export const AbsenceView = () => {
 
             <div className={showEducationSchoolDayV1 ? 'pulse-attendance-workspace' : 'contents'}>
             {showEducationSchoolDayV1 && <div className="pulse-attendance-workspace__heading"><h3>Daily register</h3><span>{scheduledStudents.length} scheduled {scheduledStudents.length === 1 ? 'place' : 'places'}{searchQuery || selectedGroup !== 'All' ? ' in this view' : ''}</span></div>}
-            <AtlasToolbar className="pulse-attendance-toolbar">
+            {allScheduledStudents.length > 0 && <AtlasToolbar className="pulse-attendance-toolbar">
                 <div className="relative min-w-[220px] flex-1">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                     <input type="search" aria-label="Search students" placeholder="Search students" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
@@ -443,7 +448,7 @@ export const AbsenceView = () => {
                         {uniqueGroups.map(group => <option key={group} value={group}>{group}</option>)}
                     </select>
                 </div>
-            </AtlasToolbar>
+            </AtlasToolbar>}
 
             <section aria-label="Session roster" id="edu-attendance-roster" className="space-y-4 scroll-mt-5">
                 {!showEducationSchoolDayV1 && <AtlasSectionHeader title="Session roster" description={`${dayOfWeek}, ${selectedDate} · ${dailyStats.unmarked} attendance ${dailyStats.unmarked === 1 ? 'mark' : 'marks'} remaining`} icon={Calendar} />}
@@ -541,7 +546,7 @@ export const AbsenceView = () => {
                                                                     </button>
                                                                 )}
                                                             </div>
-                                                            <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                                                            <div className="pulse-attendance-meta mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                                                                 <span className="truncate">{student.programName}</span>
                                                                 <span aria-hidden="true">·</span>
                                                                 <span className="truncate">{student.displayGroup}</span>
