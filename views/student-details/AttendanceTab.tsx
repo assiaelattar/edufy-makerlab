@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertCircle, Calendar, CheckCircle2, Clock3, MessageCircle, Printer, XCircle } from 'lucide-react';
 import { AppSettings, AttendanceRecord, Student } from '../../types';
 import { formatDate, generateAttendanceReportPrint } from '../../utils/helpers';
+import { normalizePhoneForWhatsApp } from '../../utils/whatsappPhone';
 import { useConfirm } from '../../context/ConfirmContext';
 import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader } from '../../components/atlas/AtlasSurface';
 
@@ -30,18 +31,19 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
   const { alert: showAlert } = useConfirm();
 
   const handleWhatsApp = async () => {
-    if (!student.parentPhone) {
-      await showAlert('Parent phone missing', 'Add a parent phone number before sharing the attendance summary.', 'warning');
+    const phone = normalizePhoneForWhatsApp(student.parentPhone);
+    if (!phone) {
+      await showAlert('Parent phone missing', 'Add a valid parent phone number before sharing the attendance summary.', 'warning');
       return;
     }
 
-    let phone = student.parentPhone.replace(/[^0-9]/g, '');
-    if (phone.startsWith('0')) phone = `212${phone.substring(1)}`;
     const message = `Hello ${student.parentName || 'Parent'}, here is an attendance summary for ${student.name}. Total absences: ${absenceCount}. Total late arrivals: ${lateCount}. Please contact us if you would like the full report.`;
-    const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer');
+    const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
     if (!shareWindow) {
       await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy, then try sharing the attendance summary again.', 'warning');
+      return;
     }
+    try { shareWindow.opener = null; } catch { /* Browser already isolated the new tab. */ }
   };
 
   return (

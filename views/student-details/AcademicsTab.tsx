@@ -70,10 +70,14 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
       return;
     }
     try {
-      generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
+      const opened = generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
         admissionDate: customAdmissionDate,
         issueDate: customIssueDate
       });
+      if (!opened) {
+        await showAlert('Print preview was blocked', 'Allow pop-ups for Edufy, then try generating the certificate again.', 'warning');
+        return;
+      }
       setAttestationModal({ isOpen: false, enrollment: null });
     } catch {
       await showAlert('Certificate could not be prepared', 'Review the dates and try again. The enrollment is unchanged.', 'danger');
@@ -90,12 +94,16 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
       return;
     }
     try {
-      generateCompletionCertificate(student, completionModal.enrollment, settings, {
+      const opened = generateCompletionCertificate(student, completionModal.enrollment, settings, {
         academyName: completionAcademyName.trim(),
         logoUrl: completionLogoUrl.trim(),
         issueDate: completionIssueDate,
         modules: completionModules.split('\n').map(m => m.trim()).filter(m => m.length > 0)
       });
+      if (!opened) {
+        await showAlert('Print preview was blocked', 'Allow pop-ups for Edufy, then try generating the certificate again.', 'warning');
+        return;
+      }
       setCompletionModal({ isOpen: false, enrollment: null });
     } catch {
       await showAlert('Certificate could not be prepared', 'Review the details and try again. The enrollment is unchanged.', 'danger');

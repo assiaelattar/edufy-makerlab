@@ -1,12 +1,12 @@
 import { StudentDetailsForm } from '../components/students/StudentDetailsForm';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight } from 'lucide-react';
+import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight, Upload } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday } from '../utils/helpers';
-import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday, compressImage } from '../utils/helpers';
+import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { manageParentAccess, type ParentAccessAction } from '../services/parentAccess';
 import { Modal } from '../components/Modal';
@@ -23,6 +23,8 @@ import { PortfolioTab } from './student-details/PortfolioTab';
 import { AttendanceTab } from './student-details/AttendanceTab';
 import { AccessAndAccountsTab } from './student-details/AccessAndAccountsTab';
 import { EducationGuide, educationGuideRegistry, type GuideState } from '../components/education-ui/EducationGuide';
+import { EducationNotice } from '../components/education-ui/EducationPrimitives';
+import { createVerifiedStudentIdentity, projectBelongsToStudent, verifyStudentRecord } from '../sparkquest/domain/studentIdentity';
 import '../components/education-ui/education-system-v1.css';
 import './student-details/education-student-details-v1.css';
 
@@ -50,14 +52,27 @@ export const StudentDetailsView = ({
     const [credentialsModal, setCredentialsModal] = useState<{ isOpen: boolean, data: { studentId: string, name: string, email: string, pass: string, role: string } | null }>({ isOpen: false, data: null });
 
     const student = useMemo(() => {
-        if (isStudentRole && userProfile) {
-            return students.find(s => s.email === userProfile.email || s.loginInfo?.email === userProfile.email) || students.find(s => s.id === studentId);
+        if (isStudentRole) {
+            const learnerUid = userProfile?.uid;
+            const organizationId = currentOrganization?.id || userProfile?.organizationId;
+            return learnerUid && organizationId
+                ? students.find(s => verifyStudentRecord(s, learnerUid, organizationId))
+                : undefined;
         }
         return students.find(s => s.id === studentId);
-    }, [students, studentId, userProfile, isStudentRole]);
+    }, [students, studentId, userProfile?.uid, userProfile?.organizationId, currentOrganization?.id, isStudentRole]);
 
     const [editEnrollment, setEditEnrollment] = useState<Partial<Enrollment> | null>(null);
     const [editPayment, setEditPayment] = useState<Partial<Payment> | null>(null);
+    const [isSavingEnrollment, setIsSavingEnrollment] = useState(false);
+    const [isSavingPayment, setIsSavingPayment] = useState(false);
+    const [isUploadingPaymentProof, setIsUploadingPaymentProof] = useState(false);
+    const [enrollmentSaveError, setEnrollmentSaveError] = useState('');
+    const [paymentSaveError, setPaymentSaveError] = useState('');
+    const enrollmentSaveLock = useRef(false);
+    const paymentSaveLock = useRef(false);
+    useEffect(() => { if (!editEnrollment) setEnrollmentSaveError(''); }, [editEnrollment]);
+    useEffect(() => { if (!editPayment) setPaymentSaveError(''); }, [editPayment]);
     const [showPassword, setShowPassword] = useState(false);
     const [showParentPassword, setShowParentPassword] = useState(false);
     const [isGeneratingAccess, setIsGeneratingAccess] = useState(false);
@@ -163,9 +178,16 @@ export const StudentDetailsView = ({
     };
 
     // ... [Calculations for enrollments, payments, etc. same as before] ...
-    const studentEnrollments = enrollments.filter(e => e.studentId === student.id);
+    const learnerIdentity = isStudentRole && userProfile?.uid
+        ? createVerifiedStudentIdentity({ authUid: userProfile.uid, organizationId: student.organizationId, student })
+        : null;
+    const studentEnrollments = enrollments.filter(enrollment => learnerIdentity
+        ? learnerIdentity.ownerIds.includes(enrollment.studentId) && enrollment.organizationId === learnerIdentity.organizationId
+        : enrollment.studentId === student.id);
     const studentPayments = payments.filter(p => studentEnrollments.some(e => e.id === p.enrollmentId));
-    const publishedProjects = studentProjects.filter(p => p.studentId === student.id && p.status === 'published');
+    const publishedProjects = studentProjects.filter(project => project.status === 'published' && (
+        learnerIdentity ? projectBelongsToStudent(project, learnerIdentity) : project.studentId === student.id
+    ));
     const studentAttendance = attendanceRecords.filter(r => r.studentId === student.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const absenceCount = studentAttendance.filter(r => r.status === 'absent').length;
     const lateCount = studentAttendance.filter(r => r.status === 'late').length;
@@ -530,13 +552,15 @@ export const StudentDetailsView = ({
         setConfirmModal({ isOpen: true, title: "Delete Payment Record", message: `Are you sure you want to delete this payment of ${formatCurrency(payment.amount)}? \n\nThis will recalculate the student's debt automatically.`, type: 'danger', isLoading: false, action: async () => { 
             if (!db) return; 
             const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
+            const batch = writeBatch(db);
             if (enrollment) {
                 const otherPayments = payments.filter(p => p.enrollmentId === payment.enrollmentId && p.id !== payment.id);
                 const newPaid = otherPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
                 const newBalance = (enrollment.totalAmount || 0) - newPaid;
-                await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
+                batch.update(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
             }
-            await deleteDoc(doc(db, 'payments', payment.id)); 
+            batch.delete(doc(db, 'payments', payment.id));
+            await batch.commit();
         } });
     };
 
@@ -547,15 +571,69 @@ export const StudentDetailsView = ({
 
     const handleSaveEnrollment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || !editEnrollment || !editEnrollment.id) return;
-        try { const original = enrollments.find(en => en.id === editEnrollment.id); if (!original) return; let updates: any = { ...editEnrollment }; if (editEnrollment.totalAmount !== undefined) { updates.balance = Number(editEnrollment.totalAmount) - (original.paidAmount || 0); } await updateDoc(doc(db, 'enrollments', editEnrollment.id), updates); setEditEnrollment(null); await showAlert('Enrollment updated', 'Enrollment details were saved successfully.', 'success'); } catch (err) { console.error(err); await showAlert('Could not update enrollment', 'Enrollment details were not saved.', 'danger'); }
+        if (enrollmentSaveLock.current || !editEnrollment?.id) return;
+        if (!db) { setEnrollmentSaveError('The data connection is unavailable. Your changes are still here.'); return; }
+        const original = enrollments.find(enrollment => enrollment.id === editEnrollment.id);
+        if (!original) { setEnrollmentSaveError('This enrollment is no longer available. Refresh the record before saving.'); return; }
+        if (editEnrollment.totalAmount !== undefined && (!Number.isFinite(Number(editEnrollment.totalAmount)) || Number(editEnrollment.totalAmount) < 0)) {
+            setEnrollmentSaveError('Enter a valid tuition amount of zero or more.');
+            return;
+        }
+        const program = programs.find(item => item.id === editEnrollment.programId);
+        if (program) {
+            const grade = program.grades.find(item => item.id === editEnrollment.gradeId);
+            if (!grade) { setEnrollmentSaveError('Select a valid level before saving this enrollment.'); return; }
+            if (!grade.groups.some(group => group.id === editEnrollment.groupId)) {
+                setEnrollmentSaveError('Select a group in the chosen level before saving this enrollment.');
+                return;
+            }
+            if (editEnrollment.secondGroupId && !grade.groups.some(group => group.id === editEnrollment.secondGroupId)) {
+                setEnrollmentSaveError('Choose an extra workshop from the selected level or clear it.');
+                return;
+            }
+        }
+        enrollmentSaveLock.current = true;
+        setIsSavingEnrollment(true);
+        setEnrollmentSaveError('');
+        try {
+            const updates: any = { ...editEnrollment };
+            if (editEnrollment.totalAmount !== undefined) {
+                updates.balance = Number(editEnrollment.totalAmount) - (original.paidAmount || 0);
+            }
+            await updateDoc(doc(db, 'enrollments', editEnrollment.id), updates);
+            setEditEnrollment(null);
+            await showAlert('Enrollment updated', 'Enrollment details were saved successfully.', 'success');
+        } catch (err) {
+            console.error(err);
+            setEnrollmentSaveError('Enrollment details were not saved. Your changes are still here. Please try again.');
+            await showAlert('Could not update enrollment', 'Enrollment details were not saved. Your changes are still here.', 'danger');
+        } finally {
+            enrollmentSaveLock.current = false;
+            setIsSavingEnrollment(false);
+        }
     };
 
     const handleSavePayment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || !editPayment || !editPayment.id) return;
+        if (paymentSaveLock.current || isUploadingPaymentProof || !editPayment?.id) return;
+        if (!db) { setPaymentSaveError('The data connection is unavailable. Your changes are still here.'); return; }
         const originalPayment = payments.find(p => p.id === editPayment.id);
-        if (!originalPayment) return;
+        if (!originalPayment) { setPaymentSaveError('This payment is no longer available. Refresh the record before saving.'); return; }
+        if (!Number.isFinite(Number(editPayment.amount)) || Number(editPayment.amount) <= 0) {
+            setPaymentSaveError('Enter a positive payment amount before saving.');
+            return;
+        }
+        if (editPayment.method === 'check' && (!editPayment.checkNumber?.trim() || !editPayment.bankName?.trim())) {
+            setPaymentSaveError('Enter both the check number and bank before saving.');
+            return;
+        }
+        if (editPayment.method === 'virement' && !editPayment.proofUrl) {
+            setPaymentSaveError('Attach transfer proof before saving this payment.');
+            return;
+        }
+        paymentSaveLock.current = true;
+        setIsSavingPayment(true);
+        setPaymentSaveError('');
         try {
             let newStatus = originalPayment.status;
             const updatedPayment = { ...editPayment };
@@ -577,55 +655,88 @@ export const StudentDetailsView = ({
                 }
             }
 
-            await updateDoc(doc(db, 'payments', editPayment.id), updatedPayment);
-
             const wasCleared = ['paid', 'verified'].includes(originalPayment.status);
             const isCleared = ['paid', 'verified'].includes(newStatus);
             const originalAmount = Number(originalPayment.amount) || 0;
             const newAmount = Number(editPayment.amount) || 0;
 
             const diff = (isCleared ? newAmount : 0) - (wasCleared ? originalAmount : 0);
-            if (diff !== 0) {
-                const enrollment = enrollments.find(e => e.id === originalPayment.enrollmentId);
-                if (enrollment) {
-                    await updateDoc(doc(db, 'enrollments', enrollment.id), {
-                        paidAmount: increment(diff),
-                        balance: increment(-diff)
-                    });
-                }
-            }
+            const enrollment = diff !== 0 ? enrollments.find(e => e.id === originalPayment.enrollmentId) : undefined;
+            if (diff !== 0 && !enrollment) throw new Error('Linked enrollment not found');
+            const batch = writeBatch(db);
+            batch.update(doc(db, 'payments', editPayment.id), updatedPayment);
+            if (enrollment) batch.update(doc(db, 'enrollments', enrollment.id), {
+                paidAmount: increment(diff),
+                balance: increment(-diff)
+            });
+            await batch.commit();
 
             setEditPayment(null);
             await showAlert('Payment updated', 'Payment details were saved successfully.', 'success');
         } catch (err) {
             console.error(err);
-            await showAlert('Could not update payment', 'Payment details were not saved.', 'danger');
+            setPaymentSaveError('Payment details were not saved. Your changes are still here. Please try again.');
+            await showAlert('Could not update payment', 'Payment details were not saved. Your changes are still here.', 'danger');
+        } finally {
+            paymentSaveLock.current = false;
+            setIsSavingPayment(false);
+        }
+    };
+
+    const handleEditPaymentProof = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        setIsUploadingPaymentProof(true);
+        setPaymentSaveError('');
+        try {
+            const proofUrl = await compressImage(file);
+            setEditPayment(previous => previous ? { ...previous, proofUrl } : null);
+        } catch (error) {
+            console.error(error);
+            setPaymentSaveError('Transfer proof could not be prepared. Choose the image again.');
+        } finally {
+            setIsUploadingPaymentProof(false);
         }
     };
 
     const handleShareReceipt = async (paymentId: string) => {
-        if (!db) return;
+        if (!db) {
+            await showAlert('Receipt status was not saved', 'The data connection is unavailable. Try again when it is restored.', 'danger');
+            return;
+        }
         try {
             await updateDoc(doc(db, 'payments', paymentId) as any, {
                 receiptSharedAt: serverTimestamp() as any
             });
         } catch (error) {
             console.error("Error sharing receipt:", error);
+            await showAlert('Receipt status was not saved', 'The receipt was sent, but Edufy could not record that confirmation. Try again later.', 'warning');
         }
     };
 
     const handleShareSchedule = async () => {
-        if (!db) return;
-        if (!student.parentPhone) {
-            await showAlert('Parent phone missing', 'Add a parent phone number before sharing the schedule.', 'warning');
+        if (!can('students.edit') || !currentOrganization?.id || student.organizationId !== currentOrganization.id) {
+            await showAlert('Permission required', 'Open this learner in the correct organization with edit access before sharing a schedule.', 'warning');
+            return;
+        }
+        const phone = normalizePhoneForWhatsApp(student.parentPhone);
+        if (!phone) {
+            await showAlert('Parent phone missing', 'Add a valid parent phone number before sharing the schedule.', 'warning');
+            return;
+        }
+        const scheduleLines = studentEnrollments
+            .filter(enrollment => enrollment.status === 'active' && enrollment.organizationId === currentOrganization.id)
+            .flatMap(enrollment => [
+                enrollment.groupTime ? `${enrollment.programName}: ${enrollment.groupName ? `${enrollment.groupName} — ` : ''}${enrollment.groupTime}` : '',
+                enrollment.secondGroupTime ? `${enrollment.programName}: ${enrollment.secondGroupName ? `${enrollment.secondGroupName} — ` : ''}${enrollment.secondGroupTime}` : ''
+            ].filter(Boolean));
+        if (scheduleLines.length === 0) {
+            await showAlert('No weekly schedule', 'Add a scheduled session to an active enrollment before sharing it.', 'warning');
             return;
         }
 
-        let phone = student.parentPhone.replace(/[^0-9]/g, '');
-        if (phone.startsWith('0')) phone = '212' + phone.substring(1);
-
         const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
-        const msg = `Hello! Here is the weekly schedule for ${student.name} at ${academyName}.\n\nStudent portal:\n${window.location.origin}\n\nLogin email: ${student.loginInfo?.email || 'Not created yet'}\nPassword: ${student.loginInfo?.initialPassword || 'Contact the academy'}\n\nSee you in class.`;
+        const msg = `Hello! Here is the weekly schedule for ${student.name} at ${academyName}.\n\n${scheduleLines.map(line => `- ${line}`).join('\n')}\n\nPlease contact the academy if a session needs to change.`;
 
         const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
         if (!shareWindow) {
@@ -634,17 +745,34 @@ export const StudentDetailsView = ({
         }
         shareWindow.opener = null;
 
+        const sent = await confirm({
+            title: 'Was the schedule sent?',
+            message: 'WhatsApp opened with the schedule draft. Confirm only after you send it to the verified parent.',
+            confirmText: 'I sent it',
+            cancelText: 'Not sent',
+            variant: 'info'
+        });
+        if (!sent) return;
+
         try {
+            if (!db) throw new Error('Database not initialized');
             await updateDoc(doc(db, 'students', student.id) as any, {
                 lastScheduleSharedAt: serverTimestamp() as any
             });
         } catch (error) {
             console.error("Error tracking schedule share:", error);
-            await showAlert('Schedule opened, tracking failed', 'WhatsApp opened, but Edufy could not record the share time.', 'warning');
+            await showAlert('Schedule status was not saved', 'The schedule was sent, but Edufy could not record that confirmation. Try again later.', 'warning');
         }
     };
 
     const shareAccount = async (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => {
+        const canShareAccount = role === 'student'
+            ? can('students.edit')
+            : ['super_admin', 'owner', 'admin'].includes(userProfile?.role || '');
+        if (!canShareAccount || !currentOrganization?.id || student.organizationId !== currentOrganization.id) {
+            await showAlert('Permission required', 'Open this learner in the correct organization with account management access before sharing sign-in details.', 'warning');
+            return;
+        }
         if (role === 'parent' && channel === 'email') {
             await showAlert('Use the one-time card', 'The parent login ID is not an inbox. Share the generated password directly by card or a reviewed WhatsApp message.', 'warning');
             return;
@@ -659,13 +787,13 @@ export const StudentDetailsView = ({
         const parentPortalUrl = parentSparkQuestUrl();
         const subject = `${academyName} ${role === 'student' ? 'learner' : 'family'} account for ${student.name}`;
         const message = role === 'student'
-            ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n${student.loginInfo?.initialPassword ? `Password: ${student.loginInfo.initialPassword}` : 'Please contact the academy for the account password.'}\n\nPlease keep these details private.`
+            ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n\nPlease contact the academy for a private access card if you need a password. Keep these details private.`
             : `Hello, here is your ${academyName} SparkQuest family access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nLogin ID: ${account.email}\n\nFor a lost password, contact the academy for a new one-time card.`;
 
         if (channel === 'email') {
             const recipient = role === 'parent'
                 ? (student.email && student.email !== account.email ? student.email : '')
-                : (student.email && student.email !== account.email ? student.email : student.parentLoginInfo?.email || '');
+                : (student.email && student.email !== account.email ? student.email : '');
             window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
             return;
         }
@@ -721,7 +849,9 @@ export const StudentDetailsView = ({
         generateStudentSchedulePrint(student, selectedEnrollments, settings);
         setIsSchedulePrintOpen(false);
     };
-    const outstandingBalance = studentEnrollments.reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
+    const outstandingBalance = activeEnrollments
+        .filter(enrollment => !currentOrganization?.id || enrollment.organizationId === currentOrganization.id)
+        .reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
     const attendedSessions = studentAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
     const attendanceRate = studentAttendance.length > 0 ? Math.round((attendedSessions / studentAttendance.length) * 100) : null;
     const studentTabs = [
@@ -888,8 +1018,8 @@ export const StudentDetailsView = ({
                     ) : <p className="text-sm text-amber-200">This learner has no active program to print.</p>}
                 </div>
             </Modal>
-            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
-                <form onSubmit={handleSaveEnrollment} className="space-y-4">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editEnrollment} onClose={() => { if (!isSavingEnrollment) setEditEnrollment(null); }} title="Edit Enrollment Details">
+                <form onSubmit={handleSaveEnrollment} onChange={() => setEnrollmentSaveError('')} aria-busy={isSavingEnrollment} className="space-y-4">
                     <div className="bg-slate-950 p-3 rounded border border-slate-800 mb-4">
                         <div className="text-xs text-slate-500 uppercase font-bold mb-1">Program</div>
                         <div className="text-white font-medium">{editEnrollment?.programName}</div>
@@ -904,6 +1034,7 @@ export const StudentDetailsView = ({
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Level / Grade</label>
                                 <select
                                     aria-label="Level or grade"
+                                    disabled={isSavingEnrollment}
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.gradeId || ''}
                                     onChange={(e) => {
@@ -918,7 +1049,10 @@ export const StudentDetailsView = ({
                                                 gradeName: selectedGrade.name,
                                                 groupId: '', // Reset group when level changes
                                                 groupName: '',
-                                                groupTime: ''
+                                                groupTime: '',
+                                                secondGroupId: undefined,
+                                                secondGroupName: undefined,
+                                                secondGroupTime: undefined
                                             }) : null);
                                         }
                                     }}
@@ -939,6 +1073,7 @@ export const StudentDetailsView = ({
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Group / Schedule</label>
                                 <select
                                     aria-label="Group or schedule"
+                                    disabled={isSavingEnrollment}
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.groupId || ''}
                                     autoFocus={Boolean(viewParams.studentEnrollmentId)}
@@ -948,6 +1083,10 @@ export const StudentDetailsView = ({
                                         const grade = program.grades.find(g => g.id === editEnrollment.gradeId);
                                         if (!grade) return;
 
+                                        if (!e.target.value) {
+                                            setEditEnrollment(prev => prev ? ({ ...prev, groupId: '', groupName: '', groupTime: '' }) : null);
+                                            return;
+                                        }
                                         const selectedGroup = grade.groups.find(g => g.id === e.target.value);
                                         if (selectedGroup) {
                                             setEditEnrollment(prev => prev ? ({
@@ -977,6 +1116,7 @@ export const StudentDetailsView = ({
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Extra Workshop / DIY (Optional)</label>
                                 <select
                                     aria-label="Extra workshop or DIY"
+                                    disabled={isSavingEnrollment}
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.secondGroupId || ''}
                                     onChange={(e) => {
@@ -1028,6 +1168,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Payment Plan</label>
                             <select
                                 aria-label="Payment plan"
+                                disabled={isSavingEnrollment}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editEnrollment?.paymentPlan || 'full'}
                                 onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, paymentPlan: e.target.value as any }) : null)}
@@ -1043,7 +1184,10 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label>
                             <input
                                 aria-label="Negotiated price"
+                                disabled={isSavingEnrollment}
                                 type="number"
+                                min="0"
+                                step="any"
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg"
                                 value={editEnrollment?.totalAmount || 0}
                                 onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, totalAmount: Number(e.target.value) }) : null)}
@@ -1051,21 +1195,32 @@ export const StudentDetailsView = ({
                         </div>
                     </div>
 
-                    <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">
-                        <Save size={16} /> Save Changes
+                    {enrollmentSaveError && <EducationNotice status="danger">{enrollmentSaveError}</EducationNotice>}
+                    <button type="submit" disabled={isSavingEnrollment} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">
+                        {isSavingEnrollment ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {isSavingEnrollment ? 'Saving changes…' : 'Save Changes'}
                     </button>
                 </form>
             </Modal>
-            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Edit Payment Record">
-                <form onSubmit={handleSavePayment} className="space-y-4">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editPayment} onClose={() => { if (!isSavingPayment) setEditPayment(null); }} title="Edit Payment Record">
+                <form onSubmit={handleSavePayment} onChange={() => setPaymentSaveError('')} aria-busy={isSavingPayment} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input aria-label="Student name on receipt" type="text" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input aria-label="Payment date" type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input aria-label="Student name on receipt" type="text" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input aria-label="Payment date" type="date" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
                     </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input aria-label="Payment amount" type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select aria-label="Payment method" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
-                    {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
-                    <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400"><Save size={16} /> Save changes</button>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input aria-label="Payment amount" type="number" min="0.01" step="any" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select aria-label="Payment method" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
+                    {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input aria-label="Check number" disabled={isSavingPayment} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input aria-label="Check bank" disabled={isSavingPayment} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
+                    {editPayment?.method === 'virement' && <div>
+                        <span className="mb-2 block text-xs font-medium text-slate-400">Transfer proof</span>
+                        <label className="edu-student-payment-proof flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-bold">
+                            {isUploadingPaymentProof ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                            {isUploadingPaymentProof ? 'Preparing image…' : 'Choose proof image'}
+                            <input type="file" accept="image/*" disabled={isSavingPayment || isUploadingPaymentProof} onChange={handleEditPaymentProof} className="sr-only" aria-label="Transfer proof image" />
+                        </label>
+                        {editPayment.proofUrl && <p className="mt-2 text-xs">Transfer proof attached</p>}
+                    </div>}
+                    {paymentSaveError && <EducationNotice status="danger">{paymentSaveError}</EducationNotice>}
+                    <button type="submit" disabled={isSavingPayment || isUploadingPaymentProof} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">{isSavingPayment ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {isSavingPayment ? 'Saving changes…' : 'Save changes'}</button>
                 </form>
             </Modal>
             <Modal designSystem={showEducationStudentDetailsV1} isOpen={confirmModal.isOpen} onClose={() => setConfirmModal((prev: any) => ({ ...prev, isOpen: false }))} title={confirmModal.title} size="md">

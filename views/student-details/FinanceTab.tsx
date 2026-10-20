@@ -63,7 +63,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 }) => {
   const [invoiceModal, setInvoiceModal] = React.useState<{ isOpen: boolean; payment: Payment | null }>({ isOpen: false, payment: null });
   const [proofUrl, setProofUrl] = React.useState<string | null>(null);
-  const { alert: showAlert } = useConfirm();
+  const { alert: showAlert, confirm } = useConfirm();
   const { can, currentOrganization } = useAuth();
   const canManagePayments = can('finance.record_payment');
 
@@ -137,9 +137,15 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
     }
     const enrollment = tenantEnrollments.find(item => item.id === payment.enrollmentId);
     const message = `Payment receipt - ${academyName}\n\nStudent: ${student.name}\nDate: ${formatDate(payment.date)}\nAmount: ${formatCurrency(payment.amount)}\nMethod: ${payment.method === 'virement' ? 'Bank transfer' : payment.method}\nProgram: ${enrollment?.programName || 'Enrollment'}\nReference: ${payment.id.slice(0, 8).toUpperCase()}\n\nThank you for your payment.`;
-    if (await openWhatsApp(message)) {
-      await Promise.resolve(onShareReceipt(payment.id));
-    }
+    if (!await openWhatsApp(message)) return;
+    const sent = await confirm({
+      title: 'Was the receipt sent?',
+      message: 'Opening WhatsApp does not confirm delivery. Mark this receipt shared only after you send the message to the verified parent.',
+      confirmText: 'I sent it',
+      cancelText: 'Not sent',
+      variant: 'info'
+    });
+    if (sent) await Promise.resolve(onShareReceipt(payment.id));
   };
 
   const printReceipt = async (payment: Payment) => {
@@ -169,7 +175,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 
   return (
     <div className="edu-student-finance space-y-5">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="edu-student-finance__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
         <AtlasSignalCard label="Open balance" value={formatCurrency(openBalance)} detail={openBalance > 0 ? 'Across active tenant enrollments' : 'Account settled'} icon={Wallet} tone={openBalance > 0 ? 'amber' : 'emerald'} />
         <AtlasSignalCard label="Cleared payments" value={formatCurrency(clearedTotal)} detail={`${sortedPayments.filter(isCleared).length} cleared record${sortedPayments.filter(isCleared).length === 1 ? '' : 's'}`} icon={CheckCircle2} tone="emerald" />
         <AtlasSignalCard label="In transit" value={formatCurrency(pendingTotal)} detail="Transfers and checks not cleared" icon={Clock} tone={pendingTotal > 0 ? 'amber' : 'slate'} />
@@ -257,7 +263,7 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 
         <div className="grid grid-cols-1 gap-3 border-t border-white/10 p-4 md:hidden">
           {sortedPayments.map(payment => (
-            <div key={payment.id} className="edu-student-payment-card p-4" onClick={() => navigateTo('activity-details', { activityId: { type: 'payment', id: payment.id } })}>
+            <div key={payment.id} className="edu-student-payment-card p-4">
               <div className="mb-3 flex items-start justify-between gap-3"><div><div className={`font-mono text-lg font-bold ${isCleared(payment) ? 'text-emerald-300' : payment.status === 'check_bounced' ? 'text-red-300' : 'text-amber-300'}`}>{formatCurrency(payment.amount)}</div><div className="mt-1 text-xs text-slate-500">{formatDate(payment.date)} / {payment.method === 'virement' ? 'Bank transfer' : payment.method}</div></div><span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${isCleared(payment) ? 'border-emerald-400/20 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 text-red-300' : 'border-amber-400/20 text-amber-300'}`}>{getStatusLabel(payment.status)}</span></div>
               <div className="border-t border-white/10 pt-2">{renderPaymentActions(payment, true)}</div>
             </div>

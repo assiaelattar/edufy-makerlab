@@ -178,18 +178,18 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Login Email</div>
               <div className="break-all font-mono text-sm text-white select-all">{student.loginInfo.email}</div>
             </div>
-            <div className="bg-slate-950/50 p-3 rounded border border-slate-800/50">
+            {canManageStudentAccess && <div className="bg-slate-950/50 p-3 rounded border border-slate-800/50">
               <div className="flex justify-between items-center mb-1">
                 <div className="text-[10px] text-slate-500 uppercase font-bold">Password</div>
-                <button onClick={() => setShowPassword(!showPassword)} className="text-[10px] font-bold text-teal-300 hover:text-white">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-[10px] font-bold text-teal-300 hover:text-white">
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
               </div>
               <div className="text-white font-mono text-sm select-all">
                 {showPassword ? student.loginInfo.initialPassword || '********' : '••••••••'}
               </div>
-            </div>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            </div>}
+            {canManageStudentAccess && <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 onClick={() => generateAccessCardPrint(student, settings)}
                 className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded flex items-center justify-center gap-1 transition-colors border border-slate-700"
@@ -208,16 +208,17 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               >
                 <MessageCircle size={12} /> WhatsApp
               </button>
-            </div>
-            <p className="text-[11px] text-slate-400">Choose a channel to open a ready message. Review the recipient before sending.</p>
+            </div>}
+            {canManageStudentAccess && <p className="text-[11px] text-slate-400">Choose a channel to open a ready message. Review the recipient before sending.</p>}
             {canManageStudentAccess && <RecipientQuickAccess student={student} role="student" />}
-            <button
+            {!canManageStudentAccess && <p className="edu-student-access-card__restricted">Access cards and sharing require learner edit permission.</p>}
+            {canManageStudentAccess && <button
               disabled
               title="Secure password reset requires the server-side account administration service"
               className="mt-2 flex min-h-10 w-full items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
             >
               <RefreshCw size={12} /> Password reset requires admin service
-            </button>
+            </button>}
           </div>
         ) : (
           <div className="text-center py-4">
@@ -254,9 +255,9 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
           </div>
 
           <div className="flex w-full gap-2 sm:w-auto">
-            <button onClick={() => setShowPin(!showPin)} className="flex min-h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 transition-colors hover:text-white" title={showPin ? 'Hide PIN' : 'Show PIN'} aria-label={showPin ? 'Hide PIN' : 'Show PIN'}>
+            {canManageStudentAccess && <button type="button" onClick={() => setShowPin(!showPin)} className="flex min-h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-400 transition-colors hover:text-white" title={showPin ? 'Hide PIN' : 'Show PIN'} aria-label={showPin ? 'Hide PIN' : 'Show PIN'}>
               {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
+            </button>}
             {canManageStudentAccess && <button onClick={handleGeneratePin} disabled={isUpdatingPin} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-slate-800 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-slate-700 sm:flex-none">
               {isUpdatingPin ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {student.pinCode ? 'Regenerate PIN' : 'Generate PIN'}
@@ -266,6 +267,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
         <p className="text-[10px] text-slate-500 mt-2">
           This 4-digit PIN allows the student to log in quickly from the Classroom Kiosk mode without needing their email/password.
         </p>
+        {!canManageStudentAccess && <p className="edu-student-access-card__restricted">Only staff with learner edit permission can reveal or change this PIN.</p>}
       </div>
 
       {/* NEW: PARENT ACCESS SECTION */}
@@ -285,6 +287,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               </span>
             )}
           </div>
+          {!canManageParentAccess && <p className="edu-student-access-card__restricted">Parent account changes and sharing require an administrator.</p>}
 
           {student.parentLoginInfo ? (
             <div className="space-y-3">
@@ -334,8 +337,8 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 Create new SparkQuest login ID and password
               </button>
               <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. The previous password stops working and the learner’s work stays linked to this login.</p>
-              <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="edu-parent-access-action edu-parent-access-action--whatsapp flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-bold"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
-              <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>
+              {canManageParentAccess && <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="edu-parent-access-action edu-parent-access-action--whatsapp flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-bold"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>}
+              {canManageParentAccess && <p className="text-[11px] text-slate-400">This shares the SparkQuest address and login ID only. Share a new password from the one-time credentials card.</p>}
               {canManageParentAccess && <RecipientQuickAccess student={student} role="parent" />}
             </div>
           ) : (
