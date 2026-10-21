@@ -70,6 +70,7 @@ export const CommitFeedView: React.FC<CommitFeedViewProps> = ({
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                         <input
                             type="text"
+                            aria-label="Search commit history"
                             placeholder="Search commits, projects, or students..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -79,6 +80,7 @@ export const CommitFeedView: React.FC<CommitFeedViewProps> = ({
 
                     {/* Student Filter */}
                     <select
+                        aria-label="Filter commits by learner"
                         value={filterStudent}
                         onChange={(e) => setFilterStudent(e.target.value)}
                         className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-slate-200 outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
@@ -108,8 +110,17 @@ export const CommitFeedView: React.FC<CommitFeedViewProps> = ({
                         return (
                             <div
                                 key={idx}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Open ${project.title} project from ${student?.name || project.studentName}'s commit`}
                                 className="cursor-pointer rounded-lg border border-white/10 bg-slate-900/75 p-4 transition-colors hover:border-teal-300/35 hover:bg-slate-900 sm:p-5"
                                 onClick={() => onViewProject(project)}
+                                onKeyDown={event => {
+                                    if (event.key === 'Enter' || event.key === ' ') {
+                                        event.preventDefault();
+                                        onViewProject(project);
+                                    }
+                                }}
                             >
                                 <div className="flex items-start gap-4">
                                     {/* Timeline dot */}
@@ -123,11 +134,11 @@ export const CommitFeedView: React.FC<CommitFeedViewProps> = ({
                                     </div>
 
                                     {/* Commit content */}
-                                    <div className="flex-1">
+                                    <div className="min-w-0 flex-1">
                                         {/* Header */}
-                                        <div className="flex items-start justify-between mb-3">
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-1">
+                                        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                                            <div className="min-w-0">
+                                                <div className="flex flex-wrap items-center gap-2 mb-1">
                                                     <User size={16} className="text-slate-500" />
                                                     <span className="font-bold text-white">
                                                         {student?.name || 'Unknown Student'}

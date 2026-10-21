@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import {
     Car,
@@ -31,10 +31,9 @@ import {
     AtlasToolbar
 } from '../components/atlas/AtlasSurface';
 import './family-journey/education-family-journey-v1.css';
-import './pickup/education-pickup-v1.css';
-import './pickup/education-pickup-pulse.css';
 import './pickup/education-pickup-playful.css';
 import { ParentO11Y } from '../sparkquest/components/ParentO11Y';
+import { EducationButton, EducationField, EducationNotice, EducationState } from '../components/education-ui/EducationPrimitives';
 
 type QueueFilter = 'all' | 'arrived' | 'ready' | 'incoming' | 'released';
 
@@ -119,6 +118,10 @@ export const PickupView = () => {
     const [verificationNote, setVerificationNote] = useState('');
     const [verificationConfirmed, setVerificationConfirmed] = useState(false);
     const [displayTime, setDisplayTime] = useState(() => new Date());
+    const lobbyOpenButtonRef = useRef<HTMLButtonElement>(null);
+    const lobbyExitButtonRef = useRef<HTMLButtonElement>(null);
+    const mobileFiltersRef = useRef<HTMLDetailsElement>(null);
+    const verificationOpenerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
     const todaySessionDate = pickupSessionDate();
     const todayWeekday = format(new Date(), 'EEEE');
 
@@ -242,14 +245,20 @@ export const PickupView = () => {
 
     useEffect(() => {
         if (!isDisplayMode) return;
+        lobbyExitButtonRef.current?.focus();
         const timer = window.setInterval(() => setDisplayTime(new Date()), 30_000);
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') setIsDisplayMode(false);
+            if (event.key === 'Tab') {
+                event.preventDefault();
+                lobbyExitButtonRef.current?.focus();
+            }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => {
             window.clearInterval(timer);
             window.removeEventListener('keydown', handleKeyDown);
+            lobbyOpenButtonRef.current?.focus();
         };
     }, [isDisplayMode]);
 
@@ -431,6 +440,13 @@ export const PickupView = () => {
         { id: 'incoming', label: 'Incoming', count: pickupSignals.onTheWay },
         { id: 'released', label: 'Released', count: pickupSignals.released }
     ];
+    const renderFilterButton = (option: typeof filterOptions[number]) => <button
+        key={option.id}
+        data-queue-filter={option.id}
+        type="button"
+        onClick={() => { setQueueFilter(option.id); if (mobileFiltersRef.current) mobileFiltersRef.current.open = false; }}
+        aria-pressed={queueFilter === option.id}
+    >{option.label} <span className="ml-1 tabular-nums opacity-70">{option.count}</span></button>;
 
     const renderHandoffCard = (group: QueueGroup) => {
         const isPending = pendingAction === `release:${group.entry.studentId}`;
@@ -452,13 +468,11 @@ export const PickupView = () => {
                 {isGatekeeper ? (
                     verificationEntryId === group.entry.id ? <form aria-label={`Verify pickup for ${group.entry.studentName}`} className="mt-4 space-y-3 rounded-xl border border-teal-300/30 bg-slate-950/60 p-3" onSubmit={event => { event.preventDefault(); void releaseStudent(group); }}>
                         <p className="text-xs font-bold text-teal-200">Match the person in front of you to the authorized picker: {group.entry.pickerName}</p>
-                        <label htmlFor={`pickup-method-${group.entry.id}`} className="block text-xs font-bold text-slate-200">How was their identity checked?</label>
-                        <select autoFocus id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')} className="min-h-11 w-full rounded-lg border border-white/20 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30"><option value="photo_id">Photo ID</option><option value="known_person">Known person</option></select>
-                        <label htmlFor={`pickup-note-${group.entry.id}`} className="block text-xs font-bold text-slate-200">Verification note</label>
-                        <textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} minLength={8} maxLength={500} required rows={2} placeholder="Record what you checked; do not enter an ID number." className="w-full rounded-lg border border-white/20 bg-slate-900 p-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-teal-300 focus:ring-2 focus:ring-teal-300/30" />
+                        <EducationField label="How was their identity checked?"><select autoFocus id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')}><option value="photo_id">Photo ID</option><option value="known_person">Known person</option></select></EducationField>
+                        <EducationField label="Verification note" hint="At least 8 characters. Do not enter an ID number."><textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} minLength={8} maxLength={500} required rows={2} placeholder="Record what you checked" /></EducationField>
                         <label className="flex items-start gap-2 text-xs leading-5 text-slate-200"><input type="checkbox" checked={verificationConfirmed} onChange={event => setVerificationConfirmed(event.target.checked)} required className="mt-1 accent-teal-400" /><span>I verified this person against the authorized picker list and am handing over {group.entry.studentName}.</span></label>
-                        <div className="flex gap-2"><button type="submit" disabled={pendingAction !== null || verificationNote.trim().length < 8 || !verificationConfirmed} className="min-h-11 flex-1 rounded-lg bg-teal-400 px-3 text-xs font-black text-slate-950 focus-visible:ring-2 focus-visible:ring-white disabled:opacity-50">{isPending ? 'Recording…' : 'Record verified release'}</button><button type="button" onClick={() => setVerificationEntryId(null)} className="min-h-11 rounded-lg border border-white/20 px-3 text-xs font-bold text-slate-200 focus-visible:ring-2 focus-visible:ring-white">Cancel</button></div>
-                    </form> : <AtlasActionButton aria-label={`Verify picker and release ${group.entry.studentName}`} icon={CheckCircle2} variant="primary" className="edu-pickup-pulse__verify mt-4 w-full" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}>Verify picker and release</AtlasActionButton>
+                        <div className="edu-pickup__form-actions"><EducationButton type="submit" variant="primary" disabled={pendingAction !== null || verificationNote.trim().length < 8 || !verificationConfirmed}>{isPending ? 'Recording…' : 'Record verified release'}</EducationButton><EducationButton onClick={() => { setVerificationEntryId(null); requestAnimationFrame(() => verificationOpenerRefs.current[group.entry.id]?.focus()); }}>Cancel</EducationButton></div>
+                    </form> : <button ref={node => { verificationOpenerRefs.current[group.entry.id] = node; }} type="button" aria-label={`Verify picker and release ${group.entry.studentName}`} className="edu-ds-button edu-pickup-pulse__verify mt-4 w-full" data-edu-variant="primary" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}><CheckCircle2 size={16} /> Verify picker and release</button>
                 ) : <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500">Authorized pickup staff must complete release.</div>}
             </article>
         );
@@ -466,22 +480,22 @@ export const PickupView = () => {
 
     if (!organizationId) {
         return (
-            <div className={`pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1 edu-pickup-pulse edu-pickup-playful' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
-                <AtlasEmptyState
+            <div className={`pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-pulse edu-pickup-playful' : ''}`} data-edu-system={showEducationFamilyJourneyV1 ? '1' : undefined} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
+                {showEducationFamilyJourneyV1 ? <EducationState kind="restricted" title="Select an organization" description="Pickup operations are tenant-scoped. Select an organization before opening the live queue." /> : <AtlasEmptyState
                     title="Select an organization"
                     description="Pickup operations are tenant-scoped. Select an organization before opening the live queue."
                     icon={ShieldCheck}
-                />
+                />}
             </div>
         );
     }
 
     return (
-        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-v1 edu-pickup-pulse edu-pickup-playful' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
+        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-pickup-pulse edu-pickup-playful' : ''}`} data-edu-system={showEducationFamilyJourneyV1 ? '1' : undefined} data-testid={showEducationFamilyJourneyV1 ? 'education-pickup-v1' : undefined}>
             {!isDisplayMode && (
                 <>
                     {showEducationFamilyJourneyV1 ? <section className="edu-pickup-v1__command" aria-labelledby="pickup-command-title">
-                        <div className="edu-pickup-playful__welcome"><span className="edu-pickup-v1__eyebrow"><Car size={17} /> School day / Pickup</span><h1 id="pickup-command-title">Home time,<br />handled with care.</h1><p>{format(new Date(), 'EEEE, d MMMM')} · {dailyRosterRows.length} learners scheduled today</p><button type="button" onClick={() => setIsDisplayMode(true)}><Monitor size={17} /> Open lobby display</button></div>
+                        <div className="edu-pickup-playful__welcome"><span className="edu-pickup-v1__eyebrow"><Car size={17} /> School day / Pickup</span><h1 id="pickup-command-title">Home time,<br />handled with care.</h1><p>{format(new Date(), 'EEEE, d MMMM')} · {dailyRosterRows.length} learners scheduled today</p><button ref={lobbyOpenButtonRef} type="button" className="edu-ds-button" onClick={() => setIsDisplayMode(true)}><Monitor size={17} /> Open lobby display</button></div>
                         <div className="edu-pickup-playful__guide"><span className="edu-pickup-playful__bubble">One safe handoff<br />at a time.</span><ParentO11Y cue={0} mood="welcome" /><span className="edu-pickup-playful__guide-label"><ShieldCheck size={16} /> In good hands</span></div>
                     </section> : <AtlasCommandHeader
                         eyebrow="Live operations"
@@ -588,39 +602,18 @@ export const PickupView = () => {
                                 </div>
                             )}
                         >
-                            <div className="flex w-full flex-wrap gap-1.5 lg:justify-end">
-                                {filterOptions.map(option => (
-                                    <button
-                                        key={option.id}
-                                        data-queue-filter={option.id}
-                                        type="button"
-                                        onClick={() => setQueueFilter(option.id)}
-                                        aria-pressed={queueFilter === option.id}
-                                        className={`min-h-9 rounded-lg border px-3 text-xs font-bold transition-colors ${queueFilter === option.id
-                                            ? 'border-teal-300/30 bg-teal-400/10 text-teal-200'
-                                            : 'border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-white'
-                                            }`}
-                                    >
-                                        {option.label} <span className="ml-1 tabular-nums opacity-70">{option.count}</span>
-                                    </button>
-                                ))}
-                            </div>
+                            <div className="edu-pickup__desktop-filters">{filterOptions.map(renderFilterButton)}</div>
+                            <details ref={mobileFiltersRef} className="edu-pickup__mobile-filters"><summary>Filter pickups <span>{filterOptions.find(option => option.id === queueFilter)?.label} · {filteredGroups.length}</span></summary><div>{filterOptions.map(renderFilterButton)}</div></details>
                         </AtlasToolbar>
                     </div>
 
                     {feedback && (
-                        <div
-                            role="status"
-                            className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${feedback.tone === 'success'
-                                ? 'border-teal-300/25 bg-teal-400/[0.07] text-teal-100'
-                                : 'border-amber-300/25 bg-amber-300/[0.07] text-amber-100'
-                                }`}
-                        >
+                        <EducationNotice status={feedback.tone === 'success' ? 'success' : 'warning'}>
                             <span>{feedback.message}</span>
-                            <button type="button" onClick={() => setFeedback(null)} className="shrink-0 opacity-70 hover:opacity-100" aria-label="Dismiss message">
+                            <button type="button" onClick={() => setFeedback(null)} className="edu-pickup__dismiss" aria-label="Dismiss message">
                                 <X size={16} />
                             </button>
-                        </div>
+                        </EducationNotice>
                     )}
 
 
@@ -628,7 +621,7 @@ export const PickupView = () => {
             )}
 
             {isDisplayMode ? (
-                <div className="edu-pickup-pulse__lobby fixed inset-0 z-[100] flex flex-col bg-slate-950 p-4 sm:p-6">
+                <div className="edu-pickup-pulse__lobby fixed inset-0 z-[100] flex flex-col bg-slate-950 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="Pickup lobby display">
                     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
                         <div className="flex min-w-0 items-center gap-3">
                             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-teal-400 text-slate-950">
@@ -643,7 +636,7 @@ export const PickupView = () => {
                             <time className="font-mono text-xl font-black tabular-nums text-amber-200 sm:text-2xl">
                                 {displayTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </time>
-                            <AtlasActionButton icon={LogOut} onClick={() => setIsDisplayMode(false)}>Exit</AtlasActionButton>
+                            <button ref={lobbyExitButtonRef} type="button" className="edu-ds-button" onClick={() => setIsDisplayMode(false)}><LogOut size={16} /> Exit lobby</button>
                         </div>
                     </header>
 
@@ -669,7 +662,7 @@ export const PickupView = () => {
                     </main>
                 </div>
             ) : filteredGroups.length === 0 ? (
-                <AtlasEmptyState
+                showEducationFamilyJourneyV1 ? <EducationState title={queueGroups.length === 0 ? 'Pickup queue is clear' : 'No pickups match this view'} description={queueGroups.length === 0 ? 'Incoming parent notifications and staff-added arrivals will appear here.' : 'Choose another status filter to continue scanning the live queue.'}>{queueGroups.length > 0 && <EducationButton onClick={() => setQueueFilter('all')}>Show all pickups</EducationButton>}</EducationState> : <AtlasEmptyState
                     title={queueGroups.length === 0 ? 'Pickup queue is clear' : 'No pickups match this view'}
                     description={queueGroups.length === 0
                         ? 'Incoming parent notifications and staff-added arrivals will appear here.'

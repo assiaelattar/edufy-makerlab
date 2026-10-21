@@ -1,5 +1,27 @@
 # Finance decisions
 
+## 2026-10-20 — Finance completion boundary
+
+- Enforce manager-only Documents access inside the panel as well as the parent Finance view, matching the existing document-ledger persistence rules even when mounted directly.
+- Keep receipt controls visible but disabled until payment status is paid or verified in both register and detail, with a reason in the button title.
+- Use isolated headless Chromium for exact responsive and file/print checks when the in-app browser viewport/control layer cannot dispatch reliably. Maintain synthetic service boundaries and keep real-account navigation read-only.
+- Defer the legacy detail status action's separate payment/enrollment writes to a ledger-safety phase; this UI pass does not rewrite financial persistence.
+
+## 2026-10-20 — Nested Documents visual boundary
+
+- Keep document form styling scoped to the Finance panel so shared Education primitives and other modules are unaffected.
+- Use actual document and service components in an isolated browser preview with substituted context/service boundaries; synthetic saves cannot reach the production ledger.
+- Suppress document summary totals while the register is loading or has failed. Hide aggregate transaction totals from roles without `finance.view_totals`, while retaining their authorized record list.
+- Keep Finance acceptance and release on hold until the listed role, output and browser checks are complete.
+
+## 2026-10-20 — Finance Design System v1 candidate
+
+- Show six Finance jobs directly, with the selected academic period in the header and working view.
+- Use shared Education primitives for Finance surfaces, status, progress and actions; use blue for selection and orange for outstanding attention.
+- Render statement records as cards on narrow screens and preserve the existing desktop tables and print/export paths.
+- Keep the Finance visual pass scoped to view code and isolated QA fixtures. Financial formulas, write handlers, tenant permissions and document identity remain under existing domain ownership.
+- Hold full module acceptance until all document and dialog states and real signed-in roles have been reviewed.
+
 ## 2026-09-09 — independent invoice sequences
 
 - Use one annual counter for formations (`YYYYFnnn`) and another for services (`YYYYSnnn`); credit-note numbering remains unchanged.

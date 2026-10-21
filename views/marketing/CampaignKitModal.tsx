@@ -167,9 +167,9 @@ export const CampaignKitModal: React.FC<CampaignKitModalProps> = ({ isOpen, onCl
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Campaign kit: ${campaign.name}`}>
-            <div className="flex h-[min(76vh,640px)] flex-col gap-3 text-slate-900">
-                <header className="shrink-0 rounded-lg border border-slate-800 bg-[#08111F] px-4 py-3 text-white">
+        <Modal isOpen={isOpen} onClose={onClose} title={`Campaign kit: ${campaign.name}`} size="xl" designSystem>
+            <div className="edu-marketing-dialog flex h-[min(76vh,640px)] flex-col gap-3 text-slate-900">
+                <header className="marketing-dialog-hero shrink-0 rounded-lg border border-slate-800 bg-[#08111F] px-4 py-3 text-white">
                     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                         <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-400/30 bg-[#0F1B2D] text-teal-300"><Briefcase size={18} /></div>
@@ -219,8 +219,8 @@ export const CampaignKitModal: React.FC<CampaignKitModalProps> = ({ isOpen, onCl
 
                         <div className="space-y-1.5">
                             {campaign.assets?.map(asset => (
-                                <div key={asset.id} role="button" tabIndex={0} onClick={() => setPreviewAsset(asset)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setPreviewAsset(asset); }} className={`group flex min-h-12 cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 outline-none transition-colors focus:ring-2 focus:ring-teal-200 ${previewAsset?.id === asset.id ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
-                                    <div className="flex min-w-0 items-center gap-2"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{assetIcon(asset.type)}</div><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{asset.name}</p><p className={`text-[10px] font-bold uppercase ${asset.status === 'approved' ? 'text-teal-700' : 'text-slate-400'}`}>{asset.type} / {asset.status}</p></div></div>
+                                <div key={asset.id} className={`group flex min-h-12 items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${previewAsset?.id === asset.id ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
+                                    <button type="button" onClick={() => setPreviewAsset(asset)} className="flex min-w-0 flex-1 items-center gap-2 text-left" aria-label={`Preview ${asset.name}`} aria-pressed={previewAsset?.id === asset.id}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">{assetIcon(asset.type)}</span><span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-900">{asset.name}</span><span className={`block text-[10px] font-bold uppercase ${asset.status === 'approved' ? 'text-teal-700' : 'text-slate-400'}`}>{asset.type} / {asset.status}</span></span></button>
                                     <button type="button" onClick={event => { event.stopPropagation(); void handleDeleteAsset(asset); }} disabled={!canCreate || !isCurrentTenant || pendingAssetId === asset.id} className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-40" aria-label={`Remove ${asset.name}`} title={`Remove ${asset.name}`}><Trash2 size={15} /></button>
                                 </div>
                             ))}

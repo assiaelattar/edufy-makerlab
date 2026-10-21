@@ -1,0 +1,25 @@
+/* The installed FaceID app is a supervised visual shell; no camera or recognition service is connected. */
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-command-header { color:var(--ds-green-ink)!important; background:var(--ds-green-soft)!important; border:2px solid var(--ds-green)!important; border-bottom:5px solid var(--ds-green-edge)!important; border-radius:24px!important; }
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-command-header h2 { color:var(--ds-green-ink)!important; font:900 clamp(28px,4vw,38px)/1.1 var(--ds-font-heading)!important; }
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-command-header .atlas-action[data-atlas-variant='primary'] { color:var(--ds-on-color)!important; background:var(--ds-blue)!important; border:2px solid var(--ds-blue-edge)!important; border-bottom:4px solid var(--ds-blue-edge)!important; }
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-command-header .atlas-action[data-atlas-variant='danger'] { color:var(--ds-on-color)!important; background:var(--ds-red)!important; border:2px solid var(--ds-red-edge)!important; border-bottom:4px solid var(--ds-red-edge)!important; }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__session-badge { display:inline-flex; align-items:center; gap:7px; padding:6px 10px; color:var(--ds-muted); background:var(--ds-surface); border:2px solid var(--ds-border); border-radius:999px; font:800 12px var(--ds-font-body); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__session-badge[data-active='true'] { color:var(--ds-green-ink); background:var(--ds-green-soft); border-color:var(--ds-green-edge); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__session-badge > span { width:8px; height:8px; background:var(--ds-muted); border-radius:50%; }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__session-badge[data-active='true'] > span { background:var(--ds-green); }
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-signal-card:nth-child(n) { color:var(--ds-ink)!important; background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important; border-radius:18px!important; }
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-signal-card:nth-child(n) :is(p,span) { color:var(--ds-ink)!important; }
+.education-ui-v1-active .edu-face-attendance[data-edu-system='1'] .atlas-signal-card:nth-child(n) .atlas-signal-detail { color:var(--ds-muted)!important; }
+.edu-face-attendance[data-edu-system='1'] :is(.edu-face-attendance__camera-panel,.edu-face-attendance__scans) { min-width:0; color:var(--ds-ink); background:var(--ds-surface)!important; border:2px solid var(--ds-border)!important; border-bottom:5px solid var(--ds-depth)!important; border-radius:20px; }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device { color:var(--ds-ink); background:var(--ds-subtle); border:2px solid var(--ds-border); border-radius:16px; }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device-grid { background-image:linear-gradient(var(--ds-border) 1px,transparent 1px),linear-gradient(90deg,var(--ds-border) 1px,transparent 1px); background-size:32px 32px; opacity:.45; }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__guide { background:var(--ds-surface); border:2px solid var(--ds-blue-edge); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__guide span { border-color:var(--ds-blue); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__guide svg { color:var(--ds-muted); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__guide svg[data-active='true'] { color:var(--ds-blue); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device-label { color:var(--ds-muted); background:var(--ds-surface); border:1px solid var(--ds-border); border-radius:10px; font:800 11px var(--ds-font-body); }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device-dot { width:8px; height:8px; background:var(--ds-muted); border-radius:50%; }
+.edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device-dot[data-active='true'] { background:var(--ds-green); }
+.edu-face-attendance[data-edu-system='1'] :is(button,a):focus-visible { outline:3px solid var(--ds-blue); outline-offset:3px; }
+@media(max-width:700px) { .edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device { min-height:280px; } .edu-face-attendance[data-edu-system='1'] .edu-face-attendance__device-label { font-size:10px; } }
+@media(prefers-reduced-motion:reduce) { .edu-face-attendance[data-edu-system='1'] * { animation-duration:.01ms!important; transition-duration:.01ms!important; } }

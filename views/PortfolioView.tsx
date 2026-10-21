@@ -86,9 +86,9 @@ export const PortfolioView = () => {
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <AtlasSignalCard label="Level" value={level} detail={`${Math.round(levelProgress)}% to the next level`} icon={Sparkles} tone="amber" />
-                <AtlasSignalCard label="Experience" value={`${xp} XP`} detail="Projects and badges combined" icon={Trophy} tone="teal" />
+                <AtlasSignalCard label="Experience" value={`${xp} XP`} detail="Project progress" icon={Trophy} tone="teal" />
                 <AtlasSignalCard label="Shipped" value={publishedProjects.length} detail="Published portfolio projects" icon={Rocket} tone="emerald" />
-                <AtlasSignalCard label="In progress" value={workInProgress} detail="Projects still being built" icon={BookOpen} tone="blue" />
+                <AtlasSignalCard label="Not published" value={workInProgress} detail="Projects before publication" icon={BookOpen} tone="blue" />
             </div>
 
             <section className="rounded-lg border border-white/10 bg-slate-950/45 p-4">
@@ -134,7 +134,6 @@ export const PortfolioView = () => {
                                 <div key={badge.id} className="flex min-h-[118px] flex-col items-center justify-center rounded-lg border border-white/[0.07] bg-white/[0.025] p-3 text-center transition-colors hover:border-amber-300/20 hover:bg-amber-300/[0.035]">
                                     <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-amber-300/15 bg-amber-400/10 text-amber-200"><Award size={23} /></div>
                                     <div className="mt-2 line-clamp-2 text-xs font-black leading-4 text-white">{badge.name}</div>
-                                    <div className="mt-1 font-mono text-[10px] text-slate-500">100 XP</div>
                                 </div>
                             ))}
                         </div>

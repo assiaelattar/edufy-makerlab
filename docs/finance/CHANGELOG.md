@@ -1,5 +1,27 @@
 # Finance changelog
 
+## 2026-10-20 — Finance browser completion follow-up
+
+- Verified Reports, populated follow-up, bulk family payment proof/failure, transaction lifecycle/detail/receipt and nested Documents dialogs with standalone Chromium at 1440px and 390px in light/dark themes.
+- Inspected synthetic receipt/report/invoice print windows and parsed downloaded payment and accounting XLSX files. Exercised failed formation/service/credit issue, failed correction and failed template save without production writes.
+- Aligned the nested Documents manager boundary with the ledger, disabled uncleared receipts in the detail view, and improved the detail heading's theme contrast.
+- Recorded remaining real-ledger, role, print and concurrency acceptance limits in the Finance audit.
+
+## 2026-10-20 — Expanded Documents and Finance review
+
+- Applied scoped Design System fields, labels, actions and states to the real Documents panel and nested formation invoice, credit note, sequences, accounting export, service catalogue and service-invoice forms.
+- Added synthetic browser adapters for the full Documents panel, including isolated success, failure, loading, error, empty and restricted scenarios; no Firebase records are read or written by the fixture.
+- Improved accessible names for invoice/document controls and guarded aggregate transaction totals for roles without `finance.view_totals`.
+- Inspected the signed-in earlier-checkout Finance home, Collections and Documents read-only. Full acceptance remains open as recorded in the Education audit; no release action occurred.
+
+## 2026-10-20 — Education workspace visual candidate
+
+- Replaced the Finance landing area with shared Education surfaces, controls, direct task entry and explicit academic-period context.
+- Aligned Collections and Transactions selection and outstanding-balance presentation with Design System v1 semantics.
+- Added responsive family-statement cards and shared document register states and actions while retaining the existing desktop table and financial handlers.
+- Added an isolated Finance UI preview for populated, empty, restricted and synthetic save states; documented the remaining browser and visual acceptance gaps in `docs/education/FINANCE_DESIGN_SYSTEM_V1_2026-10-20.md`.
+- Made no change to calculations, invoice numbering, exports, permissions, schema, production data or release state.
+
 ## 2026-09-09 — Separate formation/service sequences and cleaner PDF
 
 - Split annual invoice numbering into independent formation (`2026F001`) and service (`2026S001`) sequences.

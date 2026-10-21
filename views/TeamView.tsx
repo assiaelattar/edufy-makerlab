@@ -1,14 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle,
     ArrowLeft,
     ArrowRight,
     Ban,
     Briefcase,
     Calendar,
-    CheckCircle2,
     CheckSquare,
-    Clock,
     Copy,
     Edit2,
     Loader2,
@@ -37,6 +34,15 @@ import {
 } from 'firebase/firestore';
 import { Modal } from '../components/Modal';
 import {
+    EducationBadge,
+    EducationButton,
+    EducationField,
+    EducationNotice,
+    EducationState,
+    EducationStatusPill,
+    EducationTabs
+} from '../components/education-ui/EducationPrimitives';
+import {
     AtlasActionButton,
     AtlasCommandHeader,
     AtlasEmptyState,
@@ -50,7 +56,9 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { Project, RoleType, Task, UserProfile } from '../types';
 import { formatDate } from '../utils/helpers';
-import './team-operations/education-team-operations-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
+import './team-operations/team-design-system-v1.css';
 
 type TeamTab = 'directory' | 'tasks' | 'projects' | 'chat';
 type StaffStatusFilter = 'all' | UserProfile['status'];
@@ -75,13 +83,6 @@ const EMPTY_STAFF_FORM: StaffFormState = {
 
 const STAFF_ROLES: RoleType[] = ['owner', 'admin', 'admission_officer', 'accountant', 'instructor', 'content_manager'];
 const PRIVILEGED_ROLES: RoleType[] = ['owner', 'admin'];
-const FEEDBACK_STYLES = {
-    success: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100',
-    warning: 'border-amber-300/25 bg-amber-500/10 text-amber-100',
-    error: 'border-red-400/25 bg-red-500/10 text-red-100',
-    info: 'border-sky-400/25 bg-sky-500/10 text-sky-100'
-};
-
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const plainText = (value = '') => value.replace(/<[^>]+>/g, '').trim();
 
@@ -128,11 +129,15 @@ export const TeamView = () => {
     const [taskForm, setTaskForm] = useState<Partial<Task>>({ title: '', description: '', status: 'todo', priority: 'medium', assignedTo: '' });
     const [editingTask, setEditingTask] = useState<Task | null>(null);
     const [taskError, setTaskError] = useState('');
+    const [taskQuery, setTaskQuery] = useState('');
+    const [isSavingTask, setIsSavingTask] = useState(false);
 
     const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
     const [projectForm, setProjectForm] = useState<Partial<Project>>({ name: '', description: '', status: 'active' });
     const [selectedProject, setSelectedProject] = useState<Project | null>(null);
     const [projectError, setProjectError] = useState('');
+    const [projectQuery, setProjectQuery] = useState('');
+    const [isSavingProject, setIsSavingProject] = useState(false);
 
     const [newMessage, setNewMessage] = useState('');
     const [isSendingMessage, setIsSendingMessage] = useState(false);
@@ -185,6 +190,16 @@ export const TeamView = () => {
             return matchesQuery && matchesRole && matchesStatus;
         });
     }, [directoryQuery, roleFilter, roleLabels, staffMembers, statusFilter]);
+    const visibleTasks = useMemo(() => {
+        const query = taskQuery.trim().toLowerCase();
+        return tenantTasks.filter(task => !query || [task.title, plainText(task.description), task.assignedToName, tenantProjects.find(project => project.id === task.projectId)?.name]
+            .some(value => value?.toLowerCase().includes(query)));
+    }, [taskQuery, tenantProjects, tenantTasks]);
+    const visibleProjects = useMemo(() => {
+        const query = projectQuery.trim().toLowerCase();
+        return tenantProjects.filter(project => !query || `${project.name} ${project.description || ''}`.toLowerCase().includes(query));
+    }, [projectQuery, tenantProjects]);
+    const currentProject = selectedProject && tenantProjects.find(project => project.id === selectedProject.id);
 
     const signals = useMemo(() => ({
         activeStaff: staffMembers.filter(member => member.status === 'active').length,
@@ -194,7 +209,7 @@ export const TeamView = () => {
     }), [staffMembers, tenantProjects, tenantTasks]);
 
     useEffect(() => {
-        if (activeTab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        if (activeTab === 'chat') chatEndRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
     }, [activeTab, tenantMessages]);
 
     useEffect(() => {
@@ -309,7 +324,7 @@ export const TeamView = () => {
     };
 
     const handleToggleStatus = async (member: UserProfile) => {
-        if (!canManageMember(member) || !member.uid || pendingStaffAction) return;
+        if (!db || !canManageMember(member) || !member.uid || pendingStaffAction) return;
         if (member.uid === userProfile?.uid) {
             showFeedback('Action blocked', 'You cannot disable your own account from this screen.', 'warning');
             return;
@@ -403,6 +418,7 @@ export const TeamView = () => {
             updatedAt: serverTimestamp(),
             updatedBy: userProfile.uid
         };
+        setIsSavingTask(true);
         try {
             if (editingTask) {
                 const snapshot = await getDoc(doc(db, 'tasks', editingTask.id));
@@ -415,6 +431,8 @@ export const TeamView = () => {
             showFeedback(editingTask ? 'Task updated' : 'Task created', title, 'success');
         } catch (error) {
             setTaskError(error instanceof Error ? error.message : 'Could not save the task.');
+        } finally {
+            setIsSavingTask(false);
         }
     };
 
@@ -453,6 +471,7 @@ export const TeamView = () => {
         const name = projectForm.name?.trim() || '';
         if (name.length < 2) return setProjectError('Enter a project name.');
         if (tenantProjects.some(project => project.name.trim().toLowerCase() === name.toLowerCase())) return setProjectError('A project with this name already exists.');
+        setIsSavingProject(true);
         try {
             await addDoc(collection(db, 'projects'), {
                 name,
@@ -468,11 +487,14 @@ export const TeamView = () => {
             showFeedback('Project created', name, 'success');
         } catch {
             setProjectError('Could not create the project. Try again.');
+        } finally {
+            setIsSavingProject(false);
         }
     };
 
     const handleDeleteProject = async (project: Project) => {
         if (!db || !canCreateWork || project.organizationId !== orgId) return;
+        const currentDb = db;
         const linkedTasks = tenantTasks.filter(task => task.projectId === project.id);
         if (linkedTasks.length > 450) {
             showFeedback('Project not deleted', 'This project has too many linked tasks for a safe client-side update.', 'warning');
@@ -487,9 +509,9 @@ export const TeamView = () => {
         });
         if (!approved) return;
         try {
-            const projectRef = doc(db, 'projects', project.id);
-            const taskRefs = linkedTasks.map(task => doc(db, 'tasks', task.id));
-            await runTransaction(db, async transaction => {
+            const projectRef = doc(currentDb, 'projects', project.id);
+            const taskRefs = linkedTasks.map(task => doc(currentDb, 'tasks', task.id));
+            await runTransaction(currentDb, async transaction => {
                 const projectSnapshot = await transaction.get(projectRef);
                 const taskSnapshots = await Promise.all(taskRefs.map(taskRef => transaction.get(taskRef)));
                 if (!projectSnapshot.exists() || projectSnapshot.data().organizationId !== orgId) throw new Error('Project ownership changed.');
@@ -533,17 +555,18 @@ export const TeamView = () => {
             <article key={task.id} className="mb-3 rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-white/20">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase ${task.priority === 'high' ? 'border-red-400/25 bg-red-500/10 text-red-200' : task.priority === 'medium' ? 'border-amber-300/25 bg-amber-400/10 text-amber-200' : 'border-white/10 bg-white/[0.04] text-slate-400'}`}>{task.priority}</span>
+                         <EducationStatusPill status={task.priority === 'high' ? 'warning' : task.priority === 'medium' ? 'attention' : 'neutral'}>{task.priority} priority</EducationStatusPill>
                         <h4 className="mt-2 text-sm font-bold text-white">{task.title}</h4>
                         {plainText(task.description) && <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{plainText(task.description)}</p>}
+                         {task.dueDate && <p className="edu-team-due"><Calendar size={14} aria-hidden="true" /> Due {formatDate(task.dueDate)}</p>}
                     </div>
-                    {editable && <button type="button" onClick={() => openTask(task)} className="rounded-lg p-2 text-slate-500 hover:bg-white/[0.05] hover:text-white" title="Edit task"><Edit2 size={14} /></button>}
+                     {editable && <button type="button" onClick={() => openTask(task)} className="edu-team-icon-action" aria-label={`Edit ${task.title}`}><Edit2 size={16} /></button>}
                 </div>
                 <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-xs text-slate-400">
                     <span className="flex min-w-0 items-center gap-2"><UserCircle size={15} /><span className="truncate">{assignee?.name || task.assignedToName || 'Unassigned'}</span></span>
                     {editable && <span className="flex gap-1">
-                        <button type="button" onClick={() => moveTask(task, 'prev')} disabled={task.status === 'todo'} className="rounded-md border border-white/10 p-1.5 hover:bg-white/[0.05] disabled:opacity-30" title="Move back"><ArrowLeft size={12} /></button>
-                        <button type="button" onClick={() => moveTask(task, 'next')} disabled={task.status === 'done'} className="rounded-md border border-white/10 p-1.5 hover:bg-white/[0.05] disabled:opacity-30" title="Move forward"><ArrowRight size={12} /></button>
+                         <button type="button" onClick={() => moveTask(task, 'prev')} disabled={task.status === 'todo'} className="edu-team-icon-action" aria-label={`Move ${task.title} back`}><ArrowLeft size={16} /></button>
+                         <button type="button" onClick={() => moveTask(task, 'next')} disabled={task.status === 'done'} className="edu-team-icon-action" aria-label={`Move ${task.title} forward`}><ArrowRight size={16} /></button>
                     </span>}
                 </div>
             </article>
@@ -552,44 +575,34 @@ export const TeamView = () => {
 
     const renderMemberActions = (member: UserProfile) => (
         <div className="flex items-center justify-end gap-1">
-            <button type="button" onClick={() => openEditStaff(member)} disabled={!canManageMember(member) || pendingStaffAction === member.uid} className="rounded-lg p-2 text-slate-400 hover:bg-white/[0.05] hover:text-white disabled:opacity-40" title="Edit staff profile"><Edit2 size={15} /></button>
-            <button type="button" onClick={() => handleToggleStatus(member)} disabled={!canManageMember(member) || pendingStaffAction === member.uid || member.uid === userProfile?.uid} className={`rounded-lg p-2 hover:bg-white/[0.05] disabled:opacity-40 ${member.status === 'active' ? 'text-amber-300' : 'text-emerald-300'}`} title={member.status === 'active' ? 'Disable account' : 'Activate account'}>
+             <button type="button" onClick={() => openEditStaff(member)} disabled={!canManageMember(member) || Boolean(pendingStaffAction)} className="edu-team-icon-action" aria-label={`Edit ${member.name || member.email}`}><Edit2 size={16} /></button>
+             <button type="button" onClick={() => handleToggleStatus(member)} disabled={!canManageMember(member) || Boolean(pendingStaffAction) || member.uid === userProfile?.uid} className="edu-team-icon-action" aria-label={`${member.status === 'active' ? 'Disable' : 'Activate'} ${member.name || member.email}`}>
                 {pendingStaffAction === member.uid ? <Loader2 size={15} className="animate-spin" /> : member.status === 'active' ? <Ban size={15} /> : <UserCheck size={15} />}
             </button>
         </div>
     );
 
-    const tabButton = (tab: TeamTab, label: string, Icon: React.ComponentType<{ size?: number }>) => (
-        <button type="button" role="tab" aria-selected={activeTab === tab} onClick={() => { setActiveTab(tab); setSelectedProject(null); }} className={`flex min-h-9 flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-bold transition-colors sm:flex-none ${activeTab === tab ? 'bg-teal-400/15 text-teal-200' : 'text-slate-500 hover:bg-white/[0.04] hover:text-slate-300'}`}>
-            <Icon size={16} /> {label}
-        </button>
-    );
-
     if (!orgId) {
-        return <AtlasEmptyState icon={AlertCircle} title="Organization required" description="Select an organization before opening the team workspace." />;
+        return <div className={showEducationTeamOperationsV1 ? 'edu-v1 edu-school-ops-v1 edu-team-v1' : ''} data-edu-system={showEducationTeamOperationsV1 ? '1' : undefined}><EducationState kind="restricted" title="Organization required" description="Select an organization before opening the team workspace." /></div>;
     }
 
     return (
-        <div className={`flex min-h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-team-v1' : ''}`} data-testid={showEducationTeamOperationsV1 ? 'education-team-v1' : undefined}>
+        <div className={`flex min-h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-school-ops-v1 edu-team-v1' : ''}`} data-edu-system={showEducationTeamOperationsV1 ? '1' : undefined} data-testid={showEducationTeamOperationsV1 ? 'education-team-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="ERP team operations"
                 title="Team & Workspace"
                 description="Manage staff access and keep projects, tasks, and team conversations connected."
                 icon={Users}
-                badges={<span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{staffMembers.length} staff</span>}
-                actions={<div role="tablist" aria-label="Team views" className="grid w-full grid-cols-2 rounded-lg border border-white/10 bg-slate-900 p-1 sm:flex sm:w-auto">
-                    {tabButton('directory', 'Directory', Users)}
-                    {tabButton('tasks', 'Tasks', CheckSquare)}
-                    {tabButton('projects', 'Projects', Briefcase)}
-                    {tabButton('chat', 'Chat', MessageSquare)}
-                </div>}
+                badges={<EducationBadge status="success">{staffMembers.length} staff</EducationBadge>}
+                actions={<EducationTabs label="Team views" value={activeTab} onChange={tab => { setActiveTab(tab as TeamTab); setSelectedProject(null); }} items={[
+                    { id: 'directory', label: 'Directory', icon: Users },
+                    { id: 'tasks', label: 'Tasks', icon: CheckSquare, count: signals.openTasks },
+                    { id: 'projects', label: 'Projects', icon: Briefcase },
+                    { id: 'chat', label: 'Chat', icon: MessageSquare }
+                ]} />}
             />
 
-            {feedback && <div role={feedback.type === 'error' ? 'alert' : 'status'} className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${FEEDBACK_STYLES[feedback.type]}`}>
-                <AlertCircle size={17} className="mt-0.5 shrink-0" />
-                <div className="min-w-0 flex-1"><p className="font-bold">{feedback.title}</p><p className="mt-0.5 text-xs leading-5 opacity-85">{feedback.message}</p></div>
-                <button type="button" onClick={() => setFeedback(null)} className="rounded-md p-1 opacity-70 hover:bg-white/10 hover:opacity-100" title="Dismiss message"><X size={15} /></button>
-            </div>}
+             {feedback && <div className="edu-team-feedback"><EducationNotice status={feedback.type === 'error' ? 'danger' : feedback.type === 'success' ? 'success' : feedback.type === 'warning' ? 'warning' : 'info'}><span><strong>{feedback.title}</strong><br />{feedback.message}</span><button type="button" onClick={() => setFeedback(null)} className="edu-team-icon-action" aria-label="Dismiss message"><X size={16} /></button></EducationNotice></div>}
 
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <AtlasSignalCard label="Active staff" value={signals.activeStaff} detail="Accounts with app access" icon={UserCheck} tone="emerald" onClick={() => { setActiveTab('directory'); setStatusFilter('active'); }} />
@@ -600,28 +613,28 @@ export const TeamView = () => {
 
             {activeTab === 'directory' && <section className="space-y-4 rounded-lg border border-white/10 bg-slate-900/45 p-4">
                 <AtlasSectionHeader title="Staff directory" description="Accounts, roles, work hours, and access state for this organization." icon={ShieldCheck} actions={canManageTeam ? <AtlasActionButton icon={UserPlus} variant="primary" onClick={openCreateStaff}>Create account</AtlasActionButton> : undefined} />
-                {!canManageTeam && <div className="rounded-lg border border-sky-400/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-100">Directory access is read-only. An owner or administrator can create accounts and change roles.</div>}
+                {!canManageTeam && <EducationNotice status="info">Directory access is read-only. An owner or administrator can create accounts and change roles.</EducationNotice>}
                 <AtlasToolbar>
                     <label className="relative min-w-[220px] flex-1">
                         <span className="sr-only">Search staff</span><Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                         <input type="search" value={directoryQuery} onChange={event => setDirectoryQuery(event.target.value)} placeholder="Search name, email, or role" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                     </label>
                     <select aria-label="Filter by role" value={roleFilter} onChange={event => setRoleFilter(event.target.value as 'all' | RoleType)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-200 outline-none focus:border-teal-400/60">
-                        <option value="all">All roles</option>{assignableRoles.map(role => <option key={role.id} value={role.id}>{role.label}</option>)}
+                        <option value="all">All roles</option>{roles.filter(role => STAFF_ROLES.includes(role.id)).map(role => <option key={role.id} value={role.id}>{role.label}</option>)}
                     </select>
                     <select aria-label="Filter by status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as StaffStatusFilter)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-200 outline-none focus:border-teal-400/60">
                         <option value="all">All statuses</option><option value="active">Active</option><option value="disabled">Disabled</option>
                     </select>
                 </AtlasToolbar>
 
-                {(authLoading || appLoading) && staffMembers.length === 0 ? <div className="flex min-h-52 items-center justify-center gap-2 text-sm text-slate-400"><Loader2 size={18} className="animate-spin text-teal-300" /> Loading staff directory</div> : filteredMembers.length === 0 ? <AtlasEmptyState icon={Users} title={staffMembers.length ? 'No matching staff' : 'No staff accounts yet'} description={staffMembers.length ? 'Adjust the search or filters to see more people.' : 'Create the first staff account to start assigning access and work.'} action={canManageTeam && !staffMembers.length ? <AtlasActionButton icon={UserPlus} variant="primary" onClick={openCreateStaff}>Create first account</AtlasActionButton> : undefined} /> : <>
+                {(authLoading || appLoading) && staffMembers.length === 0 ? <EducationState kind="loading" title="Loading staff directory" description="Staff accounts will appear here when they finish loading." /> : filteredMembers.length === 0 ? <EducationState title={staffMembers.length ? 'No matching staff' : 'No staff accounts yet'} description={staffMembers.length ? 'Adjust the search or filters to see more people.' : 'Create the first staff account to start assigning access and work.'}>{canManageTeam && !staffMembers.length && <EducationButton variant="primary" icon={UserPlus} onClick={openCreateStaff}>Create first account</EducationButton>}</EducationState> : <>
                     <div className="hidden overflow-hidden rounded-lg border border-white/10 lg:block">
                         <table className="w-full table-fixed text-left">
                             <thead className="bg-slate-950/80 text-[10px] font-bold uppercase text-slate-500"><tr><th className="w-[34%] px-4 py-3">Staff member</th><th className="w-[20%] px-4 py-3">Role</th><th className="w-[14%] px-4 py-3">Status</th><th className="w-[18%] px-4 py-3">Last sign-in</th><th className="w-[14%] px-4 py-3 text-right">Actions</th></tr></thead>
                             <tbody className="divide-y divide-white/10">{filteredMembers.map(member => <tr key={member.uid || member.email} className="bg-slate-900/40 hover:bg-white/[0.025]">
                                 <td className="px-4 py-3"><div className="flex min-w-0 items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-slate-950 text-sm font-bold text-teal-200">{(member.name || member.email).charAt(0).toUpperCase()}</span><span className="min-w-0"><span className="block truncate text-sm font-bold text-white">{member.name || 'Unnamed staff'}</span><span className="block truncate text-xs text-slate-500">{member.email}</span></span></div></td>
                                 <td className="px-4 py-3 text-sm text-slate-300">{roleLabels.get(member.role) || member.role.replace('_', ' ')}</td>
-                                <td className="px-4 py-3"><span className={`inline-flex rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${member.status === 'active' ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200' : 'border-amber-300/25 bg-amber-500/10 text-amber-200'}`}>{member.status}</span></td>
+                                <td className="px-4 py-3"><EducationStatusPill status={member.status === 'active' ? 'success' : 'warning'}>{member.status}</EducationStatusPill></td>
                                 <td className="px-4 py-3 text-xs text-slate-400">{timestampLabel(member.lastLogin)}</td>
                                 <td className="px-4 py-3">{renderMemberActions(member)}</td>
                             </tr>)}</tbody>
@@ -629,62 +642,91 @@ export const TeamView = () => {
                     </div>
                     <div className="grid gap-3 lg:hidden">{filteredMembers.map(member => <article key={member.uid || member.email} className="rounded-lg border border-white/10 bg-slate-950/65 p-4">
                         <div className="flex items-start justify-between gap-3"><div className="min-w-0"><h3 className="truncate text-sm font-bold text-white">{member.name || 'Unnamed staff'}</h3><p className="truncate text-xs text-slate-500">{member.email}</p></div>{renderMemberActions(member)}</div>
-                        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-xs"><div><span className="block text-[10px] uppercase text-slate-600">Role</span><span className="mt-1 block text-slate-300">{roleLabels.get(member.role) || member.role.replace('_', ' ')}</span></div><div><span className="block text-[10px] uppercase text-slate-600">Status</span><span className={`mt-1 block font-bold ${member.status === 'active' ? 'text-emerald-300' : 'text-amber-300'}`}>{member.status}</span></div></div>
+                        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-xs"><div><span className="block text-[10px] uppercase text-slate-600">Role</span><span className="mt-1 block text-slate-300">{roleLabels.get(member.role) || member.role.replace('_', ' ')}</span></div><div><span className="block text-[10px] uppercase text-slate-600">Status</span><EducationStatusPill status={member.status === 'active' ? 'success' : 'warning'}>{member.status}</EducationStatusPill></div></div>
                     </article>)}</div>
                 </>}
             </section>}
 
             {activeTab === 'tasks' && <section className="space-y-4">
                 <AtlasSectionHeader title="Task board" description="Move assigned work from backlog to completion." icon={CheckSquare} meta={<span className="text-xs text-slate-500">{tenantTasks.length} tasks</span>} actions={canCreateWork ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => openTask()}>New task</AtlasActionButton> : undefined} />
-                <div className="overflow-x-auto pb-2"><div className="grid min-w-[840px] grid-cols-3 gap-4">{(['todo', 'in_progress', 'done'] as Task['status'][]).map(status => {
-                    const statusTasks = tenantTasks.filter(task => task.status === status);
-                    return <div key={status} className="rounded-lg border border-white/10 bg-slate-950/45 p-3"><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-bold uppercase text-slate-300">{status.replace('_', ' ')}</h3><span className="rounded-md bg-white/[0.05] px-2 py-1 text-xs text-slate-400">{statusTasks.length}</span></div>{statusTasks.length ? statusTasks.map(renderTaskCard) : <AtlasEmptyState icon={status === 'done' ? CheckCircle2 : Clock} title="No tasks" description={status === 'todo' ? 'New work will appear here.' : status === 'in_progress' ? 'Move a task forward when work begins.' : 'Completed work will collect here.'} />}</div>;
-                })}</div></div>
+                <label className="edu-team-search"><Search size={17} aria-hidden="true" /><span className="sr-only">Search tasks</span><input type="search" value={taskQuery} onChange={event => setTaskQuery(event.target.value)} placeholder="Search tasks, assignees or projects" /></label>
+                {(appLoading && tenantTasks.length === 0) ? <EducationState kind="loading" title="Loading tasks" description="The board will appear when task data is ready." /> : <div className="edu-team-board">{(['todo', 'in_progress', 'done'] as Task['status'][]).map(status => {
+                    const statusTasks = visibleTasks.filter(task => task.status === status);
+                    return <div key={status} className="edu-team-lane"><div className="edu-team-lane-heading"><h3>{status.replace('_', ' ')}</h3><EducationBadge status={status === 'done' ? 'success' : status === 'in_progress' ? 'info' : 'neutral'}>{statusTasks.length}</EducationBadge></div>{statusTasks.length ? statusTasks.map(renderTaskCard) : <EducationState title={taskQuery ? 'No matches' : 'No tasks'} description={taskQuery ? 'Try another search.' : status === 'todo' ? 'New work will appear here.' : status === 'in_progress' ? 'Move a task forward when work begins.' : 'Completed work will collect here.'} />}</div>;
+                })}</div>}
             </section>}
 
             {activeTab === 'projects' && <section className="space-y-4">
-                {selectedProject ? <>
+                {currentProject ? <>
                     <button type="button" onClick={() => setSelectedProject(null)} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white"><ArrowLeft size={16} /> Back to projects</button>
-                    <div className="rounded-lg border border-white/10 bg-slate-900/55 p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold text-white">{selectedProject.name}</h2><span className="rounded-md border border-emerald-400/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase text-emerald-200">{selectedProject.status.replace('_', ' ')}</span></div><p className="mt-2 max-w-2xl text-sm text-slate-400">{selectedProject.description || 'No description provided.'}</p></div><div className="flex gap-2">{canCreateWork && <AtlasActionButton icon={Plus} variant="primary" onClick={() => openTask(undefined, selectedProject.id)}>Add task</AtlasActionButton>}{canCreateWork && <AtlasActionButton variant="danger" onClick={() => handleDeleteProject(selectedProject)}>Delete</AtlasActionButton>}</div></div><div className="mt-5 flex flex-wrap gap-5 border-t border-white/10 pt-4 text-xs text-slate-400"><span>{tenantTasks.filter(task => task.projectId === selectedProject.id).length} tasks</span><span>{tenantTasks.filter(task => task.projectId === selectedProject.id && task.status === 'done').length} completed</span>{selectedProject.dueDate && <span className="flex items-center gap-1"><Calendar size={14} /> Due {formatDate(selectedProject.dueDate)}</span>}</div></div>
-                    <div>{tenantTasks.filter(task => task.projectId === selectedProject.id).length ? tenantTasks.filter(task => task.projectId === selectedProject.id).map(renderTaskCard) : <AtlasEmptyState icon={CheckSquare} title="No project tasks" description="Add the first task to make this workstream actionable." />}</div>
+                    <div className="edu-team-project-detail p-5"><div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-xl font-bold">{currentProject.name}</h2><EducationStatusPill status="success">{currentProject.status.replace('_', ' ')}</EducationStatusPill></div><p className="mt-2 max-w-2xl text-sm">{currentProject.description || 'No description provided.'}</p></div><div className="flex gap-2">{canCreateWork && <AtlasActionButton icon={Plus} variant="primary" onClick={() => openTask(undefined, currentProject.id)}>Add task</AtlasActionButton>}{canCreateWork && <AtlasActionButton variant="danger" onClick={() => handleDeleteProject(currentProject)}>Delete</AtlasActionButton>}</div></div><div className="edu-team-project-detail__meta mt-5 flex flex-wrap gap-5 pt-4 text-xs"><span>{tenantTasks.filter(task => task.projectId === currentProject.id).length} tasks</span><span>{tenantTasks.filter(task => task.projectId === currentProject.id && task.status === 'done').length} completed</span>{currentProject.dueDate && <span className="flex items-center gap-1"><Calendar size={14} /> Due {formatDate(currentProject.dueDate)}</span>}</div></div>
+                    <div>{tenantTasks.filter(task => task.projectId === currentProject.id).length ? tenantTasks.filter(task => task.projectId === currentProject.id).map(renderTaskCard) : <EducationState title="No project tasks" description="Add the first task to make this workstream actionable." />}</div>
                 </> : <>
                     <AtlasSectionHeader title="Projects" description="Track shared workstreams and their completion." icon={Briefcase} actions={canCreateWork ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => { setProjectError(''); setIsProjectModalOpen(true); }}>New project</AtlasActionButton> : undefined} />
-                    {tenantProjects.length === 0 ? <AtlasEmptyState icon={Briefcase} title="No projects yet" description="Create a project to group related team tasks." action={canCreateWork ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => setIsProjectModalOpen(true)}>Create project</AtlasActionButton> : undefined} /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{tenantProjects.map(project => {
+                    <label className="edu-team-search"><Search size={17} aria-hidden="true" /><span className="sr-only">Search projects</span><input type="search" value={projectQuery} onChange={event => setProjectQuery(event.target.value)} placeholder="Search projects" /></label>
+                    {appLoading && tenantProjects.length === 0 ? <EducationState kind="loading" title="Loading projects" description="Projects will appear when the workspace is ready." /> : visibleProjects.length === 0 ? <EducationState title={tenantProjects.length ? 'No matching projects' : 'No projects yet'} description={tenantProjects.length ? 'Try another search.' : 'Create a project to group related team tasks.'}>{canCreateWork && !tenantProjects.length && <EducationButton variant="primary" icon={Plus} onClick={() => { setProjectError(''); setIsProjectModalOpen(true); }}>Create project</EducationButton>}</EducationState> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{visibleProjects.map(project => {
                         const projectTasks = tenantTasks.filter(task => task.projectId === project.id); const completed = projectTasks.filter(task => task.status === 'done').length; const progress = projectTasks.length ? Math.round((completed / projectTasks.length) * 100) : 0;
-                        return <button type="button" key={project.id} onClick={() => setSelectedProject(project)} className="rounded-lg border border-white/10 bg-slate-900/55 p-4 text-left transition-colors hover:border-teal-300/40"><div className="flex items-start justify-between gap-3"><h3 className="text-base font-bold text-white">{project.name}</h3><span className="text-[10px] font-bold uppercase text-emerald-300">{project.status.replace('_', ' ')}</span></div><p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500">{project.description || 'No description'}</p><div className="mt-4 flex justify-between text-xs text-slate-500"><span>{completed}/{projectTasks.length} tasks</span><span>{progress}%</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800"><div className="h-full bg-teal-400" style={{ width: `${progress}%` }} /></div></button>;
+                        return <button type="button" key={project.id} onClick={() => setSelectedProject(project)} className="edu-team-project rounded-lg border border-white/10 bg-slate-900/55 p-4 text-left transition-colors"><div className="flex items-start justify-between gap-3"><h3 className="text-base font-bold text-white">{project.name}</h3><EducationStatusPill status="success">{project.status.replace('_', ' ')}</EducationStatusPill></div><p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-slate-500">{project.description || 'No description'}</p><div className="mt-4 flex justify-between text-xs text-slate-500"><span>{completed}/{projectTasks.length} tasks</span><span>{progress}%</span></div><div className="edu-team-progress" role="progressbar" aria-label={`${project.name} tasks complete`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div></button>;
                     })}</div>}
                 </>}
             </section>}
 
             {activeTab === 'chat' && <section className="flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
                 <div className="flex items-center justify-between border-b border-white/10 px-4 py-3"><div><h3 className="flex items-center gap-2 text-sm font-bold text-white"><MessageSquare size={17} className="text-teal-300" /> Team chat</h3><p className="mt-1 text-xs text-slate-500">Visible to staff in this organization.</p></div><span className="text-xs text-slate-500">{signals.activeStaff} active</span></div>
-                <div className="flex-1 space-y-4 overflow-y-auto p-4">{tenantMessages.length === 0 && <AtlasEmptyState icon={MessageSquare} title="No messages yet" description="Start the operational conversation below." />}{tenantMessages.map(message => { const isMe = message.senderId === userProfile?.uid; return <div key={message.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}><div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${isMe ? 'bg-teal-500 text-slate-950' : 'bg-slate-800 text-slate-200'}`}>{message.text}</div><span className="mt-1 px-1 text-[10px] text-slate-500">{!isMe && `${message.senderName} / `}{timestampLabel(message.createdAt)}</span></div>; })}<div ref={chatEndRef} /></div>
-                <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-white/10 bg-slate-950/70 p-3"><label className="sr-only" htmlFor="team-message">Team message</label><input id="team-message" maxLength={2000} value={newMessage} onChange={event => setNewMessage(event.target.value)} placeholder="Write a team message" className="h-10 flex-1 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/60" /><button type="submit" disabled={!newMessage.trim() || isSendingMessage} className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500 text-slate-950 hover:bg-teal-400 disabled:opacity-40" title="Send message">{isSendingMessage ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}</button></form>
+                <div className="flex-1 space-y-4 overflow-y-auto p-4">{appLoading && tenantMessages.length === 0 ? <EducationState kind="loading" title="Loading conversation" description="Messages will appear when the workspace is ready." /> : tenantMessages.length === 0 && <EducationState title="No messages yet" description="Start the operational conversation below." />}{tenantMessages.map(message => { const isMe = message.senderId === userProfile?.uid; return <div key={message.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}><div className={`edu-team-message ${isMe ? 'edu-team-message--own' : ''}`}>{message.text}</div><span className="mt-1 px-1 text-[10px] text-slate-500">{!isMe && `${message.senderName} / `}{timestampLabel(message.createdAt)}</span></div>; })}<div ref={chatEndRef} /></div>
+                <form onSubmit={handleSendMessage} className="edu-team-chat-composer"><label className="sr-only" htmlFor="team-message">Team message</label><input id="team-message" maxLength={2000} value={newMessage} onChange={event => setNewMessage(event.target.value)} placeholder="Write a team message" /><EducationButton type="submit" variant="primary" icon={isSendingMessage ? Loader2 : Send} disabled={!newMessage.trim() || isSendingMessage}>{isSendingMessage ? 'Sending…' : 'Send'}</EducationButton></form>
             </section>}
 
-            <Modal isOpen={isStaffModalOpen} onClose={() => !pendingStaffAction && setIsStaffModalOpen(false)} title={editingMember ? 'Edit staff profile' : 'Create staff account'}>
-                <form onSubmit={handleSaveStaff} className="space-y-4">
-                    {staffError && <div role="alert" className="flex gap-2 rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100"><AlertCircle size={17} className="mt-0.5 shrink-0" />{staffError}</div>}
-                    {!editingMember && <div className="rounded-lg border border-sky-400/20 bg-sky-500/10 p-3 text-xs leading-5 text-sky-100">This creates a real sign-in account. Edufy does not email an invitation; temporary credentials will be shown once after creation.</div>}
-                    <div><label className="mb-1 block text-xs font-bold text-slate-400" htmlFor="staff-name">Full name</label><input id="staff-name" required autoFocus value={staffForm.name} onChange={event => setStaffForm({ ...staffForm, name: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60" /></div>
-                    <div><label className="mb-1 block text-xs font-bold text-slate-400" htmlFor="staff-email">Work email</label><input id="staff-email" required type="email" disabled={Boolean(editingMember)} value={staffForm.email} onChange={event => setStaffForm({ ...staffForm, email: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60 disabled:cursor-not-allowed disabled:opacity-60" />{editingMember && <p className="mt-1 text-[11px] text-slate-500">Email changes require an authentication administrator.</p>}</div>
-                    <div><label className="mb-1 block text-xs font-bold text-slate-400" htmlFor="staff-role">Role</label><select id="staff-role" value={staffForm.role} onChange={event => setStaffForm({ ...staffForm, role: event.target.value as RoleType })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60">{assignableRoles.map(role => <option key={role.id} value={role.id}>{role.label}</option>)}</select><p className="mt-1 text-[11px] text-slate-500">Permissions come from the role configuration in Settings.</p></div>
-                    {!editingMember && <div><label className="mb-1 block text-xs font-bold text-slate-400" htmlFor="staff-password">Temporary password</label><input id="staff-password" required minLength={8} type="text" autoComplete="new-password" value={staffForm.password} onChange={event => setStaffForm({ ...staffForm, password: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 font-mono text-sm text-white outline-none focus:border-teal-400/60" /><p className="mt-1 text-[11px] text-slate-500">Use at least 8 characters and share it through a secure channel.</p></div>}
-                    <div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-bold text-slate-400" htmlFor="work-start">Workday starts</label><input id="work-start" type="time" value={staffForm.workStart} onChange={event => setStaffForm({ ...staffForm, workStart: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60" /></div><div><label className="mb-1 block text-xs font-bold text-slate-400" htmlFor="work-end">Workday ends</label><input id="work-end" type="time" value={staffForm.workEnd} onChange={event => setStaffForm({ ...staffForm, workEnd: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60" /></div></div>
-                    <AtlasActionButton type="submit" variant="primary" className="w-full" disabled={Boolean(pendingStaffAction)} icon={editingMember ? ShieldCheck : UserPlus}>{pendingStaffAction ? 'Saving...' : editingMember ? 'Save profile' : 'Create account'}</AtlasActionButton>
+            <Modal isOpen={isStaffModalOpen} onClose={() => !pendingStaffAction && setIsStaffModalOpen(false)} title={editingMember ? 'Edit staff profile' : 'Create staff account'} designSystem={showEducationTeamOperationsV1}>
+                <form onSubmit={handleSaveStaff} className="edu-team-form">
+                    {staffError && <EducationNotice status="danger">{staffError}</EducationNotice>}
+                    {!editingMember && <EducationNotice status="info">This creates a sign-in account. No invitation email is sent. Temporary credentials appear once after creation.</EducationNotice>}
+                    <EducationField label="Full name"><input required autoFocus value={staffForm.name} onChange={event => setStaffForm({ ...staffForm, name: event.target.value })} /></EducationField>
+                    <EducationField label="Work email" hint={editingMember ? 'Email changes require an authentication administrator.' : undefined}><input required type="email" disabled={Boolean(editingMember)} value={staffForm.email} onChange={event => setStaffForm({ ...staffForm, email: event.target.value })} /></EducationField>
+                    <EducationField label="Role" hint="Permissions come from the role configuration in Settings."><select value={staffForm.role} onChange={event => setStaffForm({ ...staffForm, role: event.target.value as RoleType })}>{assignableRoles.map(role => <option key={role.id} value={role.id}>{role.label}</option>)}</select></EducationField>
+                    {!editingMember && <EducationField label="Temporary password" hint="Use at least 8 characters and share it through a secure channel."><input required minLength={8} type="password" autoComplete="new-password" value={staffForm.password} onChange={event => setStaffForm({ ...staffForm, password: event.target.value })} /></EducationField>}
+                    <div className="edu-team-form-grid"><EducationField label="Workday starts"><input type="time" value={staffForm.workStart} onChange={event => setStaffForm({ ...staffForm, workStart: event.target.value })} /></EducationField><EducationField label="Workday ends"><input type="time" value={staffForm.workEnd} onChange={event => setStaffForm({ ...staffForm, workEnd: event.target.value })} /></EducationField></div>
+                    <div className="edu-ds-form-footer"><EducationButton variant="secondary" onClick={() => setIsStaffModalOpen(false)} disabled={Boolean(pendingStaffAction)}>Cancel</EducationButton><EducationButton type="submit" variant="primary" icon={editingMember ? ShieldCheck : UserPlus} disabled={Boolean(pendingStaffAction)}>{pendingStaffAction ? 'Saving account…' : editingMember ? 'Save profile' : 'Create account'}</EducationButton></div>
                 </form>
             </Modal>
 
-            <Modal isOpen={Boolean(credentials)} onClose={() => { setCredentials(null); setCredentialsCopyMessage(''); }} title="Temporary credentials">
-                {credentials && <div className="space-y-4"><div className="rounded-lg border border-amber-300/25 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">No invitation email was sent. Share these credentials securely; they will not be shown again after this dialog closes.</div><div className="rounded-lg border border-white/10 bg-slate-950 p-4 font-mono text-sm text-slate-200"><p><span className="text-slate-500">Email:</span> {credentials.email}</p><p className="mt-2 break-all"><span className="text-slate-500">Password:</span> {credentials.password}</p></div>{credentialsCopyMessage && <p role="status" className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-slate-300">{credentialsCopyMessage}</p>}<AtlasActionButton icon={Copy} variant="primary" className="w-full" onClick={copyCredentials}>Copy credentials</AtlasActionButton></div>}
+            <Modal isOpen={Boolean(credentials)} onClose={() => { setCredentials(null); setCredentialsCopyMessage(''); }} title="Temporary credentials" designSystem={showEducationTeamOperationsV1}>
+                {credentials && <div className="edu-team-credentials">
+                    <EducationNotice status="warning">No invitation email was sent. Share these credentials securely; they will not be shown again after this dialog closes.</EducationNotice>
+                    <div className="edu-team-credentials__values"><p><strong>Email</strong><span>{credentials.email}</span></p><p><strong>Temporary password</strong><span>{credentials.password}</span></p></div>
+                    {credentialsCopyMessage && <EducationNotice status="info">{credentialsCopyMessage}</EducationNotice>}
+                    <EducationButton icon={Copy} variant="primary" onClick={copyCredentials}>Copy credentials</EducationButton>
+                </div>}
             </Modal>
 
-            <Modal isOpen={isTaskModalOpen} onClose={() => setIsTaskModalOpen(false)} title={editingTask ? 'Edit task' : 'New task'}>
-                <form onSubmit={handleSaveTask} className="space-y-4">{taskError && <div role="alert" className="rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">{taskError}</div>}<div><label className="mb-1 block text-xs font-bold text-slate-400">Title</label><input required autoFocus value={taskForm.title || ''} onChange={event => setTaskForm({ ...taskForm, title: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60" /></div><div><label className="mb-1 block text-xs font-bold text-slate-400">Description</label><textarea value={taskForm.description || ''} onChange={event => setTaskForm({ ...taskForm, description: event.target.value })} className="min-h-28 w-full resize-y rounded-lg border border-white/10 bg-slate-950 p-3 text-sm text-white outline-none focus:border-teal-400/60" /></div><div className="grid grid-cols-2 gap-3"><div><label className="mb-1 block text-xs font-bold text-slate-400">Priority</label><select value={taskForm.priority || 'medium'} onChange={event => setTaskForm({ ...taskForm, priority: event.target.value as Task['priority'] })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div><div><label className="mb-1 block text-xs font-bold text-slate-400">Status</label><select value={taskForm.status || 'todo'} onChange={event => setTaskForm({ ...taskForm, status: event.target.value as Task['status'] })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white"><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option></select></div></div><div><label className="mb-1 block text-xs font-bold text-slate-400">Assignee</label>{can('team.assign_others') ? <select value={taskForm.assignedTo || ''} onChange={event => setTaskForm({ ...taskForm, assignedTo: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white"><option value="">Unassigned</option>{staffMembers.filter(member => member.status === 'active').map(member => <option key={member.uid} value={member.uid}>{member.name} / {roleLabels.get(member.role) || member.role}</option>)}</select> : <div className="rounded-lg border border-white/10 bg-slate-950 px-3 py-3 text-sm text-slate-400">{userProfile?.name || 'Assigned to me'}</div>}</div>{tenantProjects.length > 0 && <div><label className="mb-1 block text-xs font-bold text-slate-400">Project</label><select value={taskForm.projectId || ''} onChange={event => setTaskForm({ ...taskForm, projectId: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white"><option value="">No project</option>{tenantProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></div>}<div className="flex gap-2">{editingTask && <AtlasActionButton variant="danger" onClick={() => { setIsTaskModalOpen(false); deleteTask(editingTask); }}>Delete</AtlasActionButton>}<AtlasActionButton type="submit" variant="primary" className="flex-1">Save task</AtlasActionButton></div></form>
+            <Modal isOpen={isTaskModalOpen} onClose={() => !isSavingTask && setIsTaskModalOpen(false)} title={editingTask ? 'Edit task' : 'New task'} designSystem={showEducationTeamOperationsV1}>
+                <form onSubmit={handleSaveTask} className="edu-team-form">
+                    {taskError && <EducationNotice status="danger">{taskError}</EducationNotice>}
+                    <EducationField label="Title"><input required autoFocus value={taskForm.title || ''} onChange={event => setTaskForm({ ...taskForm, title: event.target.value })} /></EducationField>
+                    <EducationField label="Description"><textarea value={taskForm.description || ''} onChange={event => setTaskForm({ ...taskForm, description: event.target.value })} /></EducationField>
+                    <div className="edu-team-form-grid">
+                        <EducationField label="Priority"><select value={taskForm.priority || 'medium'} onChange={event => setTaskForm({ ...taskForm, priority: event.target.value as Task['priority'] })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></EducationField>
+                        <EducationField label="Status"><select value={taskForm.status || 'todo'} onChange={event => setTaskForm({ ...taskForm, status: event.target.value as Task['status'] })}><option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option></select></EducationField>
+                    </div>
+                    <EducationField label="Due date"><input type="date" value={taskForm.dueDate || ''} onChange={event => setTaskForm({ ...taskForm, dueDate: event.target.value })} /></EducationField>
+                    {can('team.assign_others') ? <EducationField label="Assignee"><select value={taskForm.assignedTo || ''} onChange={event => setTaskForm({ ...taskForm, assignedTo: event.target.value })}><option value="">Unassigned</option>{staffMembers.filter(member => member.status === 'active').map(member => <option key={member.uid} value={member.uid}>{member.name} / {roleLabels.get(member.role) || member.role}</option>)}</select></EducationField> : <EducationNotice status="info">Assigned to {userProfile?.name || 'me'}. Your role can only assign work to you.</EducationNotice>}
+                    {tenantProjects.length > 0 && <EducationField label="Project"><select value={taskForm.projectId || ''} onChange={event => setTaskForm({ ...taskForm, projectId: event.target.value })}><option value="">No project</option>{tenantProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select></EducationField>}
+                    <div className="edu-ds-form-footer">
+                        {editingTask && <EducationButton status="danger" onClick={() => { setIsTaskModalOpen(false); deleteTask(editingTask); }} disabled={isSavingTask}>Delete task</EducationButton>}
+                        <EducationButton variant="secondary" onClick={() => setIsTaskModalOpen(false)} disabled={isSavingTask}>Cancel</EducationButton>
+                        <EducationButton type="submit" variant="primary" disabled={isSavingTask}>{isSavingTask ? 'Saving task…' : editingTask ? 'Save task' : 'Create task'}</EducationButton>
+                    </div>
+                </form>
             </Modal>
 
-            <Modal isOpen={isProjectModalOpen} onClose={() => setIsProjectModalOpen(false)} title="New project">
-                <form onSubmit={handleSaveProject} className="space-y-4">{projectError && <div role="alert" className="rounded-lg border border-red-400/25 bg-red-500/10 p-3 text-sm text-red-100">{projectError}</div>}<div><label className="mb-1 block text-xs font-bold text-slate-400">Project name</label><input required autoFocus value={projectForm.name || ''} onChange={event => setProjectForm({ ...projectForm, name: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/60" /></div><div><label className="mb-1 block text-xs font-bold text-slate-400">Description</label><textarea value={projectForm.description || ''} onChange={event => setProjectForm({ ...projectForm, description: event.target.value })} className="min-h-24 w-full resize-y rounded-lg border border-white/10 bg-slate-950 p-3 text-sm text-white outline-none focus:border-teal-400/60" /></div><div><label className="mb-1 block text-xs font-bold text-slate-400">Due date</label><input type="date" value={projectForm.dueDate || ''} onChange={event => setProjectForm({ ...projectForm, dueDate: event.target.value })} className="h-11 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white" /></div><AtlasActionButton type="submit" variant="primary" className="w-full" icon={Briefcase}>Create project</AtlasActionButton></form>
+            <Modal isOpen={isProjectModalOpen} onClose={() => !isSavingProject && setIsProjectModalOpen(false)} title="New project" designSystem={showEducationTeamOperationsV1}>
+                <form onSubmit={handleSaveProject} className="edu-team-form">
+                    {projectError && <EducationNotice status="danger">{projectError}</EducationNotice>}
+                    <EducationField label="Project name"><input required autoFocus value={projectForm.name || ''} onChange={event => setProjectForm({ ...projectForm, name: event.target.value })} /></EducationField>
+                    <EducationField label="Description"><textarea value={projectForm.description || ''} onChange={event => setProjectForm({ ...projectForm, description: event.target.value })} /></EducationField>
+                    <EducationField label="Due date"><input type="date" value={projectForm.dueDate || ''} onChange={event => setProjectForm({ ...projectForm, dueDate: event.target.value })} /></EducationField>
+                    <div className="edu-ds-form-footer"><EducationButton variant="secondary" onClick={() => setIsProjectModalOpen(false)} disabled={isSavingProject}>Cancel</EducationButton><EducationButton type="submit" variant="primary" icon={Briefcase} disabled={isSavingProject}>{isSavingProject ? 'Creating project…' : 'Create project'}</EducationButton></div>
+                </form>
             </Modal>
         </div>
     );

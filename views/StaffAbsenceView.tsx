@@ -10,33 +10,37 @@ import { db } from '../services/firebase';
 import { StaffAttendanceRecord } from '../types';
 import { calculateDuration, formatDuration, timeToMinutes } from '../utils/timeUtils';
 import './team-operations/education-team-operations-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
+import './team-operations/education-staff-attendance-v1.css';
 
 type StaffStatus = StaffAttendanceRecord['status'];
 
-const statusStyles: Record<string, string> = {
-    present: 'border-teal-300/35 bg-teal-500 text-slate-950',
-    late: 'border-amber-300/35 bg-amber-400 text-slate-950',
-    absent: 'border-red-300/35 bg-red-500 text-white',
-    leave: 'border-sky-300/30 bg-sky-400/15 text-sky-200',
-    excused: 'border-sky-300/30 bg-sky-400/15 text-sky-200'
+const statusLabels: Record<StaffStatus | 'unmarked', string> = {
+    present: 'Present', late: 'Late', absent: 'Absent', leave: 'Leave', excused: 'Excused', unmarked: 'Unmarked'
 };
 
 export const StaffAbsenceView = () => {
     const showEducationTeamOperationsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { teamMembers, staffAttendanceRecords, settings } = useAppContext();
-    const { currentOrganization, userProfile } = useAuth();
+    const { currentOrganization, userProfile, can } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const today = format(new Date(), 'yyyy-MM-dd');
     const [selectedDate, setSelectedDate] = useState(today);
     const [searchQuery, setSearchQuery] = useState('');
+    const [reportQuery, setReportQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'unmarked' | StaffStatus>('all');
     const [activeTab, setActiveTab] = useState<'daily' | 'management'>('daily');
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+    const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7));
     const [localData, setLocalData] = useState<Record<string, { arrival?: string, departure?: string }>>({});
     const [saving, setSaving] = useState<string | null>(null);
     const [isBulkSaving, setIsBulkSaving] = useState(false);
 
     const eligibleStaff = useMemo(() => teamMembers.filter(member => !['student', 'parent', 'guest'].includes(member.role)), [teamMembers]);
+    const reportStaff = useMemo(() => eligibleStaff.filter(member => {
+        const query = reportQuery.trim().toLowerCase();
+        return !query || member.name.toLowerCase().includes(query) || member.role.toLowerCase().includes(query);
+    }), [eligibleStaff, reportQuery]);
     const staffList = useMemo(() => eligibleStaff.filter(member => {
         const query = searchQuery.trim().toLowerCase();
         if (query && !member.name.toLowerCase().includes(query) && !member.role.toLowerCase().includes(query)) return false;
@@ -230,7 +234,7 @@ export const StaffAbsenceView = () => {
 
     const monthlyReport = useMemo(() => {
         const report: Record<string, { present: number, absent: number, late: number, leave: number, totalMinutes: number, overtime: number }> = {};
-        staffList.forEach(staff => {
+        reportStaff.forEach(staff => {
             report[staff.uid!] = { present: 0, absent: 0, late: 0, leave: 0, totalMinutes: 0, overtime: 0 };
         });
 
@@ -247,7 +251,7 @@ export const StaffAbsenceView = () => {
             }
         });
         return report;
-    }, [staffList, staffAttendanceRecords, selectedMonth]);
+    }, [reportStaff, staffAttendanceRecords, selectedMonth]);
 
     const moveDate = (offset: number) => {
         setSelectedDate(format(addDays(parseISO(selectedDate), offset), 'yyyy-MM-dd'));
@@ -271,8 +275,14 @@ export const StaffAbsenceView = () => {
         </div>
     );
 
+    if (!can('team.view')) return (
+        <div className="edu-v1 edu-school-ops-v1 edu-staff-attendance-v1" data-edu-system="1" data-testid="education-staff-attendance-v1">
+            <AtlasEmptyState title="Staff attendance is restricted" description="Your role does not have access to team attendance. Ask an administrator if you need this workspace." icon={ShieldCheck} />
+        </div>
+    );
+
     return (
-        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-staff-attendance-v1' : ''}`} data-testid={showEducationTeamOperationsV1 ? 'education-staff-attendance-v1' : undefined}>
+        <div className={`flex h-full flex-col gap-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-school-ops-v1 edu-staff-attendance-v1' : ''}`} data-edu-system={showEducationTeamOperationsV1 ? '1' : undefined} data-testid={showEducationTeamOperationsV1 ? 'education-staff-attendance-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Team operations"
                 title="Staff attendance"
@@ -310,11 +320,11 @@ export const StaffAbsenceView = () => {
                     >
                         <div className="relative min-w-[220px] flex-1">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                            <input type="search" placeholder="Search team members or roles" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                            <input type="search" aria-label="Search daily team roster by name or role" placeholder="Search team members or roles" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-10 pr-3 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                         </div>
                         <div className="relative min-w-[170px]">
                             <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | 'unmarked' | StaffStatus)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-10 pr-8 text-sm text-slate-300 outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10">
+                            <select aria-label="Filter daily roster by attendance status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | 'unmarked' | StaffStatus)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-10 pr-8 text-sm text-slate-300 outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10">
                                 <option value="all">All statuses</option>
                                 <option value="unmarked">Unmarked</option>
                                 <option value="present">Present</option>
@@ -324,7 +334,7 @@ export const StaffAbsenceView = () => {
                                 <option value="excused">Excused</option>
                             </select>
                         </div>
-                        <AtlasActionButton icon={CheckCircle2} variant="primary" disabled={dailyStats.unmarked === 0 || isFutureDate || isBulkSaving} onClick={handleConfirmAllPresent}>
+                        <AtlasActionButton icon={CheckCircle2} variant="primary" disabled={dailyStats.unmarked === 0 || isFutureDate || isBulkSaving || saving !== null} onClick={handleConfirmAllPresent}>
                             {isBulkSaving ? 'Confirming...' : 'Confirm unmarked'}
                         </AtlasActionButton>
                     </AtlasToolbar>
@@ -333,7 +343,7 @@ export const StaffAbsenceView = () => {
                         <AtlasSectionHeader title="Daily team roster" description={`${dailyStats.unmarked} of ${dailyStats.total} team members still need an attendance mark`} icon={User} />
                         {isFutureDate && <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">This is a schedule preview. Staff attendance controls unlock on the selected date.</div>}
                         {staffList.length === 0 ? (
-                            <AtlasEmptyState title="No team members found" description="No staff match the current search and status filters." icon={User} action={<AtlasActionButton onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>Clear filters</AtlasActionButton>} />
+                            <AtlasEmptyState title={eligibleStaff.length === 0 ? 'No staff members yet' : 'No team members found'} description={eligibleStaff.length === 0 ? 'Staff members will appear here when they are added to the team.' : 'No staff match the current search and status filters.'} icon={User} action={eligibleStaff.length > 0 ? <AtlasActionButton onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}>Clear filters</AtlasActionButton> : undefined} />
                         ) : (
                             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                 {staffList.map(staff => {
@@ -352,10 +362,10 @@ export const StaffAbsenceView = () => {
                                     ];
 
                                     return (
-                                        <article key={staff.uid} className={`relative overflow-hidden rounded-xl border bg-slate-900/75 p-4 ${status === 'absent' ? 'border-red-400/30' : status === 'late' ? 'border-amber-300/25' : status === 'present' ? 'border-teal-300/20' : 'border-white/10'}`}>
+                                        <article key={staff.uid} aria-label={`${staff.name} attendance`} className="staff-attendance-card relative overflow-hidden rounded-xl border bg-slate-900/75 p-4" data-status={status}>
                                             {saving === staff.uid && (
-                                                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/65">
-                                                    <Clock className="animate-spin text-teal-300" size={20} aria-label="Saving attendance" />
+                                                <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/65" role="status" aria-label={`Saving attendance for ${staff.name}`}>
+                                                    <Clock className="animate-spin text-teal-300" size={20} aria-hidden="true" />
                                                 </div>
                                             )}
 
@@ -367,14 +377,14 @@ export const StaffAbsenceView = () => {
                                                         <span className="block truncate text-[10px] font-bold uppercase text-slate-500">{staff.role}</span>
                                                     </div>
                                                 </div>
-                                                <span className={`rounded-full border px-2 py-1 text-[9px] font-black uppercase ${status === 'unmarked' ? 'border-amber-300/20 bg-amber-400/10 text-amber-200' : statusStyles[status]}`}>
-                                                    {status}
+                                                <span className="staff-attendance-status rounded-full border px-2 py-1 text-[10px] font-black" data-status={status}>
+                                                    {statusLabels[status]}
                                                 </span>
                                             </div>
 
                                             <div className="mb-3 grid grid-cols-5 gap-1.5" aria-label={`Attendance status for ${staff.name}`}>
                                                 {statusOptions.map(option => (
-                                                    <button key={option.id} type="button" disabled={saving === staff.uid || isFutureDate} onClick={() => handleMarkAttendance(staff.uid!, staff.name, option.id)} aria-pressed={status === option.id} title={option.label} className={`flex h-10 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${status === option.id ? statusStyles[option.id] : 'border-white/10 bg-slate-950 text-slate-500 hover:border-white/20 hover:text-white'}`}>
+                                                    <button key={option.id} type="button" disabled={saving === staff.uid || isFutureDate || isBulkSaving} onClick={() => handleMarkAttendance(staff.uid!, staff.name, option.id)} aria-pressed={status === option.id} title={option.label} className="staff-attendance-choice flex h-10 items-center justify-center rounded-lg border transition-colors disabled:cursor-not-allowed disabled:opacity-45" data-status={option.id}>
                                                         <option.icon size={16} />
                                                         <span className="sr-only">{option.label}</span>
                                                     </button>
@@ -385,19 +395,19 @@ export const StaffAbsenceView = () => {
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <label className="min-w-0">
                                                         <span className="mb-1 block text-[9px] font-black uppercase text-slate-500">Arrival</span>
-                                                        <input type="time" value={localArrival} disabled={isFutureDate} onChange={(event) => updateLocalTime(staff.uid!, 'arrival', event.target.value)} className="h-9 w-full rounded-lg border border-white/10 bg-slate-900 px-2 font-mono text-xs text-white outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                                                        <input type="time" value={localArrival} disabled={isFutureDate || isBulkSaving || saving === staff.uid} onChange={(event) => updateLocalTime(staff.uid!, 'arrival', event.target.value)} className="h-9 w-full rounded-lg border border-white/10 bg-slate-900 px-2 font-mono text-xs text-white outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                                                     </label>
                                                     <label className="min-w-0">
                                                         <span className="mb-1 block text-[9px] font-black uppercase text-slate-500">Departure</span>
-                                                        <input type="time" value={localDeparture} disabled={isFutureDate} onChange={(event) => updateLocalTime(staff.uid!, 'departure', event.target.value)} className="h-9 w-full rounded-lg border border-white/10 bg-slate-900 px-2 font-mono text-xs text-white outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
+                                                        <input type="time" value={localDeparture} disabled={isFutureDate || isBulkSaving || saving === staff.uid} onChange={(event) => updateLocalTime(staff.uid!, 'departure', event.target.value)} className="h-9 w-full rounded-lg border border-white/10 bg-slate-900 px-2 font-mono text-xs text-white outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-45 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                                                     </label>
                                                 </div>
 
                                                 <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-2">
                                                     <span className="text-[10px] text-slate-500">Times save only for present or late staff.</span>
                                                     <div className="flex shrink-0 items-center gap-1">
-                                                        {status !== 'unmarked' && <button type="button" disabled={saving === staff.uid || isFutureDate} onClick={() => handleClearAttendance(staff.uid!, staff.name)} title="Return to unmarked" aria-label={`Clear attendance mark for ${staff.name}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><RotateCcw size={14} /></button>}
-                                                        <button type="button" disabled={!timesDirty || saving === staff.uid || isFutureDate || (status !== 'present' && status !== 'late')} onClick={() => handleSaveTimes(staff.uid!, staff.name, status)} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 text-[10px] font-bold text-slate-300 hover:border-teal-300/30 hover:text-teal-200 disabled:cursor-not-allowed disabled:opacity-40">
+                                                        {status !== 'unmarked' && <button type="button" disabled={saving === staff.uid || isBulkSaving || isFutureDate} onClick={() => handleClearAttendance(staff.uid!, staff.name)} title="Return to unmarked" aria-label={`Clear attendance mark for ${staff.name}`} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"><RotateCcw size={14} /></button>}
+                                                        <button type="button" disabled={!timesDirty || saving === staff.uid || isBulkSaving || isFutureDate || (status !== 'present' && status !== 'late')} onClick={() => handleSaveTimes(staff.uid!, staff.name, status)} className="staff-attendance-save inline-flex items-center gap-1.5 rounded-lg border px-2.5 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-40">
                                                             <Save size={13} /> Save times
                                                         </button>
                                                     </div>
@@ -430,10 +440,15 @@ export const StaffAbsenceView = () => {
                             <input type="month" value={selectedMonth} onChange={(event) => event.target.value && setSelectedMonth(event.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 font-mono text-sm text-white outline-none transition-colors focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" />
                         </label>
                     </AtlasToolbar>
+                    <label className="staff-attendance-report-search">
+                        <Search size={17} aria-hidden="true" />
+                        <span className="sr-only">Search monthly report by staff member or role</span>
+                        <input type="search" value={reportQuery} onChange={event => setReportQuery(event.target.value)} placeholder="Search team members or roles" />
+                    </label>
                     <p className="text-xs text-slate-500">Export is intentionally disabled until a verified payroll-ready format is connected. The on-screen report remains the source of truth.</p>
 
-                    {staffList.length === 0 ? (
-                        <AtlasEmptyState title="No staff to report" description="The monthly report will appear when staff members are available." icon={BarChart2} />
+                    {reportStaff.length === 0 ? (
+                        <AtlasEmptyState title={eligibleStaff.length === 0 ? 'No staff to report' : 'No matching staff'} description={eligibleStaff.length === 0 ? 'The monthly report will appear when staff members are available.' : 'Try another name or role.'} icon={BarChart2} action={eligibleStaff.length > 0 ? <AtlasActionButton onClick={() => setReportQuery('')}>Clear search</AtlasActionButton> : undefined} />
                     ) : (
                         <div className="overflow-x-auto rounded-xl border border-white/10 bg-slate-900/70">
                             <table className="w-full min-w-[680px] text-left">
@@ -447,7 +462,7 @@ export const StaffAbsenceView = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/[0.07]">
-                                    {staffList.map(staff => {
+                                    {reportStaff.map(staff => {
                                         const stats = monthlyReport[staff.uid!] || { present: 0, absent: 0, late: 0, leave: 0, totalMinutes: 0, overtime: 0 };
                                         const totalEntries = stats.present + stats.absent + stats.late;
                                         const attendanceRate = totalEntries > 0 ? Math.round(((stats.present + stats.late) / totalEntries) * 100) : 0;

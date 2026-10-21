@@ -1,0 +1,18 @@
+import React,{useState} from 'react';
+import {createRoot} from 'react-dom/client';
+import {WorkshopsView} from '../../views/WorkshopsView';
+import {EducationAdmissionsReadOnlyV1} from '../../modules/admissions/ui/EducationAdmissionsReadOnlyV1';
+import {projectAdmissionCases} from '../../modules/admissions/domain/admissionAdapter';
+import {makeLead,makeBooking,makeStudent,makeEnrollment} from '../../modules/admissions/domain/admissionAdapter.fixtures';
+import {WorkshopReportModal} from '../../components/WorkshopReportModal';
+import {ModuleFixtureControls} from './pulse-admissions-workshops-adapter';
+import '../../components/education-ui/education-ui-v1.css';
+import '../../components/education-ui/education-module-compat-v1.css';
+import '../../components/education-ui/education-role-surfaces-v1.css';
+import '../../components/layouts/education-school-themes.css';
+const params=new URLSearchParams(location.search),theme=params.get('theme')==='dark'?'dark':'light',empty=params.get('scenario')==='empty';
+document.body.className='education-ui-v1-active';document.body.dataset.eduTheme=theme;document.documentElement.style.colorScheme=theme;
+const leads=empty?[]:['new','contacted','interested','workshop_booked','demo_booked','converted','closed'].map((status,i)=>makeLead({id:'lead-'+i,name:['Alex Example','Noor Example','Sam Example','Robin Example','Jules Example','Ari Example','Lee Example'][i],parentName:'Example family '+(i+1),status,programId:'program-1',timeline:Array.from({length:7},(_,j)=>({date:'2026-10-'+String(j+1).padStart(2,'0')+'T09:00:00Z',type:'note',details:'Synthetic family follow-up '+(j+1),author:'Example coordinator'}))}));
+const projection=projectAdmissionCases({tenantId:'org-1',leads,bookings:empty?[]:[makeBooking({id:'booking-trial',admissionCaseId:'lead-3',status:'confirmed'}),makeBooking({id:'booking-attended',admissionCaseId:'lead-4',status:'attended'})],students:empty?[]:[makeStudent({admissionCaseId:'lead-5'})],enrollments:empty?[]:[makeEnrollment({admissionCaseId:'lead-5'})]});
+const Fixture=()=>{const [report,setReport]=useState(false);return <div className="edu-v1 edu-shell-v1" data-edu-theme={theme} style={{minHeight:'100vh',padding:16,background:'var(--edu-canvas)'}}><main className="edu-shell-v1__content-inner" style={{maxWidth:1320,margin:'0 auto'}}>{params.get('module')==='admissions'?<EducationAdmissionsReadOnlyV1 projection={projection} programs={[{id:'program-1',name:'Robotics workshop'}]} canUseWhatsApp={params.get('role')!=='readonly'}/>:<><WorkshopsView onConvertProspect={()=>{}}/><div className="edu-workshops-v1"><button onClick={()=>setReport(true)}>Inspect report form (synthetic)</button><WorkshopReportModal isOpen={report} onClose={()=>setReport(false)} workshopTitle="Build a rover"/></div></>}<ModuleFixtureControls/></main></div>};
+createRoot(document.getElementById('root')).render(<Fixture/>);

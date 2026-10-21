@@ -16,6 +16,9 @@ import { LeadProfileModal } from './marketing/LeadProfileModal'; // New Modal
 import { GrowthWizardModal } from './marketing/GrowthWizardModal'; // New Wizard
 import { CampaignKitModal } from './marketing/CampaignKitModal'; // New Kit Modal
 import './family-journey/education-family-journey-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
+import './marketing/education-marketing-v1.css';
 
 
 interface MarketingViewProps {
@@ -120,10 +123,6 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
         }
 
         setIsInviteModalOpen(false);
-        // Optional: Update status to 'contacted' if it was 'new'
-        if (selectedLeadForInvite.status === 'new') {
-            await handleUpdateLeadStatus(selectedLeadForInvite.id, 'contacted');
-        }
         setActionFeedback({ kind: 'success', message: 'Invitation prepared in WhatsApp. Sending remains under your control.' });
     };
 
@@ -359,7 +358,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             setEditingCampaignId(null);
         } catch (error) {
             console.error('Campaign creation failed', error);
-            setActionFeedback({ kind: 'error', message: 'The campaign could not be created. Try again.' });
+            setActionFeedback({ kind: 'error', message: editingCampaignId ? 'The campaign changes could not be saved. Try again.' : 'The campaign could not be created. Try again.' });
         } finally { setPendingAction(null); }
     };
 
@@ -458,12 +457,13 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
 
     // --- RENDER HELPERS ---
     const renderContentCard = (post: MarketingPost) => (
-        <article key={post.id} className="group relative mb-2 flex flex-col gap-2 rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-teal-400/30">
+        <article key={post.id} className="marketing-content-card group relative mb-2 flex flex-col gap-2 rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-teal-400/30">
             <div className="flex justify-between items-start">
                 <span className="rounded border border-white/10 bg-slate-950 px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{post.platform}</span>
                 <button onClick={() => handleDeleteItem('marketing_posts', post.id)} disabled={!canCreateMarketing || pendingAction !== null} className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${post.platform} content task`} title="Delete content task"><Trash2 size={14} /></button>
             </div>
             <p className="text-sm text-white font-medium line-clamp-3">{post.content}</p>
+            {post.status === 'published' && <span className="marketing-published-status">Published externally</span>}
             <div className="text-[10px] text-slate-500 flex justify-between mt-1">
                 <span>{formatDate(post.date)}</span>
                 {post.attachments && post.attachments.length > 0 && <span className="flex items-center gap-1 text-blue-400"><LinkIcon size={10} /> Attached</span>}
@@ -502,7 +502,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
     );
 
     return (
-        <div className={`flex min-h-0 flex-col gap-4 pb-24 md:h-full md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-marketing-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-marketing-v1' : undefined}>
+        <div className={`flex min-h-0 flex-col gap-4 pb-24 md:h-full md:pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-school-ops-v1 edu-marketing-v1' : ''}`} data-edu-system={showEducationFamilyJourneyV1 ? '1' : undefined} data-testid={showEducationFamilyJourneyV1 ? 'education-marketing-v1' : undefined}>
             {/* Header */}
             <AtlasCommandHeader
                 eyebrow="Growth engine"
@@ -531,7 +531,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
 
             {!canCreateMarketing && <div className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">View-only workspace. You can inspect and export CRM data; creating and moving records requires Marketing create access.</div>}
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="marketing-signals grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Marketing overview">
                 <AtlasSignalCard label="Open Leads" value={leads.filter(l => !['converted', 'closed'].includes(l.status)).length} icon={Users} tone="teal" detail="Active CRM opportunities" />
                 <AtlasSignalCard label="Campaign Spend" value={formatCurrency(campaigns.reduce((sum, c) => sum + (c.spend || 0), 0))} icon={DollarSign} tone="amber" detail={`${campaigns.length} campaigns tracked`} />
                 <AtlasSignalCard label="Content Queue" value={marketingPosts.filter(p => p.status !== 'published').length} icon={Calendar} tone="blue" detail="Posts before publish" />
@@ -552,12 +552,13 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {/* CONTENT KANBAN TAB */}
             {
                 activeTab === 'content' && (
-                    <div className="md:h-full flex flex-col min-h-0">
+                    <div className="marketing-workspace md:h-full flex flex-col min-h-0">
                         <AtlasSectionHeader title="Content operations" description="Move work through preparation and approval. Publishing to social providers is recorded manually." icon={Calendar} actions={<AtlasActionButton icon={Plus} variant="primary" onClick={() => { setActionFeedback(null); setIsPostModalOpen(true); }} disabled={!canCreateMarketing}>Schedule post</AtlasActionButton>} />
-                        <div className="flex-1 overflow-x-auto pb-4">
-                            <div className="mt-3 flex h-full min-w-[1000px] gap-3">
+                        {marketingPosts.length === 0 && <p className="marketing-context-note">{canCreateMarketing ? 'Your content queue is empty. Schedule a post to start the approval journey.' : 'No content tasks have been scheduled for this organization.'}</p>}
+                        <div className="marketing-board-scroll flex-1 overflow-x-auto pb-4" aria-label="Content stages">
+                            <div className="marketing-board mt-3 flex h-full min-w-[1000px] gap-3">
                                 {['planned', 'in_progress', 'review', 'approved'].map(status => (
-                                    <section key={status} className="flex h-full min-w-[240px] flex-1 flex-col rounded-lg border border-white/10 bg-slate-950/50">
+                                    <section key={status} className="marketing-board-column flex h-full min-w-[240px] flex-1 flex-col rounded-lg border border-white/10 bg-slate-950/50">
                                         <div className={`flex justify-between border-b border-white/10 bg-slate-900 p-3 text-xs font-bold uppercase ${status === 'review' ? 'text-amber-200' : status === 'approved' ? 'text-teal-300' : 'text-slate-400'}`}>
                                             {status === 'approved' ? 'Ready / published' : status.replace('_', ' ')}
                                             <span className="bg-slate-950 px-2 rounded text-white">{marketingPosts.filter(p => (status === 'approved' ? (p.status === 'approved' || p.status === 'published') : p.status === status)).length}</span>
@@ -579,11 +580,11 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {/* CAMPAIGNS TAB */}
             {
                 activeTab === 'campaigns' && (
-                    <div className="md:h-full flex flex-col min-h-0">
+                    <div className="marketing-workspace md:h-full flex flex-col min-h-0">
                         <AtlasSectionHeader title="Campaign control" description="Prepare launch assets, approve the kit, then activate the campaign for manual execution." icon={Megaphone} actions={<AtlasActionButton icon={Plus} variant="primary" onClick={openNewCampaign} disabled={!canCreateMarketing}>New campaign</AtlasActionButton>} />
                         <AtlasToolbar className="mt-3" trailing={<span className="text-xs text-slate-500">{visibleCampaigns.length} shown</span>}>
                             <Filter size={14} className="text-slate-500" />
-                            <select value={campaignStatusFilter} onChange={event => setCampaignStatusFilter(event.target.value as typeof campaignStatusFilter)} className="h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-400">
+                            <select aria-label="Filter campaigns by status" value={campaignStatusFilter} onChange={event => setCampaignStatusFilter(event.target.value as typeof campaignStatusFilter)} className="h-10 rounded-lg border border-white/10 bg-slate-900 px-3 text-sm text-white outline-none focus:border-teal-400">
                                 <option value="all">All statuses</option><option value="planned">Planned</option><option value="active">Active</option><option value="completed">Completed</option>
                             </select>
                         </AtlasToolbar>
@@ -592,7 +593,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                 const approvedRequired = REQUIRED_CAMPAIGN_ASSETS.filter(required => (campaign.assets || []).some(asset => asset.name.toLowerCase().includes(required) && asset.status === 'approved')).length;
                                 const kitReady = approvedRequired === REQUIRED_CAMPAIGN_ASSETS.length;
                                 return (
-                                <article key={campaign.id} className="rounded-lg border border-white/10 bg-slate-900 p-4">
+                                <article key={campaign.id} className="marketing-campaign-card rounded-lg border border-white/10 bg-slate-900 p-4">
                                     <div className="mb-4 flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <h3 className="truncate text-base font-bold text-white">{campaign.name}</h3>
@@ -603,14 +604,14 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                         </div>
                                         <button onClick={() => handleDeleteItem('campaigns', campaign.id)} disabled={!canCreateMarketing || pendingAction !== null || campaign.status === 'active'} title={campaign.status === 'active' ? 'Complete the active campaign before deleting it' : 'Delete campaign'} className="rounded-lg p-2 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${campaign.name}`}><Trash2 size={16} /></button>
                                     </div>
-                                    <div className="mb-4 grid grid-cols-3 gap-2">
+                                    <div className="marketing-campaign-facts mb-4 grid grid-cols-3 gap-2">
                                         <div className="rounded border border-white/10 bg-slate-950 p-3"><span className="text-[10px] font-bold uppercase text-slate-500">Budget</span><div className="font-mono text-sm text-white">{formatCurrency(campaign.budget)}</div></div>
                                         <div className="rounded border border-white/10 bg-slate-950 p-3"><span className="text-[10px] font-bold uppercase text-slate-500">Spend</span><div className="font-mono text-sm text-white">{formatCurrency(campaign.spend)}</div></div>
                                         <div className="rounded border border-white/10 bg-slate-950 p-3"><span className="text-[10px] font-bold uppercase text-slate-500">Kit</span><div className={`font-mono text-sm ${kitReady ? 'text-teal-300' : 'text-amber-200'}`}>{approvedRequired}/{REQUIRED_CAMPAIGN_ASSETS.length}</div></div>
                                     </div>
                                     <p className="min-h-10 text-sm text-slate-400"><span className="font-bold text-slate-300">Goal:</span> {campaign.goals || 'No campaign goal recorded.'}</p>
                                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
-                                        <button type="button" disabled title="Attribution reporting requires a connected ad or analytics provider" className="text-xs text-slate-600">Reporting not connected</button>
+                                        <span className="text-xs text-slate-600" title="Attribution reporting requires a connected ad or analytics provider">Reporting not connected</span>
                                         <div className="flex flex-wrap gap-2">
                                             <AtlasActionButton icon={Pencil} onClick={() => openCampaignEditor(campaign)} disabled={!canCreateMarketing}>Edit</AtlasActionButton>
                                             <AtlasActionButton icon={Briefcase} onClick={() => { setSelectedCampaignForKit(campaign); setIsKitModalOpen(true); }}>Campaign kit</AtlasActionButton>
@@ -620,7 +621,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                     </div>
                                 </article>
                             );})}
-                            {visibleCampaigns.length === 0 && <div className="lg:col-span-2"><AtlasEmptyState icon={Megaphone} title="No campaigns in this view" description="Change the status filter or create a planned campaign with a clear goal and launch kit." action={canCreateMarketing ? <AtlasActionButton icon={Plus} variant="primary" onClick={openNewCampaign}>Create campaign</AtlasActionButton> : undefined} /></div>}
+                            {visibleCampaigns.length === 0 && <div className="lg:col-span-2"><AtlasEmptyState icon={Megaphone} title="No campaigns in this view" description={canCreateMarketing ? 'Change the status filter or create a planned campaign with a clear goal and launch kit.' : 'Change the status filter to inspect campaigns in another stage.'} action={canCreateMarketing ? <AtlasActionButton icon={Plus} variant="primary" onClick={openNewCampaign}>Create campaign</AtlasActionButton> : undefined} /></div>}
                         </div>
                     </div>
                 )
@@ -629,18 +630,19 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             {/* LEADS CRM TAB (Acquisition) */}
             {
                 activeTab === 'leads' && (
-                    <div className="md:h-full flex flex-col min-h-0">
+                    <div className="marketing-workspace md:h-full flex flex-col min-h-0">
                         <AtlasSectionHeader title="Acquisition pipeline" description="Search, qualify, book, and convert every inquiry from one operational record." icon={Users} meta={<span className="rounded-full bg-teal-400/10 px-2 py-0.5 text-[10px] font-bold text-teal-200">{filteredLeadsOnly.length} leads</span>} />
                         <AtlasToolbar className="mt-3" trailing={<><AtlasActionButton icon={Download} onClick={handleExport}>Export view</AtlasActionButton><AtlasActionButton icon={Plus} variant="primary" onClick={() => { setActionFeedback(null); setIsLeadModalOpen(true); }} disabled={!canCreateMarketing}>Add lead</AtlasActionButton></>}>
-                            <div className="relative min-w-[190px] flex-1 sm:max-w-xs"><Search size={14} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search name, phone, source" className="h-10 w-full rounded-lg border border-white/10 bg-slate-900 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400" /></div>
-                            <div className="flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-slate-900 px-2"><Filter size={13} className="text-slate-500" /><select className="min-w-[130px] bg-transparent text-sm text-white outline-none" value={selectedInterestFilter} onChange={event => setSelectedInterestFilter(event.target.value)}><option value="">All interests</option>{interestOptions.map(option => <option key={option} value={option}>{option}</option>)}</select></div>
+                            <div className="relative min-w-[190px] flex-1 sm:max-w-xs"><Search size={14} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input aria-label="Search leads by name, phone, or source" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search name, phone, source" className="h-10 w-full rounded-lg border border-white/10 bg-slate-900 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400" /></div>
+                            <div className="flex h-10 items-center gap-2 rounded-lg border border-white/10 bg-slate-900 px-2"><Filter size={13} className="text-slate-500" /><select aria-label="Filter leads by interest" className="min-w-[130px] bg-transparent text-sm text-white outline-none" value={selectedInterestFilter} onChange={event => setSelectedInterestFilter(event.target.value)}><option value="">All interests</option>{interestOptions.map(option => <option key={option} value={option}>{option}</option>)}</select></div>
                             <div className="flex h-10 rounded-lg border border-white/10 bg-slate-950 p-1" aria-label="CRM view">
-                                <button onClick={() => setViewMode('board')} className={`flex h-8 w-8 items-center justify-center rounded-md ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`} aria-label="Board view" title="Board view"><KanbanIcon size={14} /></button>
-                                <button onClick={() => setViewMode('table')} className={`flex h-8 w-8 items-center justify-center rounded-md ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`} aria-label="Table view" title="Table view"><TableIcon size={14} /></button>
+                                <button onClick={() => setViewMode('board')} aria-pressed={viewMode === 'board'} className={`flex h-8 w-8 items-center justify-center rounded-md ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`} aria-label="Board view" title="Board view"><KanbanIcon size={14} /></button>
+                                <button onClick={() => setViewMode('table')} aria-pressed={viewMode === 'table'} className={`flex h-8 w-8 items-center justify-center rounded-md ${viewMode === 'table' ? 'bg-slate-800 text-white' : 'text-slate-500 hover:text-slate-300'}`} aria-label="Table view" title="Table view"><TableIcon size={14} /></button>
                             </div>
                         </AtlasToolbar>
 
                         {/* TABLE VIEW */}
+                        {filteredLeadsOnly.length === 0 && (searchQuery.trim() || selectedInterestFilter) && <p className="marketing-context-note" role="status">No leads match this search or interest. Clear the filters to see the pipeline.</p>}
                         {viewMode === 'table' ? (
                             <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-white/10 bg-slate-900">
                                 <div className="overflow-auto custom-scrollbar flex-1">
@@ -657,12 +659,12 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                         </thead>
                                         <tbody className="divide-y divide-slate-800">
                                             {filteredLeadsOnly.map((contact, idx) => (
-                                                <tr key={`${contact.id}-${idx}`} className="cursor-pointer transition-colors hover:bg-slate-800/50" onClick={() => { setProfileInitialAction(null); setSelectedLeadForProfile(contact); }}>
-                                                    <td className="p-4 font-bold text-white">{contact.name}</td>
+                                                <tr key={`${contact.id}-${idx}`} className="marketing-lead-row transition-colors hover:bg-slate-800/50">
+                                                    <td className="p-4 font-bold text-white"><button type="button" className="marketing-record-link" onClick={() => { setProfileInitialAction(null); setSelectedLeadForProfile(contact); }} aria-label={`Open ${contact.name} lead profile`}>{contact.name}</button></td>
                                                     <td className="p-4 text-sm text-slate-300">{contact.parentName}</td>
                                                     <td className="p-4 text-sm text-slate-400">{contact.phone}</td>
                                                     <td className="p-4">
-                                                        <select value={contact.status} onClick={event => event.stopPropagation()} onChange={event => void handleUpdateLeadStatus(contact.id, event.target.value as Lead['status'])} disabled={!canCreateMarketing} className="h-9 rounded-lg border border-white/10 bg-slate-950 px-2 text-xs font-bold capitalize text-slate-300 outline-none focus:border-teal-400 disabled:opacity-60">{LEAD_STAGES.map(stage => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</select>
+                                                        <select aria-label={`Change status for ${contact.name}`} value={contact.status} onClick={event => event.stopPropagation()} onChange={event => void handleUpdateLeadStatus(contact.id, event.target.value as Lead['status'])} disabled={!canCreateMarketing} className="h-9 rounded-lg border border-white/10 bg-slate-950 px-2 text-xs font-bold capitalize text-slate-300 outline-none focus:border-teal-400 disabled:opacity-60">{LEAD_STAGES.map(stage => <option key={stage.id} value={stage.id}>{stage.label}</option>)}</select>
                                                     </td>
                                                     <td className="p-4">
                                                         <div className="flex flex-wrap gap-1">
@@ -685,10 +687,12 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                             /* KANBAN VIEW */
                             <div className="flex-1 flex flex-col min-h-0 min-w-0 mt-4">
                                 {/* Mobile Column Selector */}
-                                <div className="mb-3 flex gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-2 md:hidden">
+                                <div className="mb-3 flex gap-2 overflow-x-auto whitespace-nowrap border-b border-white/10 pb-2 md:hidden" role="tablist" aria-label="Lead stages">
                                     {LEAD_STAGES.map(stage => (
                                         <button
                                             key={stage.id}
+                                            role="tab"
+                                            aria-selected={mobileKanbanColumn === stage.id}
                                             onClick={() => setMobileKanbanColumn(stage.id)}
                                             className={`h-9 rounded-lg px-3 text-xs font-bold transition-colors ${mobileKanbanColumn === stage.id ? 'bg-teal-500 text-slate-950' : 'border border-white/10 bg-slate-900 text-slate-500'}`}
                                         >
@@ -718,11 +722,10 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                                                         .map(lead => (
                                                             <article
                                                                 key={lead.id}
-                                                                onClick={() => { setProfileInitialAction(null); setSelectedLeadForProfile(lead); }}
-                                                                className="cursor-pointer rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-teal-400/30"
+                                                                className="marketing-lead-card rounded-lg border border-white/10 bg-slate-900 p-3 transition-colors hover:border-teal-400/30"
                                                             >
                                                                 <div className="flex justify-between items-start mb-1">
-                                                                    <h4 className="font-bold text-white text-sm">{lead.name}</h4>
+                                                                    <h4 className="font-bold text-white text-sm"><button type="button" className="marketing-record-link" onClick={() => { setProfileInitialAction(null); setSelectedLeadForProfile(lead); }} aria-label={`Open ${lead.name} lead profile`}>{lead.name}</button></h4>
                                                                     <button onClick={(e) => { e.stopPropagation(); void handleDeleteItem('leads', lead.id); }} disabled={!canCreateMarketing} className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-30" aria-label={`Delete ${lead.name}`}><Trash2 size={12} /></button>
                                                                 </div>
                                                                 <div className="flex items-center gap-1 text-[10px] text-slate-500 mb-2">
@@ -798,30 +801,30 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
             }
 
             {/* Create Post Modal */}
-            <Modal isOpen={isPostModalOpen} onClose={() => setIsPostModalOpen(false)} title="Schedule Post">
-                <form onSubmit={handleSavePost} className="space-y-4">
+            <Modal isOpen={isPostModalOpen} onClose={() => setIsPostModalOpen(false)} title="Schedule Post" designSystem={showEducationFamilyJourneyV1}>
+                <form onSubmit={handleSavePost} className="edu-marketing-dialog space-y-4">
                     <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">This creates an Edufy content task. Publishing remains manual in the selected social platform.</p>
                     {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Platform</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={postForm.platform} onChange={e => setPostForm({ ...postForm, platform: e.target.value as any })}><option value="instagram">Instagram</option><option value="facebook">Facebook</option><option value="linkedin">LinkedIn</option><option value="tiktok">TikTok</option></select></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Content / Caption</label><textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24" value={postForm.content} onChange={e => setPostForm({ ...postForm, content: e.target.value })} /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Planned Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={postForm.date} onChange={e => setPostForm({ ...postForm, date: e.target.value })} /></div>
-                    <button type="submit" disabled={pendingAction === 'post-create'} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50"><Plus size={16} /> {pendingAction === 'post-create' ? 'Creating...' : 'Create task'}</button>
+                    <div><label htmlFor="marketing-post-platform" className="block text-xs font-medium text-slate-400 mb-1">Platform</label><select id="marketing-post-platform" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={postForm.platform} onChange={e => setPostForm({ ...postForm, platform: e.target.value as any })}><option value="instagram">Instagram</option><option value="facebook">Facebook</option><option value="linkedin">LinkedIn</option><option value="tiktok">TikTok</option></select></div>
+                    <div><label htmlFor="marketing-post-content" className="block text-xs font-medium text-slate-400 mb-1">Content / caption <span aria-hidden="true">*</span></label><textarea id="marketing-post-content" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-24" value={postForm.content} onChange={e => setPostForm({ ...postForm, content: e.target.value })} /></div>
+                    <div><label htmlFor="marketing-post-date" className="block text-xs font-medium text-slate-400 mb-1">Planned date <span aria-hidden="true">*</span></label><input id="marketing-post-date" required type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={postForm.date} onChange={e => setPostForm({ ...postForm, date: e.target.value })} /></div>
+                    <div className="marketing-form-actions"><button type="button" onClick={() => setIsPostModalOpen(false)} className="marketing-secondary-action">Cancel</button><button type="submit" disabled={pendingAction === 'post-create'} className="marketing-primary-action flex h-10 items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50"><Plus size={16} /> {pendingAction === 'post-create' ? 'Creating...' : 'Create task'}</button></div>
                 </form>
             </Modal>
 
             {/* Work Submission Modal */}
-            <Modal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} title="Submit Work for Review">
-                <div className="space-y-4">
+            <Modal isOpen={isSubmitModalOpen} onClose={() => setIsSubmitModalOpen(false)} title="Submit Work for Review" designSystem={showEducationFamilyJourneyV1}>
+                <div className="edu-marketing-dialog space-y-4">
                     <p className="text-sm text-slate-400">Please provide a link to the creative assets (Google Drive, Canva, Dropbox).</p>
                     {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Asset URL</label><input className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={submissionLink} onChange={e => setSubmissionLink(e.target.value)} placeholder="https://..." /></div>
+                    <div><label htmlFor="marketing-asset-url" className="block text-xs font-medium text-slate-400 mb-1">Asset URL <span aria-hidden="true">*</span></label><input id="marketing-asset-url" type="url" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={submissionLink} onChange={e => setSubmissionLink(e.target.value)} placeholder="https://..." /></div>
                     <button onClick={handleSubmitWork} disabled={!submissionLink || pendingAction === 'post-submit'} className="h-10 w-full rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:cursor-not-allowed disabled:opacity-50">{pendingAction === 'post-submit' ? 'Submitting...' : 'Submit for review'}</button>
                 </div>
             </Modal>
 
             {/* Admin Review Modal */}
-            <Modal isOpen={isReviewModalOpen} onClose={() => setIsReviewModalOpen(false)} title="Review Content">
-                <div className="space-y-4">
+            <Modal isOpen={isReviewModalOpen} onClose={() => setIsReviewModalOpen(false)} title="Review Content" designSystem={showEducationFamilyJourneyV1}>
+                <div className="edu-marketing-dialog space-y-4">
                     {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
                     <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
                         <h4 className="text-sm font-bold text-white mb-2">Submission</h4>
@@ -836,20 +839,21 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                         <button onClick={handleRejectPost} disabled={pendingAction !== null} className="flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 text-sm font-bold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><AlertCircle size={16} /> {pendingAction === 'post-reject' ? 'Returning...' : 'Request revision'}</button>
                     </div>
                     <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Feedback (Required for rejection)</label>
-                        <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What needs to be changed?" />
+                        <label htmlFor="marketing-review-feedback" className="block text-xs font-medium text-slate-400 mb-1">Feedback (required for revision)</label>
+                        <textarea id="marketing-review-feedback" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="What needs to be changed?" />
                     </div>
                 </div>
             </Modal>
 
             {/* INVITE MODAL */}
-            <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Invite to Workshop">
-                <div className="space-y-4">
+            <Modal isOpen={isInviteModalOpen} onClose={() => setIsInviteModalOpen(false)} title="Invite to Workshop" designSystem={showEducationFamilyJourneyV1}>
+                <div className="edu-marketing-dialog space-y-4">
                     <p className="text-sm text-slate-400">Choose an active workshop to prepare a personalized booking message for <strong>{selectedLeadForInvite?.name}</strong>.</p>
 
                     <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Workshop Template</label>
+                        <label htmlFor="marketing-invite-workshop" className="block text-xs font-medium text-slate-400 mb-1">Workshop template</label>
                         <select
+                            id="marketing-invite-workshop"
                             className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                             value={selectedTemplateForInvite}
                             onChange={e => setSelectedTemplateForInvite(e.target.value)}
@@ -876,33 +880,33 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ onEnrollLead }) =>
                 </div>
             </Modal>
 
-            <Modal isOpen={isCampaignModalOpen} onClose={() => { setIsCampaignModalOpen(false); setEditingCampaignId(null); }} title={editingCampaignId ? 'Edit campaign' : 'New campaign'}>
-                <form onSubmit={handleSaveCampaign} className="space-y-4">
+            <Modal isOpen={isCampaignModalOpen} onClose={() => { setIsCampaignModalOpen(false); setEditingCampaignId(null); }} title={editingCampaignId ? 'Edit campaign' : 'New campaign'} designSystem={showEducationFamilyJourneyV1}>
+                <form onSubmit={handleSaveCampaign} className="edu-marketing-dialog space-y-4">
                     {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Campaign Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.name} onChange={e => setCampaignForm({ ...campaignForm, name: e.target.value })} /></div>
+                    <div><label htmlFor="marketing-campaign-name" className="block text-xs font-medium text-slate-400 mb-1">Campaign name <span aria-hidden="true">*</span></label><input id="marketing-campaign-name" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.name} onChange={e => setCampaignForm({ ...campaignForm, name: e.target.value })} /></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Budget</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.budget} onChange={e => setCampaignForm({ ...campaignForm, budget: Number(e.target.value) })} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Current Spend</label><input type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.spend} onChange={e => setCampaignForm({ ...campaignForm, spend: Number(e.target.value) })} /></div>
+                        <div><label htmlFor="marketing-campaign-budget" className="block text-xs font-medium text-slate-400 mb-1">Budget</label><input id="marketing-campaign-budget" type="number" min="0" step="0.01" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.budget} onChange={e => setCampaignForm({ ...campaignForm, budget: Number(e.target.value) })} /></div>
+                        <div><label htmlFor="marketing-campaign-spend" className="block text-xs font-medium text-slate-400 mb-1">Current spend</label><input id="marketing-campaign-spend" type="number" min="0" step="0.01" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.spend} onChange={e => setCampaignForm({ ...campaignForm, spend: Number(e.target.value) })} /></div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Start Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.startDate} onChange={e => setCampaignForm({ ...campaignForm, startDate: e.target.value })} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">End Date</label><input type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.endDate} onChange={e => setCampaignForm({ ...campaignForm, endDate: e.target.value })} /></div>
+                        <div><label htmlFor="marketing-campaign-start" className="block text-xs font-medium text-slate-400 mb-1">Start date</label><input id="marketing-campaign-start" type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.startDate} onChange={e => setCampaignForm({ ...campaignForm, startDate: e.target.value })} /></div>
+                        <div><label htmlFor="marketing-campaign-end" className="block text-xs font-medium text-slate-400 mb-1">End date</label><input id="marketing-campaign-end" type="date" min={campaignForm.startDate || undefined} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.endDate} onChange={e => setCampaignForm({ ...campaignForm, endDate: e.target.value })} /></div>
                     </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Goals</label><input className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.goals} onChange={e => setCampaignForm({ ...campaignForm, goals: e.target.value })} placeholder="e.g. 20 Enrollments" /></div>
+                    <div><label htmlFor="marketing-campaign-goals" className="block text-xs font-medium text-slate-400 mb-1">Goal</label><input id="marketing-campaign-goals" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={campaignForm.goals} onChange={e => setCampaignForm({ ...campaignForm, goals: e.target.value })} placeholder="e.g. 20 enrollments" /></div>
                     <button type="submit" disabled={pendingAction === 'campaign-create'} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50">{editingCampaignId ? <Pencil size={16} /> : <Plus size={16} />} {pendingAction === 'campaign-create' ? 'Saving...' : editingCampaignId ? 'Save campaign' : 'Create campaign'}</button>
                 </form>
             </Modal>
 
-            <Modal isOpen={isLeadModalOpen} onClose={() => setIsLeadModalOpen(false)} title="Add New Lead">
-                <form onSubmit={handleSaveLead} className="space-y-4">
+            <Modal isOpen={isLeadModalOpen} onClose={() => setIsLeadModalOpen(false)} title="Add New Lead" designSystem={showEducationFamilyJourneyV1}>
+                <form onSubmit={handleSaveLead} className="edu-marketing-dialog space-y-4">
                     {actionFeedback?.kind === 'error' && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{actionFeedback.message}</div>}
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Child Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.name} onChange={e => setLeadForm({ ...leadForm, name: e.target.value })} /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Parent Name</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.parentName} onChange={e => setLeadForm({ ...leadForm, parentName: e.target.value })} /></div>
+                    <div><label htmlFor="marketing-lead-name" className="block text-xs font-medium text-slate-400 mb-1">Child name <span aria-hidden="true">*</span></label><input id="marketing-lead-name" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.name} onChange={e => setLeadForm({ ...leadForm, name: e.target.value })} /></div>
+                    <div><label htmlFor="marketing-lead-parent" className="block text-xs font-medium text-slate-400 mb-1">Parent name <span aria-hidden="true">*</span></label><input id="marketing-lead-parent" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.parentName} onChange={e => setLeadForm({ ...leadForm, parentName: e.target.value })} /></div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Phone</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.phone} onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Source</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.source} onChange={e => setLeadForm({ ...leadForm, source: e.target.value })}><option>Facebook</option><option>Instagram</option><option>Google</option><option>Walk-in</option><option>Referral</option></select></div>
+                        <div><label htmlFor="marketing-lead-phone" className="block text-xs font-medium text-slate-400 mb-1">Phone <span aria-hidden="true">*</span></label><input id="marketing-lead-phone" type="tel" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.phone} onChange={e => setLeadForm({ ...leadForm, phone: e.target.value })} /></div>
+                        <div><label htmlFor="marketing-lead-source" className="block text-xs font-medium text-slate-400 mb-1">Source</label><select id="marketing-lead-source" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={leadForm.source} onChange={e => setLeadForm({ ...leadForm, source: e.target.value })}><option>Facebook</option><option>Instagram</option><option>Google</option><option>Walk-in</option><option>Referral</option></select></div>
                     </div>
-                    <div><label className="mb-1 block text-xs font-medium text-slate-400">Email (optional)</label><input type="email" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white" value={leadForm.email || ''} onChange={event => setLeadForm({ ...leadForm, email: event.target.value })} /></div>
+                    <div><label htmlFor="marketing-lead-email" className="mb-1 block text-xs font-medium text-slate-400">Email (optional)</label><input id="marketing-lead-email" type="email" className="w-full rounded-lg border border-slate-800 bg-slate-950 p-3 text-white" value={leadForm.email || ''} onChange={event => setLeadForm({ ...leadForm, email: event.target.value })} /></div>
                     <button type="submit" disabled={pendingAction === 'lead-create'} className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50"><Plus size={16} /> {pendingAction === 'lead-create' ? 'Adding...' : 'Add lead'}</button>
                 </form>
             </Modal>

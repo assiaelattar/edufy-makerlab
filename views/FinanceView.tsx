@@ -16,15 +16,17 @@ import { Enrollment, Payment } from '../types';
 import { db } from '../services/firebase';
 import { doc, writeBatch, collection, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Modal } from '../components/Modal';
+import { EducationBadge, EducationButton, EducationIcon, EducationProgress, EducationState, EducationStatusPill, EducationSurface } from '../components/education-ui/EducationPrimitives';
 import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
-import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
 import '../components/education-ui/education-system-v1.css';
 import './finance/education-finance-v1.css';
 import './finance/education-finance-focus.css';
 import './finance/education-finance-playful.css';
+import './finance/education-finance-workspace.css';
 import { FinanceDocumentsPanel } from '../components/finance/FinanceDocumentsPanel';
 import { getProgramOperationalState } from '../utils/programLifecycle';
 import { getEnrollmentFinancialSummary } from '../utils/enrollmentFinancials';
+import type { EducationAccent } from '../components/education-ui/EducationPrimitives';
 
 // --- Upcoming Payment Helper ---
 function computeNextPaymentDate(
@@ -100,8 +102,22 @@ export const computeAcademicYear = (d: Date = new Date()): string => {
     return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
 };
 
+const FinanceTaskCard = ({ icon, accent, title, description, onClick }: {
+    icon: typeof CreditCard;
+    accent: EducationAccent;
+    title: string;
+    description: string;
+    onClick: () => void;
+}) => (
+    <button type="button" className="edu-finance-workspace__task" onClick={onClick}>
+        <EducationIcon icon={icon} accent={accent} />
+        <span className="edu-finance-workspace__task-copy"><strong>{title}</strong><small>{description}</small></span>
+        <ChevronRight size={18} aria-hidden="true" />
+    </button>
+);
+
 export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?: string) => void }) => {
-    const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+    const showEducationFinanceV1 = true;
     const { payments, enrollments, students, programs, navigateTo, settings, viewParams, fetchDashboardData } = useAppContext();
     const { can, currentOrganization, userProfile, user } = useAuth();
     const workspaceScope = `finance:${currentOrganization?.id || 'none'}:${user?.uid || 'guest'}`;
@@ -1320,7 +1336,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
  //  Urgency Styling 
     const urgencyStyle = (urgency: string) => {
-        if (urgency === 'overdue') return { badge: 'bg-red-500/10 text-red-400 border-red-500/20', dot: 'bg-red-500', label: 'Overdue' };
+        if (urgency === 'overdue') return { badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20', dot: 'bg-orange-500', label: 'Overdue' };
         if (urgency === 'this_week') return { badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20', dot: 'bg-amber-500', label: 'Due this week' };
         return { badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20', dot: 'bg-blue-500', label: 'Due this month' };
     };
@@ -1376,6 +1392,8 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
         + financeCommandStats.checkExposureCount
         + financeCommandStats.bouncedCheckCount
         + financeCommandStats.overdueCount;
+    const hasSessionFinanceRecords = [...enrollments, ...payments].some(record =>
+        record.session === selectedSession || (!record.session && selectedSession === settings.academicYear));
 
     const focusedWorkspace = {
         balances: { icon: UserRoundSearch, title: 'Families to collect from', description: 'Find a family, see what remains, and take one clear action.' },
@@ -1390,52 +1408,19 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
     return (
         <div ref={financeTopRef} data-edu-system={showEducationFinanceV1 ? '1' : undefined} className={`atlas-module atlas-finance-module flex flex-col gap-4 pb-24 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-finance-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-finance-v1' : undefined}>
 
- {/*  Header  */}
-            {showEducationFinanceV1 ? (
-                <section className="edu-finance-v1__command" aria-labelledby="education-finance-title">
-                    <div className="edu-finance-v1__command-copy">
-                        <span><WalletCards size={15} />School finance <b>{selectedSession}</b></span>
-                        <h2 id="education-finance-title">Finance workspace</h2>
-                        <p>Start from the job in front of you—receive money, follow up, verify, find a receipt, or prepare accounting.</p>
-                    </div>
-                    <label className="edu-finance-v1__session-picker">
-                        <Calendar size={16} />
-                        <span>Academic session</span>
-                        <select value={selectedSession} onChange={(e) => { setSelectedSession(e.target.value); setSelectedMonth(''); }}>
-                            {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                    </label>
-                </section>
-            ) : <AtlasCommandHeader
-                eyebrow="Your daily finance helper"
-                title="Finance assistant"
-                description="Choose what you need to do. Edufy will guide the rest."
-                icon={WalletCards}
-                badges={
-                    <>
-                        <span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-semibold text-slate-400">{selectedSession}</span>
-                        {selectedMonth && (
-                            <span className="rounded-full border border-teal-400/30 bg-teal-400/10 px-2 py-0.5 text-[10px] font-semibold text-teal-200">
-                                {new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}
-                            </span>
-                        )}
-                    </>
-                }
-                actions={
-                    <>
-                        <div className="relative">
-                            <Calendar className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
-                            <select
-                                value={selectedSession}
-                                onChange={(e) => { setSelectedSession(e.target.value); setSelectedMonth(''); }}
-                                className="rounded-lg border border-white/10 bg-slate-950 py-2 pl-9 pr-8 text-sm text-slate-300 outline-none transition hover:bg-slate-900 focus:border-teal-400/60"
-                            >
-                                {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                    </>
-                }
-            />}
+            <EducationSurface role="brand-soft" className="edu-finance-workspace__header">
+                <div className="edu-finance-workspace__header-copy">
+                    <EducationBadge status="success" icon={WalletCards}>School finance</EducationBadge>
+                    <h1 id="education-finance-title">Finance workspace</h1>
+                    <p>Choose a collection task, review a payment, or find the document you need.</p>
+                </div>
+                <label className="edu-finance-workspace__session">
+                    <span><Calendar size={16} aria-hidden="true" /> Academic period</span>
+                    <select value={selectedSession} onChange={(event) => { setSelectedSession(event.target.value); setSelectedMonth(''); }}>
+                        {availableSessions.map(session => <option key={session} value={session}>{session}</option>)}
+                    </select>
+                </label>
+            </EducationSurface>
 
  {/*  KPI Cards  */}
             {/* ── Session Data Fix Banner (admin only, auto-detected) ── */}
@@ -1484,47 +1469,22 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     <Sparkles size={15} className="motion-safe:animate-pulse" /> Today
                                 </div>
                                 <h2 className="mt-2 text-xl font-black text-white sm:text-2xl">
-                                    {attentionCount > 0 ? `${attentionCount} finance task${attentionCount === 1 ? ' needs' : 's need'} attention` : 'Everything is up to date'}
+                                    {!hasSessionFinanceRecords ? 'No finance records in this period' : attentionCount > 0 ? `${attentionCount} finance task${attentionCount === 1 ? ' needs' : 's need'} attention` : 'Everything is up to date'}
                                 </h2>
                                 <p className="mt-1 text-sm leading-6 text-slate-400">
-                                    {attentionCount > 0 ? 'Start with the first task below, or record a payment when a family arrives.' : 'There are no payment exceptions waiting. You can still record a payment or review history.'}
+                                    {!hasSessionFinanceRecords ? 'Choose another academic period, or start with a new payment when records are ready.' : attentionCount > 0 ? 'Start with the first task below, or record a payment when a family arrives.' : 'There are no payment exceptions waiting. You can still record a payment or review history.'}
                                 </p>
                             </div>
                         </div>
                     </section>
 
-                    <section aria-label="Finance tasks" className="grid grid-cols-2 gap-3 xl:grid-cols-5">
-                        {can('finance.record_payment') && (
-                            <button type="button" onClick={() => onRecordPayment()} className="group min-h-40 rounded-lg border border-teal-300/25 bg-teal-300/[0.06] p-4 text-left transition duration-200 hover:border-teal-200/50 hover:bg-teal-300/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-300/60 motion-safe:hover:-translate-y-1">
-                                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-teal-300 text-slate-950"><CreditCard size={21} className="transition-transform duration-200 motion-safe:group-hover:-rotate-6 motion-safe:group-hover:scale-110" /></span>
-                                <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Record a payment</span><ChevronRight size={18} className="shrink-0 text-teal-200 transition-transform motion-safe:group-hover:translate-x-1" /></span>
-                                <span className="mt-1 block text-xs leading-5 text-slate-400">Find the child, enter the amount, and create the receipt.</span>
-                            </button>
-                        )}
-
-                        <button type="button" onClick={() => openFinanceTask('families')} className="group min-h-40 rounded-lg border border-amber-300/20 bg-amber-300/[0.04] p-4 text-left transition duration-200 hover:border-amber-200/40 hover:bg-amber-300/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/50 motion-safe:hover:-translate-y-1">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-amber-300/15 text-amber-200"><UserRoundSearch size={21} className="transition-transform duration-200 motion-safe:group-hover:scale-110" /></span>
-                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Families to collect from</span><ChevronRight size={18} className="shrink-0 text-amber-200 transition-transform motion-safe:group-hover:translate-x-1" /></span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-400">{stats.unpaidCount} learner{stats.unpaidCount === 1 ? '' : 's'} still have an open balance.</span>
-                        </button>
-
-                        <button type="button" onClick={() => openFinanceTask('verify')} className="group min-h-40 rounded-lg border border-sky-300/20 bg-sky-300/[0.04] p-4 text-left transition duration-200 hover:border-sky-200/40 hover:bg-sky-300/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/50 motion-safe:hover:-translate-y-1">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-sky-300/15 text-sky-200"><ShieldCheck size={21} className="transition-transform duration-200 motion-safe:group-hover:rotate-6 motion-safe:group-hover:scale-110" /></span>
-                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Verify payments</span><ChevronRight size={18} className="shrink-0 text-sky-200 transition-transform motion-safe:group-hover:translate-x-1" /></span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-400">{financeCommandStats.pendingVerificationCount + financeCommandStats.checkExposureCount + financeCommandStats.bouncedCheckCount} payment{financeCommandStats.pendingVerificationCount + financeCommandStats.checkExposureCount + financeCommandStats.bouncedCheckCount === 1 ? '' : 's'} need a decision.</span>
-                        </button>
-
-                        <button type="button" onClick={() => openFinanceTask('history')} className="group min-h-40 rounded-lg border border-white/10 bg-white/[0.025] p-4 text-left transition duration-200 hover:border-white/20 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/50 motion-safe:hover:-translate-y-1">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-white/[0.06] text-slate-200"><History size={21} className="transition-transform duration-200 motion-safe:group-hover:-rotate-6 motion-safe:group-hover:scale-110" /></span>
-                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Payment history</span><ChevronRight size={18} className="shrink-0 text-slate-300 transition-transform motion-safe:group-hover:translate-x-1" /></span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-400">Search receipts, print documents, or correct a mistake.</span>
-                        </button>
-
-                        {canManageInvoices && <button type="button" onClick={() => openFinanceTask('invoices')} className="group min-h-40 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] p-4 text-left transition duration-200 hover:border-violet-200/40 hover:bg-violet-300/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50 motion-safe:hover:-translate-y-1">
-                            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-violet-300/15 text-violet-200"><ReceiptText size={21} className="transition-transform duration-200 motion-safe:group-hover:scale-110" /></span>
-                            <span className="mt-5 flex items-center justify-between gap-2"><span className="text-sm font-black text-white sm:text-base">Invoices &amp; accounting</span><ChevronRight size={18} className="shrink-0 text-violet-200 transition-transform motion-safe:group-hover:translate-x-1" /></span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-400">Company billing, annual sequences, credit notes, and Excel exports.</span>
-                        </button>}
+                    <section aria-label="Finance work" className="edu-finance-workspace__tasks">
+                        {can('finance.record_payment') && <FinanceTaskCard icon={CreditCard} accent="blue" title="Record a payment" description="Find a learner and create a receipt." onClick={() => onRecordPayment()} />}
+                        <FinanceTaskCard icon={UserRoundSearch} accent="orange" title="Collections" description={`${stats.unpaidCount} learner${stats.unpaidCount === 1 ? '' : 's'} with an open balance.`} onClick={() => openFinanceTask('families')} />
+                        <FinanceTaskCard icon={ShieldCheck} accent="yellow" title="Verify payments" description={`${financeCommandStats.pendingVerificationCount + financeCommandStats.checkExposureCount + financeCommandStats.bouncedCheckCount} payment decisions waiting.`} onClick={() => openFinanceTask('verify')} />
+                        <FinanceTaskCard icon={History} accent="green" title="Transactions" description="Search receipts and review payment history." onClick={() => openFinanceTask('history')} />
+                        {canManageInvoices && <FinanceTaskCard icon={ReceiptText} accent="purple" title="Documents" description="Invoices, credit notes and accounting exports." onClick={() => openFinanceTask('invoices')} />}
+                        {can('finance.view_totals') && <FinanceTaskCard icon={BarChart2} accent="blue" title="Reports" description={`Review collections for ${selectedSession}.`} onClick={() => openFinanceTask('reports')} />}
                     </section>
 
                     <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
@@ -1534,21 +1494,21 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 <span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-400">{attentionCount} open</span>
                             </div>
                             <div className="divide-y divide-white/10">
-                                {financeCommandStats.overdueCount > 0 && <button type="button" onClick={() => openFinanceTask('follow-up')} className="group flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/[0.035]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-300/10 text-red-200"><MessageCircle size={17} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">Follow up with late families</span><span className="block text-xs text-slate-500">{financeCommandStats.overdueCount} famil{financeCommandStats.overdueCount === 1 ? 'y' : 'ies'} need a reminder.</span></span><ArrowRight size={16} className="text-slate-600 transition-transform motion-safe:group-hover:translate-x-1" /></button>}
+                                {financeCommandStats.overdueCount > 0 && <button type="button" onClick={() => openFinanceTask('follow-up')} className="group flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/[0.035]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-300/10 text-orange-200"><MessageCircle size={17} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">Follow up with late families</span><span className="block text-xs text-slate-500">{financeCommandStats.overdueCount} famil{financeCommandStats.overdueCount === 1 ? 'y' : 'ies'} need a reminder.</span></span><ArrowRight size={16} className="text-slate-600 transition-transform motion-safe:group-hover:translate-x-1" /></button>}
                                 {financeCommandStats.pendingVerificationCount > 0 && <button type="button" onClick={() => openFinanceTask('verify')} className="group flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/[0.035]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-300/10 text-amber-200"><Clock size={17} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">Verify bank transfers</span><span className="block text-xs text-slate-500">{financeCommandStats.pendingVerificationCount} transfer{financeCommandStats.pendingVerificationCount === 1 ? '' : 's'} waiting.</span></span><ArrowRight size={16} className="text-slate-600 transition-transform motion-safe:group-hover:translate-x-1" /></button>}
                                 {financeCommandStats.checkExposureCount > 0 && <button type="button" onClick={() => { openFinanceTask('verify'); setPaymentMethodFilter('check'); setTransactionStatusFilter('all'); }} className="group flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-white/[0.035]"><span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-300/10 text-sky-200"><FileText size={17} /></span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-white">Process received checks</span><span className="block text-xs text-slate-500">{financeCommandStats.checkExposureCount} check{financeCommandStats.checkExposureCount === 1 ? '' : 's'} not cleared yet.</span></span><ArrowRight size={16} className="text-slate-600 transition-transform motion-safe:group-hover:translate-x-1" /></button>}
-                                {attentionCount === 0 && <div className="flex min-h-36 flex-col items-center justify-center px-6 py-8 text-center"><CheckCircle2 size={28} className="text-teal-300" /><p className="mt-3 text-sm font-bold text-white">All caught up</p><p className="mt-1 text-xs text-slate-500">No payment needs a decision right now.</p></div>}
+                                {attentionCount === 0 && <div className="flex min-h-36 flex-col items-center justify-center px-6 py-8 text-center"><CheckCircle2 size={28} className="text-teal-300" /><p className="mt-3 text-sm font-bold text-white">{hasSessionFinanceRecords ? 'All caught up' : 'No records yet'}</p><p className="mt-1 text-xs text-slate-500">{hasSessionFinanceRecords ? 'No payment needs a decision right now.' : 'Select an academic period with records to review next steps.'}</p></div>}
                             </div>
                         </div>
 
-                        <div className="edu-finance-v1__session rounded-lg border border-white/10 bg-slate-950/45 p-4">
-                            <p className="text-[10px] font-bold uppercase text-slate-500">This session</p>
-                            <p className="mt-2 font-mono text-2xl font-black text-white">{formatCurrency(stats.realizedRevenue)}</p>
-                            <p className="mt-1 text-xs text-slate-500">Received and cleared</p>
-                            <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-teal-300 transition-all duration-500" style={{ width: `${Math.min(100, Math.max(0, stats.collectionRate))}%` }} /></div>
-                            <div className="mt-2 flex justify-between text-xs"><span className="text-slate-500">Families settled</span><span className="font-bold text-teal-200">{Math.round(stats.collectionRate)}%</span></div>
-                            <button type="button" onClick={() => setShowFinanceTools(previous => !previous)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/10 text-xs font-bold text-slate-300 transition hover:bg-white/[0.04] hover:text-white"><SlidersHorizontal size={15} /> Reports and tools</button>
-                        </div>
+                        <EducationSurface className="edu-finance-workspace__summary">
+                            <EducationBadge status="success">{selectedSession}</EducationBadge>
+                            <h3>Collected this period</h3>
+                            <strong>{can('finance.view_totals') ? formatCurrency(stats.realizedRevenue) : 'Totals restricted'}</strong>
+                            <p>Received and cleared payments</p>
+                            {can('finance.view_totals') && <EducationProgress label="Families settled" value={Math.round(stats.collectionRate)} />}
+                            <EducationButton icon={SlidersHorizontal} variant="secondary" onClick={() => setShowFinanceTools(previous => !previous)} aria-expanded={showFinanceTools}>Reports and tools</EducationButton>
+                        </EducationSurface>
                     </section>
 
                     {showFinanceTools && (
@@ -1561,13 +1521,13 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 </div>
             ) : (
                 <>
-                    <section className="edu-finance-v1__workspace-header flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/45 p-3 sm:flex-row sm:items-center">
-                        <button type="button" onClick={goFinanceHome} className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-white/10 px-3 text-xs font-bold text-slate-300 transition hover:bg-white/[0.05] hover:text-white"><ArrowLeft size={16} /> Finance home</button>
-                        {(() => { const WorkspaceIcon = focusedWorkspace[viewMode].icon; return <div className="flex min-w-0 flex-1 items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-300/10 text-teal-200"><WorkspaceIcon size={19} /></span><div className="min-w-0"><h2 className="truncate text-base font-black text-white">{focusedWorkspace[viewMode].title}</h2><p className="truncate text-xs text-slate-500">{focusedWorkspace[viewMode].description}</p></div></div>; })()}
-                        {can('finance.record_payment') && viewMode !== 'reports' && viewMode !== 'invoices' && <button type="button" onClick={() => onRecordPayment()} className="flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-teal-300 px-4 text-xs font-black text-slate-950 transition hover:bg-teal-200"><CreditCard size={16} /> Record payment</button>}
-                    </section>
+                    <EducationSurface className="edu-finance-workspace__view-header">
+                        <EducationButton icon={ArrowLeft} variant="quiet" onClick={goFinanceHome}>Finance home</EducationButton>
+                        {(() => { const WorkspaceIcon = focusedWorkspace[viewMode].icon; return <div className="edu-finance-workspace__view-title"><EducationIcon icon={WorkspaceIcon} accent={viewMode === 'invoices' ? 'purple' : viewMode === 'reports' ? 'yellow' : 'blue'} /><div><EducationBadge status="info">{selectedSession}{selectedMonth ? ` · ${new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}` : ''}</EducationBadge><h2>{focusedWorkspace[viewMode].title}</h2><p>{focusedWorkspace[viewMode].description}</p></div></div>; })()}
+                        {can('finance.record_payment') && viewMode !== 'reports' && viewMode !== 'invoices' && <EducationButton icon={CreditCard} variant="primary" onClick={() => onRecordPayment()}>Record payment</EducationButton>}
+                    </EducationSurface>
 
-            {viewMode === 'invoices' && <div className="edu-finance-v1__documents"><FinanceDocumentsPanel /></div>}
+            {viewMode === 'invoices' && <div className="edu-finance-v1__documents">{canManageInvoices ? <FinanceDocumentsPanel /> : <EducationState kind="restricted" title="Documents are restricted" description="Ask an organization manager for access to invoices and accounting." />}</div>}
 
  {/*  Monthly Revenue Chart  */}
             {viewMode === 'reports' && can('finance.view_totals') && monthlyChartData.length > 0 && (
@@ -1656,74 +1616,73 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             )}
 
  {/*  Main Table Panel  */}
-            {viewMode !== 'invoices' && <div className="edu-finance-v1__ledger rounded-lg border border-white/10 bg-slate-950/45">
+            {viewMode !== 'invoices' && <div className="edu-finance-v1__ledger edu-finance-workspace__register">
 
                 {/* Toolbar */}
-                <div className="sticky top-0 z-20 space-y-3 border-b border-white/10 bg-slate-950 p-3">
+                <div className="edu-finance-workspace__toolbar">
                     <div className="flex flex-col gap-3">
                         <div className="flex w-full flex-wrap gap-2">
                             {viewMode === 'reports' && (
-                                <div className="flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-slate-950 px-3">
-                                    <Calendar size={14} className="text-teal-300" />
+                                <div className="edu-finance-workspace__month">
+                                    <Calendar size={16} aria-hidden="true" />
                                     <input
                                         type="month"
                                         value={selectedMonth}
                                         onChange={(e) => setSelectedMonth(e.target.value)}
-                                        className="min-w-32 bg-transparent text-sm text-slate-200 outline-none"
+                                        className="edu-finance-workspace__month-input"
                                         aria-label="Report month"
                                     />
-                                    {selectedMonth && <button type="button" onClick={() => setSelectedMonth('')} className="text-lg leading-none text-slate-500 transition hover:text-white" title="Clear report month">&times;</button>}
+                                    {selectedMonth && <button type="button" onClick={() => setSelectedMonth('')} className="edu-finance-workspace__clear" aria-label="Clear report month">&times;</button>}
                                 </div>
                             )}
                             {viewMode !== 'reports' && (
-                            <div className="relative min-w-52 flex-1 xl:w-64 xl:flex-none">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
+                            <div className="edu-finance-workspace__search">
+                                <Search size={17} aria-hidden="true" />
                                 <input
                                     type="text"
                                     placeholder={viewMode === 'balances' ? 'Student or parent' : viewMode === 'upcoming' ? 'Student or program' : 'Student, check or reference'}
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white focus:border-emerald-500 outline-none"
+                                    className="edu-finance-workspace__control"
+                                    aria-label="Search finance records"
                                 />
                             </div>
                             )}
-                            <div className="relative">
-                                <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-3.5 h-3.5" />
-                                <select value={selectedProgram} onChange={(e) => setSelectedProgram(e.target.value)} className="pl-9 pr-4 py-2 bg-slate-950 border border-slate-800 text-slate-300 text-sm rounded-lg appearance-none focus:border-emerald-500 outline-none cursor-pointer">
+                            <div className="edu-finance-workspace__program">
+                                <Filter size={16} aria-hidden="true" />
+                                <select aria-label="Filter by program" value={selectedProgram} onChange={(e) => setSelectedProgram(e.target.value)} className="edu-finance-workspace__control">
                                     <option value="All">All Programs</option>
                                     {programs.filter(p => isCurrentProgramVisible(p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                             </div>
                             {viewMode === 'transactions' && (
-                                <button type="button" onClick={() => setShowHistoryFilters(previous => !previous)} className={`flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition ${showHistoryFilters ? 'border-teal-300/30 bg-teal-300/10 text-teal-200' : 'border-white/10 text-slate-400 hover:bg-white/[0.04] hover:text-white'}`}>
-                                    <SlidersHorizontal size={14} /> More filters
-                                </button>
+                                <EducationButton icon={SlidersHorizontal} variant="secondary" aria-expanded={showHistoryFilters} onClick={() => setShowHistoryFilters(previous => !previous)}>More filters</EducationButton>
                             )}
                             {viewMode === 'transactions' && transactionStatusFilter === 'attention' && (
-                                <button type="button" onClick={() => setTransactionStatusFilter('all')} className="flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] px-3 text-xs font-bold text-amber-100 transition hover:bg-amber-300/10" title="Show all payments">
-                                    <ShieldCheck size={14} /> Needs review only <span aria-hidden="true">&times;</span>
-                                </button>
+                                <EducationButton icon={ShieldCheck} variant="secondary" onClick={() => setTransactionStatusFilter('all')} title="Show all payments">Needs review only ×</EducationButton>
                             )}
  {/* Excel Export  transactions only */}
                             {viewMode === 'transactions' && can('finance.view_totals') && (
-                                <button
+                                <EducationButton
+                                    icon={Download}
                                     onClick={handleExportExcel}
                                     disabled={filteredPayments.length === 0 || !!dateRangeError}
-                                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-bold transition-colors border border-slate-700"
+                                    variant="secondary"
                                     title={dateRangeError || (filteredPayments.length === 0 ? 'No visible transactions to export' : selectedTransactionIds.size > 0 ? 'Export selected transactions to Excel' : 'Export filtered transactions to Excel')}
                                 >
-                                    <Download size={14} /> {selectedTransactionIds.size > 0 ? `Export selected (${selectedTransactionIds.size})` : `Export (${filteredPayments.length})`}
-                                </button>
+                                    {selectedTransactionIds.size > 0 ? `Export selected (${selectedTransactionIds.size})` : `Export (${filteredPayments.length})`}
+                                </EducationButton>
                             )}
  {/* Print Monthly Report  balances + month selected */}
                             {viewMode === 'reports' && selectedMonth && can('finance.view_totals') && (
-                                <button
+                                <EducationButton
+                                    icon={Printer}
                                     onClick={handlePrintMonthlyReport}
-                                    className="flex items-center gap-1.5 px-3 py-2 bg-emerald-800/60 hover:bg-emerald-700/70 text-emerald-200 hover:text-white rounded-lg text-xs font-bold transition-colors border border-emerald-700/50"
+                                    variant="secondary"
                                     title="Open the monthly report print dialog"
                                 >
-                                    <Printer size={14} /> Print Report
-                                </button>
+                                    Print report
+                                </EducationButton>
                             )}
                         </div>
                     </div>
@@ -1771,11 +1730,11 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     </select>
                                 </div>
                                 {(dateRange.start || dateRange.end || transactionStatusFilter !== 'all' || paymentMethodFilter !== 'all' || datePresetFilter !== 'all') && (
-                                    <button onClick={() => { setDateRange({ start: '', end: '' }); setTransactionStatusFilter('all'); setPaymentMethodFilter('all'); setDatePresetFilter('all'); }} className="text-xs text-red-400 hover:underline ml-2">Clear Filters</button>
+                                    <button onClick={() => { setDateRange({ start: '', end: '' }); setTransactionStatusFilter('all'); setPaymentMethodFilter('all'); setDatePresetFilter('all'); }} className="text-xs text-sky-400 hover:underline ml-2">Clear filters</button>
                                 )}
                                 {dateRangeError && <span className="text-xs font-bold text-red-300" role="alert">{dateRangeError}</span>}
                                 <div className="ml-auto text-xs text-slate-500">
-                                    {filteredPayments.length} transactions &middot; {formatCurrency(filteredPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((s, p) => s + p.amount, 0))} cleared
+                                    {filteredPayments.length} transactions{can('finance.view_totals') && <> &middot; {formatCurrency(filteredPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((s, p) => s + p.amount, 0))} cleared</>}
                                 </div>
                             </div>
 
@@ -1784,12 +1743,12 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     <div className="font-bold text-emerald-400 flex items-center gap-2">
                                         <CheckCircle2 size={16} /> {selectedTransactionIds.size} Selected
                                     </div>
-                                    <div className="flex gap-4 items-center">
+                                    {can('finance.view_totals') && <div className="flex gap-4 items-center">
                                         <div className="text-slate-300">Total: <span className="font-bold text-white font-mono ml-1">{formatCurrency(selectedSummary.total)}</span></div>
                                         {selectedSummary.cash > 0 && <div className="text-slate-400 text-xs">Cash: <span className="font-mono text-emerald-400">{formatCurrency(selectedSummary.cash)}</span></div>}
                                         {selectedSummary.transfer > 0 && <div className="text-slate-400 text-xs">Transfer: <span className="font-mono text-blue-400">{formatCurrency(selectedSummary.transfer)}</span></div>}
                                         {selectedSummary.check > 0 && <div className="text-slate-400 text-xs">Cheque: <span className="font-mono text-purple-400">{formatCurrency(selectedSummary.check)}</span></div>}
-                                    </div>
+                                    </div>}
                                     <button onClick={() => setSelectedTransactionIds(new Set())} className="ml-auto text-xs text-slate-400 hover:text-white underline">Deselect All</button>
                                 </div>
                             )}
@@ -1802,9 +1761,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             <div className="flex items-center gap-2">
                                 <span className="text-xs font-bold text-slate-500">Show</span>
                                 {(['all', 'paid', 'unpaid'] as const).map(f => (
-                                    <button key={f} onClick={() => setBalanceFilter(f)} className={`min-h-8 rounded-md border px-3 text-xs font-medium transition-colors ${balanceFilter === f
-                                        ? f === 'paid' ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900' : f === 'unpaid' ? 'bg-red-950/30 text-red-400 border-red-900' : 'bg-slate-800 text-white border-slate-600'
-                                        : 'text-slate-500 border-transparent hover:bg-slate-900'}`}>
+                                    <button type="button" key={f} onClick={() => setBalanceFilter(f)} aria-pressed={balanceFilter === f} className="edu-finance-workspace__filter">
                                         {f === 'all' ? 'Everyone' : f === 'paid' ? 'Settled' : 'Needs payment'}
                                     </button>
                                 ))}
@@ -1812,7 +1769,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             <div className="flex items-center gap-2 border-l border-slate-800 pl-3">
                                 <span className="text-xs font-bold text-slate-500">View as</span>
                                 {(['student', 'parent'] as const).map(m => (
-                                    <button key={m} onClick={() => setBalanceGrouping(m)} className={`min-h-8 rounded-md border px-3 text-xs font-medium transition-colors ${balanceGrouping === m ? 'bg-sky-900/30 text-sky-300 border-sky-800' : 'text-slate-500 border-transparent hover:bg-slate-900'}`}>
+                                    <button type="button" key={m} onClick={() => setBalanceGrouping(m)} aria-pressed={balanceGrouping === m} className="edu-finance-workspace__filter">
                                         {m === 'student' ? 'Students' : 'Families'}
                                     </button>
                                 ))}
@@ -1828,7 +1785,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             Monthly report for <strong className="text-emerald-300">{new Date(selectedMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' })}</strong>
                             <span className="text-slate-500 ml-1">
                                 &middot; {paidRows.length} paid this month
-                                {installmentUnpaidRows.length > 0 && <span className="text-red-400"> &middot; {installmentUnpaidRows.length} missed installment</span>}
+                                {installmentUnpaidRows.length > 0 && <span className="text-orange-400"> &middot; {installmentUnpaidRows.length} missed installment</span>}
                                 {annualUnpaidRows.length > 0 && <span className="text-amber-400"> &middot; {annualUnpaidRows.length} annual fee pending</span>}
                             </span>
                         </div>
@@ -1840,7 +1797,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     <div className="grid grid-cols-3 gap-px border-b border-white/10 bg-white/10">
                         <button type="button" onClick={() => handleCardClick('unpaid')} className="bg-slate-950 px-3 py-3 text-left transition-colors hover:bg-red-300/[0.05] sm:px-4">
                             <span className="block text-[10px] font-bold uppercase text-slate-500">Open balance</span>
-                            <span className="mt-1 block font-mono text-sm font-black text-red-200 sm:text-lg">{formatCurrency(stats.totalOutstanding)}</span>
+                            <span className="mt-1 block font-mono text-sm font-black text-orange-200 sm:text-lg">{formatCurrency(stats.totalOutstanding)}</span>
                             <span className="mt-0.5 block text-[10px] text-slate-600">{stats.unpaidCount} learners</span>
                         </button>
                         <div className="bg-slate-950 px-3 py-3 sm:px-4">
@@ -1857,17 +1814,10 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                 )}
 
                 {/* DATA: MONTHLY COLLECTION REPORT */}
-                {viewMode === 'reports' && !selectedMonth && (
-                    <div className="flex min-h-56 flex-col items-center justify-center border-b border-white/10 px-6 py-12 text-center">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-teal-300/20 bg-teal-300/[0.06] text-teal-200">
-                            <BarChart2 size={20} />
-                        </div>
-                        <h3 className="mt-4 text-sm font-bold text-white">Choose a month to review</h3>
-                        <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">Select a month above or choose one from collection history to see paid, missed, and outstanding accounts.</p>
-                    </div>
-                )}
+                {viewMode === 'reports' && !can('finance.view_totals') && <EducationState kind="restricted" title="Reports are restricted" description="Your role cannot view financial totals for this period." />}
+                {viewMode === 'reports' && can('finance.view_totals') && !selectedMonth && <EducationState title="Choose a month to review" description="Select a month above or choose one from collection history to see paid, missed, and outstanding accounts." />}
 
-                {viewMode === 'reports' && selectedMonth && (() => {
+                {viewMode === 'reports' && can('finance.view_totals') && selectedMonth && (() => {
                     const { installmentUnpaidRows, annualUnpaidRows, fullyPaidRows, paidRows } = monthlyReport;
                     const totalCount = installmentUnpaidRows.length + annualUnpaidRows.length + fullyPaidRows.length + paidRows.length;
                     return (
@@ -1876,28 +1826,28 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
  {/* SECTION 1: Installment due  these students have recurring plans and missed this month */}
                         {installmentUnpaidRows.length > 0 && (
                             <>
-                                <div className="px-4 py-2 bg-red-950/20 border-b border-red-900/30 flex items-center gap-2">
-                                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                    <span className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
+                                <div className="px-4 py-2 bg-orange-950/20 border-b border-orange-900/30 flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                                    <span className="text-[11px] font-bold text-orange-400 uppercase tracking-wider">
                                         Installment payment due &mdash; {installmentUnpaidRows.length} students
                                     </span>
-                                    <span className="ml-auto text-[11px] text-red-500 font-bold">
+                                    <span className="ml-auto text-[11px] text-orange-500 font-bold">
                                         {formatCurrency(installmentUnpaidRows.reduce((s, r) => s + (r.enrollment.balance || 0), 0))} outstanding
                                     </span>
                                 </div>
                                 {installmentUnpaidRows.map(({ enrollment }) => (
-                                    <div key={enrollment.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3 hover:bg-red-950/10 transition-colors group">
+                                    <div key={enrollment.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 px-4 py-3 hover:bg-orange-950/10 transition-colors group">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold text-white">{enrollment.studentName}</span>
-                                                <span className="text-[10px] uppercase font-bold bg-red-950/30 text-red-400 px-2 py-0.5 rounded border border-red-900/50">Missed</span>
+                                                <EducationStatusPill status="attention">Missed</EducationStatusPill>
                                                 <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800 px-1.5 py-0.5 rounded">{enrollment.paymentPlan}</span>
                                             </div>
                                             <div className="text-xs text-slate-400 mt-0.5">{enrollment.programName} &middot; {enrollment.gradeName} &middot; {enrollment.groupName}</div>
                                         </div>
                                         <div className="text-right shrink-0">
                                             <div className="text-[10px] text-slate-500">Outstanding balance</div>
-                                            <div className="font-bold text-red-400 font-mono">{formatCurrency(enrollment.balance || 0)}</div>
+                                            <div className="font-bold text-orange-400 font-mono">{formatCurrency(enrollment.balance || 0)}</div>
                                         </div>
                                         <div className="flex shrink-0 gap-1">
                                             <button onClick={() => handleWhatsApp(enrollment)} className="p-2 hover:bg-slate-800 rounded-lg text-emerald-500 border border-slate-700 transition-colors" title="Open WhatsApp reminder"><Phone size={15} /></button>
@@ -2113,9 +2063,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                             <td className="hidden p-4 text-right font-mono text-sm text-slate-300 lg:table-cell">{formatCurrency(enrollment.totalAmount || 0)}</td>
                                             <td className="hidden p-4 text-right font-mono text-sm text-emerald-400 md:table-cell">{formatCurrency(enrollment.paidAmount || 0)}</td>
                                             <td className="p-3 text-right sm:p-4">
-                                                <span className={`font-bold font-mono px-2 py-1 rounded text-sm ${(enrollment.balance || 0) > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
-                                                    {formatCurrency(enrollment.balance || 0)}
-                                                </span>
+                                                <EducationStatusPill status={(enrollment.balance || 0) > 0 ? 'warning' : 'success'}>{formatCurrency(enrollment.balance || 0)}</EducationStatusPill>
                                             </td>
                                             <td className="p-4 text-right">
                                                 <div className="flex justify-end gap-1">
@@ -2159,9 +2107,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                             <td className="hidden p-4 text-right font-mono text-sm text-slate-300 lg:table-cell">{formatCurrency(account.totalExpected)}</td>
                                             <td className="hidden p-4 text-right font-mono text-sm text-emerald-400 md:table-cell">{formatCurrency(account.totalPaid)}</td>
                                             <td className="p-3 text-right sm:p-4">
-                                                <span className={`font-bold font-mono px-2 py-1 rounded text-sm ${account.totalBalance > 0 ? 'bg-red-950/30 text-red-400 border border-red-900/50' : 'text-slate-500'}`}>
-                                                    {formatCurrency(account.totalBalance)}
-                                                </span>
+                                                <EducationStatusPill status={account.totalBalance > 0 ? 'warning' : 'success'}>{formatCurrency(account.totalBalance)}</EducationStatusPill>
                                             </td>
                                             <td className="p-3 text-right sm:p-4">
                                                 <div className="flex justify-end gap-1">
@@ -2330,19 +2276,12 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
  {/*  DATA: UPCOMING PAYMENTS  */}
                 {viewMode === 'upcoming' && (
                     <div className="divide-y divide-slate-800">
-                        {upcomingPayments.length === 0 ? (
-                            <div className="p-12 text-center text-slate-500">
-                                <CheckCircle2 size={40} className="mx-auto mb-3 text-emerald-600 opacity-50" />
-                                <p className="font-bold text-white mb-1">All clear!</p>
-                                <p className="text-sm">No upcoming instalment payments due in the next 30 days.</p>
-                                <p className="text-xs text-slate-600 mt-2">Only shows students on monthly, trimester, or semestre plans with an outstanding balance.</p>
-                            </div>
-                        ) : (
+                        {upcomingPayments.length === 0 ? <EducationState title="No instalments due soon" description="No monthly, trimester or semestre instalment with an open balance is due in the next 30 days." /> : (
                             <>
                                 {/* Summary bar */}
                                 <div className="px-4 py-3 bg-slate-950/50 flex flex-wrap gap-4 text-xs">
                                     {[
-                                        { key: 'overdue', label: 'Overdue', color: 'text-red-400' },
+                                        { key: 'overdue', label: 'Overdue', color: 'text-orange-400' },
                                         { key: 'this_week', label: 'Due this week', color: 'text-amber-400' },
                                         { key: 'this_month', label: 'Due this month', color: 'text-blue-400' },
                                     ].map(({ key, label, color }) => {
@@ -2366,9 +2305,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex flex-wrap items-center gap-2 mb-0.5">
                                                     <span className="font-bold text-white">{enrollment.studentName}</span>
-                                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${style.badge}`}>
-                                                        {style.label}
-                                                    </span>
+                                                    <EducationStatusPill status={urgency === 'overdue' ? 'attention' : 'info'}>{style.label}</EducationStatusPill>
                                                     <span className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800 px-2 py-0.5 rounded">
                                                         {enrollment.paymentPlan}
                                                     </span>
@@ -2384,7 +2321,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                     {dueDate ? dueDate.toLocaleDateString('fr-MA', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
                                                 </div>
                                                 {daysUntil !== null && (
-                                                    <div className={`text-[11px] font-bold ${urgency === 'overdue' ? 'text-red-400' : urgency === 'this_week' ? 'text-amber-400' : 'text-blue-400'}`}>
+                                                    <div className={`text-[11px] font-bold ${urgency === 'overdue' ? 'text-orange-400' : urgency === 'this_week' ? 'text-amber-400' : 'text-blue-400'}`}>
                                                         {urgency === 'overdue' ? `${Math.abs(daysUntil)}d overdue` : `in ${daysUntil}d`}
                                                     </div>
                                                 )}
@@ -2431,7 +2368,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             {/* --- PARENT PAYMENT MODAL --- */}
             <Modal designSystem={showEducationFinanceV1} isOpen={isParentPaymentModalOpen} onClose={() => setIsParentPaymentModalOpen(false)} title="Record Bulk Parent Payment" size="md">
                 {parentPaymentAccount && (
-                    <form onSubmit={handleSubmitParentPayment} className="space-y-5">
+                    <form onSubmit={handleSubmitParentPayment} className="edu-finance-workspace__payment-form space-y-5">
                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                             <h3 className="font-bold text-white mb-1">{parentPaymentAccount.parentName || 'Parent Account'}</h3>
                             <p className="text-xs text-slate-400 mb-3">{parentPaymentAccount.phone || 'No phone'}</p>
@@ -2448,7 +2385,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             </div>
                             <div className="flex justify-between items-center mt-3 pt-3 border-t-2 border-slate-700/80 font-bold">
                                 <span className="text-white text-sm">Total Outstanding</span>
-                                <span className="text-red-400 font-mono">{formatCurrency(parentPaymentAccount.totalBalance)}</span>
+                                <span className="text-orange-400 font-mono">{formatCurrency(parentPaymentAccount.totalBalance)}</span>
                             </div>
                         </div>
 
@@ -2462,11 +2399,11 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Amount to pay ({settings.currencySymbol || 'MAD'})</label>
-                                <input required type="number" min="0.01" max={parentPaymentAccount.totalBalance} step="0.01" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={parentPaymentForm.amount} onChange={e => setParentPaymentForm({ ...parentPaymentForm, amount: e.target.value as any })} />
+                                <input aria-label="Amount to pay" required type="number" min="0.01" max={parentPaymentAccount.totalBalance} step="0.01" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg focus:border-emerald-500 outline-none" value={parentPaymentForm.amount} onChange={e => setParentPaymentForm({ ...parentPaymentForm, amount: e.target.value as any })} />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
-                                <input required type="date" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={parentPaymentForm.date} onChange={e => setParentPaymentForm({ ...parentPaymentForm, date: e.target.value })} />
+                                <input aria-label="Payment date" required type="date" className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" value={parentPaymentForm.date} onChange={e => setParentPaymentForm({ ...parentPaymentForm, date: e.target.value })} />
                             </div>
                         </div>
 
@@ -2477,6 +2414,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     <button
                                         key={m}
                                         type="button"
+                                        aria-pressed={parentPaymentForm.method === m}
                                         onClick={() => setParentPaymentForm({ ...parentPaymentForm, method: m as any, checkNumber: m === 'check' ? parentPaymentForm.checkNumber : '', bankName: m === 'check' ? parentPaymentForm.bankName : '', depositDate: m === 'check' ? parentPaymentForm.depositDate : '', proofUrl: m === 'virement' ? parentPaymentForm.proofUrl : '' })}
                                         className={`py-2 rounded-lg text-xs font-bold capitalize border transition-all ${parentPaymentForm.method === m ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'}`}
                                     >
@@ -2489,10 +2427,10 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         {parentPaymentForm.method === 'check' && (
                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 animate-in slide-in-from-top-2">
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Check No.</label><input required className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.checkNumber} onChange={e => setParentPaymentForm({ ...parentPaymentForm, checkNumber: e.target.value })} placeholder="e.g. 739201" /></div>
-                                    <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Bank</label><input required className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.bankName} onChange={e => setParentPaymentForm({ ...parentPaymentForm, bankName: e.target.value })} placeholder="e.g. BMCE" /></div>
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Check No.</label><input aria-label="Check number" required className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.checkNumber} onChange={e => setParentPaymentForm({ ...parentPaymentForm, checkNumber: e.target.value })} placeholder="e.g. 739201" /></div>
+                                    <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Bank</label><input aria-label="Bank" required className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.bankName} onChange={e => setParentPaymentForm({ ...parentPaymentForm, bankName: e.target.value })} placeholder="e.g. BMCE" /></div>
                                 </div>
-                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Planned deposit date (optional)</label><input type="date" min={parentPaymentForm.date} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.depositDate} onChange={e => setParentPaymentForm({ ...parentPaymentForm, depositDate: e.target.value })} /></div>
+                                <div><label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Planned deposit date (optional)</label><input aria-label="Planned deposit date" type="date" min={parentPaymentForm.date} className="w-full bg-slate-900 border border-slate-800 rounded p-2 text-white text-sm" value={parentPaymentForm.depositDate} onChange={e => setParentPaymentForm({ ...parentPaymentForm, depositDate: e.target.value })} /></div>
                             </div>
                         )}
 
@@ -2503,7 +2441,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                     <div className="flex items-center gap-3">
                                         <label className="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors">
                                             <Upload size={14} /> Upload Image
-                                            <input type="file" accept="image/*" className="hidden" onChange={handleProofUpload} />
+                                            <input type="file" accept="image/*" className="sr-only" onChange={handleProofUpload} />
                                         </label>
                                         {parentPaymentForm.proofUrl && <div className="text-emerald-400 text-xs flex items-center gap-1"><ImageIcon size={14} /> Attached</div>}
                                     </div>
@@ -2557,7 +2495,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 </section>
                             )}
                             {/* Family Summary Header */}
-                            <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 flex justify-between items-start">
+                            <div className="bg-slate-950 p-5 rounded-xl border border-slate-800 flex flex-wrap justify-between items-start gap-4">
                                 <div>
                                     <h3 className="text-lg font-bold text-white mb-1">{statementViewAccount.parentName || 'Parent Account'}</h3>
                                     <div className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12} /> {statementViewAccount.phone || 'No phone'}</div>
@@ -2565,7 +2503,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                 </div>
                                 <div className="text-right">
                                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Family Balance</div>
-                                    <div className={`text-2xl font-mono font-bold ${statementViewAccount.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    <div className={`text-2xl font-mono font-bold ${statementViewAccount.totalBalance > 0 ? 'text-orange-400' : 'text-emerald-400'}`}>
                                         {formatCurrency(statementViewAccount.totalBalance)}
                                     </div>
                                     <div className="text-[10px] text-slate-500 mt-1">Expected: {formatCurrency(statementViewAccount.totalExpected)} &middot; Paid: {formatCurrency(statementViewAccount.totalPaid)}</div>
@@ -2580,7 +2518,13 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             {/* Children & Enrollments Section */}
                             <div className="space-y-2.5">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Children & Programs</h4>
-                                <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50">
+                                <div className="edu-finance-workspace__statement-cards sm:hidden">
+                                    {statementViewAccount.children.map((child: any) => <article key={child.enrollment.id} className="edu-finance-workspace__statement-card">
+                                        <strong>{child.student.name}</strong><p>{child.enrollment.programName}</p>
+                                        <dl><div><dt>Agreed fee</dt><dd>{formatCurrency(child.enrollment.totalAmount || 0)}</dd></div><div><dt>Discount</dt><dd>{formatCurrency(getEnrollmentFinancialSummary(child.enrollment, programs).discountAmount)}</dd></div><div><dt>Received</dt><dd>{formatCurrency(child.enrollment.paidAmount || 0)}</dd></div><div><dt>Remaining</dt><dd><EducationStatusPill status={child.enrollment.balance > 0 ? 'warning' : 'success'}>{formatCurrency(child.enrollment.balance || 0)}</EducationStatusPill></dd></div></dl>
+                                    </article>)}
+                                </div>
+                                <div className="hidden border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50 sm:block">
                                     <table className="w-full text-left text-xs">
                                         <thead className="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800">
                                             <tr>
@@ -2604,7 +2548,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                                                     <td className="p-3 text-right font-mono text-amber-300">{getEnrollmentFinancialSummary(c.enrollment, programs).discountAmount > 0 ? formatCurrency(getEnrollmentFinancialSummary(c.enrollment, programs).discountAmount) : '-'}</td>
                                                     <td className="p-3 text-right font-mono text-emerald-400">{formatCurrency(c.enrollment.paidAmount || 0)}</td>
                                                     <td className="p-3 text-right font-mono font-bold text-slate-200">
-                                                        <span className={c.enrollment.balance > 0 ? 'text-red-400' : 'text-slate-500'}>
+                                                        <span className={c.enrollment.balance > 0 ? 'text-orange-400' : 'text-slate-500'}>
                                                             {formatCurrency(c.enrollment.balance || 0)}
                                                         </span>
                                                     </td>
@@ -2618,7 +2562,14 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             {/* Transactions History Section */}
                             <div className="space-y-2.5">
                                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment History</h4>
-                                <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50 max-h-60 overflow-y-auto">
+                                <div className="edu-finance-workspace__statement-cards sm:hidden">
+                                    {parentPayments.length === 0 ? <p>No payments recorded yet.</p> : parentPayments.map((payment: Payment) => <article key={payment.id} className="edu-finance-workspace__statement-card">
+                                        <strong>{statementViewAccount.children.find((child: any) => child.enrollment.id === payment.enrollmentId)?.student.name || payment.studentName}</strong>
+                                        <p>{formatDate(payment.date)} · {payment.method} {payment.checkNumber ? `· #${payment.checkNumber}` : payment.bankName ? `· ${payment.bankName}` : ''}</p>
+                                        <div className="edu-finance-workspace__statement-payment"><b>{formatCurrency(payment.amount)}</b><EducationStatusPill status={['paid', 'verified'].includes(payment.status) ? 'success' : payment.status === 'check_bounced' ? 'danger' : 'warning'}>{payment.status.replace(/_/g, ' ')}</EducationStatusPill></div>
+                                    </article>)}
+                                </div>
+                                <div className="hidden border border-slate-800 rounded-xl overflow-hidden bg-slate-900/50 max-h-60 overflow-y-auto sm:block">
                                     <table className="w-full text-left text-xs">
                                         <thead className="bg-slate-950 text-slate-400 font-semibold uppercase tracking-wider border-b border-slate-800 sticky top-0">
                                             <tr>
@@ -2687,24 +2638,24 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
             </Modal>
 
             <Modal designSystem={showEducationFinanceV1} isOpen={!!editingTransaction} onClose={() => setEditingTransaction(null)} title="Edit transaction">
-                <form onSubmit={handleSaveTransactionEdit} className="space-y-4">
+                <form onSubmit={handleSaveTransactionEdit} className="edu-finance-workspace__edit-form space-y-4">
                     <div className="rounded-lg border border-amber-300/20 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">
                         Changing the amount or clearing status also reconciles the linked enrollment balance in the same atomic write.
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Amount ({settings.currencySymbol || 'MAD'})</label>
-                            <input type="number" min="0.01" step="0.01" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.amount || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, amount: Number(e.target.value) })} />
+                            <input aria-label="Transaction amount" type="number" min="0.01" step="0.01" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.amount || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, amount: Number(e.target.value) })} />
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Accounting date</label>
-                            <input type="date" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.date || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, date: e.target.value })} />
+                            <input aria-label="Accounting date" type="date" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.date || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, date: e.target.value })} />
                         </div>
                     </div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Method</label>
-                            <select className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.method || 'cash'} onChange={e => {
+                            <select aria-label="Payment method" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.method || 'cash'} onChange={e => {
                                 const method = e.target.value as Payment['method'];
                                 const status: Payment['status'] = method === 'cash' ? 'paid' : method === 'check' ? 'check_received' : 'pending_verification';
                                 setEditTransactionForm(previous => ({
@@ -2724,7 +2675,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-slate-400 mb-1">Lifecycle status</label>
-                            <select className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.status || 'paid'} onChange={e => setEditTransactionForm({ ...editTransactionForm, status: e.target.value as Payment['status'] })}>
+                            <select aria-label="Lifecycle status" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.status || 'paid'} onChange={e => setEditTransactionForm({ ...editTransactionForm, status: e.target.value as Payment['status'] })}>
                                 {(editTransactionForm.method || 'cash') === 'cash' && <><option value="paid">Paid / cleared</option><option value="verified">Verified / cleared</option></>}
                                 {editTransactionForm.method === 'virement' && <><option value="pending_verification">Pending verification</option><option value="verified">Verified / cleared</option><option value="paid">Paid / cleared (legacy)</option></>}
                                 {editTransactionForm.method === 'check' && <><option value="check_received">Check received</option><option value="check_deposited">Check deposited</option><option value="paid">Check cleared</option><option value="verified">Verified / cleared</option><option value="check_bounced">Check bounced</option></>}
@@ -2733,9 +2684,9 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                     </div>
                     {editTransactionForm.method === 'check' && (
                         <div className="grid grid-cols-1 gap-4 rounded-lg border border-white/10 bg-slate-950 p-3 sm:grid-cols-2">
-                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Check number</label><input required type="text" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.checkNumber || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, checkNumber: e.target.value })} /></div>
-                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Bank</label><input required type="text" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.bankName || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, bankName: e.target.value })} /></div>
-                            <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-400 mb-1">Deposit date</label><input type="date" min={editTransactionForm.date || undefined} className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.depositDate || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, depositDate: e.target.value })} /></div>
+                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Check number</label><input aria-label="Check number" required type="text" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.checkNumber || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, checkNumber: e.target.value })} /></div>
+                            <div><label className="block text-xs font-medium text-slate-400 mb-1">Bank</label><input aria-label="Bank" required type="text" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.bankName || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, bankName: e.target.value })} /></div>
+                            <div className="sm:col-span-2"><label className="block text-xs font-medium text-slate-400 mb-1">Deposit date</label><input aria-label="Deposit date" type="date" min={editTransactionForm.date || undefined} className="w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-white" value={editTransactionForm.depositDate || ''} onChange={e => setEditTransactionForm({ ...editTransactionForm, depositDate: e.target.value })} /></div>
                         </div>
                     )}
                     {editTransactionForm.method === 'virement' && (
@@ -2743,7 +2694,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
                             <label className="mb-2 block text-xs font-medium text-slate-400">Transfer proof {editTransactionForm.status === 'verified' ? '(required to verify)' : '(recommended)'}</label>
                             <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-bold text-slate-300 hover:bg-white/[0.08]">
                                 <Upload size={14} /> {editTransactionForm.proofUrl ? 'Replace proof' : 'Attach proof'}
-                                <input type="file" accept="image/*" className="hidden" onChange={handleTransactionProofUpload} />
+                                <input type="file" accept="image/*" className="sr-only" onChange={handleTransactionProofUpload} />
                             </label>
                             {editTransactionForm.proofUrl && <span className="ml-3 text-xs font-bold text-emerald-300">Proof attached</span>}
                         </div>

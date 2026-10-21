@@ -1,0 +1,13 @@
+import React,{useSyncExternalStore} from 'react';
+let message='',revision=0;const listeners=new Set();
+const notify=()=>{revision++;listeners.forEach(fn=>fn());};
+const params=new URLSearchParams(location.search);
+const today=new Date();const date=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+export const useAppContext=()=>({bookings:params.get('scenario')==='empty'?[]:[{id:'sample-1',organizationId:'synthetic-only',kidName:'Alex Example',parentName:'Example family',phoneNumber:'',status:'attended',workshopSlotId:'slot-1'}],workshopSlots:[{id:'slot-1',workshopTemplateId:'template-1',date,startTime:'10:00'}],workshopTemplates:[{id:'template-1',title:'Build a rover'}],programs:[{id:'program-1',name:'Robotics workshop'}],leads:[]});
+export const useAuth=()=>({currentOrganization:{id:'synthetic-only'},can:()=>true});
+export const useConfirm=()=>({alert:async(title,detail)=>{message=`${title}: ${detail}`;notify();},confirm:async()=>false});
+export const db={synthetic:true};
+export const doc=()=>({});export const collection=()=>({});export const serverTimestamp=()=>null;export const arrayUnion=(...values)=>values;
+export const runTransaction=async()=>{throw new Error('Writes disabled in this UI preview');};
+export const writeBatch=()=>({set:()=>{},update:()=>{},commit:async()=>{throw new Error('Writes disabled in this UI preview');}});
+export const ModuleFixtureControls=()=>{useSyncExternalStore(fn=>{listeners.add(fn);return()=>listeners.delete(fn);},()=>revision);return <aside aria-label="Synthetic QA controls"><strong>Synthetic preview · no school records · writes disabled</strong><p role="status">{message}</p></aside>;};

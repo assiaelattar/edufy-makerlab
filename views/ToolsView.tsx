@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import './admin/education-admin-tools-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
 import {
     AlertTriangle,
     Ban,
@@ -381,7 +383,7 @@ export const ToolsView = () => {
 
     if (!hasSettingsAccess) {
         return (
-            <div className="flex h-full items-center justify-center pb-24 md:pb-8">
+            <div className={`flex h-full items-center justify-center pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-school-ops-v1 edu-admin-tools-v1' : ''}`} data-edu-system={showEducationAdminToolsV1 ? '1' : undefined}>
                 <AtlasEmptyState
                     title="Tools access is restricted"
                     description="An administrator can grant Settings management access for this workspace."
@@ -393,7 +395,7 @@ export const ToolsView = () => {
 
     if (!hasActiveTenant) {
         return (
-            <div className="flex h-full items-center justify-center pb-24 md:pb-8">
+            <div className={`flex h-full items-center justify-center pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-school-ops-v1 edu-admin-tools-v1' : ''}`} data-edu-system={showEducationAdminToolsV1 ? '1' : undefined}>
                 <AtlasEmptyState
                     title="Active workspace required"
                     description="Maintenance tools stay locked until an active organization is selected. Suspended and trial workspaces cannot run tenant data operations here."
@@ -404,7 +406,7 @@ export const ToolsView = () => {
     }
 
     return (
-        <div className={`flex h-full flex-col gap-4 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-admin-tools-v1' : ''}`} data-testid={showEducationAdminToolsV1 ? 'education-admin-tools-v1' : undefined}>
+        <div className={`flex h-full flex-col gap-4 pb-24 md:pb-8 ${showEducationAdminToolsV1 ? 'edu-v1 edu-school-ops-v1 edu-admin-tools-v1' : ''}`} data-edu-system={showEducationAdminToolsV1 ? '1' : undefined} data-testid={showEducationAdminToolsV1 ? 'education-admin-tools-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Maintenance console"
                 title="Admin Tools"

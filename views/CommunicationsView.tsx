@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import './family-journey/education-family-journey-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
+import './communications/education-communications-v1.css';
 import {
     AlertCircle,
     CalendarClock,
@@ -26,6 +28,7 @@ import { db } from '../services/firebase';
 import { Announcement, CommunicationTemplate } from '../types';
 import { formatDate } from '../utils/helpers';
 import { Modal } from '../components/Modal';
+import { EducationButton, EducationState, EducationTabs } from '../components/education-ui/EducationPrimitives';
 import {
     AtlasActionButton,
     AtlasCommandHeader,
@@ -98,14 +101,16 @@ const timestampValue = (value: unknown) => {
 export const CommunicationsView = () => {
     const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { students, enrollments, programs } = useAppContext();
-    const { currentOrganization, can } = useAuth();
+    const { currentOrganization, can, user } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const [activeTab, setActiveTab] = useState<CommunicationsTab>('overview');
     const [templates, setTemplates] = useState<CommunicationTemplate[]>([]);
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
+    const [loadedOrganizationId, setLoadedOrganizationId] = useState('');
     const [saving, setSaving] = useState(false);
     const [loadError, setLoadError] = useState('');
+    const [loadRevision, setLoadRevision] = useState(0);
     const [templateFilter, setTemplateFilter] = useState<'all' | TemplateCategory>('all');
     const [templateSearch, setTemplateSearch] = useState('');
     const [historySearch, setHistorySearch] = useState('');
@@ -121,18 +126,40 @@ export const CommunicationsView = () => {
 
     const organizationId = currentOrganization?.id || '';
     const canManage = can('marketing.create');
+    const workspaceLoading = loading || Boolean(organizationId && loadedOrganizationId !== organizationId && !loadError);
+    const workspaceReady = !workspaceLoading && !loadError && loadedOrganizationId === organizationId;
+
+    useEffect(() => {
+        setActiveTab('overview');
+        setTemplateFilter('all');
+        setTemplateSearch('');
+        setHistorySearch('');
+        setTemplateCategory('news');
+        setMessageForm({ title: '', content: '', targetType: 'all', targetIds: [] });
+        setIsQueueOpen(false);
+        setQueueIndex(0);
+    }, [organizationId, user?.uid]);
 
     useEffect(() => {
         let cancelled = false;
 
         const fetchData = async () => {
             if (!db || !organizationId) {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) {
+                    setTemplates([]);
+                    setAnnouncements([]);
+                    setLoadedOrganizationId('');
+                    setLoadError('Organization context is unavailable. Select an organization and retry.');
+                    setLoading(false);
+                }
                 return;
             }
 
             setLoading(true);
             setLoadError('');
+            setTemplates([]);
+            setAnnouncements([]);
+            setLoadedOrganizationId('');
             try {
                 const communicationsRef = doc(db, 'organizations', organizationId, 'settings', 'communications');
                 const [communicationsSnapshot, announcementsSnapshot] = await Promise.all([
@@ -150,6 +177,7 @@ export const CommunicationsView = () => {
 
                 setTemplates(storedTemplates);
                 setAnnouncements(storedAnnouncements);
+                setLoadedOrganizationId(organizationId);
             } catch (error) {
                 console.error('Unable to load communications workspace', error);
                 if (!cancelled) setLoadError('Communications data could not be loaded. Check your connection and tenant access, then retry.');
@@ -162,7 +190,7 @@ export const CommunicationsView = () => {
         return () => {
             cancelled = true;
         };
-    }, [organizationId]);
+    }, [organizationId, loadRevision]);
 
     const tenantStudents = useMemo(
         () => students.filter(student => student.organizationId === organizationId),
@@ -204,12 +232,14 @@ export const CommunicationsView = () => {
     );
     const programAudienceCounts = useMemo(() => {
         const counts = new Map<string, Set<string>>();
+        const activeIds = new Set(activeStudents.map(student => student.id));
         tenantEnrollments.forEach(enrollment => {
+            if (!activeIds.has(enrollment.studentId)) return;
             if (!counts.has(enrollment.programId)) counts.set(enrollment.programId, new Set());
             counts.get(enrollment.programId)?.add(enrollment.studentId);
         });
         return counts;
-    }, [tenantEnrollments]);
+    }, [activeStudents, tenantEnrollments]);
 
     const filteredTemplates = useMemo(() => {
         const search = templateSearch.trim().toLowerCase();
@@ -539,7 +569,7 @@ export const CommunicationsView = () => {
     ];
 
     return (
-        <div className={`space-y-4 pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-communications-v1' : ''}`} data-testid={showEducationFamilyJourneyV1 ? 'education-communications-v1' : undefined}>
+        <div className={`space-y-4 pb-8 ${showEducationFamilyJourneyV1 ? 'edu-v1 edu-school-ops-v1 edu-communications-v1' : ''}`} data-edu-system={showEducationFamilyJourneyV1 ? '1' : undefined} data-testid={showEducationFamilyJourneyV1 ? 'education-communications-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Edufy ERP / Family operations"
                 title="Communications"
@@ -551,57 +581,35 @@ export const CommunicationsView = () => {
                     </span>
                 }
                 actions={
-                    <AtlasActionButton icon={Plus} variant="primary" onClick={() => switchTab('compose')} disabled={!canManage}>
+                    <AtlasActionButton icon={Plus} variant="primary" onClick={() => switchTab('compose')} disabled={!canManage || !workspaceReady}>
                         Compose
                     </AtlasActionButton>
                 }
             />
 
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {workspaceLoading && <EducationState kind="loading" title="Loading communications" description="Checking this organization's templates and dashboard posts." />}
+
+            {!workspaceLoading && loadError && <EducationState kind="error" title="Communications unavailable" description={loadError}><EducationButton onClick={() => setLoadRevision(revision => revision + 1)}>Retry loading</EducationButton></EducationState>}
+
+            {workspaceReady && <>
+            <div className="edu-communications-summary grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <AtlasSignalCard label="Active audience" value={activeStudents.length} detail="Tenant-scoped students" icon={Users} tone="teal" />
-                <AtlasSignalCard label="WhatsApp ready" value={reachableCount} detail={`${activeStudents.length - reachableCount} need a phone`} icon={MessageCircle} tone="emerald" />
+                <AtlasSignalCard label="Parent phones" value={reachableCount} detail={`${activeStudents.length - reachableCount} need a phone`} icon={MessageCircle} tone="emerald" />
                 <AtlasSignalCard label="Templates" value={templates.length} detail="Organization library" icon={FileText} tone="amber" />
                 <AtlasSignalCard label="Dashboard posts" value={announcements.length} detail="Publication history" icon={CheckCircle2} tone="blue" />
             </div>
 
-            {loadError && (
-                <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-400/25 bg-red-500/10 p-4 text-sm text-red-100">
-                    <AlertCircle size={18} className="mt-0.5 shrink-0" />
-                    <div><strong className="block">Workspace unavailable</strong><span className="text-red-200/80">{loadError}</span></div>
-                </div>
-            )}
-
             {!canManage && (
-                <div className="flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+                <div className="edu-communications-access flex items-start gap-3 p-4 text-sm" role="status">
                     <AlertCircle size={18} className="mt-0.5 shrink-0" />
-                    <div><strong className="block">View-only access</strong><span className="text-amber-100/75">Your role can inspect communication history but cannot publish or change templates.</span></div>
+                    <div><strong className="block">View-only access</strong><span>Your role can inspect communication history and templates but cannot publish or change templates.</span></div>
                 </div>
             )}
 
-            <div className="sticky top-0 z-20 -mx-1 bg-[#08111F] px-1 py-2">
-                <nav role="tablist" aria-label="Communications sections" className="flex gap-1 overflow-x-auto rounded-lg border border-white/10 bg-slate-950/95 p-1 custom-scrollbar">
-                    {tabItems.map(item => {
-                        const Icon = item.icon;
-                        const isActive = activeTab === item.id;
-                        return (
-                            <button
-                                key={item.id}
-                                type="button"
-                                role="tab"
-                                aria-selected={isActive}
-                                aria-controls={`communications-panel-${item.id}`}
-                                onClick={() => switchTab(item.id)}
-                                className={`flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${isActive ? 'bg-teal-500 text-slate-950' : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
-                            >
-                                <Icon size={16} /> {item.label}
-                            </button>
-                        );
-                    })}
-                </nav>
-            </div>
+            <EducationTabs items={tabItems} value={activeTab} onChange={tab => switchTab(tab as CommunicationsTab)} label="Communications sections" sticky idPrefix="communications" />
 
             {activeTab === 'overview' && (
-                <section id="communications-panel-overview" role="tabpanel" tabIndex={-1} className="space-y-4 outline-none">
+                <section id="communications-panel-overview" role="tabpanel" aria-labelledby="communications-overview" tabIndex={-1} className="space-y-4 outline-none">
                     <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
                         <div className="rounded-lg border border-white/10 bg-slate-900/70 p-4">
                             <AtlasSectionHeader title="Channel readiness" description="What Edufy can reliably do from this workspace today." icon={Inbox} />
@@ -666,13 +674,13 @@ export const CommunicationsView = () => {
             )}
 
             {activeTab === 'compose' && (
-                <section id="communications-panel-compose" role="tabpanel" tabIndex={-1} className="space-y-4 outline-none">
+                <section id="communications-panel-compose" role="tabpanel" aria-labelledby="communications-compose" tabIndex={-1} className="space-y-4 outline-none">
                     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
                         <div className="rounded-lg border border-white/10 bg-slate-900/70 p-4">
                             <AtlasSectionHeader title="Message workspace" description="Write once, then choose a real publication path." icon={Send} />
                             <div className="mt-4 space-y-4">
-                                <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-400">Message title</span><input value={messageForm.title} maxLength={120} onChange={event => setMessageForm(previous => ({ ...previous, title: event.target.value }))} placeholder="A clear internal and dashboard title" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-semibold text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/50" /></label>
-                                <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-400">Message</span><textarea value={messageForm.content} maxLength={4000} onChange={event => setMessageForm(previous => ({ ...previous, content: event.target.value }))} placeholder="Write the operational update and next action." className="min-h-56 w-full resize-y rounded-lg border border-white/10 bg-slate-950 p-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/50" /></label>
+                                <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-400">Message title <span aria-hidden="true">*</span></span><input value={messageForm.title} required maxLength={120} onChange={event => setMessageForm(previous => ({ ...previous, title: event.target.value }))} placeholder="A clear internal and dashboard title" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-semibold text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/50" /></label>
+                                <label className="block"><span className="mb-1.5 block text-xs font-bold text-slate-400">Message <span aria-hidden="true">*</span></span><textarea value={messageForm.content} required maxLength={4000} onChange={event => setMessageForm(previous => ({ ...previous, content: event.target.value }))} placeholder="Write the operational update and next action." className="min-h-56 w-full resize-y rounded-lg border border-white/10 bg-slate-950 p-3 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/50" /></label>
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className="text-xs text-slate-500">Insert for WhatsApp:</span>
                                     {['{{student_name}}', '{{parent_name}}'].map(token => <button key={token} type="button" onClick={() => setMessageForm(previous => ({ ...previous, content: `${previous.content}${previous.content ? ' ' : ''}${token}` }))} className="min-h-9 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 font-mono text-xs text-teal-200 hover:bg-white/[0.08]">{token}</button>)}
@@ -749,10 +757,10 @@ export const CommunicationsView = () => {
             )}
 
             {activeTab === 'templates' && (
-                <section id="communications-panel-templates" role="tabpanel" tabIndex={-1} className="space-y-4 outline-none">
+                <section id="communications-panel-templates" role="tabpanel" aria-labelledby="communications-templates" tabIndex={-1} className="space-y-4 outline-none">
                     <AtlasToolbar
-                        leading={<div className="relative min-w-56 flex-1"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input value={templateSearch} onChange={event => setTemplateSearch(event.target.value)} placeholder="Search templates" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50" /></div>}
-                        trailing={<><select value={templateFilter} onChange={event => setTemplateFilter(event.target.value as 'all' | TemplateCategory)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/50"><option value="all">All categories</option>{CATEGORY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><AtlasActionButton icon={Plus} onClick={handleSeedTemplates} disabled={!canManage || saving}>Add starters</AtlasActionButton></>}
+                        leading={<div className="relative min-w-56 flex-1"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input value={templateSearch} onChange={event => setTemplateSearch(event.target.value)} aria-label="Search templates" placeholder="Search templates" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50" /></div>}
+                        trailing={<><select value={templateFilter} onChange={event => setTemplateFilter(event.target.value as 'all' | TemplateCategory)} aria-label="Filter templates by category" className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/50"><option value="all">All categories</option>{CATEGORY_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><AtlasActionButton icon={Plus} onClick={handleSeedTemplates} disabled={!canManage || saving}>Add starters</AtlasActionButton></>}
                     >
                         <span className="text-xs text-slate-500">{filteredTemplates.length} shown</span>
                     </AtlasToolbar>
@@ -776,8 +784,8 @@ export const CommunicationsView = () => {
             )}
 
             {activeTab === 'history' && (
-                <section id="communications-panel-history" role="tabpanel" tabIndex={-1} className="space-y-4 outline-none">
-                    <AtlasToolbar leading={<div className="relative min-w-56 flex-1"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input value={historySearch} onChange={event => setHistorySearch(event.target.value)} placeholder="Search dashboard posts" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50" /></div>}><span className="text-xs text-slate-500">Publication history only. Provider delivery is not tracked.</span></AtlasToolbar>
+                <section id="communications-panel-history" role="tabpanel" aria-labelledby="communications-history" tabIndex={-1} className="space-y-4 outline-none">
+                    <AtlasToolbar leading={<div className="relative min-w-56 flex-1"><Search size={16} className="pointer-events-none absolute left-3 top-3 text-slate-500" /><input value={historySearch} onChange={event => setHistorySearch(event.target.value)} aria-label="Search dashboard posts" placeholder="Search dashboard posts" className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50" /></div>}><span className="text-xs text-slate-500">Publication history only. Provider delivery is not tracked.</span></AtlasToolbar>
                     <div className="space-y-2">
                         {filteredAnnouncements.map(item => (
                             <article key={item.id} className="rounded-lg border border-white/10 bg-slate-900/70 p-4">
@@ -793,19 +801,22 @@ export const CommunicationsView = () => {
                 </section>
             )}
 
-            <Modal isOpen={isQueueOpen} onClose={() => setIsQueueOpen(false)} title="Review WhatsApp drafts" size="lg">
+            <Modal isOpen={isQueueOpen} onClose={() => setIsQueueOpen(false)} title="Review WhatsApp drafts" size="lg" designSystem={showEducationFamilyJourneyV1}>
+                <div className="edu-communications-dialog edu-school-ops-v1" data-edu-system={showEducationFamilyJourneyV1 ? '1' : undefined}>
                 {currentQueueStudent ? (
                     <div className="space-y-4">
                         <div className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100/80"><strong className="block text-amber-100">Operator-assisted workflow</strong>Edufy opens a personalized WhatsApp draft. Review it, send it in WhatsApp if appropriate, then return here. Delivery and replies are not tracked.</div>
-                        <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase text-slate-500">Recipient {queueIndex + 1} of {whatsappRecipients.length}</p><h3 className="mt-1 text-xl font-black text-white">{currentQueueStudent.name}</h3><p className="mt-1 flex items-center gap-2 text-sm text-slate-400"><Phone size={14} /> {currentQueueStudent.parentPhone}</p></div><span className="rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs font-bold text-teal-200">{Math.round(((queueIndex + 1) / whatsappRecipients.length) * 100)}%</span></div>
+                        <div className="flex items-center justify-between gap-3" aria-live="polite"><div><p className="text-xs font-bold uppercase text-slate-500">Recipient {queueIndex + 1} of {whatsappRecipients.length}</p><h3 className="mt-1 text-xl font-black text-white">{currentQueueStudent.name}</h3><p className="mt-1 flex items-center gap-2 text-sm text-slate-400"><Phone size={14} /> {currentQueueStudent.parentPhone}</p></div><span className="rounded-lg border border-teal-400/20 bg-teal-400/10 px-3 py-2 text-xs font-bold text-teal-200">{Math.round(((queueIndex + 1) / whatsappRecipients.length) * 100)}%</span></div>
                         <div className="h-2 overflow-hidden rounded-lg bg-slate-950"><div className="h-full bg-teal-500 transition-[width] duration-200" style={{ width: `${((queueIndex + 1) / whatsappRecipients.length) * 100}%` }} /></div>
                         <div className="rounded-lg border border-white/10 bg-slate-950/70 p-4"><p className="mb-2 text-[10px] font-black uppercase text-slate-500">Personalized preview</p><p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{generateMessage(currentQueueStudent.id)}</p></div>
                         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><AtlasActionButton icon={SkipForward} onClick={() => advanceQueue(false)}>Skip recipient</AtlasActionButton><AtlasActionButton icon={MessageCircle} variant="primary" onClick={() => advanceQueue(true)}>Open draft and continue</AtlasActionButton></div>
                     </div>
                 ) : (
-                    <AtlasEmptyState title="No WhatsApp recipients" description="Choose an audience with at least one valid parent phone number." icon={MessageCircle} />
+                    <AtlasEmptyState title="No WhatsApp recipients" description="Choose an audience with at least one parent phone number." icon={MessageCircle} />
                 )}
+                </div>
             </Modal>
+            </>}
         </div>
     );
 };

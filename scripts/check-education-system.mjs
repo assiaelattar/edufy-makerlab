@@ -1,6 +1,7 @@
 import {readFileSync} from 'node:fs';
 import assert from 'node:assert/strict';
 const css=readFileSync(new URL('../components/education-ui/education-system-v1.css',import.meta.url),'utf8');
+const moduleCss=readFileSync(new URL('../components/education-ui/education-system-v1-modules.css',import.meta.url),'utf8');
 const light=css.slice(0,css.indexOf('[data-edu-theme="dark"]'));
 const dark=css.slice(css.indexOf('[data-edu-theme="dark"]'),css.indexOf('color-scheme:dark;'));
 const tokens=text=>Object.fromEntries([...text.matchAll(/--ds-([a-z-]+):\s*(#[a-f0-9]{3,6})\s*;/gi)].map(m=>[m[1],m[2]]));
@@ -14,6 +15,27 @@ for(const [theme,t]of [['light',tokens(light)],['dark',{...tokens(light),...toke
 }
 assert(css.includes('prefers-reduced-motion:reduce'));checks++;
 assert(css.includes('--edu-orange:var(--ds-orange)!important'));checks++;
+assert(moduleCss.includes('.edu-school-ops-v1'));checks++;
+assert(moduleCss.includes('.atlas-signal-card:nth-child(n)'));checks++;
+assert(moduleCss.includes('prefers-reduced-motion: reduce'));checks++;
+const moduleViews=[
+ 'WorkshopQualityView.tsx','MarketingView.tsx','CommunicationsView.tsx','TeamView.tsx','StaffAbsenceView.tsx',
+ 'MediaView.tsx','ToolkitView.tsx','ArchiveView.tsx','ToolsView.tsx'
+];
+for(const file of moduleViews){
+ const source=readFileSync(new URL(`../views/${file}`,import.meta.url),'utf8');
+ assert(source.includes("education-system-v1-modules.css"),`${file} must import the shared module bridge`);
+ assert(source.includes('edu-school-ops-v1'),`${file} must use the shared school workspace contract`);
+ assert(source.includes('data-edu-system='),`${file} must opt into Design System v1`);
+ for(const modal of openingTags(source,'Modal')) assert(modal.includes('designSystem='),`${file} modal must opt into the canonical dialog`);
+ checks+=3;
+}
+const settingsView=readFileSync(new URL('../views/SettingsView.tsx',import.meta.url),'utf8');
+const settingsCss=readFileSync(new URL('../views/settings/education-settings-v1.css',import.meta.url),'utf8');
+assert(settingsView.includes("education-settings-v1.css"),'SettingsView must import its scoped design-system styles');checks++;
+assert(settingsView.includes('edu-settings-v1')&&settingsView.includes('data-edu-system='),'SettingsView must opt into its canonical workspace contract');checks++;
+assert(settingsCss.includes('prefers-reduced-motion: reduce'),'Settings styles must support reduced motion');checks++;
+for(const modal of openingTags(settingsView,'Modal')){assert(modal.includes('designSystem='),'SettingsView modal must opt into the canonical dialog');checks++;}
 const studentDetails=readFileSync(new URL('../views/StudentDetailsView.tsx',import.meta.url),'utf8');
 for(const modal of openingTags(studentDetails,'Modal')){assert(modal.includes('designSystem='),'StudentDetailsView Modal must opt into the canonical dialog');checks++;}
-console.log(`Education System v1: ${checks} token, contrast, dialog-contract and reduced-motion checks passed.`);
+console.log(`Education System v1: ${checks} token, contrast, module/dialog-contract and reduced-motion checks passed.`);

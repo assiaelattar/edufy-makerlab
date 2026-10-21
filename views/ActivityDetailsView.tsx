@@ -290,7 +290,7 @@ export const ActivityDetailsView = () => {
                            <div><span className="text-slate-500 text-xs block">Class</span><span className="text-white">{enrollment.gradeName} • {enrollment.groupName}</span></div>
                        </div>
                        <div className="space-y-4">
-                           <div><span className="text-slate-500 text-xs block">Balance</span><span className={`font-bold text-lg ${enrollment.balance > 0 ? 'text-red-400' : 'text-slate-300'}`}>{formatCurrency(enrollment.balance)}</span></div>
+                           <div><span className="text-slate-500 text-xs block">Balance</span><span className={`font-bold text-lg ${enrollment.balance > 0 ? 'text-orange-400' : 'text-slate-300'}`}>{formatCurrency(enrollment.balance)}</span></div>
                        </div>
                    </div>
                </section>
@@ -304,6 +304,7 @@ export const ActivityDetailsView = () => {
         if(!payment) return <AtlasEmptyState icon={Receipt} title="Payment not found" description="This payment may have been deleted or moved." />;
         const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
         const student = students.find(s => s.id === enrollment?.studentId);
+        const receiptAvailable = ['paid', 'verified'].includes(payment.status);
 
         return (
             <div className={`relative mx-auto max-w-5xl space-y-5 pb-24 animate-in fade-in duration-200 md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-activity-details-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-activity-details-v1' : undefined}>
@@ -313,7 +314,7 @@ export const ActivityDetailsView = () => {
                    description={`Recorded for ${payment.studentName} on ${formatDate(payment.date)}.`}
                    icon={Receipt}
                    badges={<span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase ${['paid','verified'].includes(payment.status) ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : payment.status === 'check_bounced' ? 'border-red-400/20 bg-red-400/10 text-red-300' : 'border-amber-300/20 bg-amber-300/10 text-amber-200'}`}>{payment.status.replace('_', ' ')}</span>}
-                   actions={<><AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton><AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}>Print receipt</AtlasActionButton></>}
+                   actions={<><AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo(backTarget.view, backTarget.params)}>{backTarget.label}</AtlasActionButton><AtlasActionButton icon={Printer} variant="primary" disabled={!receiptAvailable} title={receiptAvailable ? 'Print cleared payment receipt' : 'Receipt available when payment clears'} onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}>Print receipt</AtlasActionButton></>}
                />
                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                    <AtlasSignalCard label="Amount" value={formatCurrency(payment.amount)} detail="Recorded payment" icon={WalletCards} tone="teal" />
@@ -409,7 +410,7 @@ export const ActivityDetailsView = () => {
                             <AtlasActionButton icon={Pencil} onClick={() => { setEditForm(payment); setIsEditModalOpen(true); }}>Edit payment</AtlasActionButton>
                             <AtlasActionButton aria-label="Delete payment" title="Delete payment" icon={Trash2} variant="danger" onClick={() => openDeleteConfirmation(payment)} />
                         </div>
-                        <AtlasActionButton icon={Printer} variant="primary" onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}>Print receipt</AtlasActionButton>
+                        <AtlasActionButton icon={Printer} variant="primary" disabled={!receiptAvailable} title={receiptAvailable ? 'Print cleared payment receipt' : 'Receipt available when payment clears'} onClick={() => generateReceipt(payment, enrollment, student, settings, programs)}>Print receipt</AtlasActionButton>
                     </div>
                </section>
 

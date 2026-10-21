@@ -7,6 +7,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
+import { EducationState } from '../components/education-ui/EducationPrimitives';
 import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 import { SuccessModal } from '../components/SuccessModal';
 import { collection, addDoc, query, where, onSnapshot, orderBy, serverTimestamp, deleteDoc, doc, updateDoc, Timestamp, writeBatch } from 'firebase/firestore';
@@ -22,6 +23,7 @@ import { config } from '../utils/config';
 
 import { NotificationBell } from '../components/NotificationBell';
 import { ProjectFactoryModal } from './learning/ProjectFactoryModal';
+import { StudentProjectModal } from './learning/StudentProjectModal';
 import { StudentProjectWizardView } from './learning/StudentProjectWizardView';
 import { InstructorStudioDashboard } from './learning/InstructorStudioDashboard';
 import { CommitFeedView } from './learning/CommitFeedView';
@@ -172,6 +174,7 @@ export const LearningView = () => {
     const [wizardStep, setWizardStep] = useState(0);
     const [activeModalTab, setActiveModalTab] = useState<'details' | 'resources' | 'workflow' | 'targeting' | 'publishing'>('details');
     const [reviewModalOpen, setReviewModalOpen] = useState(false);
+    const [reviewSaving, setReviewSaving] = useState(false);
     const [selectedSubmission, setSelectedSubmission] = useState<StudentProject | null>(null);
     const [feedback, setFeedback] = useState('');
     const [isSeeding, setIsSeeding] = useState(false);
@@ -323,6 +326,11 @@ export const LearningView = () => {
 
     // --- BADGE STATE ---
     const [isBadgeModalOpen, setIsBadgeModalOpen] = useState(false);
+    const [setupSaving, setSetupSaving] = useState(false);
+    const [setupSaveError, setSetupSaveError] = useState('');
+    useEffect(() => {
+        if (!isWorkflowModalOpen && !isStationModalOpen && !isBadgeModalOpen) setSetupSaveError('');
+    }, [isWorkflowModalOpen, isStationModalOpen, isBadgeModalOpen]);
     const [editingBadgeId, setEditingBadgeId] = useState<string | null>(null);
     const [badgeForm, setBadgeForm] = useState<Partial<Badge>>({
         name: '',
@@ -333,7 +341,9 @@ export const LearningView = () => {
     });
 
     const handleSaveBadge = async () => {
-        if (!db || !badgeForm.name) return;
+        if (!db || !badgeForm.name?.trim() || setupSaving) return;
+        setSetupSaving(true);
+        setSetupSaveError('');
         try {
             if (editingBadgeId) {
                 await updateDoc(doc(db, 'badges', editingBadgeId), {
@@ -351,6 +361,9 @@ export const LearningView = () => {
             setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } });
         } catch (e) {
             console.error('Error saving badge:', e);
+            setSetupSaveError('The badge could not be saved. Your changes are still here; try again.');
+        } finally {
+            setSetupSaving(false);
         }
     };
 
@@ -908,13 +921,16 @@ export const LearningView = () => {
     };
 
     const handleReviewAction = async (status: 'published' | 'changes_requested') => {
-        if (!db || !selectedSubmission) return;
+        if (!db || !selectedSubmission || reviewSaving) return;
+        let statusSaved = false;
+        setReviewSaving(true);
         try {
             await updateDoc(doc(db, 'student_projects', selectedSubmission.id), {
                 status: status === 'changes_requested' ? 'changes_requested' : 'published',
                 instructorFeedback: feedback,
                 updatedAt: serverTimestamp()
             });
+            statusSaved = true;
 
             if (selectedSubmission.studentId) {
                 await sendNotification(
@@ -1003,16 +1019,19 @@ export const LearningView = () => {
             }
         } catch (error) {
             console.error("Error processing review:", error);
-            await showAlert('Project status not updated', 'The review could not be saved. Check your connection and try again.', 'danger');
+            await showAlert(
+                statusSaved ? 'Review saved with a follow-up issue' : 'Project status not updated',
+                statusSaved ? 'The decision was saved, but a badge or notification could not be completed. Check the project before trying again.' : 'The review could not be saved. Your feedback is still here; try again.',
+                'danger'
+            );
         } finally {
-            setReviewModalOpen(false);
-            setFeedback('');
-            setSelectedSubmission(null);
+            setReviewSaving(false);
+            if (statusSaved) {
+                setReviewModalOpen(false);
+                setFeedback('');
+                setSelectedSubmission(null);
+            }
         }
-
-        setReviewModalOpen(false);
-        setFeedback('');
-        setSelectedSubmission(null);
     };
 
     const startNewProject = async (template?: ProjectTemplate) => {
@@ -1109,7 +1128,7 @@ export const LearningView = () => {
         // Legacy: setActiveProject(project); setIsProjectModalOpen(true);
     };
 
-    const handleSaveProject = async (silent = false): Promise<string | undefined> => {
+    const handleSaveProject = async (silent = false, formOverride?: Partial<StudentProject>): Promise<string | undefined> => {
         console.log("💾 Saving project...", { silent, currentStudentId, userProfile });
 
         if (!db || !userProfile) {
@@ -1121,14 +1140,14 @@ export const LearningView = () => {
         console.log("✅ DB and userProfile check passed");
 
         // Fallback: If currentStudentId is null (e.g. new account not synced), use Auth UID
-        const studentIdToUse = currentStudentId || userProfile.uid;
+        const studentIdToUse = activeProject?.studentId || currentStudentId || userProfile.uid;
         console.log("📝 Student ID to use:", studentIdToUse);
 
         const rawData = {
-            ...projectForm,
+            ...(formOverride || projectForm),
             organizationId: tenantOrgId,
             studentId: studentIdToUse,
-            studentName: userProfile.name,
+            studentName: activeProject?.studentName || userProfile.name,
             updatedAt: serverTimestamp()
         };
 
@@ -1315,12 +1334,18 @@ export const LearningView = () => {
             } catch (e) { console.error(e); }
         }
 
-        await updateDoc(doc(db, 'student_projects', activeProject.id), {
-            ...cleanData(projectForm),
-            mediaUrls: media,
-            status: 'submitted',
-            updatedAt: serverTimestamp()
-        });
+        try {
+            await updateDoc(doc(db, 'student_projects', activeProject.id), {
+                ...cleanData(projectForm),
+                mediaUrls: media,
+                status: 'submitted',
+                updatedAt: serverTimestamp()
+            });
+        } catch (error) {
+            console.error('Failed to submit project for review:', error);
+            await showAlert('Submission failed', 'The project was not submitted. Your work is still here; try again.', 'danger');
+            return;
+        }
         setIsProjectModalOpen(false);
         setShowSuccessModal(true);
 
@@ -1401,7 +1426,7 @@ export const LearningView = () => {
                     ].map(item => {
                         const Icon = item.icon;
                         return (
-                            <button key={item.id} type="button" onClick={() => setActiveTab(item.id as typeof activeTab)} className={activeTab === item.id ? 'is-active' : ''}>
+                            <button key={item.id} type="button" aria-current={activeTab === item.id ? 'page' : undefined} onClick={() => setActiveTab(item.id as typeof activeTab)} className={activeTab === item.id ? 'is-active' : ''}>
                                 <Icon size={17} />
                                 <span><small>{item.label}</small>{item.detail}</span>
                             </button>
@@ -1448,6 +1473,8 @@ export const LearningView = () => {
                                 <div className="flex items-center justify-between border-b border-white/10 pb-6">
                                     <div className="flex items-center gap-4">
                                         <button
+                                            type="button"
+                                            aria-label="Back to curriculum factory"
                                             onClick={() => {
                                                 setShowStationProjects(false);
                                                 setSelectedStation(null);
@@ -1832,7 +1859,16 @@ export const LearningView = () => {
                 {/* STUDIO TAB - Instructor Project Monitoring */}
                 {
                     activeTab === 'studio' && (
-                        <div>
+                        <div className="edu-learning-studio">
+                            <nav className="edu-learning-studio-nav" aria-label="Studio views">
+                                {([
+                                    ['dashboard', 'Overview'],
+                                    ['commits', 'Commit history'],
+                                    ['reviews', 'Review queue']
+                                ] as const).map(([view, label]) => (
+                                    <button key={view} type="button" aria-current={studioView === view ? 'page' : undefined} onClick={() => setStudioView(view)}>{label}</button>
+                                ))}
+                            </nav>
                             {studioView === 'dashboard' && (
                                 <InstructorStudioDashboard
                                     studentProjects={studentProjects}
@@ -1937,7 +1973,7 @@ export const LearningView = () => {
                 {/* REVIEW TAB */}
                 {
                     activeTab === 'review' && (
-                        <div className="flex flex-col">
+                        <div className="edu-learning-review flex flex-col">
                             <div className="space-y-3 pb-4">
                                 {pendingReviews.length === 0 ? <div className="p-8 text-center text-slate-500 italic bg-slate-900/50 rounded-xl border border-slate-800">No projects waiting for review.</div> :
                                     pendingReviews.map(p => {
@@ -2064,7 +2100,7 @@ export const LearningView = () => {
                 {/* SETUP TAB */}
                 {
                     activeTab === 'setup' && (
-                        <div className="flex flex-col">
+                        <div className="edu-learning-setup flex flex-col">
                             <div className="bg-gradient-to-r from-purple-900/20 to-indigo-900/20 border border-purple-800/30 rounded-xl p-6 mb-6">
                                 <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
                                     <Beaker className="text-purple-400" size={28} /> Setup Factory
@@ -2073,24 +2109,30 @@ export const LearningView = () => {
                             </div>
 
                             {/* Sub-tabs */}
-                            <div className="flex gap-2 mb-6 border-b border-slate-800 pb-2">
+                            <div className="edu-learning-setup-tabs flex gap-2 mb-6 border-b border-slate-800 pb-2" role="group" aria-label="Learning setup sections">
                                 <button
+                                    type="button"
+                                    aria-pressed={setupSubTab === 'workflows'}
                                     onClick={() => setSetupSubTab('workflows')}
                                     className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'workflows' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    🔄 Workflows
+                                    <ListChecks size={16} /> Workflows
                                 </button>
                                 <button
+                                    type="button"
+                                    aria-pressed={setupSubTab === 'stations'}
                                     onClick={() => setSetupSubTab('stations')}
                                     className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'stations' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    🎨 Stations
+                                    <Beaker size={16} /> Stations
                                 </button>
                                 <button
+                                    type="button"
+                                    aria-pressed={setupSubTab === 'badges'}
                                     onClick={() => setSetupSubTab('badges')}
                                     className={`px-4 py-2 rounded-lg font-bold transition-all ${setupSubTab === 'badges' ? 'bg-purple-900/30 text-purple-400 border border-purple-800/50' : 'text-slate-500 hover:text-slate-300'}`}
                                 >
-                                    🏆 Badges
+                                    <Award size={16} /> Badges
                                 </button>
                             </div>
 
@@ -2156,6 +2198,8 @@ export const LearningView = () => {
                                                         </button>
                                                         {!workflow.isDefault && (
                                                             <button
+                                                            type="button"
+                                                            aria-label={`Set ${workflow.name} as default workflow`}
                                                                 onClick={() => handleSetDefaultWorkflow(workflow.id)}
                                                                 className="px-3 py-2 bg-purple-900/20 hover:bg-purple-900/30 text-purple-400 rounded-lg text-sm font-medium"
                                                                 title="Set as default"
@@ -2165,6 +2209,8 @@ export const LearningView = () => {
                                                         )}
                                                         {!workflow.isDefault && (
                                                             <button
+                                                            type="button"
+                                                            aria-label={`Delete ${workflow.name} workflow`}
                                                                 onClick={() => handleDeleteWorkflow(workflow.id)}
                                                                 className="px-3 py-2 bg-red-900/20 hover:bg-red-900/30 text-red-400 rounded-lg text-sm font-medium"
                                                             >
@@ -2261,6 +2307,8 @@ export const LearningView = () => {
                                                                     return (
                                                                         <button
                                                                             key={gid}
+                                                                            type="button"
+                                                                            aria-pressed={!!isActive}
                                                                             onClick={() => handleToggleStationActivation(station.id, gid)}
                                                                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all shadow-sm ${isActive
                                                                                 ? theme.activeBtn
@@ -2275,6 +2323,8 @@ export const LearningView = () => {
                                                             </div>
                                                         </div>
                                                         <button
+                                                            type="button"
+                                                            aria-label={`Edit ${station.label} station`}
                                                             onClick={() => {
                                                                 setEditingStationId(station.id);
                                                                 setStationForm(station);
@@ -2289,6 +2339,25 @@ export const LearningView = () => {
                                             })}
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {setupSubTab === 'badges' && (
+                                <section className="edu-learning-badges" aria-label="Learning badges">
+                                    <div className="edu-learning-badges-header">
+                                        <div><h4>Badges</h4><p>Recognize completed project milestones with the existing badge rules.</p></div>
+                                        <button type="button" onClick={() => { setEditingBadgeId(null); setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } }); setIsBadgeModalOpen(true); }}><Plus size={16} /> New badge</button>
+                                    </div>
+                                    {badges.length === 0 ? (
+                                        <div className="edu-ds-state" data-edu-accent="purple"><Award size={26} /><h5>No badges yet</h5><p>Create a badge or add the default collection to start recognizing project work.</p><button type="button" className="edu-ds-button" data-edu-variant="primary" onClick={handleSeedBadges} disabled={isSeeding}>{isSeeding ? 'Creating...' : 'Create default badges'}</button></div>
+                                    ) : (
+                                        <div className="edu-learning-badges-grid">{badges.map(badge => {
+                                            const Icon = (LucideIcons[badge.icon as keyof typeof LucideIcons] || Award) as React.ElementType;
+                                            return <article key={badge.id} className="edu-learning-badge-card"><div className="edu-learning-badge-icon"><Icon size={24} /></div><h5>{badge.name}</h5><p>{badge.description || 'Project recognition'}</p><div><button type="button" onClick={() => { setEditingBadgeId(badge.id); setBadgeForm(badge); setIsBadgeModalOpen(true); }}>Edit</button><button type="button" onClick={() => handleDeleteBadge(badge.id)} aria-label={`Delete ${badge.name} badge`}>Delete</button></div></article>;
+                                        })}</div>
+                                    )}
+                                </section>
+                            )}
 
                                     {/* WORKFLOW MODAL */}
                                     {isWorkflowModalOpen && (
@@ -2300,12 +2369,13 @@ export const LearningView = () => {
                                                 setEditingWorkflowId(null);
                                                 setWorkflowForm({ name: '', description: '', phases: [] });
                                             }}
-                                            title={editingWorkflowId ? "✏️ Edit Workflow" : "✨ Create New Workflow"}
+                                            title={editingWorkflowId ? "Edit workflow" : "Create workflow"}
                                         >
-                                            <div className="space-y-6">
+                                            <div className="edu-learning-setup-form space-y-6">
                                                 <div>
-                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Workflow Name</label>
+                                                    <label htmlFor="learning-workflow-name" className="block text-sm font-bold text-slate-400 mb-2">Workflow Name</label>
                                                     <input
+                                                        id="learning-workflow-name"
                                                         type="text"
                                                         value={workflowForm.name || ''}
                                                         onChange={e => setWorkflowForm(prev => ({ ...prev, name: e.target.value }))}
@@ -2315,8 +2385,9 @@ export const LearningView = () => {
                                                 </div>
 
                                                 <div>
-                                                    <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
+                                                    <label htmlFor="learning-workflow-description" className="block text-sm font-bold text-slate-400 mb-2">Description</label>
                                                     <textarea
+                                                        id="learning-workflow-description"
                                                         value={workflowForm.description || ''}
                                                         onChange={e => setWorkflowForm(prev => ({ ...prev, description: e.target.value }))}
                                                         className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
@@ -2354,6 +2425,7 @@ export const LearningView = () => {
                                                                 <span className="text-slate-500 font-bold text-sm">{index + 1}</span>
                                                                 <input
                                                                     type="text"
+                                                                    aria-label={`Phase ${index + 1} name`}
                                                                     value={phase.name}
                                                                     onChange={e => {
                                                                         const updated = [...(workflowForm.phases || [])];
@@ -2364,6 +2436,7 @@ export const LearningView = () => {
                                                                     placeholder="Phase name"
                                                                 />
                                                                 <select
+                                                                    aria-label={`Phase ${index + 1} color`}
                                                                     value={phase.color}
                                                                     onChange={e => {
                                                                         const updated = [...(workflowForm.phases || [])];
@@ -2383,6 +2456,7 @@ export const LearningView = () => {
                                                                 </select>
                                                                 <button
                                                                     type="button"
+                                                                    aria-label={`Remove phase ${index + 1}`}
                                                                     onClick={() => {
                                                                         const updated = workflowForm.phases?.filter((_, i) => i !== index);
                                                                         setWorkflowForm(prev => ({ ...prev, phases: updated }));
@@ -2401,6 +2475,7 @@ export const LearningView = () => {
                                                     </div>
                                                 </div>
 
+                                                {setupSaveError && <p className="edu-learning-setup-error" role="alert">{setupSaveError}</p>}
                                                 <div className="flex gap-3 pt-4 border-t border-slate-800">
                                                     <button
                                                         type="button"
@@ -2416,7 +2491,9 @@ export const LearningView = () => {
                                                     <button
                                                         type="button"
                                                         onClick={async () => {
-                                                            if (!db || !workflowForm.name || !workflowForm.phases?.length) return;
+                                                            if (!db || !workflowForm.name?.trim() || !workflowForm.phases?.length || workflowForm.phases.some(phase => !phase.name.trim()) || setupSaving) return;
+                                                            setSetupSaving(true);
+                                                            setSetupSaveError('');
                                                             try {
                                                                 if (editingWorkflowId) {
                                                                     // Update existing workflow
@@ -2438,12 +2515,15 @@ export const LearningView = () => {
                                                                 setWorkflowForm({ name: '', description: '', phases: [] });
                                                             } catch (e) {
                                                                 console.error('Error saving workflow:', e);
+                                                                setSetupSaveError('The workflow could not be saved. Your changes are still here; try again.');
+                                                            } finally {
+                                                                setSetupSaving(false);
                                                             }
                                                         }}
-                                                        disabled={!workflowForm.name || !workflowForm.phases?.length}
+                                                        disabled={setupSaving || !workflowForm.name?.trim() || !workflowForm.phases?.length || workflowForm.phases.some(phase => !phase.name.trim())}
                                                         className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
-                                                        {editingWorkflowId ? 'Update' : 'Create'} Workflow
+                                                        {setupSaving ? 'Saving...' : `${editingWorkflowId ? 'Update' : 'Create'} Workflow`}
                                                     </button>
                                                 </div>
                                             </div>
@@ -2459,13 +2539,15 @@ export const LearningView = () => {
                                             setEditingStationId(null);
                                             setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '', startDate: undefined, endDate: undefined });
                                         }}
-                                        title={editingStationId ? "✏️ Edit Station" : "✨ Create New Station"}
+                                        title={editingStationId ? "Edit station" : "Create station"}
                                     >
-                                        <div className="space-y-6">
+                                        <div className="edu-learning-setup-form space-y-6">
+                                            {setupSaveError && <p className="edu-learning-setup-error" role="alert">{setupSaveError}</p>}
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-400 mb-2">Station Name</label>
                                                 <input
                                                     type="text"
+                                                    aria-label="Station name"
                                                     value={stationForm.label || ''}
                                                     onChange={e => setStationForm(prev => ({ ...prev, label: e.target.value }))}
                                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
@@ -2476,6 +2558,7 @@ export const LearningView = () => {
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
                                                 <textarea
+                                                    aria-label="Station description"
                                                     value={stationForm.description || ''}
                                                     onChange={e => setStationForm(prev => ({ ...prev, description: e.target.value }))}
                                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
@@ -2488,6 +2571,7 @@ export const LearningView = () => {
                                                     <label className="block text-sm font-bold text-slate-400 mb-2">Start Date (Optional)</label>
                                                     <input
                                                         type="date"
+                                                        aria-label="Station start date"
                                                         value={stationForm.startDate ? stationForm.startDate.toDate().toISOString().split('T')[0] : ''}
                                                         onChange={e => {
                                                             const date = e.target.value ? Timestamp.fromDate(new Date(e.target.value)) : undefined;
@@ -2500,6 +2584,7 @@ export const LearningView = () => {
                                                     <label className="block text-sm font-bold text-slate-400 mb-2">End Date (Optional)</label>
                                                     <input
                                                         type="date"
+                                                        aria-label="Station end date"
                                                         value={stationForm.endDate ? stationForm.endDate.toDate().toISOString().split('T')[0] : ''}
                                                         onChange={e => {
                                                             const date = e.target.value ? Timestamp.fromDate(new Date(e.target.value)) : undefined;
@@ -2559,6 +2644,7 @@ export const LearningView = () => {
                                                 <div>
                                                     <label className="block text-sm font-bold text-slate-400 mb-2">Color</label>
                                                     <select
+                                                        aria-label="Station color"
                                                         value={stationForm.color || 'blue'}
                                                         onChange={e => setStationForm(prev => ({ ...prev, color: e.target.value }))}
                                                         className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
@@ -2582,6 +2668,7 @@ export const LearningView = () => {
                                                     <label className="block text-sm font-bold text-slate-400 mb-2">Icon</label>
                                                     <input
                                                         type="text"
+                                                        aria-label="Station icon"
                                                         value={stationForm.icon || ''}
                                                         onChange={e => setStationForm(prev => ({ ...prev, icon: e.target.value }))}
                                                         className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
@@ -2605,7 +2692,9 @@ export const LearningView = () => {
                                                 <button
                                                     type="button"
                                                     onClick={async () => {
-                                                        if (!db || !stationForm.label) return;
+                                                        if (!db || !stationForm.label?.trim() || setupSaving) return;
+                                                        setSetupSaving(true);
+                                                        setSetupSaveError('');
                                                         try {
                                                             if (editingStationId) {
                                                                 // Update existing station
@@ -2635,12 +2724,15 @@ export const LearningView = () => {
                                                             setStationForm({ label: '', color: 'blue', icon: 'Circle', description: '', startDate: undefined, endDate: undefined });
                                                         } catch (e) {
                                                             console.error('Error saving station:', e);
+                                                            setSetupSaveError('The station could not be saved. Your changes are still here; try again.');
+                                                        } finally {
+                                                            setSetupSaving(false);
                                                         }
                                                     }}
-                                                    disabled={!stationForm.label}
+                                                    disabled={setupSaving || !stationForm.label?.trim()}
                                                     className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {editingStationId ? 'Update' : 'Create'} Station
+                                                    {setupSaving ? 'Saving...' : `${editingStationId ? 'Update' : 'Create'} Station`}
                                                 </button>
                                             </div>
                                         </div>
@@ -2655,13 +2747,15 @@ export const LearningView = () => {
                                             setEditingBadgeId(null);
                                             setBadgeForm({ name: '', description: '', color: 'blue', icon: 'Award', criteria: { type: 'project_count', target: 'all', count: 1 } });
                                         }}
-                                        title={editingBadgeId ? "✏️ Edit Badge" : "✨ Create New Badge"}
+                                        title={editingBadgeId ? "Edit badge" : "Create badge"}
                                     >
-                                        <div className="space-y-6">
+                                        <div className="edu-learning-setup-form space-y-6">
+                                            {setupSaveError && <p className="edu-learning-setup-error" role="alert">{setupSaveError}</p>}
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-400 mb-2">Badge Name</label>
                                                 <input
                                                     type="text"
+                                                    aria-label="Badge name"
                                                     value={badgeForm.name || ''}
                                                     onChange={e => setBadgeForm(prev => ({ ...prev, name: e.target.value }))}
                                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
@@ -2672,6 +2766,7 @@ export const LearningView = () => {
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-400 mb-2">Description</label>
                                                 <textarea
+                                                    aria-label="Badge description"
                                                     value={badgeForm.description || ''}
                                                     onChange={e => setBadgeForm(prev => ({ ...prev, description: e.target.value }))}
                                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none h-24"
@@ -2683,11 +2778,12 @@ export const LearningView = () => {
                                                 <div>
                                                     <label className="block text-sm font-bold text-slate-400 mb-2">Color</label>
                                                     <select
+                                                        aria-label="Badge color"
                                                         value={badgeForm.color || 'blue'}
                                                         onChange={e => setBadgeForm(prev => ({ ...prev, color: e.target.value }))}
                                                         className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
                                                     >
-                                                        {Object.keys(STATION_THEMES).map(color => (
+                                                        {['blue', 'purple', 'amber', 'yellow', 'sky', 'violet', 'pink', 'emerald', 'slate', 'indigo', 'cyan', 'rose', 'green'].map(color => (
                                                             <option key={color} value={color}>{color.charAt(0).toUpperCase() + color.slice(1)}</option>
                                                         ))}
                                                     </select>
@@ -2696,6 +2792,7 @@ export const LearningView = () => {
                                                     <label className="block text-sm font-bold text-slate-400 mb-2">Icon (Lucide)</label>
                                                     <input
                                                         type="text"
+                                                        aria-label="Badge icon"
                                                         value={badgeForm.icon || ''}
                                                         onChange={e => setBadgeForm(prev => ({ ...prev, icon: e.target.value }))}
                                                         className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-white focus:border-purple-500 outline-none"
@@ -2711,6 +2808,7 @@ export const LearningView = () => {
                                                     <div>
                                                         <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type</label>
                                                         <select
+                                                            aria-label="Badge criteria type"
                                                             value={badgeForm.criteria?.type || 'project_count'}
                                                             onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, type: e.target.value as any } }))}
                                                             className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
@@ -2725,6 +2823,7 @@ export const LearningView = () => {
                                                             <div>
                                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Target Station</label>
                                                                 <select
+                                                                    aria-label="Badge target station"
                                                                     value={badgeForm.criteria?.target || 'all'}
                                                                     onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, target: e.target.value } }))}
                                                                     className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
@@ -2737,6 +2836,7 @@ export const LearningView = () => {
                                                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Count Required</label>
                                                                 <input
                                                                     type="number"
+                                                                    aria-label="Badge project count required"
                                                                     min="1"
                                                                     value={badgeForm.criteria?.count || 1}
                                                                     onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, count: parseInt(e.target.value) } }))}
@@ -2751,6 +2851,7 @@ export const LearningView = () => {
                                                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Skill Name</label>
                                                             <input
                                                                 type="text"
+                                                                aria-label="Badge skill name"
                                                                 value={badgeForm.criteria?.target || ''}
                                                                 onChange={e => setBadgeForm(prev => ({ ...prev, criteria: { ...prev.criteria!, target: e.target.value } }))}
                                                                 className="w-full p-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm"
@@ -2776,16 +2877,14 @@ export const LearningView = () => {
                                                 <button
                                                     type="button"
                                                     onClick={handleSaveBadge}
-                                                    disabled={!badgeForm.name}
+                                                    disabled={setupSaving || !badgeForm.name?.trim()}
                                                     className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {editingBadgeId ? 'Update' : 'Create'} Badge
+                                                    {setupSaving ? 'Saving...' : `${editingBadgeId ? 'Update' : 'Create'} Badge`}
                                                 </button>
                                             </div>
                                         </div>
                                     </Modal>
-                                </div>
-                            )}
                         </div>
                     )
                 }
@@ -2807,7 +2906,32 @@ export const LearningView = () => {
                     onArchive={() => handleArchiveTemplate(templateForm.id!, templateForm.status || 'draft')}
                 />
 
-                <Modal designSystem={showEducationLearningV1} isOpen={reviewModalOpen} onClose={() => setReviewModalOpen(false)} title="Review Submission">
+                <StudentProjectModal
+                    isOpen={isProjectModalOpen}
+                    onClose={() => setIsProjectModalOpen(false)}
+                    projectForm={projectForm}
+                    setProjectForm={setProjectForm}
+                    activeProject={activeProject}
+                    currentTheme={currentTheme}
+                    workspaceTab={workspaceTab}
+                    setWorkspaceTab={setWorkspaceTab}
+                    selectedWorkflowId={selectedWorkflowId}
+                    handleWorkflowChange={handleWorkflowChange}
+                    processTemplates={processTemplates}
+                    handleSaveProject={handleSaveProject}
+                    handleStartBuilding={handleStartBuilding}
+                    handleMoveStep={handleMoveStep}
+                    handleAddStep={handleAddStep}
+                    handleDeleteStep={handleDeleteStep}
+                    newStepTitle={newStepTitle}
+                    setNewStepTitle={setNewStepTitle}
+                    apiConfig={settings.apiConfig}
+                    isWorkflowLocked={!!projectTemplates.find(t => t.id === projectForm.templateId)?.defaultWorkflowId}
+                    badges={badges}
+                    handleSubmitForReview={handleSubmitForReview}
+                />
+
+                <Modal designSystem={showEducationLearningV1} isOpen={reviewModalOpen} onClose={() => { if (!reviewSaving) setReviewModalOpen(false); }} title="Review Submission">
                     <div className="space-y-4">
                         <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
                             <div className="flex justify-between mb-2"><span className="text-xs font-bold text-slate-500 uppercase">Student</span><span className="text-white font-medium">{selectedSubmission?.studentName}</span></div>
@@ -2826,21 +2950,33 @@ export const LearningView = () => {
                             {selectedSubmission?.mediaUrls?.[0] && <img src={selectedSubmission.mediaUrls[0]} alt="Work" className="w-full rounded-lg border border-slate-800" />}
                         </div>
                         <div>
-                            <label className="block text-xs text-slate-400 mb-1">Feedback</label>
-                            <textarea className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Great job!..." />
+                            <label htmlFor="learning-review-feedback" className="block text-xs text-slate-400 mb-1">Feedback</label>
+                            <textarea id="learning-review-feedback" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white h-20" value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Great job!..." />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => handleReviewAction('changes_requested')} className="py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-bold border border-slate-700">Request Changes</button>
-                            <button onClick={() => handleReviewAction('published')} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">Approve & Publish</button>
+                            <button disabled={reviewSaving} onClick={() => handleReviewAction('changes_requested')} className="py-3 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg font-bold border border-slate-700">{reviewSaving ? 'Saving...' : 'Request Changes'}</button>
+                            <button disabled={reviewSaving} onClick={() => handleReviewAction('published')} className="py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold">{reviewSaving ? 'Saving...' : 'Approve & Publish'}</button>
                         </div>
                     </div>
                 </Modal>
+                <SuccessModal
+                    designSystem={showEducationLearningV1}
+                    isOpen={showSuccessModal}
+                    onClose={() => setShowSuccessModal(false)}
+                    title="Project submitted"
+                    message="The project is ready for instructor review."
+                />
+                <ToastContainer toasts={toasts} removeToast={removeToast} />
             </div >
         );
     }
 
     const progress = projectForm.steps ? Math.round((projectForm.steps.filter(s => s.status === 'done').length / (projectForm.steps.length || 1)) * 100) : 0;
     const phase = projectForm.status === 'planning' ? 1 : projectForm.status === 'submitted' ? 3 : 2;
+
+    if (userProfile.role !== 'student') {
+        return <main data-edu-system={showEducationLearningV1 ? '1' : undefined} className="edu-v1 edu-learning-v1"><EducationState kind="restricted" title="Learning workspace is restricted" description="Your role does not have access to manage learning projects. Ask an organization manager for access." /></main>;
+    }
 
     // --- STUDENT VIEW (GAMIFIED) ---
     if (!isInstructor) {

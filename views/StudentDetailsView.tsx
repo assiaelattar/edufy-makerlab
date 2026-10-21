@@ -1,12 +1,12 @@
 import { StudentDetailsForm } from '../components/students/StudentDetailsForm';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight, Upload } from 'lucide-react';
+import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday, compressImage } from '../utils/helpers';
-import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { formatDate, calculateAge, generateStudentSchedulePrint, formatCurrency, generateReceipt, generateAccessCardPrint, generateMakerResume, getEmbedSrc, generateCredentialsPrint, getDaysUntilBirthday } from '../utils/helpers';
+import { arrayUnion, collection, deleteDoc, doc, getDocs, increment, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { manageParentAccess, type ParentAccessAction } from '../services/parentAccess';
 import { Modal } from '../components/Modal';
@@ -16,18 +16,15 @@ import { config } from '../utils/config';
 
 const parentSparkQuestUrl = () => new URL('?role=parent', config.sparkQuestUrl).toString();
 import { normalizePhoneForWhatsApp } from '../utils/whatsappPhone';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState } from '../components/atlas/AtlasSurface';
+import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { AcademicsTab } from './student-details/AcademicsTab';
 import { FinanceTab } from './student-details/FinanceTab';
 import { PortfolioTab } from './student-details/PortfolioTab';
 import { AttendanceTab } from './student-details/AttendanceTab';
 import { AccessAndAccountsTab } from './student-details/AccessAndAccountsTab';
 import { EducationGuide, educationGuideRegistry, type GuideState } from '../components/education-ui/EducationGuide';
-import { EducationButton, EducationNotice } from '../components/education-ui/EducationPrimitives';
-import { createVerifiedStudentIdentity, projectBelongsToStudent, verifyStudentRecord } from '../sparkquest/domain/studentIdentity';
 import '../components/education-ui/education-system-v1.css';
 import './student-details/education-student-details-v1.css';
-import './student-details/education-student-preview-polish.css';
 
 export const StudentDetailsView = ({
     onEditStudent,
@@ -53,27 +50,14 @@ export const StudentDetailsView = ({
     const [credentialsModal, setCredentialsModal] = useState<{ isOpen: boolean, data: { studentId: string, name: string, email: string, pass: string, role: string } | null }>({ isOpen: false, data: null });
 
     const student = useMemo(() => {
-        if (isStudentRole) {
-            const learnerUid = userProfile?.uid;
-            const organizationId = currentOrganization?.id || userProfile?.organizationId;
-            return learnerUid && organizationId
-                ? students.find(s => verifyStudentRecord(s, learnerUid, organizationId))
-                : undefined;
+        if (isStudentRole && userProfile) {
+            return students.find(s => s.email === userProfile.email || s.loginInfo?.email === userProfile.email) || students.find(s => s.id === studentId);
         }
         return students.find(s => s.id === studentId);
-    }, [students, studentId, userProfile?.uid, userProfile?.organizationId, currentOrganization?.id, isStudentRole]);
+    }, [students, studentId, userProfile, isStudentRole]);
 
     const [editEnrollment, setEditEnrollment] = useState<Partial<Enrollment> | null>(null);
     const [editPayment, setEditPayment] = useState<Partial<Payment> | null>(null);
-    const [isSavingEnrollment, setIsSavingEnrollment] = useState(false);
-    const [isSavingPayment, setIsSavingPayment] = useState(false);
-    const [isUploadingPaymentProof, setIsUploadingPaymentProof] = useState(false);
-    const [enrollmentSaveError, setEnrollmentSaveError] = useState('');
-    const [paymentSaveError, setPaymentSaveError] = useState('');
-    const enrollmentSaveLock = useRef(false);
-    const paymentSaveLock = useRef(false);
-    useEffect(() => { if (!editEnrollment) setEnrollmentSaveError(''); }, [editEnrollment]);
-    useEffect(() => { if (!editPayment) setPaymentSaveError(''); }, [editPayment]);
     const [showPassword, setShowPassword] = useState(false);
     const [showParentPassword, setShowParentPassword] = useState(false);
     const [isGeneratingAccess, setIsGeneratingAccess] = useState(false);
@@ -121,6 +105,23 @@ export const StudentDetailsView = ({
             setEditEnrollment(enrollment);
         }
     }, [student, isStudentRole, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments, can]);
+
+    const badgeTone: Record<string, string> = {
+        blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
+        purple: 'bg-purple-950/30 text-purple-300 border-purple-500/30',
+        amber: 'bg-amber-950/30 text-amber-300 border-amber-500/30',
+        yellow: 'bg-yellow-950/30 text-yellow-300 border-yellow-500/30',
+        sky: 'bg-sky-950/30 text-sky-300 border-sky-500/30',
+        violet: 'bg-violet-950/30 text-violet-300 border-violet-500/30',
+        pink: 'bg-pink-950/30 text-pink-300 border-pink-500/30',
+        emerald: 'bg-emerald-950/30 text-emerald-300 border-emerald-500/30',
+        slate: 'bg-slate-800 text-slate-300 border-slate-600',
+        indigo: 'bg-indigo-950/30 text-indigo-300 border-indigo-500/30',
+        cyan: 'bg-cyan-950/30 text-cyan-300 border-cyan-500/30',
+        rose: 'bg-rose-950/30 text-rose-300 border-rose-500/30',
+        green: 'bg-green-950/30 text-green-300 border-green-500/30',
+        teal: 'bg-teal-950/30 text-teal-300 border-teal-500/30'
+    };
 
     if (!student) return (
         <div className="p-4">
@@ -179,16 +180,9 @@ export const StudentDetailsView = ({
     };
 
     // ... [Calculations for enrollments, payments, etc. same as before] ...
-    const learnerIdentity = isStudentRole && userProfile?.uid
-        ? createVerifiedStudentIdentity({ authUid: userProfile.uid, organizationId: student.organizationId, student })
-        : null;
-    const studentEnrollments = enrollments.filter(enrollment => learnerIdentity
-        ? learnerIdentity.ownerIds.includes(enrollment.studentId) && enrollment.organizationId === learnerIdentity.organizationId
-        : enrollment.studentId === student.id);
+    const studentEnrollments = enrollments.filter(e => e.studentId === student.id);
     const studentPayments = payments.filter(p => studentEnrollments.some(e => e.id === p.enrollmentId));
-    const publishedProjects = studentProjects.filter(project => project.status === 'published' && (
-        learnerIdentity ? projectBelongsToStudent(project, learnerIdentity) : project.studentId === student.id
-    ));
+    const publishedProjects = studentProjects.filter(p => p.studentId === student.id && p.status === 'published');
     const studentAttendance = attendanceRecords.filter(r => r.studentId === student.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const absenceCount = studentAttendance.filter(r => r.status === 'absent').length;
     const lateCount = studentAttendance.filter(r => r.status === 'late').length;
@@ -202,9 +196,9 @@ export const StudentDetailsView = ({
     const renderProjectModal = () => (
         <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!selectedProject} onClose={() => setSelectedProject(null)} title={selectedProject?.title || ''} size="lg">
             {selectedProject && (
-                <div className="edu-student-project-detail space-y-6">
+                <div className="space-y-6">
                     {/* RICH MEDIA DISPLAY */}
-                    <div className="edu-student-project-detail__media w-full overflow-hidden">
+                    <div className="w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
                         {selectedProject.embedUrl && getEmbedSrc(selectedProject.embedUrl) ? (
                             <div className="aspect-video w-full">
                                 <iframe
@@ -217,27 +211,27 @@ export const StudentDetailsView = ({
                         ) : selectedProject.mediaUrls?.[0] ? (
                             <img src={selectedProject.mediaUrls[0]} className="w-full max-h-[400px] object-cover" alt={`${selectedProject.title} project media`} />
                         ) : (
-                            <div className="edu-student-project-detail__placeholder h-40 flex items-center justify-center gap-3"><ImageIcon size={32} /><span>Project media not added</span></div>
+                            <div className="h-48 flex items-center justify-center text-slate-600"><ImageIcon size={48} /></div>
                         )}
                     </div>
 
                     <div className="flex gap-4 items-start">
                         <div className="flex-1">
-                            <span className="edu-student-project-detail__station text-[10px] font-bold uppercase tracking-wider px-2 py-1 mb-2 inline-block">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border mb-2 inline-block ${getTheme(selectedProject.station).bgSoft} ${getTheme(selectedProject.station).text} ${getTheme(selectedProject.station).border}`}>
                                 {getTheme(selectedProject.station).label}
                             </span>
-                            <p className="edu-student-project-detail__description text-sm leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
+                            <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">{selectedProject.description}</p>
                         </div>
                         {selectedProject.externalLink && (
-                            <a href={selectedProject.externalLink} target="_blank" rel="noopener noreferrer" aria-label={`Open ${selectedProject.title} external project`} className="edu-student-project-detail__link shrink-0 p-3">
+                            <a href={selectedProject.externalLink} target="_blank" rel="noopener noreferrer" aria-label={`Open ${selectedProject.title} external project`} className="shrink-0 p-3 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl transition-colors">
                                 <ExternalLink size={20} />
                             </a>
                         )}
                     </div>
 
                     {/* ENGINEERING PROCESS TIMELINE */}
-                    <div className="edu-student-project-detail__journey border-t pt-6">
-                        <h4 className="text-xs font-bold uppercase tracking-wider mb-4">Engineering Journey</h4>
+                    <div className="border-t border-slate-800 pt-6">
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Engineering Journey</h4>
                         <div className="space-y-3 relative before:absolute before:left-[19px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-800">
                             {selectedProject.steps?.map((step, idx) => {
                                 let statusColor = 'bg-slate-800 text-slate-500';
@@ -256,10 +250,10 @@ export const StudentDetailsView = ({
 
                                 return (
                                     <div key={step.id} className="relative flex items-center gap-4">
-                                        <div data-status={step.status} className={`edu-student-project-detail__step-icon w-10 h-10 rounded-full flex items-center justify-center shrink-0 z-10 ${statusColor}`}>
+                                        <div className={`w-10 h-10 rounded-full border-4 border-slate-900 flex items-center justify-center shrink-0 z-10 ${statusColor}`}>
                                             {icon}
                                         </div>
-                                        <div className="edu-student-project-detail__step p-3 flex-1">
+                                        <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex-1">
                                             <div className="flex justify-between items-start">
                                                 <div className="text-sm font-medium text-slate-200">{step.title}</div>
                                                 {step.status === 'PENDING_REVIEW' && <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">In Review</span>}
@@ -274,7 +268,7 @@ export const StudentDetailsView = ({
 
                     {/* INSTRUCTOR FEEDBACK */}
                     {selectedProject.instructorFeedback && (
-                        <div className="edu-student-project-detail__feedback p-4 flex gap-3">
+                        <div className="bg-indigo-950/30 border border-indigo-900/50 p-4 rounded-xl flex gap-3">
                             <MessageCircle className="text-indigo-400 shrink-0" size={20} />
                             <div>
                                 <h4 className="text-xs font-bold text-indigo-400 uppercase mb-1">Instructor Feedback</h4>
@@ -295,29 +289,31 @@ export const StudentDetailsView = ({
             <div data-edu-system={showEducationStudentDetailsV1 ? '1' : undefined} className={`space-y-8 pb-24 md:pb-8 h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-portal-v1' : ''}`}>
                 {!isStudentRole && (
                     <div className="edu-student-portal-v1__preview bg-indigo-600 text-white px-4 py-3 rounded-xl flex justify-between items-center shadow-lg border border-indigo-400/50">
-                        <div className="flex items-center gap-2 text-sm font-bold"><Eye size={18} /> Learner view preview</div>
-                        <button type="button" onClick={() => setViewMode('admin')} className="edu-student-portal-v1__return bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2"><ArrowLeft size={14} /> Return to record</button>
+                        <div className="flex items-center gap-2 text-sm font-bold"><Eye size={18} /> Preview Mode: Viewing as Student</div>
+                        <button onClick={() => setViewMode('admin')} className="bg-white text-indigo-600 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2"><ArrowLeft size={14} /> Exit Preview</button>
                     </div>
                 )}
 
                 <div className="edu-student-portal-v1__hero relative rounded-3xl overflow-hidden border border-indigo-500/30 shadow-2xl">
+                    <div className="absolute inset-0 bg-gradient-to-r from-indigo-900 via-purple-900 to-slate-900"></div>
+                    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                     <div className="relative z-10 p-8 md:p-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
                         <div className="relative">
-                            <div className="edu-student-portal-v1__avatar w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 p-1 shadow-xl shadow-cyan-500/20">
+                            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 p-1 shadow-xl shadow-cyan-500/20">
                                 <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-4xl font-bold text-white">{student.name.charAt(0)}</div>
                             </div>
-                            <div className="edu-student-portal-v1__maker absolute -bottom-2 -right-2 text-xs font-bold px-3 py-1 flex items-center gap-1"><Star size={12} fill="currentColor" /> Maker</div>
+                            <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white text-xs font-bold px-3 py-1 rounded-full border-4 border-slate-900 shadow-sm flex items-center gap-1"><Star size={12} fill="currentColor" /> Maker</div>
                         </div>
                         <div className="flex-1">
                             <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">{student.name}</h1>
                             <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-4">
-                                <span className="edu-student-portal-v1__stat px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Trophy size={14} className="text-amber-400" /> {skills.length} recorded skills</span>
-                                <span className="edu-student-portal-v1__stat px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Rocket size={14} className="text-cyan-400" /> {publishedProjects.length} published projects</span>
+                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Trophy size={14} className="text-amber-400" /> {skills.length} recorded skills</span>
+                                <span className="px-3 py-1 rounded-full bg-white/10 text-white text-sm backdrop-blur-sm border border-white/10 flex items-center gap-2"><Rocket size={14} className="text-cyan-400" /> {publishedProjects.length} published projects</span>
                             </div>
                             <p className="text-indigo-200 max-w-xl">Explore your classes and published work.</p>
                         </div>
                         <div className="relative z-10">
-                            <button type="button" onClick={() => generateMakerResume(student, publishedProjects, settings)} className="edu-student-portal-v1__resume px-5 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-white/10 transition-all active:scale-95">
+                            <button onClick={() => generateMakerResume(student, publishedProjects, settings)} className="px-5 py-3 bg-white text-indigo-900 hover:bg-indigo-50 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-white/10 transition-all active:scale-95">
                                 <Printer size={18} /> Maker Resume
                             </button>
                         </div>
@@ -326,30 +322,30 @@ export const StudentDetailsView = ({
 
                 <div className="edu-student-portal-v1__content grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="space-y-6">
-                        <div className="edu-student-portal-v1__card p-6">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Calendar className="text-blue-500" /> My Classes</h3>
                             {activeCourses.length === 0 ? <p className="text-slate-500 text-sm">No active classes.</p> :
                                 <div className="space-y-3">{activeCourses.map(e => (
-                                    <div key={e.id} className="edu-student-portal-v1__course p-4">
+                                    <div key={e.id} className="p-4 bg-slate-950 rounded-xl border border-slate-800/50">
                                         <div className="font-bold text-white text-sm">{e.programName}</div>
                                         <div className="flex justify-between items-center mt-2">
                                             <div className="text-xs text-slate-400">{e.gradeName}</div>
-                                            <span className="edu-student-portal-v1__schedule text-xs font-bold px-2 py-1 flex items-center gap-1"><Clock size={12} /> {e.groupTime?.split(' ')[0] || 'Weekly'}</span>
+                                            <span className="text-xs font-bold text-emerald-400 bg-emerald-950/30 px-2 py-1 rounded border border-emerald-900/50 flex items-center gap-1"><Clock size={12} /> {e.groupTime?.split(' ')[0] || 'Weekly'}</span>
                                         </div>
                                     </div>
                                 ))}</div>
                             }
                         </div>
-                        <div className="edu-student-portal-v1__card p-6">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Award className="text-purple-500" /> Awarded badges</h3>
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Award className="text-purple-500" /> Badges Earned</h3>
                             <div className="flex flex-wrap gap-3">
-                                {(!student.badges || student.badges.length === 0) ? <p className="text-slate-500 text-sm">Badges appear here when awarded.</p> :
+                                {(!student.badges || student.badges.length === 0) ? <p className="text-slate-500 text-sm">Complete projects to earn badges!</p> :
                                     student.badges.map(badgeId => {
                                         const badge = badges.find(b => b.id === badgeId);
                                         if (!badge) return null;
                                         const Icon = (LucideIcons[badge.icon as keyof typeof LucideIcons] || LucideIcons.Award) as React.ElementType;
                                         return (
-                                            <div key={badgeId} className="edu-student-portal-v1__badge px-3 py-2 text-xs font-bold flex items-center gap-2" title={badge.description}>
+                                            <div key={badgeId} className={`px-3 py-2 text-xs font-bold rounded-xl border flex items-center gap-2 ${badgeTone[badge.color] || badgeTone.slate}`} title={badge.description}>
                                                 <Icon size={16} /> {badge.name}
                                             </div>
                                         );
@@ -357,41 +353,41 @@ export const StudentDetailsView = ({
                                 }
                             </div>
                         </div>
-                        <div className="edu-student-portal-v1__card p-6">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Zap className="text-amber-500" /> Recorded skills</h3>
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Zap className="text-amber-500" /> Skills Unlocked</h3>
                             <div className="flex flex-wrap gap-2">
-                                {skills.length === 0 ? <p className="text-slate-500 text-sm">Skills from published projects appear here.</p> : skills.map(skill => (
-                                    <span key={skill} className="edu-student-portal-v1__skill px-3 py-1.5 text-xs font-bold flex items-center gap-1"><CheckCircle2 size={12} /> {skill}</span>
+                                {skills.length === 0 ? <p className="text-slate-500 text-sm">Submit projects to earn skill badges!</p> : skills.map(skill => (
+                                    <span key={skill} className="px-3 py-1.5 bg-slate-800 text-cyan-300 text-xs font-bold rounded-lg border border-slate-700 flex items-center gap-1"><CheckCircle2 size={12} className="text-cyan-500" /> {skill}</span>
                                 ))}
                             </div>
                         </div>
                     </div>
 
                     <div className="lg:col-span-2">
-                        <div className="edu-student-portal-v1__card p-6 h-full">
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-full">
                             <div className="flex justify-between items-center mb-6">
-                                <h3 className="text-lg font-bold text-white flex items-center gap-2"><BookOpen className="text-pink-500" /> Published projects</h3>
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2"><BookOpen className="text-pink-500" /> My Project Portfolio</h3>
                                 <button onClick={() => navigateTo('learning')} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg transition-colors">Go to Studio</button>
                             </div>
                             {publishedProjects.length === 0 ? (
                                 <div className="text-center py-12 border-2 border-dashed border-slate-800 rounded-xl">
                                     <div className="w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600"><Target size={32} /></div>
                                     <h4 className="text-white font-bold">No projects yet</h4>
-                                    <p className="text-slate-500 text-sm mt-1 mb-4">Projects appear here when they are published.</p>
-                                    <button type="button" onClick={() => navigateTo('learning')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/20">Open Studio</button>
+                                    <p className="text-slate-500 text-sm mt-1 mb-4">Go to the Learning Studio to start building!</p>
+                                    <button onClick={() => navigateTo('learning')} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/20">Start a Project</button>
                                 </div>
                             ) : (
-                                <div className="edu-student-portal-v1__project-grid grid grid-cols-1 sm:grid-cols-2 gap-4" data-single={publishedProjects.length === 1}>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     {publishedProjects.map(p => (
-                                        <button key={p.id} type="button" onClick={() => setSelectedProject(p)} className="edu-student-portal-v1__project group overflow-hidden text-left" aria-label={`Open ${p.title} project`}>
-                                            <div className="edu-student-portal-v1__project-media relative overflow-hidden">
-                                                {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 motion-reduce:transform-none" alt={p.title} /> : <div className="edu-student-project-card__placeholder"><ImageIcon size={28} /><span>Project media not added</span></div>}
+                                        <button key={p.id} type="button" onClick={() => setSelectedProject(p)} className="group bg-slate-950 border border-slate-800 rounded-xl overflow-hidden hover:border-indigo-500/50 hover:shadow-lg hover:shadow-indigo-500/10 transition-all cursor-pointer text-left" aria-label={`Open ${p.title} project`}>
+                                            <div className="h-40 bg-slate-900 relative overflow-hidden">
+                                                {p.mediaUrls?.[0] ? <img src={p.mediaUrls[0]} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={p.title} /> : <div className="flex items-center justify-center h-full text-slate-700"><ImageIcon size={32} /></div>}
                                                 {p.embedUrl ? <div className="absolute top-3 right-3 bg-red-600 text-white p-1.5 rounded-lg shadow-lg"><Zap size={14} /></div> : p.externalLink && <div className="absolute top-3 right-3 bg-black/60 text-white p-1.5 rounded-lg"><ExternalLink size={14} /></div>}
                                             </div>
                                             <div className="p-4">
                                                 <h4 className="font-bold text-white mb-1 group-hover:text-indigo-400 transition-colors">{p.title}</h4>
                                                 <p className="text-xs text-slate-500 line-clamp-2 mb-3">{p.description}</p>
-                                                <div className="flex flex-wrap gap-1">{p.skillsAcquired.slice(0, 3).map(s => <span key={s} className="edu-student-portal-v1__skill text-[10px] px-1.5 py-0.5">{s}</span>)}</div>
+                                                <div className="flex flex-wrap gap-1">{p.skillsAcquired.slice(0, 3).map(s => <span key={s} className="text-[10px] bg-indigo-950/50 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-900/30">{s}</span>)}</div>
                                             </div>
                                         </button>
                                     ))}
@@ -551,15 +547,13 @@ export const StudentDetailsView = ({
         setConfirmModal({ isOpen: true, title: "Delete Payment Record", message: `Are you sure you want to delete this payment of ${formatCurrency(payment.amount)}? \n\nThis will recalculate the student's debt automatically.`, type: 'danger', isLoading: false, action: async () => { 
             if (!db) return; 
             const enrollment = enrollments.find(e => e.id === payment.enrollmentId);
-            const batch = writeBatch(db);
             if (enrollment) {
                 const otherPayments = payments.filter(p => p.enrollmentId === payment.enrollmentId && p.id !== payment.id);
                 const newPaid = otherPayments.filter(p => ['paid', 'verified'].includes(p.status)).reduce((sum, p) => sum + p.amount, 0);
                 const newBalance = (enrollment.totalAmount || 0) - newPaid;
-                batch.update(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
+                await updateDoc(doc(db, 'enrollments', enrollment.id), { paidAmount: newPaid, balance: newBalance });
             }
-            batch.delete(doc(db, 'payments', payment.id));
-            await batch.commit();
+            await deleteDoc(doc(db, 'payments', payment.id));
         } });
     };
 
@@ -570,69 +564,15 @@ export const StudentDetailsView = ({
 
     const handleSaveEnrollment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (enrollmentSaveLock.current || !editEnrollment?.id) return;
-        if (!db) { setEnrollmentSaveError('The data connection is unavailable. Your changes are still here.'); return; }
-        const original = enrollments.find(enrollment => enrollment.id === editEnrollment.id);
-        if (!original) { setEnrollmentSaveError('This enrollment is no longer available. Refresh the record before saving.'); return; }
-        if (editEnrollment.totalAmount !== undefined && (!Number.isFinite(Number(editEnrollment.totalAmount)) || Number(editEnrollment.totalAmount) < 0)) {
-            setEnrollmentSaveError('Enter a valid tuition amount of zero or more.');
-            return;
-        }
-        const program = programs.find(item => item.id === editEnrollment.programId);
-        if (program) {
-            const grade = program.grades.find(item => item.id === editEnrollment.gradeId);
-            if (!grade) { setEnrollmentSaveError('Select a valid level before saving this enrollment.'); return; }
-            if (!grade.groups.some(group => group.id === editEnrollment.groupId)) {
-                setEnrollmentSaveError('Select a group in the chosen level before saving this enrollment.');
-                return;
-            }
-            if (editEnrollment.secondGroupId && !grade.groups.some(group => group.id === editEnrollment.secondGroupId)) {
-                setEnrollmentSaveError('Choose an extra workshop from the selected level or clear it.');
-                return;
-            }
-        }
-        enrollmentSaveLock.current = true;
-        setIsSavingEnrollment(true);
-        setEnrollmentSaveError('');
-        try {
-            const updates: any = { ...editEnrollment };
-            if (editEnrollment.totalAmount !== undefined) {
-                updates.balance = Number(editEnrollment.totalAmount) - (original.paidAmount || 0);
-            }
-            await updateDoc(doc(db, 'enrollments', editEnrollment.id), updates);
-            setEditEnrollment(null);
-            await showAlert('Enrollment updated', 'Enrollment details were saved successfully.', 'success');
-        } catch (err) {
-            console.error(err);
-            setEnrollmentSaveError('Enrollment details were not saved. Your changes are still here. Please try again.');
-            await showAlert('Could not update enrollment', 'Enrollment details were not saved. Your changes are still here.', 'danger');
-        } finally {
-            enrollmentSaveLock.current = false;
-            setIsSavingEnrollment(false);
-        }
+        if (!db || !editEnrollment || !editEnrollment.id) return;
+        try { const original = enrollments.find(en => en.id === editEnrollment.id); if (!original) return; let updates: any = { ...editEnrollment }; if (editEnrollment.totalAmount !== undefined) { updates.balance = Number(editEnrollment.totalAmount) - (original.paidAmount || 0); } await updateDoc(doc(db, 'enrollments', editEnrollment.id), updates); setEditEnrollment(null); await showAlert('Enrollment updated', 'Enrollment details were saved successfully.', 'success'); } catch (err) { console.error(err); await showAlert('Could not update enrollment', 'Enrollment details were not saved.', 'danger'); }
     };
 
     const handleSavePayment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (paymentSaveLock.current || isUploadingPaymentProof || !editPayment?.id) return;
-        if (!db) { setPaymentSaveError('The data connection is unavailable. Your changes are still here.'); return; }
+        if (!db || !editPayment || !editPayment.id) return;
         const originalPayment = payments.find(p => p.id === editPayment.id);
-        if (!originalPayment) { setPaymentSaveError('This payment is no longer available. Refresh the record before saving.'); return; }
-        if (!Number.isFinite(Number(editPayment.amount)) || Number(editPayment.amount) <= 0) {
-            setPaymentSaveError('Enter a positive payment amount before saving.');
-            return;
-        }
-        if (editPayment.method === 'check' && (!editPayment.checkNumber?.trim() || !editPayment.bankName?.trim())) {
-            setPaymentSaveError('Enter both the check number and bank before saving.');
-            return;
-        }
-        if (editPayment.method === 'virement' && !editPayment.proofUrl) {
-            setPaymentSaveError('Attach transfer proof before saving this payment.');
-            return;
-        }
-        paymentSaveLock.current = true;
-        setIsSavingPayment(true);
-        setPaymentSaveError('');
+        if (!originalPayment) return;
         try {
             let newStatus = originalPayment.status;
             const updatedPayment = { ...editPayment };
@@ -654,88 +594,55 @@ export const StudentDetailsView = ({
                 }
             }
 
+            await updateDoc(doc(db, 'payments', editPayment.id), updatedPayment);
+
             const wasCleared = ['paid', 'verified'].includes(originalPayment.status);
             const isCleared = ['paid', 'verified'].includes(newStatus);
             const originalAmount = Number(originalPayment.amount) || 0;
             const newAmount = Number(editPayment.amount) || 0;
 
             const diff = (isCleared ? newAmount : 0) - (wasCleared ? originalAmount : 0);
-            const enrollment = diff !== 0 ? enrollments.find(e => e.id === originalPayment.enrollmentId) : undefined;
-            if (diff !== 0 && !enrollment) throw new Error('Linked enrollment not found');
-            const batch = writeBatch(db);
-            batch.update(doc(db, 'payments', editPayment.id), updatedPayment);
-            if (enrollment) batch.update(doc(db, 'enrollments', enrollment.id), {
-                paidAmount: increment(diff),
-                balance: increment(-diff)
-            });
-            await batch.commit();
+            if (diff !== 0) {
+                const enrollment = enrollments.find(e => e.id === originalPayment.enrollmentId);
+                if (enrollment) {
+                    await updateDoc(doc(db, 'enrollments', enrollment.id), {
+                        paidAmount: increment(diff),
+                        balance: increment(-diff)
+                    });
+                }
+            }
 
             setEditPayment(null);
             await showAlert('Payment updated', 'Payment details were saved successfully.', 'success');
         } catch (err) {
             console.error(err);
-            setPaymentSaveError('Payment details were not saved. Your changes are still here. Please try again.');
-            await showAlert('Could not update payment', 'Payment details were not saved. Your changes are still here.', 'danger');
-        } finally {
-            paymentSaveLock.current = false;
-            setIsSavingPayment(false);
-        }
-    };
-
-    const handleEditPaymentProof = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        setIsUploadingPaymentProof(true);
-        setPaymentSaveError('');
-        try {
-            const proofUrl = await compressImage(file);
-            setEditPayment(previous => previous ? { ...previous, proofUrl } : null);
-        } catch (error) {
-            console.error(error);
-            setPaymentSaveError('Transfer proof could not be prepared. Choose the image again.');
-        } finally {
-            setIsUploadingPaymentProof(false);
+            await showAlert('Could not update payment', 'Payment details were not saved.', 'danger');
         }
     };
 
     const handleShareReceipt = async (paymentId: string) => {
-        if (!db) {
-            await showAlert('Receipt status was not saved', 'The data connection is unavailable. Try again when it is restored.', 'danger');
-            return;
-        }
+        if (!db) return;
         try {
             await updateDoc(doc(db, 'payments', paymentId) as any, {
                 receiptSharedAt: serverTimestamp() as any
             });
         } catch (error) {
             console.error("Error sharing receipt:", error);
-            await showAlert('Receipt status was not saved', 'The receipt was sent, but Edufy could not record that confirmation. Try again later.', 'warning');
         }
     };
 
     const handleShareSchedule = async () => {
-        if (!can('students.edit') || !currentOrganization?.id || student.organizationId !== currentOrganization.id) {
-            await showAlert('Permission required', 'Open this learner in the correct organization with edit access before sharing a schedule.', 'warning');
-            return;
-        }
-        const phone = normalizePhoneForWhatsApp(student.parentPhone);
-        if (!phone) {
-            await showAlert('Parent phone missing', 'Add a valid parent phone number before sharing the schedule.', 'warning');
-            return;
-        }
-        const scheduleLines = studentEnrollments
-            .filter(enrollment => enrollment.status === 'active' && enrollment.organizationId === currentOrganization.id)
-            .flatMap(enrollment => [
-                enrollment.groupTime ? `${enrollment.programName}: ${enrollment.groupName ? `${enrollment.groupName} — ` : ''}${enrollment.groupTime}` : '',
-                enrollment.secondGroupTime ? `${enrollment.programName}: ${enrollment.secondGroupName ? `${enrollment.secondGroupName} — ` : ''}${enrollment.secondGroupTime}` : ''
-            ].filter(Boolean));
-        if (scheduleLines.length === 0) {
-            await showAlert('No weekly schedule', 'Add a scheduled session to an active enrollment before sharing it.', 'warning');
+        if (!db) return;
+        if (!student.parentPhone) {
+            await showAlert('Parent phone missing', 'Add a parent phone number before sharing the schedule.', 'warning');
             return;
         }
 
+        let phone = student.parentPhone.replace(/[^0-9]/g, '');
+        if (phone.startsWith('0')) phone = '212' + phone.substring(1);
+
         const academyName = settings.academyName || currentOrganization?.name || 'Edufy';
-        const msg = `Hello! Here is the weekly schedule for ${student.name} at ${academyName}.\n\n${scheduleLines.map(line => `- ${line}`).join('\n')}\n\nPlease contact the academy if a session needs to change.`;
+        const msg = `Hello! Here is the weekly schedule for ${student.name} at ${academyName}.\n\nStudent portal:\n${window.location.origin}\n\nLogin email: ${student.loginInfo?.email || 'Not created yet'}\nPassword: ${student.loginInfo?.initialPassword || 'Contact the academy'}\n\nSee you in class.`;
 
         const shareWindow = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
         if (!shareWindow) {
@@ -744,34 +651,17 @@ export const StudentDetailsView = ({
         }
         shareWindow.opener = null;
 
-        const sent = await confirm({
-            title: 'Was the schedule sent?',
-            message: 'WhatsApp opened with the schedule draft. Confirm only after you send it to the verified parent.',
-            confirmText: 'I sent it',
-            cancelText: 'Not sent',
-            variant: 'info'
-        });
-        if (!sent) return;
-
         try {
-            if (!db) throw new Error('Database not initialized');
             await updateDoc(doc(db, 'students', student.id) as any, {
                 lastScheduleSharedAt: serverTimestamp() as any
             });
         } catch (error) {
             console.error("Error tracking schedule share:", error);
-            await showAlert('Schedule status was not saved', 'The schedule was sent, but Edufy could not record that confirmation. Try again later.', 'warning');
+            await showAlert('Schedule opened, tracking failed', 'WhatsApp opened, but Edufy could not record the share time.', 'warning');
         }
     };
 
     const shareAccount = async (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => {
-        const canShareAccount = role === 'student'
-            ? can('students.edit')
-            : ['super_admin', 'owner', 'admin'].includes(userProfile?.role || '');
-        if (!canShareAccount || !currentOrganization?.id || student.organizationId !== currentOrganization.id) {
-            await showAlert('Permission required', 'Open this learner in the correct organization with account management access before sharing sign-in details.', 'warning');
-            return;
-        }
         if (role === 'parent' && channel === 'email') {
             await showAlert('Use the one-time card', 'The parent login ID is not an inbox. Share the generated password directly by card or a reviewed WhatsApp message.', 'warning');
             return;
@@ -786,13 +676,13 @@ export const StudentDetailsView = ({
         const parentPortalUrl = parentSparkQuestUrl();
         const subject = `${academyName} ${role === 'student' ? 'learner' : 'family'} account for ${student.name}`;
         const message = role === 'student'
-            ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n\nPlease contact the academy for a private access card if you need a password. Keep these details private.`
+            ? `Hello, here is ${student.name}'s learner account for ${academyName}.\n\nSign in: ${config.sparkQuestUrl}\nEmail: ${account.email}\n${student.loginInfo?.initialPassword ? `Password: ${student.loginInfo.initialPassword}` : 'Please contact the academy for the account password.'}\n\nPlease keep these details private.`
             : `Hello, here is your ${academyName} SparkQuest family access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nLogin ID: ${account.email}\n\nFor a lost password, contact the academy for a new one-time card.`;
 
         if (channel === 'email') {
             const recipient = role === 'parent'
                 ? (student.email && student.email !== account.email ? student.email : '')
-                : (student.email && student.email !== account.email ? student.email : '');
+                : (student.email && student.email !== account.email ? student.email : student.parentLoginInfo?.email || '');
             window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
             return;
         }
@@ -848,9 +738,7 @@ export const StudentDetailsView = ({
         generateStudentSchedulePrint(student, selectedEnrollments, settings);
         setIsSchedulePrintOpen(false);
     };
-    const outstandingBalance = activeEnrollments
-        .filter(enrollment => !currentOrganization?.id || enrollment.organizationId === currentOrganization.id)
-        .reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
+    const outstandingBalance = studentEnrollments.reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
     const attendedSessions = studentAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
     const attendanceRate = studentAttendance.length > 0 ? Math.round((attendedSessions / studentAttendance.length) * 100) : null;
     const studentTabs = [
@@ -866,16 +754,12 @@ export const StudentDetailsView = ({
         ...(absenceCount > 0 ? [{ id: 'attendance', title: 'Review attendance', detail: `${absenceCount} absence${absenceCount === 1 ? '' : 's'} recorded.`, icon: Calendar, action: () => setActiveTab('Attendance') }] : []),
         ...(!student.loginInfo?.email || (!isAdult && !student.parentLoginInfo?.email) ? [{ id: 'access', title: 'Finish portal access', detail: !student.loginInfo?.email ? 'Learner access is not ready.' : 'Family access is not ready.', icon: Key, action: () => setActiveTab('Access') }] : [])
     ];
-    const guideState: GuideState = studentGuideState || (attentionItems.length ? 'attention' : 'complete');
+    const guideState: GuideState = studentGuideState || (activeTab === 'Overview' ? (attentionItems.length ? 'attention' : 'welcome') : 'context');
     const guideMessage = studentGuideState
         ? educationGuideRegistry.students[studentGuideState]
-        : attentionItems[0]?.detail || 'No urgent follow-up. This learner record is ready for the next school day.';
-    const overviewSignals = [
-        { label: 'Active learning', value: String(activeEnrollments.length), detail: `${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`, icon: GraduationCap, tone: 'green', action: () => setActiveTab('Learning') },
-        { label: 'Balance due', value: formatCurrency(outstandingBalance), detail: outstandingBalance > 0 ? 'Review payment history' : 'Account settled', icon: Wallet, tone: outstandingBalance > 0 ? 'orange' : 'green', action: () => setActiveTab('Finance') },
-        { label: 'Attendance', value: attendanceRate === null ? 'No data' : `${attendanceRate}%`, detail: `${absenceCount} absent · ${lateCount} late`, icon: Calendar, tone: absenceCount > 0 ? 'orange' : 'blue', action: () => setActiveTab('Attendance') },
-        { label: 'Published work', value: String(publishedProjects.length), detail: 'Portfolio projects', icon: FolderKanban, tone: 'purple', action: () => { setLearningView('portfolio'); setActiveTab('Learning'); } }
-    ];
+        : activeTab === 'Overview'
+            ? (attentionItems[0]?.detail || educationGuideRegistry.students.welcome)
+            : ({ Learning: 'See current enrollments and published work in one learning workspace.', Attendance: 'Review the attendance pattern before acting on an individual record.', Finance: 'Start with the balance, then inspect the payment history.', Access: 'Manage learner and family access in this protected workspace.' } as const)[activeTab];
 
     return (
         <div className={`flex flex-col gap-5 pb-8 ${showEducationStudentDetailsV1 ? 'edu-v1 edu-student-details-v1' : ''}`} data-edu-system={showEducationStudentDetailsV1 ? '1' : undefined} data-testid={showEducationStudentDetailsV1 ? 'education-student-details-v1' : undefined}>
@@ -897,10 +781,10 @@ export const StudentDetailsView = ({
                             {membershipEndStr && <span className="edu-student-details-v1__membership">STEM program until {membershipEndStr}</span>}
                         </div>
                     </div>
-                    <div className="edu-student-details-v1__actions" aria-label="Learner actions">
-                        {can('students.edit') && <EducationButton icon={Pencil} variant={attentionItems.length ? 'secondary' : 'primary'} className="edu-student-details-v1__edit" onClick={handleEditClick}>Edit record</EducationButton>}
-                        <EducationButton icon={Printer} className="edu-student-details-v1__schedule" onClick={openSchedulePrint}>Schedule</EducationButton>
-                        {can('students.edit') && <EducationButton icon={student.lastScheduleSharedAt ? CheckCircle2 : Share2} className="edu-student-details-v1__share" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</EducationButton>}
+                    <div className="edu-student-details-v1__actions">
+                        <button type="button" onClick={openSchedulePrint}><Printer size={17} />Schedule</button>
+                        {can('students.edit') && <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>}
+                        {can('students.edit') && <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>}
                     </div>
                 </section>
             ) : <AtlasCommandHeader
@@ -923,6 +807,10 @@ export const StudentDetailsView = ({
                     <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('students')} title="Back to students" aria-label="Back to students" />
                 </>}
             />}
+
+            <EducationGuide module="students" state={guideState} mode="compact" message={guideMessage} dismissible={activeTab !== 'Overview'} action={guideState === 'attention' && attentionItems[0] ? { label: attentionItems[0].title, onClick: attentionItems[0].action } : undefined} />
+
+            {attentionItems.length > 1 && activeTab === 'Overview' && <section className="edu-student-details-v1__attention" aria-labelledby="student-attention-title"><header><span><AlertTriangle size={18} /></span><div><h3 id="student-attention-title">Also needs attention</h3><p>Review these after the next step above.</p></div></header><div>{attentionItems.slice(1).map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={item.action}><span><Icon size={17} /></span><span><strong>{item.title}</strong><small>{item.detail}</small></span><ChevronRight size={17} /></button>; })}</div></section>}
 
             <div className="edu-student-details-v1__workspace min-w-0">
                 <main className="min-w-0">
@@ -966,16 +854,15 @@ export const StudentDetailsView = ({
 
                     <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="edu-student-details-v1__panel min-w-0" tabIndex={0}>
                         {activeTab === 'Overview' && <div className="edu-student-details-v1__overview">
-                            <div className="edu-student-details-v1__priority">
-                                <EducationGuide module="students" state={guideState} mode="inline" message={guideMessage} action={guideState === 'attention' && attentionItems[0] ? { label: attentionItems[0].title, onClick: attentionItems[0].action } : undefined} />
-                                {attentionItems.length > 1 && <div className="edu-student-details-v1__attention" aria-label="More items to review"><span>Also to review</span>{attentionItems.slice(1).map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={item.action} title={item.detail}><Icon size={15} /><strong>{item.title}</strong><ChevronRight size={15} /></button>; })}</div>}
-                            </div>
-                            <div className="edu-student-details-v1__signals" aria-label="Learner record summary">
-                                {overviewSignals.map(signal => { const Icon = signal.icon; return <button key={signal.label} type="button" className="edu-student-details-v1__signal" data-tone={signal.tone} onClick={signal.action} aria-label={`${signal.label}: ${signal.value}. ${signal.detail}`}><span className="edu-student-details-v1__signal-icon"><Icon size={20} aria-hidden="true" /></span><span className="edu-student-details-v1__signal-label">{signal.label}</span><strong>{signal.value}</strong><small>{signal.detail}</small><ChevronRight className="edu-student-details-v1__signal-arrow" size={17} aria-hidden="true" /></button>; })}
+                            <div className="edu-student-details-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
+                                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Learning')} />
+                                <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
+                                <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'amber' : 'blue'} onClick={() => setActiveTab('Attendance')} />
+                                <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => { setLearningView('portfolio'); setActiveTab('Learning'); }} />
                             </div>
                             <div className="edu-student-details-v1__overview-grid">
-                                <section className="edu-student-details-v1__family"><header><span><Users size={19} /></span><div><h3>Learner and family</h3><p>Contact and care at a glance</p></div>{can('students.edit') && <EducationButton variant="quiet" onClick={handleEditClick}>Edit</EducationButton>}</header><dl><div><dt><Mail size={16} />Learner email</dt><dd data-missing={!student.email}>{student.email || 'Not added'}</dd></div><div><dt><Phone size={16} />Parent phone</dt><dd data-missing={!student.parentPhone}>{student.parentPhone || 'Not added'}</dd></div><div><dt><Calendar size={16} />Birth date</dt><dd data-missing={!student.birthDate}>{student.birthDate || 'Not added'}</dd></div><div data-alert={Boolean(student.medicalInfo)}><dt><Shield size={16} />Medical notes</dt><dd>{student.medicalInfo || 'No medical alerts'}</dd></div></dl></section>
-                                <section className="edu-student-details-v1__current-learning"><header><span><GraduationCap size={19} /></span><div><h3>Current learning</h3><p>Programs and weekly schedule</p></div><EducationButton variant="quiet" onClick={() => setActiveTab('Learning')}>View all</EducationButton></header>{activeEnrollments.length ? <div className="edu-student-details-v1__program-list">{activeEnrollments.slice(0, 3).map(enrollment => <button type="button" key={enrollment.id} onClick={() => setActiveTab('Learning')}><span><strong>{enrollment.programName}</strong><small>{enrollment.gradeName || 'Level not set'} · {enrollment.groupName || 'Group not set'}{enrollment.groupTime ? ` · ${enrollment.groupTime}` : ''}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="edu-student-details-v1__overview-empty"><BookOpen size={24} /><p>No active enrollment yet.</p>{can('students.enroll') && <EducationButton variant="primary" onClick={() => onQuickEnroll(student.id)}>Add enrollment</EducationButton>}</div>}</section>
+                                <section><header><span><Users size={18} /></span><div><h3>Learner and family</h3><p>Essential contact and care information</p></div>{can('students.edit') && <button type="button" onClick={handleEditClick}>Edit</button>}</header><dl><div><dt><Mail size={15} />Learner email</dt><dd>{student.email || 'Not added'}</dd></div><div><dt><Phone size={15} />Parent phone</dt><dd>{student.parentPhone || 'Not added'}</dd></div><div><dt><Calendar size={15} />Birth date</dt><dd>{student.birthDate || 'Not added'}</dd></div><div data-alert={Boolean(student.medicalInfo)}><dt><Shield size={15} />Medical notes</dt><dd>{student.medicalInfo || 'No medical alerts'}</dd></div></dl></section>
+                                <section><header><span><GraduationCap size={18} /></span><div><h3>Current learning</h3><p>Programs and weekly delivery</p></div><button type="button" onClick={() => setActiveTab('Learning')}>Open</button></header>{activeEnrollments.length ? <div className="edu-student-details-v1__program-list">{activeEnrollments.slice(0, 3).map(enrollment => <button type="button" key={enrollment.id} onClick={() => setActiveTab('Learning')}><span><strong>{enrollment.programName}</strong><small>{enrollment.gradeName || 'Level not set'} · {enrollment.groupName || 'Group not set'}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="edu-student-details-v1__overview-empty"><BookOpen size={24} /><p>No active enrollment.</p>{can('students.enroll') && <button type="button" onClick={() => onQuickEnroll(student.id)}>Add enrollment</button>}</div>}</section>
                             </div>
                         </div>}
                         {activeTab === 'Learning' && <div className="edu-student-details-v1__learning"><div className="edu-student-details-v1__subtabs" role="group" aria-label="Learning workspace"><button type="button" aria-pressed={learningView === 'enrollments'} onClick={() => setLearningView('enrollments')}><GraduationCap size={16} />Enrollments <span>{studentEnrollments.length}</span></button><button type="button" aria-pressed={learningView === 'portfolio'} onClick={() => setLearningView('portfolio')}><FolderKanban size={16} />Portfolio <span>{publishedProjects.length}</span></button></div>{learningView === 'enrollments' ? <AcademicsTab studentEnrollments={studentEnrollments} onQuickEnroll={onQuickEnroll} navigateTo={navigateTo as any} setEditEnrollment={setEditEnrollment} initiateDeleteEnrollment={initiateDeleteEnrollment} studentId={student.id} canEnroll={can('students.enroll')} canEdit={can('students.enroll')} canDelete={can('students.delete')} /> : <PortfolioTab publishedProjects={publishedProjects} setSelectedProject={setSelectedProject} />}</div>}
@@ -1018,8 +905,8 @@ export const StudentDetailsView = ({
                     ) : <p className="text-sm text-amber-200">This learner has no active program to print.</p>}
                 </div>
             </Modal>
-            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editEnrollment} onClose={() => { if (!isSavingEnrollment) setEditEnrollment(null); }} title="Edit Enrollment Details">
-                <form onSubmit={handleSaveEnrollment} onChange={() => setEnrollmentSaveError('')} aria-busy={isSavingEnrollment} className="space-y-4">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editEnrollment} onClose={() => setEditEnrollment(null)} title="Edit Enrollment Details">
+                <form onSubmit={handleSaveEnrollment} className="space-y-4">
                     <div className="bg-slate-950 p-3 rounded border border-slate-800 mb-4">
                         <div className="text-xs text-slate-500 uppercase font-bold mb-1">Program</div>
                         <div className="text-white font-medium">{editEnrollment?.programName}</div>
@@ -1034,7 +921,6 @@ export const StudentDetailsView = ({
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Level / Grade</label>
                                 <select
                                     aria-label="Level or grade"
-                                    disabled={isSavingEnrollment}
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.gradeId || ''}
                                     onChange={(e) => {
@@ -1049,10 +935,7 @@ export const StudentDetailsView = ({
                                                 gradeName: selectedGrade.name,
                                                 groupId: '', // Reset group when level changes
                                                 groupName: '',
-                                                groupTime: '',
-                                                secondGroupId: undefined,
-                                                secondGroupName: undefined,
-                                                secondGroupTime: undefined
+                                                groupTime: ''
                                             }) : null);
                                         }
                                     }}
@@ -1073,7 +956,6 @@ export const StudentDetailsView = ({
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Group / Schedule</label>
                                 <select
                                     aria-label="Group or schedule"
-                                    disabled={isSavingEnrollment}
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.groupId || ''}
                                     autoFocus={Boolean(viewParams.studentEnrollmentId)}
@@ -1083,10 +965,6 @@ export const StudentDetailsView = ({
                                         const grade = program.grades.find(g => g.id === editEnrollment.gradeId);
                                         if (!grade) return;
 
-                                        if (!e.target.value) {
-                                            setEditEnrollment(prev => prev ? ({ ...prev, groupId: '', groupName: '', groupTime: '' }) : null);
-                                            return;
-                                        }
                                         const selectedGroup = grade.groups.find(g => g.id === e.target.value);
                                         if (selectedGroup) {
                                             setEditEnrollment(prev => prev ? ({
@@ -1116,7 +994,6 @@ export const StudentDetailsView = ({
                                 <label className="block text-xs font-medium text-slate-400 mb-1">Extra Workshop / DIY (Optional)</label>
                                 <select
                                     aria-label="Extra workshop or DIY"
-                                    disabled={isSavingEnrollment}
                                     className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                     value={editEnrollment.secondGroupId || ''}
                                     onChange={(e) => {
@@ -1168,7 +1045,6 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Payment Plan</label>
                             <select
                                 aria-label="Payment plan"
-                                disabled={isSavingEnrollment}
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white"
                                 value={editEnrollment?.paymentPlan || 'full'}
                                 onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, paymentPlan: e.target.value as any }) : null)}
@@ -1184,10 +1060,7 @@ export const StudentDetailsView = ({
                             <label className="block text-xs font-medium text-slate-400 mb-1">Negotiated Price (Total Tuition)</label>
                             <input
                                 aria-label="Negotiated price"
-                                disabled={isSavingEnrollment}
                                 type="number"
-                                min="0"
-                                step="any"
                                 className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-lg"
                                 value={editEnrollment?.totalAmount || 0}
                                 onChange={e => setEditEnrollment(prev => prev ? ({ ...prev, totalAmount: Number(e.target.value) }) : null)}
@@ -1195,32 +1068,21 @@ export const StudentDetailsView = ({
                         </div>
                     </div>
 
-                    {enrollmentSaveError && <EducationNotice status="danger">{enrollmentSaveError}</EducationNotice>}
-                    <button type="submit" disabled={isSavingEnrollment} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">
-                        {isSavingEnrollment ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {isSavingEnrollment ? 'Saving changes…' : 'Save Changes'}
+                    <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">
+                        <Save size={16} /> Save Changes
                     </button>
                 </form>
             </Modal>
-            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editPayment} onClose={() => { if (!isSavingPayment) setEditPayment(null); }} title="Edit Payment Record">
-                <form onSubmit={handleSavePayment} onChange={() => setPaymentSaveError('')} aria-busy={isSavingPayment} className="space-y-4">
+            <Modal designSystem={showEducationStudentDetailsV1} isOpen={!!editPayment} onClose={() => setEditPayment(null)} title="Edit Payment Record">
+                <form onSubmit={handleSavePayment} className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input aria-label="Student name on receipt" type="text" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input aria-label="Payment date" type="date" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Student Name (On Receipt)</label><input aria-label="Student name on receipt" type="text" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-medium" value={editPayment?.studentName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, studentName: e.target.value }) : null)} /></div>
+                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input aria-label="Payment date" type="date" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.date || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, date: e.target.value }) : null)} /></div>
                     </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input aria-label="Payment amount" type="number" min="0.01" step="any" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select aria-label="Payment method" disabled={isSavingPayment} className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
-                    {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input aria-label="Check number" disabled={isSavingPayment} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input aria-label="Check bank" disabled={isSavingPayment} className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
-                    {editPayment?.method === 'virement' && <div>
-                        <span className="mb-2 block text-xs font-medium text-slate-400">Transfer proof</span>
-                        <label className="edu-student-payment-proof flex min-h-11 cursor-pointer items-center gap-2 px-3 text-sm font-bold">
-                            {isUploadingPaymentProof ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                            {isUploadingPaymentProof ? 'Preparing image…' : 'Choose proof image'}
-                            <input type="file" accept="image/*" disabled={isSavingPayment || isUploadingPaymentProof} onChange={handleEditPaymentProof} className="sr-only" aria-label="Transfer proof image" />
-                        </label>
-                        {editPayment.proofUrl && <p className="mt-2 text-xs">Transfer proof attached</p>}
-                    </div>}
-                    {paymentSaveError && <EducationNotice status="danger">{paymentSaveError}</EducationNotice>}
-                    <button type="submit" disabled={isSavingPayment || isUploadingPaymentProof} className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400">{isSavingPayment ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {isSavingPayment ? 'Saving changes…' : 'Save changes'}</button>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input aria-label="Payment amount" type="number" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={editPayment?.amount || 0} onChange={e => setEditPayment(prev => prev ? ({ ...prev, amount: Number(e.target.value) }) : null)} /></div>
+                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select aria-label="Payment method" className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={editPayment?.method} onChange={e => setEditPayment(prev => prev ? ({ ...prev, method: e.target.value as any }) : null)}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
+                    {editPayment?.method === 'check' && (<div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded border border-slate-800"><div><label className="text-xs text-slate-500 block mb-1">Check No.</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.checkNumber || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, checkNumber: e.target.value }) : null)} /></div><div><label className="text-xs text-slate-500 block mb-1">Bank</label><input className="w-full bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={editPayment.bankName || ''} onChange={e => setEditPayment(prev => prev ? ({ ...prev, bankName: e.target.value }) : null)} /></div></div>)}
+                    <button type="submit" className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400"><Save size={16} /> Save changes</button>
                 </form>
             </Modal>
             <Modal designSystem={showEducationStudentDetailsV1} isOpen={confirmModal.isOpen} onClose={() => setConfirmModal((prev: any) => ({ ...prev, isOpen: false }))} title={confirmModal.title} size="md">

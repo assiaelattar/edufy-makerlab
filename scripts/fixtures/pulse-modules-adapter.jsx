@@ -1,0 +1,14 @@
+import React, { useSyncExternalStore } from 'react';
+export * from './pulse-attendance-adapter';
+const weekday = new Date().toLocaleDateString('en-US',{weekday:'long'});
+export const fixtureStudents = ['Alex Example','Sam Example','Noor Example','Robin Example','Charlie Example','Taylor Example'].map((name,i)=>({id:`learner-${i}`,name,status:'active',organizationId:'synthetic-only',parentName:`Family ${i+1}`,parentPhone:i===1?'':`+1555000000${i}`,birthDate:'2016-01-01',school:'Example School',createdAt:'2026-09-01'}));
+export const fixturePrograms = [{id:'robotics',name:'Robotics workshop',status:'active',grades:[{id:'level-1',name:'Level 1',groups:[{id:'explorers',name:'Explorers',day:weekday,time:'14:00'},{id:'inventors',name:'Inventors',day:weekday,time:'16:00'}]}]},{id:'design',name:'Creative coding',status:'active',grades:[{id:'level-2',name:'Level 2',groups:[{id:'creators',name:'Digital creators',day:weekday==='Monday'?'Tuesday':'Monday',time:'10:30'}]}]}];
+export const fixtureEnrollments = fixtureStudents.slice(0,5).map((s,i)=>({id:`enrollment-${i}`,studentId:s.id,studentName:s.name,programId:'robotics',programName:'Robotics workshop',gradeName:'Level 1',groupId:i===4?'':i<3?'explorers':'inventors',groupName:i===4?'':i<3?'Explorers':'Inventors',groupTime:`${weekday} ${i<3?'14:00':'16:00'}`,status:'active',balance:i===2?250:0,totalAmount:1000,paidAmount:i===2?750:1000}));
+let revision=0, params={}, lastAction='';const listeners=new Set();
+const notify=()=>{revision++;listeners.forEach(f=>f());};
+const subscribe=f=>{listeners.add(f);return()=>listeners.delete(f);};
+export const recordAction=(value)=>{lastAction=value;notify();};
+export const useAuth=()=>({currentOrganization:{id:'synthetic-only',name:'Example school'},can:()=>new URLSearchParams(location.search).get('role')!=='readonly'});
+export const useAppContext=()=>{useSyncExternalStore(subscribe,()=>revision);return {programs:new URLSearchParams(location.search).get('scenario')==='empty'?[]:fixturePrograms,students:fixtureStudents,enrollments:fixtureEnrollments,viewParams:params,settings:{academyName:'Example school'},navigateTo:(view,next={})=>{lastAction=`${view} ${JSON.stringify(next)}`;params=view==='classes'?next:params;notify();}};};
+export const ModuleFixtureControls=()=>{useSyncExternalStore(subscribe,()=>revision);return <aside aria-label="Synthetic QA controls" style={{marginTop:24,padding:16,borderTop:'1px solid var(--edu-border)'}}><strong>Synthetic UI preview · no school records</strong><p role="status">{lastAction}</p></aside>;};
+export const EducationAdmissionsReadOnlyV1=()=> <p>Admissions is outside this isolated UI preview.</p>;

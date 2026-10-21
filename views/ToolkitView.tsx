@@ -29,6 +29,8 @@ import { db } from '../services/firebase';
 import { Asset, ToolLink } from '../types';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
 import './resources/education-resources-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
 
 type ToolkitTab = 'digital' | 'inventory';
 type SortOption = 'name' | 'category' | 'newest' | 'status';
@@ -518,7 +520,7 @@ export const ToolkitView = () => {
     };
 
     return (
-        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-toolkit-v1' : ''}`} data-testid={showEducationResourcesV1 ? 'education-toolkit-v1' : undefined}>
+        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-school-ops-v1 edu-toolkit-v1' : ''}`} data-edu-system={showEducationResourcesV1 ? '1' : undefined} data-testid={showEducationResourcesV1 ? 'education-toolkit-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Organization resources"
                 title="Toolkit"
@@ -699,7 +701,7 @@ export const ToolkitView = () => {
                 </section>
             )}
 
-            <Modal isOpen={isToolModalOpen} onClose={() => { if (!isSaving) setIsToolModalOpen(false); }} title={editingTool ? 'Edit Resource' : 'Add Resource'}>
+            <Modal isOpen={isToolModalOpen} onClose={() => { if (!isSaving) setIsToolModalOpen(false); }} title={editingTool ? 'Edit Resource' : 'Add Resource'} designSystem={showEducationResourcesV1}>
                 <form onSubmit={handleSaveTool} className="space-y-4">
                     <div><label htmlFor="tool-title" className="mb-1 block text-xs font-bold text-slate-400">Resource name</label><input id="tool-title" required maxLength={80} className={fieldClassName} value={toolForm.title || ''} onChange={event => setToolForm({ ...toolForm, title: event.target.value })} placeholder="e.g. Arduino IDE" /></div>
                     <div><label htmlFor="tool-url" className="mb-1 block text-xs font-bold text-slate-400">External URL</label><input id="tool-url" type="url" inputMode="url" required className={fieldClassName} value={toolForm.url || ''} onChange={event => setToolForm({ ...toolForm, url: event.target.value })} placeholder="https://provider.example.com" /><p className="mt-1 text-[11px] leading-4 text-slate-500">Only http and https links are accepted. Provider accounts and availability are managed outside Edufy.</p></div>
@@ -709,7 +711,7 @@ export const ToolkitView = () => {
                 </form>
             </Modal>
 
-            <Modal isOpen={isAssetModalOpen} onClose={() => { if (!isSaving) setIsAssetModalOpen(false); }} title={editingAsset ? 'Edit Inventory Item' : 'Add Inventory Item'}>
+            <Modal isOpen={isAssetModalOpen} onClose={() => { if (!isSaving) setIsAssetModalOpen(false); }} title={editingAsset ? 'Edit Inventory Item' : 'Add Inventory Item'} designSystem={showEducationResourcesV1}>
                 <form onSubmit={handleSaveAsset} className="space-y-4">
                     <div><label htmlFor="asset-name" className="mb-1 block text-xs font-bold text-slate-400">Item name</label><input id="asset-name" required maxLength={100} className={fieldClassName} value={assetForm.name || ''} onChange={event => setAssetForm({ ...assetForm, name: event.target.value })} placeholder="e.g. Robotics kit 05" /></div>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -722,7 +724,7 @@ export const ToolkitView = () => {
                 </form>
             </Modal>
 
-            <Modal isOpen={isCheckoutModalOpen} onClose={() => { if (!isSaving) setIsCheckoutModalOpen(false); }} title={`Check Out: ${selectedAsset?.name || 'Item'}`}>
+            <Modal isOpen={isCheckoutModalOpen} onClose={() => { if (!isSaving) setIsCheckoutModalOpen(false); }} title={`Check Out: ${selectedAsset?.name || 'Item'}`} designSystem={showEducationResourcesV1}>
                 <form onSubmit={handleCheckout} className="space-y-4">
                     <p className="text-sm leading-5 text-slate-500">Assign this item to an active student. The register will retain custody until an authorized return is recorded.</p>
                     <div><label htmlFor="checkout-student" className="mb-1 block text-xs font-bold text-slate-400">Student</label><select id="checkout-student" required className={fieldClassName} value={assignStudentId} onChange={event => setAssignStudentId(event.target.value)}><option value="">Choose student</option>{eligibleStudents.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}</select>{eligibleStudents.length === 0 && <p className="mt-1 text-[11px] text-amber-200">No active students are available in this organization.</p>}</div>

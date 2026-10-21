@@ -1,0 +1,33 @@
+# Expenses · Design System v1 local handoff
+
+**Status:** focused local implementation complete; release acceptance remains open. The Expenses workspace now uses canonical Education surfaces and a module-owned responsive stylesheet. Existing calculations, Firestore destinations, tenant checks, write handlers, CSV columns, permissions and stored data are preserved. No production write, push or deployment was performed.
+
+## Surface inventory and evidence
+
+The source inventory covers each reachable Expenses view and nested interaction. “Synthetic” means the real `ExpensesView` mounted with in-memory Auth/App/Firestore/Confirm boundaries and invented records. “Signed-in” means the local application with the existing Administrator school session, inspected read-only. No real school screenshot was retained.
+
+| Surface | Migration and behavior | Browser verification | Remaining boundary |
+| --- | --- | --- | --- |
+| Header and period toolbar | Canonical command header, session and month controls, role-gated actions and filtered CSV export. Session/month selections still drive existing calculations. | Synthetic desktop/390px light/dark; signed-in desktop/390px. Empty export disabled. | Real CSV download contents were not inspected; no production export performed. |
+| Overview | Next-step priority, period/session metrics, recurring-charge preview and recent expense register use Education badges, icons, actions and neutral record surfaces. | Synthetic populated/empty, desktop/390px light/dark; signed-in loaded overview at desktop/390px. | Live October 2026 ledger was empty, so populated rows were synthetic. |
+| Expense register | Search, category and linked-template filters; clear filter; selected record detail with notes/status; edit/delete/receipt actions. Selection from overview and recurring charge navigates here. | Synthetic five-row register, filtered/empty results, selected detail and receipt viewer; signed-in empty register at desktop/390px. | Real populated ledger and receipt were not available for read-only inspection. |
+| Recurring charges | Due, pending, paid, duplicate-review, scheduled and manual weekly states remain derived from existing templates and linked ledger records. Payment/review actions are contextual. | All six statuses exercised synthetically; signed-in six due charges viewed read-only at desktop/390px. | Real payment was opened and canceled; persistence/rules not certified. |
+| Categories & insights | Existing category totals and period/session margin shown through canonical metrics and category meters; empty breakdown state. | Synthetic populated/empty at desktop/390px light/dark; signed-in empty period at desktop/390px. | Live populated category calculations were unavailable in this account period. |
+| Templates workspace | Monthly template form and active register, edit/cancel/delete actions, manual weekly explanation. Form retains existing validation, tenant guard and write destinations. Correct update success label after edit. | Synthetic create validation/success/failure, template list and edit/cancel; signed-in template view read-only at desktop/390px. | No real template write or deletion accepted. |
+| New/edit expense dialog | Canonical mobile-safe modal and form sections; title, category, amount, date and beneficiary first; payment method, status, notes and proof behind a disclosure. Existing upload compression and save logic retained. | Synthetic required-field checks, disclosure, save success/failure with failed draft retained; 390px scrolling, Escape and focus return. Signed-in new form opened and canceled. | Real financial write and file upload were not performed. |
+| Recurring payment dialog | Amount, date, method and optional proof; existing linked-record handler retained. | Synthetic open/cancel/success and 390px dialog layout; signed-in opened/canceled. | Real payment write not performed. |
+| Receipt viewer | Canonical dialog shows the existing receipt image. | Synthetic data-URL receipt opened and image exposed with accessible name. | Real receipt unavailable in current period. |
+| Delete confirmations | Existing `useConfirm` tenant checks and deletion semantics retained for expenses and templates. | Synthetic expense confirmation requested and canceled; no delete event. | Consequential real deletion not exercised. |
+| Loading/error/empty/permission states | Canonical loading and workspace-error states; empty registers, charges, breakdown and templates; read-only role hides create controls and restricts template editing. | Synthetic loading/error/empty/read-only variants checked; signed-in Administrator only. | AppContext does not expose optional Expenses listener failure as a distinct module error; live restricted-role and listener-error acceptance remain open. |
+| Responsive and motion | Module stylesheet scopes desktop and mobile layouts to `edu-expenses-v1`, uses shared tokens, and removes animation/transition under reduced-motion preference. | Five tabs × light/dark at 1440px and 390px: panel IDs matched selected tabs and document width matched viewport. Mobile form scroll, keyboard close/return and reduced motion checked. | Physical phone and alternate browser engines unverified. |
+
+## Evidence and commands
+
+- Synthetic preview: `http://127.0.0.1:5253/`; variants include `theme=dark`, `scenario=empty|loading|error`, `role=readonly`, `save=error`, and `confirm=accept`. The fixture does not connect to school Firestore.
+- Screenshots in `pulse-evidence/expenses-v1-*.png` show synthetic overview, recurring and templates at desktop/mobile in light/dark. The corrected 390px dark overview has single-column metrics; page width is 390px with no horizontal overflow.
+- Signed-in local app: `http://127.0.0.1:5202/`. Administrator read-only navigation reached all five tabs at desktop and 390px. Session 2025–2026, October 2026: six due recurring charges, zero ledger expenses, MAD 0 period expenses, MAD 164,923 session margin and MAD 212,900 income. Both financial dialogs were canceled.
+- `npm.cmd run build`, `node scripts/check-education-system.mjs`, `node scripts/test-service-catalogue.mjs`, `node scripts/atlas-loop-agent.js`, filtered TypeScript diagnostics for Expenses and `git diff --check` are the focused local gates. See final handoff for their actual results.
+
+## Acceptance boundary
+
+The populated ledger, writes, failures and receipt were verified only with synthetic records. The signed-in school tour was strictly read-only. A real populated ledger/receipt, restricted role, optional-listener failure, physical phone and any authorized real financial write still need separate acceptance before release. Preserve the existing unrelated dirty files; this phase stops at Expenses.

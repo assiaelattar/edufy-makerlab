@@ -8,9 +8,8 @@ import { formatCurrency } from '../../utils/helpers';
 import { useAppContext } from '../../context/AppContext';
 import { generateRegistrationCertificate, generateCompletionCertificate } from '../../utils/certificateGenerator';
 import { Modal } from '../../components/Modal';
-import { EducationActionMenu, EducationButton, EducationField, EducationState, EducationStatusPill } from '../../components/education-ui/EducationPrimitives';
+import { AtlasActionButton, AtlasEmptyState, AtlasSectionHeader } from '../../components/atlas/AtlasSurface';
 import { useConfirm } from '../../context/ConfirmContext';
-import './education-student-learning-polish.css';
 
 interface AcademicsTabProps {
   studentEnrollments: Enrollment[];
@@ -71,14 +70,10 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
       return;
     }
     try {
-      const opened = generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
+      generateRegistrationCertificate(student, attestationModal.enrollment, settings, {
         admissionDate: customAdmissionDate,
         issueDate: customIssueDate
       });
-      if (!opened) {
-        await showAlert('Print preview was blocked', 'Allow pop-ups for Edufy, then try generating the certificate again.', 'warning');
-        return;
-      }
       setAttestationModal({ isOpen: false, enrollment: null });
     } catch {
       await showAlert('Certificate could not be prepared', 'Review the dates and try again. The enrollment is unchanged.', 'danger');
@@ -95,16 +90,12 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
       return;
     }
     try {
-      const opened = generateCompletionCertificate(student, completionModal.enrollment, settings, {
+      generateCompletionCertificate(student, completionModal.enrollment, settings, {
         academyName: completionAcademyName.trim(),
         logoUrl: completionLogoUrl.trim(),
         issueDate: completionIssueDate,
         modules: completionModules.split('\n').map(m => m.trim()).filter(m => m.length > 0)
       });
-      if (!opened) {
-        await showAlert('Print preview was blocked', 'Allow pop-ups for Edufy, then try generating the certificate again.', 'warning');
-        return;
-      }
       setCompletionModal({ isOpen: false, enrollment: null });
     } catch {
       await showAlert('Certificate could not be prepared', 'Review the details and try again. The enrollment is unchanged.', 'danger');
@@ -112,122 +103,260 @@ export const AcademicsTab: React.FC<AcademicsTabProps> = ({
   };
 
   return (
-    <section className="edu-student-surface edu-student-surface--learning edu-student-learning">
-      <header className="edu-student-learning__intro">
-        <div className="edu-student-learning__identity">
-          <span className="edu-student-learning__icon"><BookOpen size={23} aria-hidden="true" /></span>
-          <div>
-            <span className="edu-student-learning__eyebrow">Learning record</span>
-            <h3>Enrollments</h3>
-            <p>Programs, weekly groups, tuition and documents</p>
+    <div className="edu-student-surface edu-student-surface--learning overflow-hidden rounded-lg border border-white/10 bg-slate-900/55">
+      <div className="p-4">
+        <AtlasSectionHeader
+          title="Enrollments"
+          description="Programs, schedules, tuition, and certificates"
+          icon={BookOpen}
+          meta={<span className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[10px] text-slate-400">{studentEnrollments.length}</span>}
+          actions={canEnroll ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>New enrollment</AtlasActionButton> : undefined}
+        />
+      </div>
+      <div className="border-t border-white/10">
+        {studentEnrollments.length === 0 ? (
+          <div className="p-4">
+            <AtlasEmptyState
+              icon={BookOpen}
+              title="No enrollments yet"
+              description="Add the student's first program to connect schedules, attendance, and billing."
+              action={canEnroll ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>Enroll student</AtlasActionButton> : undefined}
+            />
           </div>
-        </div>
-        <div className="edu-student-learning__header-actions">
-          <span className="edu-student-learning__count">{studentEnrollments.length} {studentEnrollments.length === 1 ? 'program' : 'programs'}</span>
-          {canEnroll && studentEnrollments.length > 0 && <EducationButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>New enrollment</EducationButton>}
-        </div>
-      </header>
-
-      {studentEnrollments.length === 0 ? (
-        <div className="edu-student-learning__empty">
-          <EducationState
-            title="No enrollments yet"
-            description={canEnroll ? "Add a program to connect this learner's schedule, attendance and billing." : "Programs will appear here when this learner is enrolled."}
-          >
-            {canEnroll && <EducationButton icon={Plus} variant="primary" onClick={() => onQuickEnroll(studentId)}>Enroll student</EducationButton>}
-          </EducationState>
-        </div>
-      ) : (
-        <div className="edu-student-learning__list">
-          {studentEnrollments.map((e) => (
-            <article key={e.id} className="edu-student-learning__record">
-              <div className="edu-student-learning__record-head">
-                <div className="edu-student-learning__program">
-                  <span className="edu-student-learning__program-icon"><BookOpen size={21} aria-hidden="true" /></span>
-                  <div>
-                    <h4 title={e.programName}>{e.programName || 'Program not named'}</h4>
-                    <p>{[e.gradeName, e.groupName].filter(Boolean).join(' · ') || 'Level and group not set'}</p>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {studentEnrollments.map((e) => (
+              <div key={e.id} className="edu-student-record group px-4 py-4 transition-colors hover:bg-white/[0.025]">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-400/20 bg-teal-400/10 text-teal-300">
+                      <BookOpen size={19} />
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="truncate text-sm font-black text-white transition-colors group-hover:text-teal-300" title={e.programName}>{e.programName}</h4>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span>{e.gradeName}</span><span className="text-slate-700">/</span><span>{e.groupName}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div data-tone={e.balance > 0 ? 'attention' : 'success'} className={`edu-student-status w-fit rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${e.balance > 0 ? 'bg-amber-500/10 text-amber-300 border-amber-400/20' : 'bg-emerald-500/10 text-emerald-300 border-emerald-400/20'}`}>
+                      {e.balance > 0 ? 'Payment Due' : 'Paid'}
                   </div>
                 </div>
-                <EducationStatusPill status={e.balance > 0 ? 'warning' : 'success'}>{e.balance > 0 ? 'Payment due' : 'Paid'}</EducationStatusPill>
-              </div>
 
-              <div className="edu-student-learning__record-body">
-                <div className="edu-student-learning__schedule" aria-label="Weekly schedule">
-                  <span className="edu-student-learning__field-label">Weekly group</span>
-                  <strong>{e.groupTime || 'Time not set'}</strong>
-                  {e.secondGroupTime && <small>{e.secondGroupName ? e.secondGroupName + ' · ' : 'Second group · '}{e.secondGroupTime}</small>}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/70 px-2.5 py-1 text-xs font-mono text-slate-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-teal-400"></span>
+                    {e.groupTime}
+                  </div>
+                  {e.secondGroupTime && (
+                    <div className="flex items-center gap-2 rounded-lg border border-sky-400/20 bg-sky-500/10 px-2.5 py-1 text-xs font-mono text-sky-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-sky-400"></span>
+                      + {e.secondGroupName}
+                    </div>
+                  )}
                 </div>
-                <dl className="edu-student-learning__amounts">
-                  <div><dt>Tuition</dt><dd>{formatCurrency(e.totalAmount)}</dd></div>
-                  <div data-due={e.balance > 0}><dt>Balance</dt><dd>{e.balance > 0 ? formatCurrency(e.balance) : 'Settled'}</dd></div>
-                </dl>
-              </div>
 
-              <div className="edu-student-learning__record-actions" role="group" aria-label={e.programName + ' enrollment actions'}>
-                <EducationButton icon={ArrowRightLeft} variant="secondary" onClick={() => navigateTo('activity-details', { activityId: { type: 'enrollment', id: e.id } })}>View details</EducationButton>
-                {canEdit && <EducationButton icon={Pencil} variant="quiet" onClick={() => setEditEnrollment(e)}>Edit</EducationButton>}
-                <EducationActionMenu label="Certificates">
-                  <button type="button" onClick={() => handleOpenAttestationModal(e)}><BookOpen size={16} aria-hidden="true" />Registration certificate</button>
-                  <button type="button" onClick={() => setCompletionModal({ isOpen: true, enrollment: e })}><Award size={16} aria-hidden="true" />Completion certificate</button>
-                </EducationActionMenu>
-                {canDelete && <button type="button" className="edu-student-learning__delete" onClick={() => initiateDeleteEnrollment(e.id)} aria-label={'Delete ' + e.programName + ' enrollment'} title="Delete enrollment"><Trash2 size={17} aria-hidden="true" /></button>}
+                <div className="mt-3 flex flex-col gap-3 border-t border-white/5 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-xs">
+                    <span className="mr-2 text-slate-500">Tuition</span>
+                    <span className="font-mono font-bold text-white">{formatCurrency(e.totalAmount)}</span>
+                    {e.balance > 0 && (
+                      <span className="ml-3 font-mono text-amber-300">Due {formatCurrency(e.balance)}</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1">
+                    {canEdit && <button
+                      onClick={() => setEditEnrollment(e)}
+                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
+                      title="Edit Enrollment"
+                      aria-label={`Edit ${e.programName} enrollment`}
+                    >
+                      <Pencil size={16} />
+                    </button>}
+                    <button
+                      onClick={() => navigateTo('activity-details', { activityId: { type: 'enrollment', id: e.id } })}
+                      className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-teal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60"
+                      title="View Details"
+                      aria-label={`View ${e.programName} enrollment details`}
+                    >
+                      <ArrowRightLeft size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleOpenAttestationModal(e);
+                      }}
+                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors"
+                      title="Attestation d'inscription"
+                      aria-label={`Registration certificate for ${e.programName}`}
+                    >
+                      <BookOpen size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setCompletionModal({ isOpen: true, enrollment: e });
+                      }}
+                      className="p-2 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
+                      title="Attestation de réussite"
+                      aria-label={`Completion certificate for ${e.programName}`}
+                    >
+                      <Award size={16} />
+                    </button>
+                    {canDelete && <button
+                      onClick={(evt) => {
+                        evt.stopPropagation();
+                        initiateDeleteEnrollment(e.id);
+                      }}
+                      className="p-2 hover:bg-red-900/20 text-slate-400 hover:text-red-400 rounded-lg transition-colors"
+                      title="Delete Enrollment"
+                      aria-label={`Delete ${e.programName} enrollment`}
+                    >
+                      <Trash2 size={16} />
+                    </button>}
+                  </div>
+                </div>
               </div>
-            </article>
-          ))}
-        </div>
-      )}
+            ))
+            }
+          </div>
+        )}
+      </div>
+
+      {/* ATTESTATION DATE MODAL */}
       <Modal
         designSystem
         isOpen={attestationModal.isOpen}
         onClose={() => setAttestationModal({ isOpen: false, enrollment: null })}
         title="Configuration de l'Attestation"
       >
-        <div className="edu-student-learning-dialog">
-          <p>Choisissez les dates à afficher sur l'attestation d'inscription avant de l'imprimer.</p>
-          <div className="edu-student-learning-dialog__fields">
-            <EducationField label="Date d'admission / Début" hint="Date à laquelle l'étudiant a commencé le programme.">
-              <input type="date" value={customAdmissionDate} onChange={(event) => setCustomAdmissionDate(event.target.value)} />
-            </EducationField>
-            <EducationField label="Fait à Casablanca, le" hint="Date de délivrance du document.">
-              <input type="date" value={customIssueDate} onChange={(event) => setCustomIssueDate(event.target.value)} />
-            </EducationField>
+        <div className="space-y-6">
+          <p className="text-slate-400 text-sm">
+            Vous pouvez modifier les dates qui apparaîtront sur l'attestation avant de l'imprimer.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="student-admission-date" className="block text-sm font-medium text-slate-300 mb-1">Date d'admission / Début</label>
+              <input
+                id="student-admission-date"
+                type="date"
+                value={customAdmissionDate}
+                onChange={(e) => setCustomAdmissionDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+              />
+              <p className="text-xs text-slate-500 mt-1">Date à laquelle l'étudiant a commencé le programme.</p>
+            </div>
+
+            <div>
+              <label htmlFor="student-registration-issue-date" className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
+              <input
+                id="student-registration-issue-date"
+                type="date"
+                value={customIssueDate}
+                onChange={(e) => setCustomIssueDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+              />
+              <p className="text-xs text-slate-500 mt-1">Date de délivrance du document.</p>
+            </div>
           </div>
-          <div className="edu-student-learning-dialog__actions">
-            <EducationButton variant="quiet" onClick={() => setAttestationModal({ isOpen: false, enrollment: null })}>Annuler</EducationButton>
-            <EducationButton variant="primary" icon={BookOpen} onClick={handleGenerateAttestation}>Générer l'attestation</EducationButton>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button
+              onClick={() => setAttestationModal({ isOpen: false, enrollment: null })}
+              className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleGenerateAttestation}
+              className="flex min-h-10 items-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 font-bold text-slate-950 transition-colors hover:bg-teal-400"
+            >
+              <BookOpen size={18} />
+              Générer Attestation
+            </button>
           </div>
         </div>
       </Modal>
 
+      {/* COMPLETION ATTESTATION MODAL */}
       <Modal
         designSystem
         isOpen={completionModal.isOpen}
         onClose={() => setCompletionModal({ isOpen: false, enrollment: null })}
         title="Attestation de réussite / Programme"
       >
-        <div className="edu-student-learning-dialog">
-          <p>Précisez les informations à afficher sur l'attestation de fin de programme.</p>
-          <div className="edu-student-learning-dialog__fields">
-            <EducationField label="Nom de l'Académie">
-              <input type="text" value={completionAcademyName} onChange={(event) => setCompletionAcademyName(event.target.value)} placeholder="e.g. Edufy Academy" />
-            </EducationField>
-            <EducationField label="URL du Logo (optionnel)">
-              <input type="text" value={completionLogoUrl} onChange={(event) => setCompletionLogoUrl(event.target.value)} placeholder="https://..." />
-            </EducationField>
-            <EducationField label="Fait à Casablanca, le">
-              <input type="date" value={completionIssueDate} onChange={(event) => setCompletionIssueDate(event.target.value)} />
-            </EducationField>
-            <EducationField label="Modules / Compétences acquises (1 par ligne)">
-              <textarea value={completionModules} onChange={(event) => setCompletionModules(event.target.value)} rows={4} placeholder={"Introduction à la robotique\nProgrammation Python\nModélisation 3D..."} />
-            </EducationField>
+        <div className="space-y-6">
+          <p className="text-slate-400 text-sm">
+            Personnalisez l'attestation de fin de programme avant de la générer.
+          </p>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="student-completion-academy" className="block text-sm font-medium text-slate-300 mb-1">Nom de l'Académie</label>
+              <input
+                id="student-completion-academy"
+                type="text"
+                value={completionAcademyName}
+                onChange={(e) => setCompletionAcademyName(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+                placeholder="e.g. Edufy Academy"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="student-completion-logo" className="block text-sm font-medium text-slate-300 mb-1">URL du Logo (optionnel)</label>
+              <input
+                id="student-completion-logo"
+                type="text"
+                value={completionLogoUrl}
+                onChange={(e) => setCompletionLogoUrl(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+                placeholder="https://..."
+              />
+            </div>
+
+            <div>
+              <label htmlFor="student-completion-date" className="block text-sm font-medium text-slate-300 mb-1">Fait à Casablanca, le</label>
+              <input
+                id="student-completion-date"
+                type="date"
+                value={completionIssueDate}
+                onChange={(e) => setCompletionIssueDate(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="student-completion-modules" className="block text-sm font-medium text-slate-300 mb-1">Modules / Compétences acquises (1 par ligne)</label>
+              <textarea
+                id="student-completion-modules"
+                value={completionModules}
+                onChange={(e) => setCompletionModules(e.target.value)}
+                rows={4}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 p-2.5 text-white outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-400/30"
+                placeholder="Introduction à la robotique\nProgrammation Python\nModélisation 3D..."
+              />
+            </div>
           </div>
-          <div className="edu-student-learning-dialog__actions">
-            <EducationButton variant="quiet" onClick={() => setCompletionModal({ isOpen: false, enrollment: null })}>Annuler</EducationButton>
-            <EducationButton variant="primary" icon={Award} onClick={handleGenerateCompletion}>Générer l'attestation</EducationButton>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <button
+              onClick={() => setCompletionModal({ isOpen: false, enrollment: null })}
+              className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={handleGenerateCompletion}
+              className="px-6 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-lg shadow-amber-900/20 flex items-center gap-2"
+            >
+              <Award size={18} />
+              Générer Attestation
+            </button>
           </div>
         </div>
       </Modal>
-    </section>
+    </div>
   );
 };

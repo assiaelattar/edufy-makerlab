@@ -1,6 +1,6 @@
 import { useWorkspaceViewState, useWorkspaceScroll } from '../components/education-ui/useWorkspaceViewState';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Search, Plus, Zap, RefreshCw, Archive, Eye, Pencil, Filter, UserCheck, UserX, TrendingUp, FileDown, AlertTriangle, Users, ShieldCheck, Wallet, Link as LinkIcon } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -8,6 +8,7 @@ import { updateDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useConfirm } from '../context/ConfirmContext';
 import { Modal } from '../components/Modal';
+import { EducationButton, EducationField } from '../components/education-ui/EducationPrimitives';
 import { AtlasCommandHeader } from '../components/atlas/AtlasSurface';
 import StudentDirectoryHealth, { type StudentDirectoryFilter } from '../components/students/StudentDirectoryHealth';
 import EducationStudentsOperationsV1 from './students/EducationStudentsOperationsV1';
@@ -58,6 +59,17 @@ export const StudentsView = ({
     const [selectedParentStatement, setSelectedParentStatement] = useState<any>(null);
     const [selectedParentProgramIds, setSelectedParentProgramIds] = useState<string[]>([]);
 
+    // Bulk selection is temporary and must never carry across a different roster or tenant.
+    useEffect(() => {
+        setSelectedIds([]);
+        setIsLinkModalOpen(false);
+    }, [workspaceScope, searchQuery, filterProgramId, filterGradeName, filterDay, filterAudience, showArchived, directoryFilter, viewMode]);
+
+    useEffect(() => {
+        setSelectedParentStatement(null);
+        setSelectedParentProgramIds([]);
+    }, [workspaceScope]);
+
     const openParentStatement = (parent: any) => {
         setSelectedParentProgramIds([]);
         setSelectedParentStatement(parent);
@@ -92,6 +104,7 @@ export const StudentsView = ({
 
     const handleBulkLinkParents = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!can('students.edit') || isLinking) return;
         const firestore = db;
         if (!firestore || selectedIds.length === 0) return;
         const selectedStudents = students.filter(student => selectedIds.includes(student.id));
@@ -277,8 +290,10 @@ export const StudentsView = ({
             result = result.filter(p => p.parentName.toLowerCase().includes(q) || p.phone.includes(q));
         }
 
-        return result.sort((a, b) => b.totalBalance - a.totalBalance);
-    }, [students, enrollments, searchQuery]);
+        return result.sort((a, b) => can('finance.view')
+            ? b.totalBalance - a.totalBalance
+            : a.parentName.localeCompare(b.parentName));
+    }, [students, enrollments, searchQuery, can]);
 
     const parentLedger = useMemo(() => {
         const totalBalance = parentAccounts.reduce((sum, parent) => sum + parent.totalBalance, 0);
@@ -423,7 +438,7 @@ export const StudentsView = ({
         }
     };
 
-    const showEducationStudentsV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
+    const showEducationStudentsV1 = true;
 
     const admissionProjection = useMemo(() => projectAdmissionCases({
         tenantId: currentOrganization?.id || '',
@@ -917,7 +932,7 @@ export const StudentsView = ({
             )}
             </>}
             {/* Bulk Actions Bar */}
-            {selectedIds.length > 0 && (
+            {!showEducationStudentsV1 && can('students.edit') && selectedIds.length > 0 && (
                 <div className="edu-students-v1__bulk-bar fixed bottom-6 left-1/2 z-40 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-4 rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 shadow-2xl shadow-black/80">
                     <div className="text-sm text-slate-300 font-medium animate-pulse">
                         <span className="font-bold text-white bg-blue-600/30 px-2.5 py-1 rounded-full border border-blue-500/20 text-xs mr-2">{selectedIds.length}</span> 
@@ -942,16 +957,16 @@ export const StudentsView = ({
             )}
 
             {/* Link Parent Modal */}
-            <Modal isOpen={isLinkModalOpen} onClose={() => setIsLinkModalOpen(false)} title="Link Students to Parent Account" size="md">
-                <form onSubmit={handleBulkLinkParents} className="space-y-5">
+            <Modal designSystem isOpen={isLinkModalOpen && can('students.edit')} onClose={() => { if (!isLinking) setIsLinkModalOpen(false); }} title="Link parent information" size="md">
+                <form onSubmit={handleBulkLinkParents} className="edu-students-dialog">
                     {/* Selected Students Info */}
-                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500 block">Linking Students ({selectedIds.length})</label>
-                        <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                    <div className="edu-students-dialog__selection">
+                        <strong>Selected learners ({selectedIds.length})</strong>
+                        <div className="edu-students-dialog__chips">
                             {selectedIds.map(id => {
                                 const s = students.find(x => x.id === id);
                                 return s ? (
-                                    <span key={id} className="text-xs bg-slate-900 text-slate-300 border border-slate-800 px-2.5 py-1 rounded-md">
+                                    <span key={id}>
                                         {s.name}
                                     </span>
                                 ) : null;
@@ -960,105 +975,88 @@ export const StudentsView = ({
                     </div>
 
                     {/* Copy Details Autocomplete */}
-                    <div className="space-y-1 relative">
-                        <label className="text-[10px] uppercase font-bold text-slate-400 block">Copy details from an existing student</label>
-                        <input 
-                            type="text" 
+                    <div className="edu-students-dialog__lookup">
+                        <EducationField label="Copy details from an existing learner" hint="Choose a learner who already has the right family contact."><input
+                            type="search"
                             placeholder="Search student name..." 
-                            className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:border-blue-500 outline-none" 
                             value={autofillSearch} 
                             onChange={e => {
                                 setAutofillSearch(e.target.value);
                                 setShowAutofillResults(true);
                             }}
                             onFocus={() => setShowAutofillResults(true)}
-                        />
+                        /></EducationField>
                         {showAutofillResults && autofillSuggestions.length > 0 && (
-                            <div className="absolute top-full left-0 right-0 bg-slate-950 border border-slate-800 rounded-lg mt-1 shadow-2xl z-50 max-h-40 overflow-y-auto divide-y divide-slate-800">
+                            <div className="edu-students-dialog__suggestions" role="group" aria-label="Matching learners">
                                 {autofillSuggestions.map(s => (
-                                    <div 
+                                    <button type="button"
                                         key={s.id} 
                                         onClick={() => handleAutofillSelect(s)}
-                                        className="p-2.5 hover:bg-slate-900 cursor-pointer text-xs transition-colors"
                                     >
-                                        <div className="font-bold text-white">{s.name}</div>
-                                        <div className="text-[10px] text-slate-500">Parent: {s.parentName} ({s.parentPhone})</div>
-                                    </div>
+                                        <strong>{s.name}</strong>
+                                        <small>{s.parentName} · {s.parentPhone}</small>
+                                    </button>
                                 ))}
                             </div>
                         )}
                         {showAutofillResults && autofillSearch && autofillSuggestions.length === 0 && (
-                            <div className="absolute top-full left-0 right-0 bg-slate-950 border border-slate-800 rounded-lg mt-1 p-2.5 text-[10px] text-slate-500 italic z-50">
+                            <div className="edu-students-dialog__no-results" role="status">
                                 No students with parent details found.
                             </div>
                         )}
                     </div>
 
-                    <div className="h-px bg-slate-800"></div>
-
                     {/* Parent details form */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Parent Name *</label>
-                            <input 
+                    <div className="edu-students-dialog__fields">
+                        <EducationField label="Parent name"><input
                                 required 
-                                type="text" 
+                                type="text" autoComplete="name"
                                 placeholder="e.g. Jean Dupont" 
-                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" 
                                 value={parentForm.name} 
                                 onChange={e => setParentForm(prev => ({ ...prev, name: e.target.value }))}
-                            />
-                        </div>
-                        <div>
-                            <label className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Parent Phone *</label>
-                            <input 
+                            /></EducationField>
+                        <EducationField label="Parent phone"><input
                                 required 
-                                type="text" 
+                                type="tel" autoComplete="tel"
                                 placeholder="e.g. +212600112233" 
-                                className="w-full p-2.5 bg-slate-950 border border-slate-800 rounded-lg text-white text-sm focus:border-blue-500 outline-none" 
                                 value={parentForm.phone} 
                                 onChange={e => setParentForm(prev => ({ ...prev, phone: e.target.value }))}
-                            />
-                        </div>
+                            /></EducationField>
                     </div>
 
-                    <div className="pt-2">
-                        <button 
-                            type="submit" 
-                            disabled={isLinking || !parentForm.name || !parentForm.phone}
-                            className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                        >
-                            {isLinking ? 'Linking...' : 'Confirm Link'}
-                        </button>
+                    <p className="edu-students-dialog__warning">This replaces existing parent name and phone on every selected learner. Review the confirmation before applying.</p>
+                    <div className="edu-students-dialog__actions">
+                        <EducationButton onClick={() => setIsLinkModalOpen(false)} disabled={isLinking}>Cancel</EducationButton>
+                        <EducationButton type="submit" variant="primary" disabled={isLinking || !parentForm.name.trim() || !parentForm.phone.trim()}>{isLinking ? 'Linking…' : 'Review link'}</EducationButton>
                     </div>
                 </form>
             </Modal>
 
             {/* Parent Statement Modal */}
-            <Modal isOpen={!!selectedParentStatement} onClose={() => setSelectedParentStatement(null)} title="Parent Financial Statement" size="lg">
+            <Modal designSystem isOpen={!!selectedParentStatement && can('finance.view')} onClose={() => setSelectedParentStatement(null)} title="Parent financial statement" size="lg">
                 {parentStatementView && (
-                    <div className="space-y-6">
+                    <div className="edu-students-statement">
                         {parentStatementProgramOptions.length > 1 && (
-                            <section className="rounded-xl border border-blue-300/20 bg-blue-300/[0.05] p-4">
+                            <section className="edu-students-statement__filters">
                                 <div className="mb-3 flex items-center justify-between gap-3">
                                     <div>
-                                        <h4 className="text-xs font-black uppercase tracking-wider text-blue-100">Programs included in this statement</h4>
-                                        <p className="mt-1 text-xs text-slate-400">Select the programs to show in the parent payment statement.</p>
+                                        <h4>Programs included</h4>
+                                        <p>Select the programs to show in this statement.</p>
                                     </div>
-                                    <button type="button" onClick={() => setSelectedParentProgramIds([])} className="text-xs font-bold text-blue-200 hover:text-white">All programs</button>
+                                    <EducationButton variant="quiet" onClick={() => setSelectedParentProgramIds([])}>All programs</EducationButton>
                                 </div>
-                                <div className="grid gap-2 sm:grid-cols-2">
+                                <div className="edu-students-statement__programs">
                                     {parentStatementProgramOptions.map(program => {
                                         const checked = selectedParentProgramIds.length === 0 || selectedParentProgramIds.includes(program.id);
                                         return (
-                                            <label key={program.id} className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${checked ? 'border-blue-300/40 bg-blue-300/10 text-white' : 'border-white/10 bg-slate-950/30 text-slate-300 hover:border-white/20'}`}>
+                                            <label key={program.id} data-checked={checked}>
                                                 <input type="checkbox" checked={checked} onChange={() => setSelectedParentProgramIds(previous => {
                                                     if (previous.length === 0) return parentStatementProgramOptions.map(item => item.id).filter(id => id !== program.id);
                                                     if (checked && previous.length === 1) return previous;
                                                     const next = checked ? previous.filter(id => id !== program.id) : [...previous, program.id];
                                                     return next.length === parentStatementProgramOptions.length ? [] : next;
                                                 })} />
-                                                <span className="truncate">{program.name}</span>
+                                                <span>{program.name}</span>
                                             </label>
                                         );
                                     })}
@@ -1066,55 +1064,55 @@ export const StudentsView = ({
                             </section>
                         )}
                         {/* Summary Header */}
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex justify-between items-center">
+                        <div className="edu-students-statement__summary">
                             <div>
-                                <h3 className="text-xl font-bold text-white mb-1">{parentStatementView.parentName}</h3>
-                                <p className="text-sm font-mono text-slate-400">{parentStatementView.phone}</p>
+                                <h3>{parentStatementView.parentName}</h3>
+                                <p>{parentStatementView.phone}</p>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Balance Due</p>
-                                <p className={`text-3xl font-bold font-mono ${parentStatementView.totalBalance > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            <div className="edu-students-statement__total" data-due={parentStatementView.totalBalance > 0}>
+                                <p>Balance due</p>
+                                <strong>
                                     {formatCurrency(parentStatementView.totalBalance)}
-                                </p>
-                                <p className="mt-1 text-[10px] text-slate-500">Prix catalogue: {formatCurrency(parentStatementView.totalList)} · Remise: {formatCurrency(parentStatementView.totalDiscount)}</p>
-                                <p className="text-[10px] text-slate-500">Prix négocié: {formatCurrency(parentStatementView.totalExpected)} · Payé: {formatCurrency(parentStatementView.totalPaid)}</p>
+                                </strong>
+                                <small>List: {formatCurrency(parentStatementView.totalList)} · Discount: {formatCurrency(parentStatementView.totalDiscount)}</small>
+                                <small>Agreed: {formatCurrency(parentStatementView.totalExpected)} · Paid: {formatCurrency(parentStatementView.totalPaid)}</small>
                             </div>
                         </div>
 
                         {/* Breakdown */}
-                        <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="edu-students-statement__learners">
                             {parentStatementView.children.length === 0 ? (
-                                <div className="rounded-xl border border-dashed border-slate-800 p-8 text-center text-sm text-slate-500">Select at least one program to display in this statement.</div>
+                                <div className="edu-students-statement__empty">Select at least one program to display in this statement.</div>
                             ) : parentStatementView.children.map((c: any) => (
-                                <div key={c.student.id} className="bg-slate-950 border border-slate-800 rounded-xl p-4">
-                                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-slate-800">
-                                        <h4 className="font-bold text-white">{c.student.name}</h4>
+                                <div key={c.student.id} className="edu-students-statement__learner">
+                                    <div className="edu-students-statement__learner-head">
+                                        <h4>{c.student.name}</h4>
                                         <button 
                                             onClick={() => {
                                                 setSelectedParentStatement(null);
                                                 navigateTo('student-details', { studentId: c.student.id });
                                             }}
-                                            className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-900/20 px-2 py-1 rounded"
+                                            className="edu-students-statement__profile"
                                         >
                                             View Details
                                         </button>
                                     </div>
                                     {c.enrollments.length === 0 ? (
-                                        <p className="text-xs text-slate-500 italic">No active enrollments.</p>
+                                        <p>No active enrollments.</p>
                                     ) : (
-                                        <div className="space-y-2">
+                                        <div className="edu-students-statement__enrollments">
                                             {c.enrollments.map((e: any) => {
                                                 const bal = (e.totalAmount || 0) - (e.paidAmount || 0);
                                                 const financialSummary = getEnrollmentFinancialSummary(e, programs);
                                                 return (
-                                                    <div key={e.id} className="flex justify-between items-center text-sm">
-                                                        <span className="text-slate-300">{e.programName}</span>
-                                                        <div className="flex gap-4 font-mono text-xs">
-                                                            <span className="text-slate-500">Cat: {formatCurrency(financialSummary.listAmount)}</span>
-                                                            <span className="text-amber-500">Rem: {formatCurrency(financialSummary.discountAmount)}</span>
-                                                            <span className="text-slate-500">Net: {formatCurrency(financialSummary.agreedAmount)}</span>
-                                                            <span className="text-emerald-500">Paid: {formatCurrency(e.paidAmount || 0)}</span>
-                                                            <span className={`font-bold min-w-24 text-right ${bal > 0 ? 'text-red-400' : 'text-slate-300'}`}>Bal: {formatCurrency(bal)}</span>
+                                                    <div key={e.id} className="edu-students-statement__enrollment">
+                                                        <strong>{e.programName}</strong>
+                                                        <div>
+                                                            <span>List: {formatCurrency(financialSummary.listAmount)}</span>
+                                                            <span>Discount: {formatCurrency(financialSummary.discountAmount)}</span>
+                                                            <span>Agreed: {formatCurrency(financialSummary.agreedAmount)}</span>
+                                                            <span>Paid: {formatCurrency(e.paidAmount || 0)}</span>
+                                                            <b data-due={bal > 0}>Balance: {formatCurrency(bal)}</b>
                                                         </div>
                                                     </div>
                                                 );
@@ -1126,21 +1124,15 @@ export const StudentsView = ({
                         </div>
 
                         {/* Actions */}
-                        <div className="pt-4 flex gap-3 border-t border-slate-800">
-                            <button 
-                                onClick={() => setSelectedParentStatement(null)}
-                                className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors border border-slate-700"
-                            >
-                                Close
-                            </button>
-                            <button 
+                        <div className="edu-students-statement__actions">
+                            <EducationButton onClick={() => setSelectedParentStatement(null)}>Close</EducationButton>
+                            <EducationButton variant="primary" icon={FileDown}
                                 onClick={() => {
                                     generateParentStatementPrint(parentStatementView, settings, programs);
                                 }}
-                                className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
                             >
-                                <FileDown size={18} /> Print Official Statement
-                            </button>
+                                Print statement
+                            </EducationButton>
                         </div>
                     </div>
                 )}

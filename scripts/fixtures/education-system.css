@@ -1,0 +1,29 @@
+html,body,#root { min-height:100%; margin:0; }
+.ds-review { display:grid!important; grid-template-columns:220px minmax(0,1fr)!important; min-height:100vh; background:var(--ds-canvas)!important; }
+.ds-review-nav { padding:30px 18px; border-right:2px solid var(--ds-border); background:var(--ds-surface); position:sticky; top:0; height:100vh; }
+.ds-logo { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font:900 32px Nunito,sans-serif; color:var(--ds-green-ink); text-decoration:none; margin-bottom:40px; }
+.ds-logo span { width:100%; margin-left:34px; color:var(--ds-muted); font:500 12px 'DM Sans',sans-serif; }
+.ds-review-nav > button { display:flex; gap:12px; align-items:center; width:100%; min-height:48px; border:2px solid transparent; padding:12px; margin-bottom:7px; border-radius:14px; text-align:left; color:var(--ds-muted); font-weight:700; }
+.ds-review-nav > button[aria-current] { color:var(--ds-blue-ink); background:var(--ds-blue-soft); border-color:var(--ds-blue); border-bottom-width:4px; }
+.ds-review-note { margin-top:40px; font-size:12px; color:var(--ds-muted); line-height:1.8; }
+.ds-review-main { padding:20px 30px!important; width:100%; min-width:0; max-width:1500px; margin:0 auto; }
+.ds-review-bar { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-bottom:18px; border-bottom:1px solid var(--ds-border); font-size:13px; color:var(--ds-muted); }
+.ds-gallery { display:grid; gap:24px; padding:32px 0; }
+.ds-gallery h1 { font-size:36px; line-height:1.15; margin-bottom:12px; }
+.ds-gallery h2 { font-size:23px; margin-bottom:18px; }
+.ds-gallery header > p:not(.ds-eyebrow) { color:var(--ds-muted); }
+.ds-eyebrow { font:800 11px 'DM Sans',sans-serif; text-transform:uppercase; letter-spacing:.1em; color:var(--ds-muted); margin-bottom:12px; }
+.ds-gallery > section { background:var(--ds-surface); border:2px solid var(--ds-border); border-bottom-width:4px; border-radius:24px; padding:24px; }
+.ds-swatches { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+.ds-swatches > div { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:16px; background:var(--accent-soft); border-radius:16px; color:var(--accent-ink); }
+.ds-swatches code { width:100%; font-size:12px; }
+.ds-badges { display:flex; flex-wrap:wrap; gap:10px; margin:20px 0; }
+.ds-state-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; }
+.ds-preview-toast { position:fixed; z-index:100; bottom:12px; left:12px; right:12px; padding:16px; background:var(--ds-red-soft); color:var(--ds-red-ink); border:2px solid var(--ds-red); border-radius:14px; }
+.ds-student-fixture-controls { margin:24px 0; padding:16px; border:2px dashed var(--ds-border); border-radius:16px; background:var(--ds-surface); color:var(--ds-ink); }
+.ds-student-fixture-controls section { margin-top:12px; padding:12px; border:2px solid var(--ds-blue); border-radius:12px; background:var(--ds-blue-soft); }
+.ds-student-fixture-controls p { margin:8px 0; overflow-wrap:anywhere; }
+.ds-student-fixture-controls button { min-height:44px; margin:4px 8px 4px 0; padding:8px 12px; border:2px solid var(--ds-blue-edge); border-radius:12px; background:var(--ds-blue); color:var(--ds-on-color); font-weight:800; }
+.ds-student-fixture-controls:has(section) { position:fixed; z-index:90; left:12px; right:12px; bottom:12px; max-width:520px; max-height:40dvh; overflow:auto; box-shadow:0 5px 0 var(--ds-depth); }
+@media(max-width:900px) { .ds-review { grid-template-rows:auto 1fr; } .ds-review-nav { align-items:center; } .ds-review-nav > button { align-self:center; } }
+@media(max-width:900px) { .ds-review { grid-template-columns:1fr!important; } .ds-review-nav { position:relative; height:auto; padding:12px 16px; display:flex; gap:8px; overflow-x:auto; border-right:0; border-bottom:2px solid var(--ds-border); } .ds-review-nav .ds-logo,.ds-review-nav .ds-eyebrow,.ds-review-note { display:none; } .ds-review-nav > button { width:auto; flex-shrink:0; margin:0; padding:8px 12px; font-size:13px; } .ds-review-main { padding:16px!important; } .ds-review-bar > span { max-width:150px; } .ds-swatches { grid-template-columns:repeat(2,minmax(0,1fr)); } .ds-state-grid { grid-template-columns:1fr; } .ds-gallery h1 { font-size:30px; } }

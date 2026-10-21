@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import './resources/education-resources-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
 import {
     Archive,
     ArchiveRestore,
@@ -402,7 +404,7 @@ export const ArchiveView = () => {
 
     if (!canView) {
         return (
-            <div className="pb-24 md:pb-8">
+            <div className={`pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-school-ops-v1 edu-archive-v1' : ''}`} data-edu-system={showEducationResourcesV1 ? '1' : undefined}>
                 <AtlasEmptyState
                     icon={ShieldAlert}
                     title="Archive access is restricted"
@@ -413,7 +415,7 @@ export const ArchiveView = () => {
     }
 
     return (
-        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-archive-v1' : ''}`} data-testid={showEducationResourcesV1 ? 'education-archive-v1' : undefined}>
+        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-school-ops-v1 edu-archive-v1' : ''}`} data-edu-system={showEducationResourcesV1 ? '1' : undefined} data-testid={showEducationResourcesV1 ? 'education-archive-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Organization knowledge"
                 title="Resource Archive"
@@ -581,7 +583,7 @@ export const ArchiveView = () => {
                 </>
             )}
 
-            <Modal isOpen={isModalOpen} onClose={() => { if (!isSaving) resetModal(); }} title={editingLink ? 'Edit resource' : 'Add resource'}>
+            <Modal isOpen={isModalOpen} onClose={() => { if (!isSaving) resetModal(); }} title={editingLink ? 'Edit resource' : 'Add resource'} designSystem={showEducationResourcesV1}>
                 <form onSubmit={handleSaveLink} className="space-y-4" noValidate>
                     {formError && <div id="archive-form-error" role="alert" className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">{formError}</div>}
                     <div>

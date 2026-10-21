@@ -4,7 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
-import { EducationActionMenu, EducationButton, EducationRegister, EducationStatusPill } from '../components/education-ui/EducationPrimitives';
+import { EducationActionMenu, EducationButton, EducationNotice, EducationRegister, EducationState, EducationStatusPill } from '../components/education-ui/EducationPrimitives';
 import { Modal } from '../components/Modal';
 import { calculateAge, formatCurrency, generateRosterPrint } from '../utils/helpers';
 import { config } from '../utils/config';
@@ -53,7 +53,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       const group = grade?.groups?.find(item => item.id === classId.grpId);
 
       if (!program || !grade || !group) {
-         return <AtlasEmptyState title="Class not found" description="Return to Classes and choose another group." icon={School} action={<AtlasActionButton icon={ArrowLeft} onClick={() => navigateTo('classes', {})}>Back to classes</AtlasActionButton>} />;
+         return <div className="edu-classes-v1" data-edu-system="1"><EducationState title="Class not found" description="Return to Classes and choose another group."><EducationButton icon={ArrowLeft} onClick={() => navigateTo('classes', {})}>Back to classes</EducationButton></EducationState></div>;
       }
 
       const enrolledStudents = enrollments
@@ -123,14 +123,14 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
       };
 
       return (
-         <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1 edu-classes-pulse' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-class-roster-v1' : undefined}>
+         <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1 edu-classes-pulse' : ''}`} data-edu-system={showEducationSchoolDayV1 ? '1' : undefined} data-testid={showEducationSchoolDayV1 ? 'education-class-roster-v1' : undefined}>
             <AtlasCommandHeader
                density={showEducationSchoolDayV1 ? 'compact' : 'default'}
                eyebrow={`${program.name} / ${grade.name}`}
                title={group.name}
                description={showEducationSchoolDayV1 ? `${group.day} at ${group.time}` : `${group.day} at ${group.time}. Keep the roster, family contacts, and account follow-up together.`}
                icon={School}
-               badges={<span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] font-bold text-slate-300">{enrolledStudents.length} students</span>}
+               badges={<EducationStatusPill status="info">{enrolledStudents.length} students</EducationStatusPill>}
                actions={(
                   <>
                      <EducationButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('classes', {})}>Classes</EducationButton>
@@ -168,9 +168,9 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                                     <strong>{student.name}</strong>
                                     <span>{student.school || 'School not listed'} · {formatStudentAge(student.birthDate)}</span>
                                  </div>
-                                 {student.enrollment.balance > 0 ? <b data-status="due">Due {formatCurrency(student.enrollment.balance)}</b> : <b data-status="paid">Paid</b>}
-                                 {student.enrollment.secondGroupId === group.id && <EducationStatusPill status="info">Secondary group</EducationStatusPill>}
+                                 {student.enrollment.balance > 0 ? <EducationStatusPill status="warning">Due {formatCurrency(student.enrollment.balance)}</EducationStatusPill> : <EducationStatusPill status="success">Paid</EducationStatusPill>}
                               </div>
+                              {student.enrollment.secondGroupId === group.id && <EducationStatusPill status="info">Secondary group</EducationStatusPill>}
                               <div className="edu-classes-v1__mobile-contact">
                                  <span>{student.parentName || 'Parent not listed'}</span>
                                  <span><Phone size={13} />{student.parentPhone || 'No phone'}</span>
@@ -208,32 +208,33 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                   </>
                )}
             </EducationRegister>
-            <Modal designSystem={showEducationSchoolDayV1} isOpen={isAccessPrintOpen} onClose={() => setIsAccessPrintOpen(false)} title={`Print access · ${group.name}`} size="lg">
-               <div className="space-y-4">
-                  <p className="text-sm text-slate-300">Select the learners whose portal access cards you want to hand out in class. Only this group is included.</p>
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-900/60 p-3">
-                     <label className="flex items-center gap-2 text-sm font-bold text-white">
-                        <input type="checkbox" checked={readyAccessStudents.length > 0 && selectedAccessStudents.length === readyAccessStudents.length} disabled={readyAccessStudents.length === 0} onChange={() => setSelectedAccessIds(selectedAccessStudents.length === readyAccessStudents.length ? [] : readyAccessStudents.map(student => student.id))} className="h-4 w-4 accent-teal-400" />
+            <Modal designSystem isOpen={isAccessPrintOpen} onClose={() => setIsAccessPrintOpen(false)} title={`Print access · ${group.name}`} size="lg">
+               <div className="edu-classes-access space-y-4">
+                  <p className="edu-classes-access__intro">Select learners whose portal access cards you want to hand out in this class.</p>
+                  {readyAccessStudents.length === 0 && <EducationNotice status="attention">No learner in this group has printable access yet. Open a learner profile to review account setup.</EducationNotice>}
+                  <div className="edu-classes-access__select-all">
+                     <label>
+                        <input type="checkbox" checked={readyAccessStudents.length > 0 && selectedAccessStudents.length === readyAccessStudents.length} disabled={readyAccessStudents.length === 0} onChange={() => setSelectedAccessIds(selectedAccessStudents.length === readyAccessStudents.length ? [] : readyAccessStudents.map(student => student.id))} />
                         Select all ready ({readyAccessStudents.length})
                      </label>
-                     <span className="text-xs text-slate-400">{selectedAccessStudents.length} selected</span>
+                     <span>{selectedAccessStudents.length} selected</span>
                   </div>
-                  <div className="max-h-[50vh] divide-y divide-white/10 overflow-y-auto rounded-lg border border-white/10">
+                  <div className="edu-classes-access__list">
                      {accessCandidates.map(student => {
                         const ready = readyAccessIds.has(student.id);
                         return (
-                           <div key={student.id} className={`flex items-center gap-3 px-3 py-3 ${ready ? 'hover:bg-white/[0.04]' : 'opacity-65'}`}>
-                              <label className={`flex min-w-0 flex-1 items-center gap-3 ${ready ? 'cursor-pointer' : ''}`}>
-                                 <input type="checkbox" checked={ready && selectedAccessIds.includes(student.id)} disabled={!ready} onChange={() => setSelectedAccessIds(previous => previous.includes(student.id) ? previous.filter(id => id !== student.id) : [...previous, student.id])} aria-label={`Select ${student.name} access card`} className="h-4 w-4 shrink-0 accent-teal-400" />
-                                 <span className="min-w-0 flex-1"><strong className="block truncate text-sm text-white">{student.name}</strong><span className="block truncate text-xs text-slate-400">{ready ? student.loginInfo!.email : student.organizationId !== currentOrganization?.id ? 'Account is outside this organization' : student.status === 'inactive' ? 'Learner record is inactive' : !student.loginInfo?.email ? 'Learner access not created' : !student.loginInfo?.uid ? 'Account link is incomplete' : 'Printable password unavailable'}</span></span>
+                           <div key={student.id} className="edu-classes-access__row" data-ready={ready}>
+                              <label>
+                                 <input type="checkbox" checked={ready && selectedAccessIds.includes(student.id)} disabled={!ready} onChange={() => setSelectedAccessIds(previous => previous.includes(student.id) ? previous.filter(id => id !== student.id) : [...previous, student.id])} aria-label={`Select ${student.name} access card`} />
+                                 <span><strong>{student.name}</strong><small>{ready ? student.loginInfo!.email : student.organizationId !== currentOrganization?.id ? 'Account is outside this organization' : student.status === 'inactive' ? 'Learner record is inactive' : !student.loginInfo?.email ? 'Learner access not created' : !student.loginInfo?.uid ? 'Account link is incomplete' : 'Printable password unavailable'}</small></span>
                               </label>
-                              {!ready && <button type="button" onClick={() => { setIsAccessPrintOpen(false); navigateTo('student-details', { studentId: student.id }); }} className="rounded-lg border border-white/10 px-2 py-1 text-xs font-bold text-teal-200 hover:bg-white/[0.06]">Open profile</button>}
+                              {!ready && <EducationButton variant="quiet" onClick={() => { setIsAccessPrintOpen(false); navigateTo('student-details', { studentId: student.id }); }}>Open profile</EducationButton>}
                            </div>
                         );
                      })}
                   </div>
-                  <p className="text-xs text-slate-400">The printout contains saved initial passwords, which may be outdated after a reset. Check access before distribution, collect unused pages, and hand each card to the correct learner or guardian.</p>
-                  <button type="button" disabled={selectedAccessStudents.length === 0} onClick={handlePrintAccess} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={16} />Print {selectedAccessStudents.length} access card{selectedAccessStudents.length === 1 ? '' : 's'}</button>
+                  <EducationNotice status="warning">The printout contains saved initial passwords, which may be outdated after a reset. Check access before distribution, collect unused pages, and hand each card to the correct learner or guardian.</EducationNotice>
+                  <EducationButton icon={Printer} variant="primary" disabled={selectedAccessStudents.length === 0} onClick={handlePrintAccess} className="edu-classes-access__print">Print {selectedAccessStudents.length} access card{selectedAccessStudents.length === 1 ? '' : 's'}</EducationButton>
                </div>
             </Modal>
          </div>
@@ -251,7 +252,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
    })).filter(program => program.grades.length > 0);
 
    return (
-      <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1 edu-classes-pulse' : ''}`} data-testid={showEducationSchoolDayV1 ? 'education-classes-v1' : undefined}>
+      <div className={`atlas-module atlas-classes-module space-y-5 pb-24 md:pb-8 ${showEducationSchoolDayV1 ? 'edu-v1 edu-classes-v1 edu-classes-pulse' : ''}`} data-edu-system={showEducationSchoolDayV1 ? '1' : undefined} data-testid={showEducationSchoolDayV1 ? 'education-classes-v1' : undefined}>
          <AtlasCommandHeader density={showEducationSchoolDayV1 ? 'compact' : 'default'} eyebrow="Teaching day" title={showEducationSchoolDayV1 ? 'Classes' : 'Classes & schedule'} description={showEducationSchoolDayV1 ? undefined : 'Move from program structure to the live roster without losing context.'} icon={School} actions={<><AtlasActionButton icon={CalendarCheck} onClick={() => navigateTo('schedule')}>Weekly schedule</AtlasActionButton><AtlasActionButton icon={ClipboardCheck} variant="primary" onClick={() => navigateTo('attendance')}>Take attendance</AtlasActionButton></>} />
 
          {showEducationSchoolDayV1 && <section className="pulse-classes-today" aria-label="Today's classes">
@@ -266,11 +267,11 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
          </div>}
 
          <AtlasToolbar
-            leading={<div className="relative w-full sm:max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} /><input type="search" aria-label="Search classes" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search groups, grades, or days" className="min-h-10 w-full rounded-lg border border-white/10 bg-slate-950/70 py-2 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/20" /></div>}
+            leading={<div className="edu-classes-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Search classes" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search groups, grades, or days" /></div>}
          >
-            <div className="flex w-full gap-2 overflow-x-auto pb-1 custom-scrollbar">
-               <button type="button" aria-pressed={activeProgramId === 'all'} onClick={() => setActiveProgramId('all')} className={`min-h-9 shrink-0 rounded-lg border px-3 text-xs font-bold transition-colors ${activeProgramId === 'all' ? 'border-teal-300/30 bg-teal-400/15 text-teal-200' : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-white'}`}>All programs</button>
-               {allPrograms.map(program => <button type="button" key={program.id} aria-pressed={activeProgramId === program.id} onClick={() => setActiveProgramId(program.id)} className={`min-h-9 shrink-0 rounded-lg border px-3 text-xs font-bold transition-colors ${activeProgramId === program.id ? 'border-teal-300/30 bg-teal-400/15 text-teal-200' : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-white'}`}>{program.name}</button>)}
+            <div className="edu-classes-filters custom-scrollbar" role="group" aria-label="Filter classes by program">
+               <button type="button" aria-pressed={activeProgramId === 'all'} onClick={() => setActiveProgramId('all')}>All programs</button>
+               {allPrograms.map(program => <button type="button" key={program.id} aria-pressed={activeProgramId === program.id} onClick={() => setActiveProgramId(program.id)}>{program.name}</button>)}
             </div>
          </AtlasToolbar>
 
@@ -280,7 +281,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
             <div className="space-y-8">
                {filteredPrograms.map(program => (
                   <section key={program.id} className="pulse-classes-directory space-y-4">
-                     <AtlasSectionHeader title={program.name} description="Choose a group to open its working roster." icon={Layers3} meta={<span className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold text-slate-400">{program.grades.reduce((total, grade) => total + grade.groups.length, 0)} groups</span>} />
+                     <AtlasSectionHeader title={program.name} description="Choose a group to open its working roster." icon={Layers3} meta={<EducationStatusPill status="neutral">{program.grades.reduce((total, grade) => total + grade.groups.length, 0)} groups</EducationStatusPill>} />
                      <div className={showEducationSchoolDayV1 ? 'pulse-classes-groups' : 'grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4'}>
                         {program.grades.flatMap(grade => grade.groups.map(group => {
                            const count = enrollments.filter(enrollment => isEnrollmentEligibleForAttendance(enrollment, program, today) && enrollment.programId === program.id && ((enrollment.groupId === group.id || (enrollment.gradeName === grade.name && enrollment.groupName === group.name)) || enrollment.secondGroupId === group.id)).length;
@@ -288,7 +289,7 @@ export const ClassesView = ({ onEnroll }: { onEnroll?: (programId: string, grade
                               <button type="button" key={group.id} onClick={() => navigateTo('classes', { classId: { pId: program.id, gId: grade.id, grpId: group.id } })} className="pulse-classes-group group min-h-[176px] rounded-lg border border-white/10 bg-slate-900/70 p-4 text-left transition-colors hover:border-teal-300/35 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
                                  <div className="flex items-start justify-between gap-3"><div><span className="text-[10px] font-black uppercase text-teal-300">{grade.name}</span><h4 className="mt-1 text-base font-black text-white">{group.name}</h4></div><ChevronRight size={18} className="text-slate-600 transition-colors group-hover:text-teal-300" /></div>
                                  <div className="mt-5 space-y-2 text-sm text-slate-400"><div className="flex items-center gap-2"><Calendar size={15} className="text-slate-500" />{group.day}</div><div className="flex items-center gap-2"><Clock size={15} className="text-slate-500" />{group.time}</div></div>
-                                 <div className="mt-5 flex items-center justify-between border-t border-white/[0.07] pt-3"><span className="text-xs text-slate-500">Roster</span><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${count > 0 ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-200' : 'border-white/10 bg-white/[0.03] text-slate-500'}`}>{count} {count === 1 ? 'student' : 'students'}</span></div>
+                                 <div className="mt-5 flex items-center justify-between border-t border-white/[0.07] pt-3"><span className="text-xs text-slate-500">Roster</span><EducationStatusPill status={count > 0 ? 'success' : 'neutral'}>{count} {count === 1 ? 'student' : 'students'}</EducationStatusPill></div>
                               </button>
                            );
                         }))}

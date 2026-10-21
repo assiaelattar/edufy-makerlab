@@ -1,4 +1,52 @@
+## Design System v1 source of truth — 2026-10-19
+
+Contract: docs/education/design-system-v1/README.md. Canonical scoped tokens: components/education-ui/education-system-v1.css. Typed primitives: components/education-ui/EducationPrimitives.tsx. Form reference: components/students/StudentDetailsForm.tsx and components/enrollment/EnrollmentWizard.tsx. View-state owner: components/education-ui/useWorkspaceViewState.ts. Review harness: scripts/preview-education-system.mjs; evidence: docs/education/pulse-evidence/ds-v1-*.png. Report and rollout gate: docs/education/design-system-v1/IMPLEMENTATION_REPORT.md. Existing domain owners and .agent SOT entries remain authoritative. No module-local palette reinvention.
+
+## Dashboard educational pass complete — 2026-10-19
+
+Dashboard phase: `docs/education/DASHBOARD_EDUCATIONAL_2026-10-19.md`; UI `views/dashboard/EducationDashboardV1.tsx`; scoped palette `views/dashboard/education-dashboard-playful.css`; isolated QA `scripts/preview-pulse-dashboard.mjs`.
+
+## Calendar rendering source of truth — 2026-10-19
+
+`views/CalendarView.tsx` and `views/school-day/education-calendar-playful.css` own the latest weekly/agenda presentation. Existing AppContext session feed, assignment/sync commands and attendance.manage remain authoritative. See `docs/education/CALENDAR_EDUCATIONAL_2026-10-19.md`; synthetic harness `scripts/preview-pulse-calendar.mjs`.
+
+## Current Programs source of truth — 2026-10-19
+
+`docs/education/PROGRAMS_WORKSPACE_2026-10-19.md` documents the complete Programs workspace pass. Implementation: `views/ProgramsView.tsx`, `views/ProgramDetailsView.tsx`, module-scoped `views/programs/education-programs-workspace.css`. Browser evidence: `docs/education/pulse-evidence/programs-workspace-*`. Earlier catalog-only milestones are historical.
+
+## Three-module visual pass complete - 2026-10-19
+
+Students directory/overview, Programs catalog/workspace and Attendance register are complete locally in the approved educational direction. The latest user correction requires neutral metric cards, lime/green identity, blue actions and restrained #FF9600 orange warning cues. Preserve the adopted Notion-style navigation and all domain/write handlers. Current evidence is *-balanced-*.png; earlier saturated orange screenshots are superseded. Read docs/education/EDUCATIONAL_ROLLOUT_2026-10-19.md before continuing. Actual app: http://127.0.0.1:5202/. Signed-in read-only desktop navigation was checked; synthetic save tests are separate. No deployment. Full student profile editor styling and later modules remain subsequent scope. Stop at this batch handoff; heartbeat paused.
+
+## Approved rollout - 2026-10-19
+
+The user approved the Pickup visual direction while explicitly preserving the adopted Notion-style navigation and operational UX. Proceed sequentially Students, Programs, Attendance; approval gate is lifted for these modules. Heartbeat is ACTIVE with this updated scope.
+
+Students directory and learner overview are complete locally. Next: Programs, then Attendance. See docs/education/EDUCATIONAL_ROLLOUT_2026-10-19.md. No push/deploy or domain/auth changes.
+
 # Context Map
+
+## Latest Pulse continuation — Programs next
+
+Read docs/education/EDUFY_PULSE_PICKUP_2026-10-16.md. Pickup is complete locally; continue Programs without repeating earlier passes. Preserve existing lifecycle handlers and separate local synthetic checks from real-school acceptance.
+
+## Pulse module continuation
+
+Read docs/education/EDUFY_PULSE_CLASSES_STUDENTS_2026-10-16.md and its module preview harness. Continue Pickup next under the user’s explicit automatic-progression authorization; retain synthetic-versus-real acceptance boundaries.
+
+## Pulse Attendance visual refinement — 2026-10-16
+
+Latest Attendance render/CSS owners remain `views/AbsenceView.tsx` and `views/school-day/education-attendance-pulse.css`; shared tokens, handlers and persistence are unchanged. Read `docs/education/EDUFY_PULSE_ATTENDANCE_VISUAL_2026-10-16.md` and its `refined-*` screenshots before further work. This pass trades some compactness for a clearer register structure; signed-in and physical-phone acceptance remain open. Do not extend the pattern to other modules before the Attendance benchmark is accepted.
+
+## Pulse Attendance milestone
+
+Read `docs/education/EDUFY_PULSE_AUDIT_2026-10-16.md`, `docs/education/EDUFY_PULSE_ATTENDANCE_2026-10-16.md`, `views/AbsenceView.tsx`, `views/school-day/education-attendance-pulse.css`, the shared Education tokens, AtlasSurface and the Attendance listener in AppContext. Reproduce isolated UI/readiness with `scripts/preview-pulse-attendance.mjs` (`--baseline`, `--provider`). Preserve write payloads and membership selectors. Signed-in acceptance precedes Classes/Students.
+
+Education UI Learning and Portfolio focus: read `docs/education/LEARNING_PORTFOLIO_FOCUS_2026-10-16.md`, `docs/education/UI_DESIGN_DELIVERY_MAP_2026-10-16.md`, `views/LearningView.tsx`, `views/PortfolioView.tsx`, `views/learning/education-learning-focus.css`, and the existing `views/learning/education-learning-v1.css`. Keep student-project identity, tenant, status, review and SparkQuest behavior in their current owners. Signed-in light/dark phone acceptance remains pending.
+
+Education UI Finance and Expenses focus: read `docs/education/FINANCE_EXPENSES_FOCUS_2026-10-16.md`, `views/FinanceView.tsx`, `views/ExpensesView.tsx`, `views/finance/education-finance-focus.css`, and `components/finance/AGENT_CONTEXT.md`. Preserve payment and expense write controls, stored status, tenant boundaries and document generation. Signed-in light/dark phone acceptance remains pending.
+
+Education UI Admissions and Workshops focus: read `docs/education/ADMISSIONS_WORKSHOPS_FOCUS_2026-10-15.md`, `modules/admissions/AGENT_CONTEXT.md`, `modules/admissions/domain/admissionSelectors.ts`, the Admissions UI/CSS, `views/WorkshopsView.tsx`, and `views/programs/education-workshops-focus.css`. Keep booking, enrollment, CRM, family link and WhatsApp truth in their existing owners. Signed-in light/dark phone review remains pending.
 
 Education UI Classes, attendance and schedule focus: read `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`, `EDUCATION_UI_SYSTEM_MAP.md`, the three view owners, `utils/schoolSchedule.ts`, `utils/membershipLifecycle.ts`, and `views/school-day/education-school-day-v1.css`. Keep class/attendance records and instructor assignment writes under their current selectors and permissions. Signed-in light/dark phone review remains pending.
 
@@ -53,3 +101,6 @@ Read `components/finance/AGENT_CONTEXT.md`, `docs/finance/SERVICE_CATALOGUE_PHAS
 - Mirrored client contracts: `modules/pickup/domain/pickupLifecycle.ts`, `sparkquest/domain/pickupLifecycle.ts`
 - Security authority: `firestore.rules`
 - Learner and family surfaces: `sparkquest/components/PickupSchedule.tsx`, `sparkquest/components/ParentPickupControl.tsx`
+## Current context — Phase 1 shell, Student Details and 011Y review — 2026-10-20
+
+Read `docs/education/EDUFY_SHELL_STUDENT_GUIDE_PHASE_1_2026-10-20.md` before continuing. The current gate covers the global shell, command palette, mobile navigation, Student Details, full student editor and animated contextual 011Y. Preserve broad unfinished module edits but do not treat them as approved. Await user visual approval, then continue Settings → Finance → Expenses. No deploy or push.

@@ -26,10 +26,10 @@ The school workspace opens only after authentication resolves an actual organiza
 | Student profile | Learner record, signals, access, and action timeline | Preview complete | Existing tabs, account actions, and record workflows are preserved |
 | Classes and attendance | Session-first school-day workspace | Daily action and real-date focus pass; signed-in acceptance pending | Existing class, roster, attendance, and absence behavior is preserved; French/English weekdays resolve consistently |
 | Global schedule | Weekly planning and coverage workspace | Real coverage priority and permission-aware controls pass; signed-in acceptance pending | Existing event navigation, assignments and sync writes are preserved |
-| Programs and workshops | Program operations, capacity, quality, and workshop pipeline | Programs focused redesign plus live portfolio priority; workshops share the coherent baseline | Existing program, roster, quality, and follow-up actions are preserved |
-| Finance and expenses | Collection, invoicing, verification, and reconciliation workspace | Finance focused redesign; expenses coherence pass complete | Existing finance permissions, records, forms, and exports are preserved |
-| Learning and portfolio | Learning lifecycle, evidence, portfolio, and review workspace | Coherent baseline complete; deep workflow redesign pending | Existing curriculum, portfolio, and review actions are preserved |
-| Family journey | Marketing, communications, enrollment forms, and pickup flow | Pickup staff desk focused pass; other family-journey modules keep the coherent baseline | Existing CRM, messaging, form, and pickup actions are preserved |
+| Programs and workshops | Program operations, capacity, quality, and family follow-up | Programs portfolio priority and Workshops attended-family queue focused locally; signed-in acceptance pending | Existing program, roster, quality, booking, enrollment and CRM actions are preserved |
+| Finance and expenses | Collection, invoicing, verification, and reconciliation workspace | Finance task-first redesign and Expenses recurring-obligation focus pass; signed-in acceptance pending | Existing finance permissions, records, forms, and exports are preserved; pending charges stay visibly pending |
+| Learning and portfolio | Learning lifecycle, evidence, portfolio, and review workspace | Instructor next-action and learner portfolio continuation focused locally; signed-in acceptance pending | Existing curriculum, portfolio, review, identity and SparkQuest actions are preserved |
+| Family journey | Admissions passport, Marketing, communications, enrollment forms, and pickup flow | Admissions family priority and Pickup desk focused locally; Marketing and communications retain baseline | Existing CRM, messaging, form, and pickup actions are preserved |
 | Team operations | Team directory, staff attendance, and media library | Coherent baseline complete; deep workflow redesign pending | Existing staff, absence, project, privacy, and gallery behavior is preserved |
 | Resources | Toolkit and archive workspace | Coherent baseline complete; deep workflow redesign pending | Existing resource and archive actions are preserved |
 | Admin and platform | Settings, admin tools, Marketplace, and SaaS administration | Coherent baseline complete; deep workflow redesign pending | Existing tenant, entitlement, app, and platform controls are preserved |
@@ -58,7 +58,7 @@ The school workspace opens only after authentication resolves an actual organiza
 
 ## Delivery boundary
 
-The shell, Dashboard, Students, Student profile, Programs, Program details, Finance, and Pickup staff desk have focused workflow redesigns. Every authenticated module now shares the same production shell, neutral KPI treatment, command surfaces and action hierarchy. Remaining modules must be described as having a coherent baseline—not a finished workflow redesign—until each receives the same task-level pass. The current three-module priority and next-module order are recorded in `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
+The shell, Dashboard, Students, Student profile, Programs, Program details, Finance, Pickup staff desk, and locally Learning/Portfolio have focused workflow passes. Every authenticated module shares the school shell. Remaining modules have a coherent baseline until their task flow is addressed. The release-source/local status is recorded in `docs/education/UI_DESIGN_DELIVERY_MAP_2026-10-16.md`.
 
 ## Focused module contract
 
@@ -68,3 +68,7 @@ The shell, Dashboard, Students, Student profile, Programs, Program details, Fina
 - Student profiles keep actions, signals, learning, finance, attendance, portfolio, and access in one command center.
 - Programs starts with portfolio health and next actions; each program opens into readiness, schedule, roster, waiting list, finance, and sharing without returning to the legacy visual hierarchy.
 - Finance starts with the operator's job rather than a ledger: record, collect, verify, find history, or prepare accounting. Desktop keeps dense tables where useful; mobile uses purpose-built balance and transaction cards.
+
+## Edufy Pulse Attendance benchmark — local, 2026-10-16
+
+Pulse extends the existing tokens and Atlas command header with optional compact density. Attendance now puts the register after compact progress and filters, retains membership follow-up in a disclosure, and exposes pending/saved/error plus initial data readiness. See `docs/education/EDUFY_PULSE_ATTENDANCE_2026-10-16.md`; signed-in acceptance remains, no release.

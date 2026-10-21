@@ -10,12 +10,10 @@ import { formatCurrency, formatDate, compressImage } from '../utils/helpers';
 import { addDoc, collection, serverTimestamp, deleteDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Expense, ExpenseTemplate } from '../types';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { EducationBadge, EducationButton, EducationDetailPanel, EducationField, EducationFormSection, EducationIcon, EducationNotice, EducationRegister, EducationSectionHeader, EducationState, EducationStatusPill, EducationTabs, EducationToolbar } from '../components/education-ui/EducationPrimitives';
 import { format } from 'date-fns';
 import '../components/education-ui/education-system-v1.css';
-import './finance/education-finance-v1.css';
-import './finance/education-finance-focus.css';
-import './finance/education-finance-playful.css';
+import './finance/education-expenses-v1.css';
 
 const getRecurringDueDate = (month: string, dayDue?: number) => {
     const [year, monthNumber] = month.split('-').map(Number);
@@ -25,8 +23,7 @@ const getRecurringDueDate = (month: string, dayDue?: number) => {
 };
 
 export const ExpensesView = () => {
-    const showEducationFinanceV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { expenses, expenseTemplates, payments, settings } = useAppContext();
+    const { expenses, expenseTemplates, payments, settings, loading, workspaceError } = useAppContext();
     const { can, currentOrganization, user } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const orgId = currentOrganization?.id || '';
@@ -42,7 +39,9 @@ export const ExpensesView = () => {
     }, [expenses, settings.academicYear]);
     
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false);
+    const [activeView, setActiveView] = useWorkspaceViewState<'overview' | 'register' | 'recurring' | 'insights' | 'templates'>(workspaceScope, 'activeView', 'overview');
+    const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
+    const [showExpenseDetails, setShowExpenseDetails] = useState(false);
     const [isPayTemplateModalOpen, setIsPayTemplateModalOpen] = useState(false);
     
     const [searchQuery, setSearchQuery] = useWorkspaceViewState(workspaceScope, 'searchQuery', '');
@@ -324,6 +323,7 @@ export const ExpensesView = () => {
         }
         setIsSavingTemplate(true);
         try {
+            const isUpdatingTemplate = Boolean(editingTemplateId);
             const templateData = {
                 title: templateForm.title.trim(),
                 category: templateForm.category || 'other',
@@ -340,7 +340,7 @@ export const ExpensesView = () => {
                 await addDoc(collection(db, 'expense_templates'), { ...templateData, organizationId: orgId, createdAt: serverTimestamp() });
             }
             setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 });
-            await showAlert(editingTemplateId ? 'Recurring charge updated' : 'Recurring charge added', 'The monthly obligation is ready for period tracking.', 'success');
+            await showAlert(isUpdatingTemplate ? 'Recurring charge updated' : 'Recurring charge added', 'The monthly obligation is ready for period tracking.', 'success');
         } catch (err) {
             console.error(err);
             showAlert("Error", "Could not save this recurring charge.", "danger");
@@ -484,379 +484,178 @@ export const ExpensesView = () => {
         await showAlert('Expense export ready', `${filteredExpenses.length} ledger record${filteredExpenses.length === 1 ? '' : 's'} exported with the current filters.`, 'success');
     };
 
+    const selectedExpense = expenses.find(item => item.id === selectedExpenseId) || null;
+    const canManage = can('expenses.manage');
+    const categories = ['All', 'rent', 'salary', 'utilities', 'material', 'marketing', 'other'];
+    const recurringStatusTone = (status: string) => status === 'paid' ? 'success' : status === 'due' || status === 'pending' || status === 'review' ? 'warning' : 'info';
+    const openRegisterForTemplate = (id: string) => {
+        setLedgerTemplateId(id);
+        setSearchQuery('');
+        setCategoryFilter('All');
+        setActiveView('register');
+    };
+    const openExpenseEditor = (expense: Expense) => {
+        setExpenseForm(expense);
+        setEditingId(expense.id);
+        setIsEditing(true);
+        setIsModalOpen(true);
+    };
+    const openNewExpense = () => {
+        setIsEditing(false);
+        setEditingId(null);
+        setShowExpenseDetails(false);
+        setExpenseForm({ title: '', category: 'other', amount: 0, date: format(new Date(), 'yyyy-MM-dd'), method: 'cash', status: 'paid', beneficiary: '', notes: '' });
+        setIsModalOpen(true);
+    };
+    const expenseRows = (items: Expense[]) => items.map(expense => (
+        <article key={expense.id} className="edu-expense-row">
+            <button type="button" className="edu-expense-row__main" onClick={() => { setSelectedExpenseId(expense.id); setActiveView('register'); }} aria-label={'View details for ' + expense.title}>
+                <span className="edu-expense-row__name"><strong>{expense.title}</strong><small>{formatDate(expense.date)} · {expense.beneficiary}</small></span>
+                <span className="edu-expense-row__category">{expense.category}</span>
+                <span className="edu-expense-row__amount"><strong>{formatCurrency(expense.amount)}</strong><EducationStatusPill status={expense.status === 'pending' ? 'warning' : 'success'}>{expense.status}</EducationStatusPill></span>
+            </button>
+        </article>
+    ));
+    const recurringCards = (items: typeof recurringStatus) => items.map(({ template, status, expense, matchCount, dueDate }) => (
+        <article key={template.id} className="edu-expense-charge" data-status={status}>
+            <div className="edu-expense-charge__head">
+                <EducationIcon icon={status === 'paid' ? CheckCircle2 : status === 'manual' ? Info : Clock} accent={status === 'paid' ? 'green' : status === 'due' || status === 'pending' || status === 'review' ? 'orange' : 'blue'} />
+                <span><strong>{template.title}</strong><small>{template.beneficiary} · {template.frequency}</small></span>
+                <EducationStatusPill status={recurringStatusTone(status)}>{status === 'review' ? 'Review records' : status}</EducationStatusPill>
+            </div>
+            <div className="edu-expense-charge__foot">
+                <span><strong>{status === 'review' ? matchCount + ' ledger entries' : formatCurrency(expense?.amount ?? template.amount)}</strong><small>{expense ? formatDate(expense.date) : dueDate ? 'Due ' + formatDate(dueDate) : 'Manual schedule'}</small></span>
+                {(status === 'due' || status === 'scheduled') && canManage && <EducationButton variant={status === 'due' ? 'primary' : 'secondary'} onClick={() => handlePayTemplateOpen(template)}>Record payment</EducationButton>}
+                {(status === 'pending' || status === 'review') && <EducationButton variant="secondary" onClick={() => openRegisterForTemplate(template.id)}>Review ledger</EducationButton>}
+                {status === 'manual' && <EducationButton variant="quiet" onClick={() => handlePayTemplateOpen(template)}>Schedule guidance</EducationButton>}
+                {status === 'paid' && <span className="edu-expense-charge__paid">Paid via {expense?.method}</span>}
+            </div>
+        </article>
+    ));
+
+    if (loading) return <main data-edu-system="1" className="edu-v1 edu-expenses-v1"><EducationState kind="loading" title="Loading expenses" description="Preparing the expense ledger and recurring charges." /></main>;
+    if (workspaceError) return <main data-edu-system="1" className="edu-v1 edu-expenses-v1"><EducationState kind="error" title="Expenses unavailable" description={workspaceError} /></main>;
+
     return (
-        <div data-edu-system={showEducationFinanceV1 ? '1' : undefined} className={`flex flex-col space-y-6 pb-24 md:h-full md:pb-8 ${showEducationFinanceV1 ? 'edu-v1 edu-expenses-v1' : ''}`} data-testid={showEducationFinanceV1 ? 'education-expenses-v1' : undefined}>
-            
-            <AtlasCommandHeader
-                eyebrow="Finance operations"
-                title="Expenses & Bills"
-                description="Control recurring obligations, record operating costs, and protect the center's margin."
-                icon={TrendingDown}
-                badges={
-                    <span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">
-                        {selectedSession} / {displayMonthName}
-                    </span>
-                }
-                actions={
-                    <>
-                    {can('expenses.manage') && (
-                        <>
-                            <AtlasActionButton icon={Settings} onClick={() => setIsTemplateManagerOpen(true)} title="Manage recurring charges">Recurring</AtlasActionButton>
-                            <AtlasActionButton variant="primary" icon={Plus} onClick={() => { setIsEditing(false); setExpenseForm({title: '', category: 'other', amount: 0, date: format(new Date(), 'yyyy-MM-dd'), method: 'cash', status: 'paid', beneficiary: ''}); setIsModalOpen(true); }}>
-                                Record expense
-                            </AtlasActionButton>
-                        </>
-                    )}
-                    </>
-                }
-            />
+        <main data-edu-system="1" className="edu-v1 edu-expenses-v1" data-testid="education-expenses-v1">
+            <header className="edu-expenses-v1__header">
+                <div><EducationBadge status="success" icon={TrendingDown}>Finance operations</EducationBadge><h1>Expenses</h1><p>Review obligations, record costs and inspect the ledger for {selectedSession}.</p></div>
+                <div className="edu-expenses-v1__header-actions">
+                    {canManage && <EducationButton icon={Repeat} onClick={() => setActiveView('templates')}>Recurring templates</EducationButton>}
+                    {canManage && <EducationButton variant="primary" icon={Plus} onClick={openNewExpense}>Record expense</EducationButton>}
+                </div>
+            </header>
 
-            <AtlasToolbar
-                leading={
-                    <>
-                        <select value={selectedSession} onChange={(e) => setSelectedSession(e.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-bold text-white outline-none focus:border-teal-400/50">
-                            {availableSessions.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                        <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm font-bold text-white outline-none focus:border-teal-400/50"/>
-                    </>
-                }
-                trailing={
-                    <AtlasActionButton icon={Download} onClick={handleExportExpenses} disabled={filteredExpenses.length === 0} title={filteredExpenses.length === 0 ? 'No visible expense records to export' : 'Export the filtered expense ledger as CSV'}>
-                        Export {filteredExpenses.length > 0 ? `(${filteredExpenses.length})` : ''}
-                    </AtlasActionButton>
-                }
-            >
-                <span className="text-xs text-slate-500">Showing expenses for the selected academic session and month.</span>
-            </AtlasToolbar>
+            <EducationToolbar label="Expense period and export">
+                <EducationField label="Academic session"><select value={selectedSession} onChange={event => setSelectedSession(event.target.value)}>{availableSessions.map(session => <option key={session} value={session}>{session}</option>)}</select></EducationField>
+                <EducationField label="Month"><input type="month" value={selectedMonth} onChange={event => setSelectedMonth(event.target.value)} /></EducationField>
+                <EducationButton icon={Download} onClick={handleExportExpenses} disabled={filteredExpenses.length === 0} title={filteredExpenses.length === 0 ? 'No visible expense records to export' : 'Export filtered expense ledger as CSV'}>Export {filteredExpenses.length > 0 ? '(' + filteredExpenses.length + ')' : ''}</EducationButton>
+            </EducationToolbar>
 
-            {showEducationFinanceV1 && (
-                <section className="edu-expenses-v1__focus" aria-label="Next expense action">
-                    <div>
-                        <span className="edu-expenses-v1__eyebrow">Next step / {displayMonthName}</span>
-                        <h2>{firstReview ? `${recurringReviewCount} recurring ${recurringReviewCount === 1 ? 'charge needs' : 'charges need'} review` : firstDue ? `${recurringDueCount} recurring ${recurringDueCount === 1 ? 'charge' : 'charges'} due` : firstPending ? `${recurringPendingCount} recurring ${recurringPendingCount === 1 ? 'record' : 'records'} pending` : nextScheduled ? 'Upcoming recurring charge' : 'Expenses in view'}</h2>
-                        <p>{firstReview ? `${firstReview.template.title} has ${firstReview.matchCount} linked ledger records this month. Review them before recording another payment.` : firstDue ? `${firstDue.template.title} · ${formatCurrency(firstDue.template.amount)} · due ${formatDate(firstDue.dueDate!)}` : firstPending ? `${firstPending.template.title} has a pending ledger entry. Review it before recording another payment.` : nextScheduled ? `${nextScheduled.template.title} · ${formatCurrency(nextScheduled.template.amount)} · scheduled ${formatDate(nextScheduled.dueDate!)}` : recurringManualCount > 0 ? `${recurringManualCount} weekly template${recurringManualCount === 1 ? '' : 's'} need manual review.` : 'Review the ledger or record a new operating cost.'}</p>
-                    </div>
-                    {!firstReview && firstDue && can('expenses.manage') ? (
-                        <button type="button" onClick={() => handlePayTemplateOpen(firstDue.template)}>Record payment <ArrowRight size={16} /></button>
-                    ) : (
-                        <button type="button" onClick={() => {
-                            if (firstReview || (!firstDue && firstPending)) { setLedgerTemplateId((firstReview || firstPending)?.template.id || null); setSearchQuery(''); setCategoryFilter('All'); }
-                            document.getElementById(firstReview || (!firstDue && firstPending) ? 'expenses-ledger' : recurringStatus.length ? 'expenses-recurring' : 'expenses-ledger')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }}>{firstReview || (!firstDue && firstPending) ? 'Review ledger' : recurringStatus.length ? 'Review charges' : 'Review ledger'} <ArrowRight size={16} /></button>
-                    )}
+            <EducationTabs label="Expense workspace" value={activeView} onChange={value => setActiveView(value as typeof activeView)} items={[
+                { id: 'overview', label: 'Overview', icon: TrendingDown },
+                { id: 'register', label: 'Expense register', icon: Receipt, count: filteredExpenses.length },
+                { id: 'recurring', label: 'Recurring charges', icon: Repeat, count: recurringStatus.length, status: recurringDueCount || recurringReviewCount ? 'attention' : undefined },
+                { id: 'insights', label: 'Categories & insights', icon: PieChart },
+                { id: 'templates', label: 'Templates', icon: Settings, count: expenseTemplates.filter(item => item.recurring).length }
+            ]} />
+
+            {activeView === 'overview' && <div className="edu-expenses-v1__content" role="tabpanel" id="expense-workspace-panel-overview" aria-labelledby="expense-workspace-overview">
+                <section className="edu-expenses-v1__next">
+                    <div><EducationBadge status={firstReview || firstDue || firstPending ? 'warning' : 'info'}>Next step · {displayMonthName}</EducationBadge><h2>{firstReview ? recurringReviewCount + (recurringReviewCount === 1 ? ' recurring charge needs review' : ' recurring charges need review') : firstDue ? recurringDueCount + (recurringDueCount === 1 ? ' recurring charge due' : ' recurring charges due') : firstPending ? recurringPendingCount + (recurringPendingCount === 1 ? ' record pending' : ' records pending') : nextScheduled ? 'Upcoming recurring charge' : 'Expenses in view'}</h2><p>{firstReview ? firstReview.template.title + ' has ' + firstReview.matchCount + ' linked records. Review before recording another payment.' : firstDue ? firstDue.template.title + ' · ' + formatCurrency(firstDue.template.amount) + ' · due ' + formatDate(firstDue.dueDate!) : firstPending ? firstPending.template.title + ' has a pending ledger entry.' : nextScheduled ? nextScheduled.template.title + ' · scheduled ' + formatDate(nextScheduled.dueDate!) : recurringManualCount ? recurringManualCount + ' weekly templates need manual review.' : 'Review the ledger or record an operating cost.'}</p></div>
+                    {firstDue && !firstReview && canManage ? <EducationButton variant="primary" onClick={() => handlePayTemplateOpen(firstDue.template)}>Record payment</EducationButton> : <EducationButton variant="primary" onClick={() => firstReview || firstPending ? openRegisterForTemplate((firstReview || firstPending)!.template.id) : setActiveView(recurringStatus.length ? 'recurring' : 'register')}>Review {firstReview || firstPending ? 'ledger' : recurringStatus.length ? 'charges' : 'register'}</EducationButton>}
                 </section>
-            )}
-
-            {/* RECURRING CHARGES GRID */}
-            {recurringStatus.length > 0 && (
-                <div id="expenses-recurring" className="space-y-3 edu-expenses-v1__recurring">
-                    <AtlasSectionHeader
-                        title={`Recurring charges / ${displayMonthName}`}
-                        description="Review fixed obligations before they become overdue."
-                        icon={Repeat}
-                        meta={
-                            <span className="rounded-md bg-amber-400/10 px-2 py-1 text-[10px] font-bold uppercase text-amber-200">
-                                {recurringDueCount} due{recurringReviewCount > 0 ? ` / ${recurringReviewCount} review` : ''}{recurringPendingCount > 0 ? ` / ${recurringPendingCount} pending` : ''}{recurringManualCount > 0 ? ` / ${recurringManualCount} manual` : ''}
-                            </span>
-                        }
-                    />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {recurringStatus.map(({ template, status, expense, matchCount, dueDate }) => (
-                            <div key={template.id} data-status={status} className={`group relative rounded-lg border p-4 transition-colors ${status === 'paid' ? 'border-emerald-400/20 bg-slate-900/50' : status === 'manual' || status === 'scheduled' ? 'border-sky-400/20 bg-slate-900/70' : 'border-amber-300/25 bg-slate-900'}`}>
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${status === 'paid' ? 'bg-emerald-900/20 text-emerald-500' : status === 'manual' || status === 'scheduled' ? 'bg-sky-900/20 text-sky-400' : 'bg-amber-900/20 text-amber-500'}`}>
-                                            {status === 'paid' ? <CheckCircle2 size={16}/> : status === 'manual' ? <Info size={16}/> : <Clock size={16}/>}
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-bold text-white leading-tight">{template.title}</div>
-                                            <div className="text-[10px] text-slate-500 uppercase tracking-wide">{template.frequency}</div>
-                                        </div>
-                                    </div>
-                                    {status === 'paid' && expense ? (
-                                        <div className="text-right">
-                                            <div className="text-emerald-400 font-bold text-sm">{formatCurrency(expense.amount)}</div>
-                                            <div className="text-[10px] text-slate-500">{formatDate(expense.date)}</div>
-                                        </div>
-                                    ) : status === 'review' ? (
-                                        <div className="text-right">
-                                            <div className="text-slate-300 font-bold text-sm">{matchCount} ledger entries</div>
-                                            <div className="text-[10px] font-medium text-amber-500">Review records</div>
-                                        </div>
-                                    ) : status === 'due' || status === 'scheduled' || status === 'pending' ? (
-                                        <div className="text-right">
-                                            <div className="text-slate-300 font-bold text-sm">{formatCurrency(expense?.amount ?? template.amount)}</div>
-                                            <div className={`text-[10px] font-medium ${status === 'due' || status === 'pending' ? 'text-amber-500' : 'text-sky-400'}`}>{status === 'pending' ? 'Pending record' : status === 'due' ? 'Due' : 'Scheduled'} {status === 'pending' && expense ? formatDate(expense.date) : dueDate ? formatDate(dueDate) : ''}</div>
-                                        </div>
-                                    ) : (
-                                        <div className="text-right">
-                                            <div className="text-slate-300 font-bold text-sm">{formatCurrency(template.amount)}</div>
-                                            <div className="text-[10px] text-sky-400 font-medium">Manual schedule</div>
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                {(status === 'due' || status === 'scheduled') && can('expenses.manage') && (
-                                    <AtlasActionButton
-                                        onClick={() => handlePayTemplateOpen(template)}
-                                        variant={status === 'due' ? 'primary' : 'secondary'}
-                                        className="mt-3 w-full text-xs"
-                                    >
-                                        {status === 'due' ? 'Record payment' : 'Record early'} <ArrowRight size={12}/>
-                                    </AtlasActionButton>
-                                )}
-                                {status === 'paid' && (
-                                    <div className="mt-3 text-center text-[10px] text-emerald-500 font-medium bg-emerald-950/30 py-1.5 rounded border border-emerald-900/30 flex items-center justify-center gap-1">
-                                        Paid via {expense?.method}
-                                    </div>
-                                )}
-                                {(status === 'pending' || status === 'review') && (
-                                    <button type="button" className="edu-expenses-v1__review" onClick={() => { setLedgerTemplateId(template.id); setSearchQuery(''); setCategoryFilter('All'); document.getElementById('expenses-ledger')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>{status === 'review' ? 'Review ledger entries' : 'Review pending record'} <ArrowRight size={12} /></button>
-                                )}
-                                {status === 'manual' && (
-                                    <AtlasActionButton
-                                        type="button"
-                                        onClick={() => handlePayTemplateOpen(template)}
-                                        variant="secondary"
-                                        className="mt-3 w-full text-xs"
-                                        title="Weekly templates need a weekday or occurrence count before automatic tracking is reliable"
-                                    >
-                                        Review limitation <Info size={12} />
-                                    </AtlasActionButton>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+                <div className="edu-expenses-v1__metrics">
+                    <section><EducationIcon icon={TrendingDown} accent="blue"/><span>Period expenses</span><strong>{formatCurrency(stats.totalExpenses)}</strong><small>{displayMonthName}</small></section>
+                    <section><EducationIcon icon={DollarSign} accent={stats.sessionNetProfit >= 0 ? 'green' : 'orange'}/><span>Session margin</span><strong>{formatCurrency(stats.sessionNetProfit)}</strong><small>{formatCurrency(stats.sessionTotalIncome)} income</small></section>
+                    <section><EducationIcon icon={Clock} accent={recurringDueCount ? 'orange' : 'blue'}/><span>Recurring due</span><strong>{recurringDueCount}</strong><small>{recurringReviewCount ? recurringReviewCount + ' need review' : recurringPendingCount ? recurringPendingCount + ' pending records' : recurringScheduledCount + ' scheduled later'}</small></section>
+                    <section><EducationIcon icon={PieChart} accent="purple"/><span>Highest category</span><strong className="capitalize">{stats.topCategory}</strong><small>Largest period cost</small></section>
                 </div>
-            )}
+                <EducationSectionHeader eyebrow="Working context" title="Recurring charges" description="Fixed obligations for the selected month." action={<EducationButton onClick={() => setActiveView('recurring')}>View all charges</EducationButton>} />
+                {recurringStatus.length ? <div className="edu-expenses-v1__charges">{recurringCards(recurringStatus.slice(0, 4))}</div> : <EducationState title="No recurring charges" description="Create a monthly template to track an obligation across periods.">{canManage && <EducationButton onClick={() => setActiveView('templates')}>Set up a template</EducationButton>}</EducationState>}
+                <EducationRegister title="Recent expenses" description="Most recent records in the selected period." icon={Receipt} actions={<EducationButton onClick={() => setActiveView('register')}>Open register</EducationButton>}>{filteredExpenses.length ? expenseRows(filteredExpenses.slice(0, 5)) : <EducationState title="No expenses in this period" description="Try another month or record a cost.">{canManage && <EducationButton onClick={openNewExpense}>Record expense</EducationButton>}</EducationState>}</EducationRegister>
+            </div>}
 
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <AtlasSignalCard label="Period expenses" value={formatCurrency(stats.totalExpenses)} detail={displayMonthName} icon={TrendingDown} tone="red" />
-                <AtlasSignalCard label="Session margin" value={formatCurrency(stats.sessionNetProfit)} detail={`${formatCurrency(stats.sessionTotalIncome)} income`} icon={DollarSign} tone={stats.sessionNetProfit >= 0 ? 'emerald' : 'red'} />
-                <AtlasSignalCard label="Recurring due" value={recurringDueCount} detail={recurringReviewCount > 0 ? `${recurringReviewCount} need ledger review` : recurringPendingCount > 0 ? `${recurringPendingCount} pending records` : recurringScheduledCount > 0 ? `${recurringScheduledCount} scheduled later` : recurringDueCount === 1 ? 'Charge needs payment' : 'Charges need payment'} icon={Clock} tone={recurringDueCount > 0 || recurringReviewCount > 0 || recurringPendingCount > 0 ? 'amber' : 'slate'} />
-                <AtlasSignalCard label="Highest category" value={stats.topCategory} detail="Largest period cost" icon={PieChart} tone="blue" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:h-full md:min-h-0">
-                {/* Expense History List */}
-                <div id="expenses-ledger" className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col min-h-[400px] md:h-full edu-expenses-v1__ledger">
-                    <AtlasToolbar className="rounded-none border-0 border-b border-slate-800 bg-slate-950/30">
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                            <input type="text" placeholder="Search expenses..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-slate-900 border border-slate-800 rounded-lg text-sm text-white focus:border-rose-500 outline-none" />
-                        </div>
-                        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto">
-                            {['All', 'rent', 'salary', 'utilities', 'material', 'marketing', 'other'].map(cat => (
-                                <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize whitespace-nowrap border transition-colors ${categoryFilter === cat ? 'bg-rose-950/30 text-rose-400 border-rose-900/50' : 'bg-slate-950 text-slate-400 border-slate-800 hover:border-slate-600'}`}>{cat}</button>
-                            ))}
-                        </div>
-                    </AtlasToolbar>
-
-                    {ledgerTemplateId && (
-                        <div className="edu-expenses-v1__ledger-filter">
-                            <span>Showing records for {expenseTemplates.find(template => template.id === ledgerTemplateId)?.title || 'this recurring charge'}</span>
-                            <button type="button" onClick={() => setLedgerTemplateId(null)}>Show all expenses</button>
-                        </div>
-                    )}
-
-                    <div className="md:flex-1 md:overflow-y-auto custom-scrollbar p-2">
-                        {filteredExpenses.length === 0 ? (
-                            <AtlasEmptyState
-                                title="No expenses found"
-                                description="Adjust the month, academic session, category, or search terms. No totals or exports are generated from an empty result."
-                                icon={Receipt}
-                                action={(searchQuery || categoryFilter !== 'All' || ledgerTemplateId) ? <AtlasActionButton onClick={() => { setSearchQuery(''); setCategoryFilter('All'); setLedgerTemplateId(null); }}>Clear filters</AtlasActionButton> : undefined}
-                            />
-                        ) : (
-                            <div className="space-y-2">
-                                {filteredExpenses.map(expense => (
-                                    <div key={expense.id} className="group rounded-lg border border-slate-800 bg-slate-950 p-4 transition-colors hover:border-slate-700">
-                                        <div className="flex justify-between items-start">
-                                            <div className="flex items-start gap-3">
-                                                <div className={`p-2 rounded-lg ${expense.category === 'rent' ? 'bg-blue-900/20 text-blue-400' : expense.category === 'salary' ? 'bg-purple-900/20 text-purple-400' : 'bg-slate-800 text-slate-400'}`}><DollarSign size={18}/></div>
-                                                <div>
-                                                    <h4 className="font-bold text-white text-sm">{expense.title}</h4>
-                                                    <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                                                        <span>{formatDate(expense.date)}</span><span>•</span><span className="capitalize">{expense.category}</span><span>•</span><span className="text-slate-400">{expense.beneficiary}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="font-bold text-white text-lg">{formatCurrency(expense.amount)}</div>
-                                                {expense.status === 'pending' && <span className="text-[10px] text-amber-500 font-bold uppercase">Pending</span>}
-                                            </div>
-                                        </div>
-                                        <div className="mt-3 pt-3 border-t border-slate-800 flex justify-between items-center">
-                                            <div className="text-xs text-slate-500">{expense.notes || '-'}</div>
-                                            <div className="flex gap-2">
-                                                {expense.receiptUrl && <button onClick={() => setShowProof(expense.receiptUrl!)} className="p-1.5 hover:bg-slate-800 rounded text-sky-400" title="View receipt" aria-label={`View receipt for ${expense.title}`}><ImageIcon size={14}/></button>}
-                                                {can('expenses.manage') && (
-                                                    <>
-                                                        <button onClick={() => { setExpenseForm(expense); setEditingId(expense.id); setIsEditing(true); setIsModalOpen(true); }} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-blue-400" title="Edit Expense"><Edit size={14}/></button>
-                                                        <button onClick={() => handleDeleteExpense(expense.id)} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-red-400" title="Delete expense" aria-label={`Delete ${expense.title}`}><Trash2 size={14}/></button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+            {activeView === 'register' && <div className="edu-expenses-v1__content" role="tabpanel" id="expense-workspace-panel-register" aria-labelledby="expense-workspace-register">
+                <EducationSectionHeader eyebrow="Expense ledger" title="Expense register" description="Search the selected period, then open a record for its context and actions." />
+                <EducationToolbar label="Expense register filters">
+                    <EducationField label="Search expenses"><input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Title or beneficiary" /></EducationField>
+                    <EducationField label="Category"><select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}>{categories.map(category => <option key={category} value={category}>{category}</option>)}</select></EducationField>
+                    {(searchQuery || categoryFilter !== 'All' || ledgerTemplateId) && <EducationButton onClick={() => { setSearchQuery(''); setCategoryFilter('All'); setLedgerTemplateId(null); }}>Clear filters</EducationButton>}
+                </EducationToolbar>
+                {ledgerTemplateId && <EducationNotice status="info">Showing records for {expenseTemplates.find(template => template.id === ledgerTemplateId)?.title || 'this recurring charge'}. <button type="button" onClick={() => setLedgerTemplateId(null)}>Show all expenses</button></EducationNotice>}
+                <div className="edu-expenses-v1__register-layout">
+                    <EducationRegister title="Ledger records" description={filteredExpenses.length + ' visible expenses'} icon={Receipt}>{filteredExpenses.length ? expenseRows(filteredExpenses) : <EducationState title="No expenses found" description="Adjust the month, academic session, category or search terms. The empty result cannot be exported." />}</EducationRegister>
+                    {selectedExpense && filteredExpenses.some(item => item.id === selectedExpense.id) && <EducationDetailPanel label={'Expense details for ' + selectedExpense.title} className="edu-expenses-v1__detail"><div className="edu-expenses-v1__detail-title"><EducationIcon icon={Receipt} accent="purple"/><div><span>Expense detail</span><h3>{selectedExpense.title}</h3></div><button type="button" onClick={() => setSelectedExpenseId(null)} aria-label="Close expense details">×</button></div><dl><div><dt>Amount</dt><dd>{formatCurrency(selectedExpense.amount)}</dd></div><div><dt>Accounting date</dt><dd>{formatDate(selectedExpense.date)}</dd></div><div><dt>Beneficiary</dt><dd>{selectedExpense.beneficiary}</dd></div><div><dt>Category</dt><dd className="capitalize">{selectedExpense.category}</dd></div><div><dt>Method</dt><dd>{selectedExpense.method}</dd></div><div><dt>Status</dt><dd><EducationStatusPill status={selectedExpense.status === 'pending' ? 'warning' : 'success'}>{selectedExpense.status}</EducationStatusPill></dd></div><div><dt>Notes</dt><dd>{selectedExpense.notes || 'No notes'}</dd></div></dl><div className="edu-expenses-v1__detail-actions">{selectedExpense.receiptUrl && <EducationButton icon={ImageIcon} onClick={() => setShowProof(selectedExpense.receiptUrl!)}>View receipt</EducationButton>}{canManage && <EducationButton icon={Edit} onClick={() => openExpenseEditor(selectedExpense)}>Edit</EducationButton>}{canManage && <EducationButton icon={Trash2} status="danger" onClick={() => handleDeleteExpense(selectedExpense.id)}>Delete</EducationButton>}</div></EducationDetailPanel>}
                 </div>
+            </div>}
 
-                {/* Breakdown Chart */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 h-fit">
-                    <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><PieChart size={16} className="text-rose-400"/> Category Breakdown</h3>
-                    <div className="space-y-3">
-                        {Object.keys(stats.breakdown).length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-5 text-center text-xs leading-5 text-slate-500">No category totals are available for the filtered period.</p>}
-                        {Object.entries(stats.breakdown).sort(([,a], [,b]) => (b as number) - (a as number)).map(([cat, amount]) => {
-                            const val = amount as number;
-                            const percentage = stats.totalExpenses > 0 ? (val / stats.totalExpenses) * 100 : 0;
-                            return (
-                                <div key={cat}>
-                                    <div className="flex justify-between text-xs mb-1"><span className="text-slate-300 capitalize">{cat}</span><span className="text-slate-400">{Math.round(percentage)}%</span></div>
-                                    <div className="h-2 overflow-hidden rounded-full bg-slate-950"><div className="h-full rounded-full bg-amber-300" style={{ width: `${percentage}%` }}></div></div>
-                                    <div className="text-[10px] text-slate-500 mt-0.5 text-right">{formatCurrency(val)}</div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            </div>
+            {activeView === 'recurring' && <div className="edu-expenses-v1__content" role="tabpanel" id="expense-workspace-panel-recurring" aria-labelledby="expense-workspace-recurring">
+                <EducationSectionHeader eyebrow="Scheduled obligations" title={'Recurring charges · ' + displayMonthName} description="Monthly templates are tracked by due day. Weekly templates stay manual until their schedule has enough detail." action={canManage && <EducationButton icon={Settings} onClick={() => setActiveView('templates')}>Manage templates</EducationButton>} />
+                <div className="edu-expenses-v1__status-line"><EducationStatusPill status="warning">{recurringDueCount} due</EducationStatusPill><EducationStatusPill status="warning">{recurringReviewCount} review</EducationStatusPill><EducationStatusPill status="warning">{recurringPendingCount} pending</EducationStatusPill><EducationStatusPill status="info">{recurringManualCount} manual</EducationStatusPill></div>
+                {recurringStatus.length ? <div className="edu-expenses-v1__charges">{recurringCards(recurringStatus)}</div> : <EducationState title="No recurring charges" description="There are no recurring templates to project for this month.">{canManage && <EducationButton onClick={() => setActiveView('templates')}>Manage templates</EducationButton>}</EducationState>}
+            </div>}
 
-            {/* --- MODALS --- */}
+            {activeView === 'insights' && <div className="edu-expenses-v1__content" role="tabpanel" id="expense-workspace-panel-insights" aria-labelledby="expense-workspace-insights">
+                <EducationSectionHeader eyebrow="Period analysis" title="Categories & insights" description="Breakdown reflects the current session, month, search, category and template filters." />
+                <div className="edu-expenses-v1__metrics"><section><EducationIcon icon={TrendingDown} accent="blue"/><span>Period expenses</span><strong>{formatCurrency(stats.totalExpenses)}</strong></section><section><EducationIcon icon={DollarSign} accent={stats.sessionNetProfit >= 0 ? 'green' : 'orange'}/><span>Session margin</span><strong>{formatCurrency(stats.sessionNetProfit)}</strong></section><section><EducationIcon icon={PieChart} accent="purple"/><span>Highest category</span><strong className="capitalize">{stats.topCategory}</strong></section></div>
+                <EducationRegister title="Category breakdown" description="Share of visible period expenses." icon={PieChart}>{Object.keys(stats.breakdown).length ? Object.entries(stats.breakdown).sort(([, a], [, b]) => b - a).map(([category, amount]) => { const percentage = stats.totalExpenses > 0 ? amount / stats.totalExpenses * 100 : 0; return <div className="edu-expenses-v1__category" key={category}><div><strong className="capitalize">{category}</strong><span>{Math.round(percentage)}% · {formatCurrency(amount)}</span></div><meter min="0" max="100" value={percentage} aria-label={category + ' share'}>{Math.round(percentage)}%</meter></div>; }) : <EducationState title="No category totals" description="There are no visible expenses in the filtered period." />}</EducationRegister>
+            </div>}
 
-            {/* 1. Ad-Hoc Expense Modal */}
-            <Modal designSystem={showEducationFinanceV1} isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? "Edit Expense" : "Record Ad-Hoc Expense"}>
-                <form onSubmit={handleSaveAdHocExpense} className="space-y-4">
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Title</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.title} onChange={e => setExpenseForm({...expenseForm, title: e.target.value})} placeholder="e.g. Plumbing Repair"/></div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Category</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white capitalize" value={expenseForm.category} onChange={e => setExpenseForm({...expenseForm, category: e.target.value as any})}>{['rent', 'salary', 'utilities', 'material', 'marketing', 'other'].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Amount</label><input type="number" min="0.01" step="0.01" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}/></div>
-                    </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input type="date" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})}/></div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Beneficiary</label><input required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.beneficiary} onChange={e => setExpenseForm({...expenseForm, beneficiary: e.target.value})}/></div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Payment method</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.method || 'cash'} onChange={e => setExpenseForm({...expenseForm, method: e.target.value as Expense['method']})}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank transfer</option></select></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Ledger status</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.status || 'paid'} onChange={e => setExpenseForm({...expenseForm, status: e.target.value as Expense['status']})}><option value="paid">Paid</option><option value="pending">Pending</option></select></div>
-                    </div>
-                    <div><label className="block text-xs font-medium text-slate-400 mb-1">Audit notes</label><textarea rows={3} className="w-full resize-y p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.notes || ''} onChange={e => setExpenseForm({...expenseForm, notes: e.target.value})} placeholder="Reference, approval context, or supplier details" /></div>
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Receipt (Optional)</label>
-                        <div className="flex items-center gap-3">
-                            <label className="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors">
-                                <Upload size={14}/> Upload
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'form')} />
-                            </label>
-                            {expenseForm.receiptUrl && <span className="text-xs text-emerald-400 flex items-center gap-1"><ImageIcon size={12}/> Attached</span>}
-                        </div>
-                    </div>
-                    <button type="submit" disabled={isSavingExpense} className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-500 py-3 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50">
-                        {isSavingExpense && <Loader2 size={16} className="animate-spin" />}{isSavingExpense ? 'Saving expense...' : isEditing ? 'Save expense changes' : 'Record expense'}
-                    </button>
-                </form>
-            </Modal>
-
-            {/* 2. Pay Recurring Template Modal (The "Pay Now" Flow) */}
-            <Modal designSystem={showEducationFinanceV1} isOpen={isPayTemplateModalOpen} onClose={() => setIsPayTemplateModalOpen(false)} title={`Pay ${payingTemplate?.title}`}>
-                <form onSubmit={handleConfirmPayment} className="space-y-5">
-                    <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 flex justify-between items-center mb-2">
-                        <span className="text-xs text-slate-400 uppercase">Default Amount</span>
-                        <span className="text-white font-bold">{formatCurrency(payingTemplate?.amount || 0)}</span>
-                    </div>
-                    
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Payment Amount (Adjust if needed)</label>
-                        <input type="number" min="0.01" step="0.01" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white font-bold text-xl text-center focus:border-emerald-500 outline-none" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: Number(e.target.value)})}/>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Date</label><input type="date" required className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})}/></div>
-                        <div><label className="block text-xs font-medium text-slate-400 mb-1">Method</label><select className="w-full p-3 bg-slate-950 border border-slate-800 rounded-lg text-white" value={expenseForm.method} onChange={e => setExpenseForm({...expenseForm, method: e.target.value as any})}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></div>
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-1">Proof / Receipt (Optional)</label>
-                        <div className="flex items-center gap-3">
-                            <label className="cursor-pointer bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 px-3 py-2 rounded-lg text-xs flex items-center gap-2 transition-colors w-full justify-center">
-                                <Upload size={14}/> {paymentProof ? "Change File" : "Upload File"}
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileUpload(e, 'pay')} />
-                            </label>
-                        </div>
-                        {paymentProof && (
-                            <div className="mt-2 relative w-full h-32 bg-slate-950 rounded-lg overflow-hidden border border-slate-800">
-                                <img src={paymentProof} alt="Proof" className="w-full h-full object-contain"/>
-                            </div>
-                        )}
-                    </div>
-
-                    <button type="submit" disabled={isSavingRecurringPayment} className="w-full py-3 bg-teal-500 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 text-slate-950 rounded-lg font-bold flex items-center justify-center gap-2">
-                        {isSavingRecurringPayment ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18}/>} {isSavingRecurringPayment ? 'Recording payment...' : 'Record recurring payment'}
-                    </button>
-                </form>
-            </Modal>
-
-            {/* 3. Template Manager Modal */}
-            <Modal designSystem={showEducationFinanceV1} isOpen={isTemplateManagerOpen} onClose={() => setIsTemplateManagerOpen(false)} title="Manage Recurring Charges">
-                <div className="space-y-6">
-                    {/* Create New Template */}
-                    <form onSubmit={handleSaveTemplate} className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3">
-                        <h4 className="text-sm font-bold text-white mb-2">{editingTemplateId ? 'Edit Recurring Charge' : 'Define New Recurring Charge'}</h4>
-                        <div className="grid grid-cols-2 gap-3">
-                            <input required placeholder="Title (e.g. Office Rent)" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.title} onChange={e => setTemplateForm({...templateForm, title: e.target.value})}/>
-                            <select className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm capitalize" value={templateForm.category} onChange={e => setTemplateForm({...templateForm, category: e.target.value as any})}>{['rent', 'salary', 'utilities', 'material', 'marketing', 'other'].map(c => <option key={c} value={c}>{c}</option>)}</select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <input type="number" min="0.01" step="0.01" required placeholder="Default Amount" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.amount} onChange={e => setTemplateForm({...templateForm, amount: Number(e.target.value)})}/>
-                            <input required placeholder="Beneficiary" className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.beneficiary} onChange={e => setTemplateForm({...templateForm, beneficiary: e.target.value})}/>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div><label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">Frequency</label><select disabled className="w-full cursor-not-allowed p-2 bg-slate-900 border border-slate-700 rounded text-slate-400 text-sm" value="monthly"><option value="monthly">Monthly</option></select></div>
-                            <div><label className="mb-1 block text-[10px] font-bold uppercase text-slate-500">Due day</label><input type="number" min="1" max="31" required className="w-full p-2 bg-slate-900 border border-slate-700 rounded text-white text-sm" value={templateForm.dayDue || 1} onChange={e => setTemplateForm({...templateForm, dayDue: Number(e.target.value)})}/></div>
-                        </div>
-                        <p className="text-[11px] leading-5 text-slate-500">Monthly schedules are tracked automatically. Existing weekly templates stay visible but require manual expense records because they do not store a weekday or occurrence count.</p>
-                        <div className="flex gap-2">
-                            {editingTemplateId && (
-                                <button type="button" onClick={() => { setEditingTemplateId(null); setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 }); }} className="flex-1 py-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded-lg text-sm transition-colors font-bold">Cancel Edit</button>
-                            )}
-                            <button type="submit" disabled={isSavingTemplate} className="flex-1 py-2 bg-teal-500 hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-50 text-slate-950 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors">
-                                {isSavingTemplate ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} {isSavingTemplate ? 'Saving...' : editingTemplateId ? 'Update charge' : 'Add charge'}
-                            </button>
-                        </div>
+            {activeView === 'templates' && <div className="edu-expenses-v1__content" role="tabpanel" id="expense-workspace-panel-templates" aria-labelledby="expense-workspace-templates">
+                <EducationSectionHeader eyebrow="Recurring setup" title="Recurring templates" description="Define one monthly obligation, then review its occurrence each month." />
+                {!canManage ? <EducationState kind="restricted" title="Read-only access" description="Your role can review recurring charges, but cannot change templates." /> : <div className="edu-expenses-v1__template-layout">
+                    <form onSubmit={handleSaveTemplate} className="edu-expenses-v1__template-form">
+                        <h3>{editingTemplateId ? 'Edit recurring charge' : 'New monthly charge'}</h3>
+                        <EducationFormSection title="Charge details" icon={Repeat} accent="purple">
+                            <EducationField label="Title"><input required value={templateForm.title || ''} onChange={event => setTemplateForm({ ...templateForm, title: event.target.value })} placeholder="Office rent" /></EducationField>
+                            <EducationField label="Category"><select value={templateForm.category} onChange={event => setTemplateForm({ ...templateForm, category: event.target.value as ExpenseTemplate['category'] })}>{categories.slice(1).map(category => <option key={category} value={category}>{category}</option>)}</select></EducationField>
+                            <EducationField label="Default amount"><input type="number" min="0.01" step="0.01" required value={templateForm.amount} onChange={event => setTemplateForm({ ...templateForm, amount: Number(event.target.value) })} /></EducationField>
+                            <EducationField label="Beneficiary"><input required value={templateForm.beneficiary || ''} onChange={event => setTemplateForm({ ...templateForm, beneficiary: event.target.value })} /></EducationField>
+                            <EducationField label="Due day" hint="Days beyond a short month's end are shown on its final day."><input type="number" min="1" max="31" required value={templateForm.dayDue || 1} onChange={event => setTemplateForm({ ...templateForm, dayDue: Number(event.target.value) })} /></EducationField>
+                        </EducationFormSection>
+                        <EducationNotice status="info">Monthly schedules are tracked automatically. Existing weekly templates need manual expense records because they have no stored weekday or occurrence count.</EducationNotice>
+                        <div className="edu-expenses-v1__form-actions">{editingTemplateId && <EducationButton onClick={() => { setEditingTemplateId(null); setTemplateForm({ title: '', category: 'rent', amount: 0, beneficiary: '', recurring: true, frequency: 'monthly', dayDue: 1 }); }}>Cancel edit</EducationButton>}<EducationButton type="submit" variant="primary" disabled={isSavingTemplate}>{isSavingTemplate ? 'Saving…' : editingTemplateId ? 'Update charge' : 'Add charge'}</EducationButton></div>
                     </form>
+                    <EducationRegister title="Active templates" description={expenseTemplates.filter(item => item.recurring).length + ' recurring charges'} icon={Repeat}>{expenseTemplates.filter(item => item.recurring).length ? expenseTemplates.filter(item => item.recurring).map(template => <article className="edu-expenses-v1__template-row" key={template.id}><div><strong>{template.title}</strong><small>{formatCurrency(template.amount)} · {template.frequency} · {template.beneficiary}</small></div><div><EducationButton icon={Edit} onClick={() => { setEditingTemplateId(template.id); setTemplateForm(template); }}>Edit</EducationButton><EducationButton icon={Trash2} status="danger" onClick={() => handleDeleteTemplate(template.id)}>Delete</EducationButton></div></article>) : <EducationState title="No recurring templates" description="Define a monthly obligation to track it by due day." />}</EducationRegister>
+                </div>}
+            </div>}
 
-                    {/* List Templates */}
-                    <div className="mt-6 space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Active Templates</h4>
-                        {expenseTemplates.filter(t => t.recurring).length === 0 && <p className="rounded-lg border border-dashed border-white/10 p-5 text-center text-xs leading-5 text-slate-500">No recurring charges yet. Define a monthly obligation above to track it by due day.</p>}
-                        {expenseTemplates.filter(t => t.recurring).map(template => (
-                            <div key={template.id} className="flex items-center justify-between p-3 bg-slate-900 border border-slate-800 rounded-lg hover:border-slate-700 transition-colors">
-                                <div>
-                                    <div className="font-bold text-white text-sm">{template.title}</div>
-                                    <div className="text-xs text-slate-400">{formatCurrency(template.amount)} • {template.frequency}</div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => {
-                                        setEditingTemplateId(template.id);
-                                        setTemplateForm(template);
-                                    }} className="p-1.5 text-slate-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors" title="Edit Template">
-                                        <Edit size={14} />
-                                    </button>
-                                    <button onClick={() => handleDeleteTemplate(template.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors" title="Delete Template">
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+            <Modal designSystem isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? 'Edit expense' : 'Record expense'}>
+                <form onSubmit={handleSaveAdHocExpense} className="edu-expenses-v1__modal-form">
+                    <p>Start with the cost and beneficiary. Add payment and evidence details when needed.</p>
+                    <EducationFormSection title="Expense" icon={Receipt}>
+                        <EducationField label="Title"><input required value={expenseForm.title || ''} onChange={event => setExpenseForm({ ...expenseForm, title: event.target.value })} placeholder="Plumbing repair" /></EducationField>
+                        <EducationField label="Category"><select value={expenseForm.category} onChange={event => setExpenseForm({ ...expenseForm, category: event.target.value as Expense['category'] })}>{categories.slice(1).map(category => <option key={category} value={category}>{category}</option>)}</select></EducationField>
+                        <EducationField label="Amount"><input type="number" min="0.01" step="0.01" required value={expenseForm.amount} onChange={event => setExpenseForm({ ...expenseForm, amount: Number(event.target.value) })} /></EducationField>
+                        <EducationField label="Accounting date"><input type="date" required value={expenseForm.date || ''} onChange={event => setExpenseForm({ ...expenseForm, date: event.target.value })} /></EducationField>
+                        <EducationField label="Beneficiary or supplier"><input required value={expenseForm.beneficiary || ''} onChange={event => setExpenseForm({ ...expenseForm, beneficiary: event.target.value })} /></EducationField>
+                    </EducationFormSection>
+                    <button type="button" className="edu-expenses-v1__disclosure" aria-expanded={showExpenseDetails} onClick={() => setShowExpenseDetails(!showExpenseDetails)}>{showExpenseDetails ? 'Hide' : 'Add'} payment and evidence details</button>
+                    {showExpenseDetails && <EducationFormSection title="Payment and evidence" icon={Upload} accent="purple">
+                        <EducationField label="Payment method"><select value={expenseForm.method || 'cash'} onChange={event => setExpenseForm({ ...expenseForm, method: event.target.value as Expense['method'] })}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Bank transfer</option></select></EducationField>
+                        <EducationField label="Ledger status"><select value={expenseForm.status || 'paid'} onChange={event => setExpenseForm({ ...expenseForm, status: event.target.value as Expense['status'] })}><option value="paid">Paid</option><option value="pending">Pending</option></select></EducationField>
+                        <EducationField label="Audit notes"><textarea rows={3} value={expenseForm.notes || ''} onChange={event => setExpenseForm({ ...expenseForm, notes: event.target.value })} placeholder="Reference or approval context" /></EducationField>
+                        <EducationField label="Receipt image" hint={expenseForm.receiptUrl ? 'Image attached' : 'Optional image proof'}><input type="file" accept="image/*" onChange={event => handleFileUpload(event, 'form')} /></EducationField>
+                    </EducationFormSection>}
+                    <div className="edu-expenses-v1__form-actions"><EducationButton onClick={() => setIsModalOpen(false)}>Cancel</EducationButton><EducationButton type="submit" variant="primary" disabled={isSavingExpense}>{isSavingExpense ? 'Saving expense…' : isEditing ? 'Save changes' : 'Record expense'}</EducationButton></div>
+                </form>
             </Modal>
 
-            {/* Receipt Viewer */}
-            <Modal designSystem={showEducationFinanceV1} isOpen={!!showProof} onClose={() => setShowProof(null)} title="Expense receipt" size="lg">
-                {showProof && <img src={showProof} className="max-h-[70vh] w-full rounded-lg bg-slate-950 object-contain" alt="Expense receipt" />}
+            <Modal designSystem isOpen={isPayTemplateModalOpen} onClose={() => setIsPayTemplateModalOpen(false)} title={'Record ' + (payingTemplate?.title || 'recurring payment')}>
+                <form onSubmit={handleConfirmPayment} className="edu-expenses-v1__modal-form">
+                    <EducationNotice status="info">Template amount: {formatCurrency(payingTemplate?.amount || 0)}. This payment will be linked to the selected monthly charge.</EducationNotice>
+                    <EducationFormSection title="Payment" icon={CheckCircle2}>
+                        <EducationField label="Payment amount"><input type="number" min="0.01" step="0.01" required value={expenseForm.amount} onChange={event => setExpenseForm({ ...expenseForm, amount: Number(event.target.value) })} /></EducationField>
+                        <EducationField label="Date"><input type="date" required value={expenseForm.date || ''} onChange={event => setExpenseForm({ ...expenseForm, date: event.target.value })} /></EducationField>
+                        <EducationField label="Method"><select value={expenseForm.method || 'cash'} onChange={event => setExpenseForm({ ...expenseForm, method: event.target.value as Expense['method'] })}><option value="cash">Cash</option><option value="check">Check</option><option value="virement">Transfer</option></select></EducationField>
+                        <EducationField label="Proof image" hint={paymentProof ? 'Image attached' : 'Optional receipt'}><input type="file" accept="image/*" onChange={event => handleFileUpload(event, 'pay')} /></EducationField>
+                    </EducationFormSection>
+                    {paymentProof && <img className="edu-expenses-v1__proof" src={paymentProof} alt="Payment proof preview" />}
+                    <div className="edu-expenses-v1__form-actions"><EducationButton onClick={() => setIsPayTemplateModalOpen(false)}>Cancel</EducationButton><EducationButton type="submit" variant="primary" disabled={isSavingRecurringPayment}>{isSavingRecurringPayment ? 'Recording…' : 'Record payment'}</EducationButton></div>
+                </form>
             </Modal>
-        </div>
+            <Modal designSystem isOpen={!!showProof} onClose={() => setShowProof(null)} title="Expense receipt" size="lg">{showProof && <img src={showProof} className="edu-expenses-v1__proof" alt="Expense receipt" />}</Modal>
+        </main>
     );
 };

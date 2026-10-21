@@ -1,0 +1,83 @@
+/* Finance document surfaces and forms share the Education palette in both themes. */
+[data-edu-system="1"] .edu-finance-documents__field {
+  border: 2px solid var(--ds-border) !important;
+  border-radius: var(--ds-radius-control) !important;
+  background: var(--ds-surface) !important;
+  color: var(--ds-ink) !important;
+  font: 700 14px var(--ds-font-body);
+}
+[data-edu-system="1"] .edu-finance-documents__field::placeholder { color: var(--ds-muted); }
+[data-edu-system="1"] .edu-finance-documents__field:focus-visible { border-color: var(--ds-blue) !important; }
+[data-edu-system="1"] .edu-finance-documents__label { color: var(--ds-muted) !important; }
+[data-edu-system="1"] .edu-finance-documents__register :is(.text-white,.text-slate-200,.text-slate-300) { color: var(--ds-ink) !important; }
+[data-edu-system="1"] .edu-finance-documents__register :is(.text-slate-500,.text-slate-600) { color: var(--ds-muted) !important; }
+[data-edu-system="1"] .edu-finance-documents__row > div:last-child button {
+  min-height: 42px; border: 2px solid var(--ds-border); border-radius: 12px;
+  background: var(--ds-surface); color: var(--ds-blue-ink); font: 900 12px var(--ds-font-heading);
+}
+[data-edu-system="1"] .edu-finance-documents__row > div:last-child button[title="Créer un avoir total"] {
+  color: var(--ds-orange-ink); border-color: var(--ds-orange);
+}
+[data-edu-system="1"] .edu-finance-documents__row > div:last-child button:hover { background: var(--ds-blue-soft); }
+[data-edu-system="1"] .edu-finance-documents__row > div:last-child button[title="Créer un avoir total"]:hover { background: var(--ds-orange-soft); }
+
+[data-edu-system="1"] .edu-finance-documents-form { color: var(--ds-ink); }
+[data-edu-system="1"] .edu-finance-documents-form > div:first-child[class*="bg-amber"] {
+  border-color: var(--ds-yellow) !important; background: var(--ds-yellow-soft) !important; color: var(--ds-yellow-ink) !important;
+}
+[data-edu-system="1"] .edu-finance-documents-form > div:first-child[class*="bg-amber"] * { color: inherit !important; }
+[data-edu-system="1"] .edu-finance-documents-form > div:first-child[class*="bg-sky"] {
+  border-color: var(--ds-blue) !important; background: var(--ds-blue-soft) !important; color: var(--ds-blue-ink) !important;
+}
+[data-edu-system="1"] .edu-finance-documents-form :is([class*="bg-slate"],[class*="bg-sky"],[class*="bg-teal"],[class*="bg-amber"]):not(button) {
+  border-color: var(--ds-border) !important; background: var(--ds-subtle) !important;
+}
+[data-edu-system="1"] .edu-finance-documents-form :is(.text-white,.text-slate-200,.text-slate-300,.text-teal-100,.text-sky-100,.text-amber-100) { color: var(--ds-ink) !important; }
+[data-edu-system="1"] .edu-finance-documents-form :is(.text-slate-400,.text-slate-500,.text-slate-600) { color: var(--ds-muted) !important; }
+[data-edu-system="1"] .edu-finance-documents-form :is(.text-sky-200,.text-teal-200) { color: var(--ds-blue-ink) !important; }
+[data-edu-system="1"] .edu-finance-documents-form button:not([type="submit"]) {
+  min-height: 44px; border: 2px solid var(--ds-border); border-radius: var(--ds-radius-control);
+  background: var(--ds-surface); color: var(--ds-ink); font: 900 13px var(--ds-font-heading);
+}
+[data-edu-system="1"] .edu-finance-documents-form button[type="submit"] {
+  min-height: 46px; border: 2px solid var(--ds-blue-edge); border-bottom-width: 4px;
+  border-radius: var(--ds-radius-control); background: var(--ds-blue); color: var(--ds-on-color);
+  font: 900 14px var(--ds-font-heading);
+}
+[data-edu-system="1"] .edu-finance-documents-form--credit button[type="submit"] {
+  border-color: var(--ds-orange-edge) !important; background: var(--ds-orange) !important; color: var(--ds-on-color) !important;
+}
+[data-edu-system="1"] .edu-finance-documents-form .edu-finance-documents__export-button {
+  border-color: var(--ds-blue-edge) !important; background: var(--ds-blue) !important; color: var(--ds-on-color) !important;
+}
+[data-edu-system="1"] .edu-finance-documents-form button:disabled { opacity: .55; cursor: not-allowed; }
+[data-edu-system="1"] .edu-finance-documents-form input[type="checkbox"] { accent-color: var(--ds-blue); }
+
+[data-edu-system="1"] .service-workspace { color: var(--ds-ink); }
+[data-edu-system="1"] .service-workspace :is(h3,h4) { color: var(--ds-ink); font-family: var(--ds-font-heading); }
+[data-edu-system="1"] .service-workspace :is(input,textarea,select) {
+  border: 2px solid var(--ds-border); border-radius: var(--ds-radius-control);
+  background: var(--ds-surface); color: var(--ds-ink);
+}
+[data-edu-system="1"] .service-workspace :is(input,textarea,select,button):focus-visible { outline: 3px solid var(--ds-blue); outline-offset: 2px; }
+[data-edu-system="1"] .service-workspace button {
+  border: 2px solid var(--ds-border); border-bottom: 4px solid var(--ds-depth);
+  border-radius: var(--ds-radius-control); background: var(--ds-surface); color: var(--ds-ink);
+  font-family: var(--ds-font-heading); font-weight: 900;
+}
+[data-edu-system="1"] .service-workspace button.primary {
+  border-color: var(--ds-blue-edge); background: var(--ds-blue); color: var(--ds-on-color);
+}
+[data-edu-system="1"] .service-workspace :is(.service-card,.service-line,.service-billing-details) {
+  border-color: var(--ds-border); background: var(--ds-surface); color: var(--ds-ink);
+}
+[data-edu-system="1"] .service-workspace :is(.service-note,.service-details,.service-steps,.service-card__price span) { color: var(--ds-muted); }
+[data-edu-system="1"] .service-workspace :is(.service-totals,.service-edit-notice) {
+  border: 2px solid var(--ds-blue); background: var(--ds-blue-soft); color: var(--ds-ink);
+}
+[data-edu-system="1"] .service-workspace :is(.service-totals strong,.service-edit-notice strong,.service-steps strong) { color: var(--ds-blue-ink); }
+[data-edu-system="1"] .service-workspace .service-error { border-color: var(--ds-red); background: var(--ds-red-soft); color: var(--ds-red-ink); }
+@media (max-width: 639px) {
+  [data-edu-system="1"] .edu-finance-documents-form > div:last-child:has(button) { flex-wrap: wrap; }
+  [data-edu-system="1"] .edu-finance-documents-form > div:last-child:has(button) button { flex: 1 1 130px; }
+}

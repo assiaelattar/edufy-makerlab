@@ -11,7 +11,6 @@ import {
   GraduationCap,
   Link2,
   MapPin,
-  MessageSquare,
   Pencil,
   Plus,
   RefreshCw,
@@ -199,7 +198,9 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
       ? {
         eyebrow: 'School community · family accounts',
         title: 'Families',
-        description: 'See siblings, balances, and contact context together before opening a statement.',
+        description: can('finance.view')
+          ? 'See siblings, balances, and contact context together before opening a statement.'
+          : 'See connected learners and family contact context together.',
       }
       : {
         eyebrow: 'Family journey · admissions',
@@ -379,14 +380,14 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                 </div>
               )}
 
-              <div className="edu-student-ops__selection-row">
+              {can('students.edit') && <div className="edu-student-ops__selection-row">
                 <label><input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll} />Select all shown</label>
-                {selectedIds.length > 0 && <button type="button" onClick={onLinkParent}><Link2 size={15} />Link parent info for {selectedIds.length}</button>}
-              </div>
+                {selectedIds.length > 0 && <><button type="button" onClick={onLinkParent}><Link2 size={15} />Link parent info for {selectedIds.length}</button><button type="button" onClick={() => setSelectedIds([])}>Clear selection</button></>}
+              </div>}
 
               <div className="edu-student-ops__student-list">
                 {visibleStudents.length === 0 ? (
-                  <div className="edu-student-ops__empty"><Search size={22} /><strong>No learners match this view</strong><span>Try another smart view or clear the advanced filters.</span>{hasActiveFilters && <button type="button" onClick={clearFilters}>Clear filters</button>}</div>
+                  <div className="edu-student-ops__empty"><Search size={22} /><strong>{students.length === 0 ? 'No learners yet' : showArchived ? 'No archived learners match this view' : 'No learners match this view'}</strong><span>{students.length === 0 ? 'Add a learner to begin the school directory.' : showArchived ? 'Try another filter or return to active learners.' : 'Try another smart view or clear the advanced filters.'}</span>{students.length === 0 && can('students.edit') ? <button type="button" onClick={onAddStudent}>Add student</button> : hasActiveFilters && <button type="button" onClick={clearFilters}>Clear filters</button>}</div>
                 ) : visibleStudents.map(student => {
                   const issues = directoryHealth.records.get(student.id)?.issues || [];
                   const operationalIssues = issues.filter(issue => issue !== 'missing_profile');
@@ -395,8 +396,8 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                   const firstIssue = primaryIssue ? STUDENT_DIRECTORY_ISSUE_LABELS[primaryIssue] : 'Record ready';
                   const isSelected = selectedStudent?.id === student.id;
                   return (
-                    <div key={student.id} className="edu-student-ops__student-row" data-selected={isSelected} data-needs-action={operationalIssues.length > 0}>
-                      <label className="edu-student-ops__row-check" onClick={event => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${student.name}`} checked={selectedIds.includes(student.id)} onChange={() => setSelectedIds(current => current.includes(student.id) ? current.filter(id => id !== student.id) : [...current, student.id])} /></label>
+                    <div key={student.id} className="edu-student-ops__student-row" data-selected={isSelected} data-needs-action={operationalIssues.length > 0} data-selectable={can('students.edit')}>
+                      {can('students.edit') && <label className="edu-student-ops__row-check" onClick={event => event.stopPropagation()}><input type="checkbox" aria-label={`Select ${student.name}`} checked={selectedIds.includes(student.id)} onChange={() => setSelectedIds(current => current.includes(student.id) ? current.filter(id => id !== student.id) : [...current, student.id])} /></label>}
                       <button type="button" className="edu-student-ops__student-main" onClick={() => onViewProfile(student.id)} aria-label={`Open ${student.name}'s profile`}>
                         <span className="edu-student-ops__avatar">{getInitials(student.name)}</span>
                         <span className="edu-student-ops__student-copy"><strong>{student.name}</strong><span>{firstIssue}{activeEnrollments[0]?.programName ? ` · ${activeEnrollments[0].programName}` : ''}</span></span>
@@ -431,7 +432,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                     <div className="edu-student-ops__facts">
                       <div><small>Family contact</small><strong>{selectedStudent.parentName || 'Not recorded'}</strong><span>{selectedStudent.parentPhone || selectedStudent.email || 'Contact needed'}</span></div>
                       <div><small>Program & class</small><strong>{selectedPrimaryEnrollment?.programName || 'No active program'}</strong><span>{selectedPrimaryEnrollment?.gradeName || selectedPrimaryEnrollment?.groupTime || 'Placement needed'}</span></div>
-                      <div><small>Account</small><strong>{selectedBalance > 0 ? `${formatCurrency(selectedBalance)} due` : 'No balance due'}</strong><span>{selectedEnrollments.length} active enrollment{selectedEnrollments.length === 1 ? '' : 's'}</span></div>
+                      {can('finance.view') && <div><small>Account</small><strong>{selectedBalance > 0 ? `${formatCurrency(selectedBalance)} due` : 'No balance due'}</strong><span>{selectedEnrollments.length} active enrollment{selectedEnrollments.length === 1 ? '' : 's'}</span></div>}
                       <div><small>Record</small><strong>{selectedIssues.length ? `${selectedIssues.length} item${selectedIssues.length === 1 ? '' : 's'} to review` : 'Ready for daily work'}</strong><span>{selectedStudent.school || 'School not recorded'}</span></div>
                     </div>
 
@@ -450,24 +451,24 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                     </div>
                   </div>
                 </>
-              ) : <div className="edu-student-ops__empty edu-student-ops__empty--passport"><UsersRound size={24} /><strong>No learner selected</strong><span>Choose a learner from the smart roster.</span></div>}
+              ) : <div className="edu-student-ops__empty edu-student-ops__empty--passport"><UsersRound size={24} /><strong>{students.length === 0 ? 'Learner overview starts here' : 'No learner selected'}</strong><span>{students.length === 0 ? 'Add a learner to see their next steps and school record.' : 'Choose a learner from the smart roster.'}</span></div>}
             </EducationDetailPanel>
           </section>
         </>
       ) : workspaceMode === 'parents' ? (
         <section className="edu-student-ops__family-layout" aria-label="Family accounts">
           <div className="edu-student-ops__family-roster">
-            <div className="edu-student-ops__family-summary">
+            <div className="edu-student-ops__family-summary" data-finance={can('finance.view')}>
               <div><small>Family accounts</small><strong>{parentAccounts.length}</strong><span>Active households inferred from contact records</span></div>
-              <div><small>Families with balance</small><strong>{parentLedger.familiesWithBalance}</strong><span>{formatCurrency(parentLedger.totalBalance)} outstanding</span></div>
+              {can('finance.view') && <div><small>Families with balance</small><strong>{parentLedger.familiesWithBalance}</strong><span>{formatCurrency(parentLedger.totalBalance)} outstanding</span></div>}
             </div>
             <label className="edu-student-ops__search"><Search size={18} /><input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Find a family by name or phone" aria-label="Search families" />{searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Clear search"><X size={16} /></button>}</label>
             <div className="edu-student-ops__family-list">
-              {parentAccounts.length === 0 ? <div className="edu-student-ops__empty"><UsersRound size={22} /><strong>No family accounts match</strong><span>Try another parent name or phone number.</span></div> : parentAccounts.map(parent => (
+              {parentAccounts.length === 0 ? <div className="edu-student-ops__empty"><UsersRound size={22} /><strong>{searchQuery ? 'No family accounts match' : 'No family accounts yet'}</strong><span>{searchQuery ? 'Try another parent name or phone number.' : 'Family accounts appear when learners have a parent contact.'}</span></div> : parentAccounts.map(parent => (
                 <button key={parent.phone} type="button" aria-pressed={selectedFamily?.phone === parent.phone} onClick={() => setSelectedFamilyPhone(parent.phone)}>
                   <span className="edu-student-ops__avatar">{getInitials(parent.parentName)}</span>
                   <span><strong>{parent.parentName}</strong><small>{parent.phone} · {parent.children.length} learner{parent.children.length === 1 ? '' : 's'}</small></span>
-                  <b data-due={parent.totalBalance > 0}>{parent.totalBalance > 0 ? formatCurrency(parent.totalBalance) : 'Settled'}</b>
+                  {can('finance.view') && <b data-due={parent.totalBalance > 0}>{parent.totalBalance > 0 ? formatCurrency(parent.totalBalance) : 'Settled'}</b>}
                   <ChevronRight size={16} />
                 </button>
               ))}
@@ -477,9 +478,9 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
           <aside className="edu-student-ops__family-passport">
             {selectedFamily ? <>
               <div className="edu-student-ops__family-passport-head"><span><UsersRound size={18} /></span><div><small>Family account</small><h2>{selectedFamily.parentName}</h2><p>{selectedFamily.phone}</p></div></div>
-              <div className="edu-student-ops__family-money"><div><small>Expected</small><strong>{formatCurrency(selectedFamily.totalExpected)}</strong></div><div><small>Paid</small><strong>{formatCurrency(selectedFamily.totalPaid)}</strong></div><div data-due={selectedFamily.totalBalance > 0}><small>Balance</small><strong>{formatCurrency(selectedFamily.totalBalance)}</strong></div></div>
+              {can('finance.view') && <div className="edu-student-ops__family-money"><div><small>Expected</small><strong>{formatCurrency(selectedFamily.totalExpected)}</strong></div><div><small>Paid</small><strong>{formatCurrency(selectedFamily.totalPaid)}</strong></div><div data-due={selectedFamily.totalBalance > 0}><small>Balance</small><strong>{formatCurrency(selectedFamily.totalBalance)}</strong></div></div>}
               <div className="edu-student-ops__children"><div><strong>Learners in this family</strong><span>{selectedFamily.children.length} connected</span></div>{selectedFamily.children.map(child => <button key={child.student.id} type="button" onClick={() => onViewProfile(child.student.id)}><span className="edu-student-ops__avatar">{getInitials(child.student.name)}</span><span><strong>{child.student.name}</strong><small>{child.enrollments[0]?.programName || 'No active enrollment'}</small></span><ChevronRight size={16} /></button>)}</div>
-              <div className="edu-student-ops__family-actions"><button type="button" onClick={() => onOpenParentStatement(selectedFamily)}><WalletCards size={16} />Open statement</button><button type="button" onClick={() => onOpenParentStatement(selectedFamily)}><MessageSquare size={16} />Review account</button></div>
+              {can('finance.view') && <div className="edu-student-ops__family-actions"><button type="button" onClick={() => onOpenParentStatement(selectedFamily)}><WalletCards size={16} />Open statement</button></div>}
             </> : <div className="edu-student-ops__empty"><UsersRound size={22} /><strong>No family selected</strong></div>}
           </aside>
         </section>

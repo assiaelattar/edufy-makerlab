@@ -30,6 +30,28 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     activeModalTab, setActiveModalTab, availableGrades, availableGroups, processTemplates, wizardStep, WIZARD_STEPS, onArchive
 }) => {
     const { alert: showAlert } = useConfirm();
+    const [saving, setSaving] = React.useState(false);
+    const [saveError, setSaveError] = React.useState('');
+    React.useEffect(() => { if (!isOpen) setSaveError(''); }, [isOpen]);
+    const submitProject = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (saving) return;
+        if (!templateForm.title?.trim() || !templateForm.description?.trim()) {
+            setActiveModalTab('details');
+            setSaveError('Add a project title and description before saving.');
+            return;
+        }
+        setSaving(true);
+        setSaveError('');
+        try {
+            await handleSaveTemplate(event);
+        } catch (error) {
+            console.error('Error saving project template:', error);
+            setSaveError('The project could not be saved. Your changes are still here; try again.');
+        } finally {
+            setSaving(false);
+        }
+    };
     const INPUT_CLASS = "min-h-10 w-full rounded-lg border border-white/10 bg-slate-950/70 px-3 py-2 text-sm font-bold text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20";
     const LABEL_CLASS = "block text-xs font-black text-slate-400 uppercase tracking-wider mb-2";
 
@@ -79,8 +101,8 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
     };
 
     return (
-        <Modal designSystem isOpen={isOpen} onClose={onClose} title={editingTemplateId ? "Edit project" : "Create project"} size="xl">
-            <form onSubmit={handleSaveTemplate} className="edu-learning-project-form flex min-h-0 flex-col">
+        <Modal designSystem isOpen={isOpen} onClose={() => { if (!saving) onClose(); }} title={editingTemplateId ? "Edit project" : "Create project"} size="xl">
+            <form onSubmit={submitProject} className="edu-learning-project-form flex min-h-0 flex-col">
                 {/* Header with Import */}
                 <div className="edu-learning-project-toolbar flex shrink-0 flex-col gap-2 border-b border-white/10 bg-slate-950/80 px-4 pt-2 sm:flex-row sm:items-center sm:justify-between sm:px-6">
                     <div className="edu-learning-project-tabs flex overflow-x-auto no-scrollbar" role="tablist" aria-label="Project setup steps">
@@ -128,9 +150,10 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                         <AtlasActionButton type="button" icon={Upload} onClick={() => document.getElementById('import-json')?.click()} title="Import mission from JSON"><span className="hidden sm:inline">Import</span></AtlasActionButton>
                         <button
                             type="submit"
+                            disabled={saving}
                             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
                         >
-                            Save draft
+                            {saving ? 'Saving...' : 'Save project'}
                         </button>
                     </div>
                 </div>
@@ -141,38 +164,39 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                         <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                                 <div className="md:col-span-12">
-                                    <label className={LABEL_CLASS}>Project Title</label>
-                                    <input required className={INPUT_CLASS} value={templateForm.title} onChange={e => setTemplateForm({ ...templateForm, title: e.target.value })} placeholder="e.g. Mars Rover Expedition" />
+                                    <label htmlFor="learning-project-title" className={LABEL_CLASS}>Project Title <span aria-hidden="true">*</span></label>
+                                    <input id="learning-project-title" required className={INPUT_CLASS} value={templateForm.title} onChange={e => setTemplateForm({ ...templateForm, title: e.target.value })} placeholder="e.g. Mars Rover Expedition" />
                                 </div>
                                 <div className="md:col-span-6">
-                                    <label className={LABEL_CLASS}>Station / Category</label>
-                                    <select className={INPUT_CLASS} value={templateForm.station} onChange={e => setTemplateForm({ ...templateForm, station: e.target.value as any })}>
+                                    <label htmlFor="learning-project-station" className={LABEL_CLASS}>Station / Category</label>
+                                    <select id="learning-project-station" className={INPUT_CLASS} value={templateForm.station} onChange={e => setTemplateForm({ ...templateForm, station: e.target.value as any })}>
                                         {Object.keys(STATION_THEMES).map(k => <option key={k} value={k}>{STATION_THEMES[k as StationType].label}</option>)}
                                     </select>
                                 </div>
                                 <div className="md:col-span-6">
-                                    <label className={LABEL_CLASS}>Difficulty</label>
-                                    <select className={INPUT_CLASS} value={templateForm.difficulty} onChange={e => setTemplateForm({ ...templateForm, difficulty: e.target.value as any })}>
+                                    <label htmlFor="learning-project-difficulty" className={LABEL_CLASS}>Difficulty</label>
+                                    <select id="learning-project-difficulty" className={INPUT_CLASS} value={templateForm.difficulty} onChange={e => setTemplateForm({ ...templateForm, difficulty: e.target.value as any })}>
                                         <option value="beginner">Beginner</option>
                                         <option value="intermediate">Intermediate</option>
                                         <option value="advanced">Advanced</option>
                                     </select>
                                 </div>
                                 <div className="md:col-span-12">
-                                    <label className={LABEL_CLASS}>Description</label>
-                                    <textarea className={`${INPUT_CLASS} h-32 resize-none`} value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="Describe the mission..." />
+                                    <label htmlFor="learning-project-description" className={LABEL_CLASS}>Description</label>
+                                    <textarea id="learning-project-description" className={`${INPUT_CLASS} h-32 resize-none`} value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="Describe the mission..." />
                                 </div>
                                 <div className="md:col-span-12">
-                                    <label className={LABEL_CLASS}>Skills (comma separated)</label>
-                                    <input className={INPUT_CLASS} value={Array.isArray(templateForm.skills) ? templateForm.skills.join(', ') : templateForm.skills} onChange={e => setTemplateForm({ ...templateForm, skills: e.target.value as any })} placeholder="Logic, Python, Design..." />
+                                    <label htmlFor="learning-project-skills" className={LABEL_CLASS}>Skills (comma separated)</label>
+                                    <input id="learning-project-skills" className={INPUT_CLASS} value={Array.isArray(templateForm.skills) ? templateForm.skills.join(', ') : templateForm.skills} onChange={e => setTemplateForm({ ...templateForm, skills: e.target.value as any })} placeholder="Logic, Python, Design..." />
                                 </div>
                                 <div className="md:col-span-12">
-                                    <label className={LABEL_CLASS}>Mandatory Steps (comma separated)</label>
-                                    <input className={INPUT_CLASS} value={Array.isArray(templateForm.defaultSteps) ? templateForm.defaultSteps.join(', ') : templateForm.defaultSteps} onChange={e => setTemplateForm({ ...templateForm, defaultSteps: e.target.value as any })} placeholder="Research, Design, Prototype, Test..." />
+                                    <label htmlFor="learning-project-steps" className={LABEL_CLASS}>Mandatory Steps (comma separated)</label>
+                                    <input id="learning-project-steps" className={INPUT_CLASS} value={Array.isArray(templateForm.defaultSteps) ? templateForm.defaultSteps.join(', ') : templateForm.defaultSteps} onChange={e => setTemplateForm({ ...templateForm, defaultSteps: e.target.value as any })} placeholder="Research, Design, Prototype, Test..." />
                                 </div>
                                 <div className="md:col-span-12">
-                                    <label className={LABEL_CLASS}>Default Workflow (Optional)</label>
+                                    <label htmlFor="learning-project-workflow" className={LABEL_CLASS}>Default Workflow (Optional)</label>
                                     <select
+                                        id="learning-project-workflow"
                                         className={INPUT_CLASS}
                                         value={templateForm.defaultWorkflowId || ''}
                                         onChange={e => setTemplateForm({ ...templateForm, defaultWorkflowId: e.target.value || undefined })}
@@ -220,7 +244,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                                     <p className="text-xs text-slate-400 truncate max-w-[200px]">{res.url}</p>
                                                 </div>
                                             </div>
-                                            <button type="button" onClick={() => {
+                                            <button type="button" aria-label={`Remove ${res.title} resource`} onClick={() => {
                                                 const newRes = [...(templateForm.resources || [])];
                                                 newRes.splice(idx, 1);
                                                 setTemplateForm({ ...templateForm, resources: newRes });
@@ -239,10 +263,10 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                     <h5 className="text-xs font-bold text-slate-400 uppercase mb-3">Add New Resource</h5>
                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
                                         <div className="md:col-span-4">
-                                            <input id="res-title" placeholder="Resource Title" className={INPUT_CLASS} />
+                                            <input id="res-title" aria-label="Resource title" placeholder="Resource Title" className={INPUT_CLASS} />
                                         </div>
                                         <div className="md:col-span-3">
-                                            <select id="res-type" className={INPUT_CLASS}>
+                                            <select id="res-type" aria-label="Resource type" className={INPUT_CLASS}>
                                                 <option value="link">Link</option>
                                                 <option value="video">Video</option>
                                                 <option value="file">File</option>
@@ -250,8 +274,8 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                             </select>
                                         </div>
                                         <div className="md:col-span-5 flex gap-2">
-                                            <input id="res-url" placeholder="URL" className={`${INPUT_CLASS} flex-1`} />
-                                            <button type="button" onClick={() => {
+                                            <input id="res-url" aria-label="Resource URL" placeholder="URL" className={`${INPUT_CLASS} flex-1`} />
+                                            <button type="button" aria-label="Add resource" onClick={() => {
                                                 const title = (document.getElementById('res-title') as HTMLInputElement).value;
                                                 const type = (document.getElementById('res-type') as HTMLSelectElement).value as any;
                                                 const url = (document.getElementById('res-url') as HTMLInputElement).value;
@@ -295,6 +319,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                 <div className="text-center py-12 p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-300">
                                     <p className="text-slate-400 font-bold mb-4">No specific workflow selected for this mission.</p>
                                     <button
+                                        type="button"
                                         onClick={() => setActiveModalTab('details')}
                                         className="text-indigo-600 font-bold hover:underline"
                                     >
@@ -334,7 +359,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                                                     <span className="text-sm font-bold text-indigo-900">{res.title}</span>
                                                                     <span className="text-xs text-indigo-400 truncate max-w-[150px]">{res.url}</span>
                                                                 </div>
-                                                                <button onClick={() => removeStepResource(phase.id, res.id)} className="text-indigo-300 hover:text-red-500"><X size={14} /></button>
+                                                                <button type="button" aria-label={`Remove ${res.title} from ${phase.name}`} onClick={() => removeStepResource(phase.id, res.id)} className="text-indigo-300 hover:text-red-500"><X size={14} /></button>
                                                             </div>
                                                         ))}
                                                         {(!templateForm.stepResources?.[phase.id] || templateForm.stepResources[phase.id].length === 0) && (
@@ -344,16 +369,17 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
 
                                                     {/* Add Resource Small Form */}
                                                     <div className="flex gap-2">
-                                                        <input id={`title-${phase.id}`} placeholder="Title" className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-400" />
-                                                        <select id={`type-${phase.id}`} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none">
+                                                        <input id={`title-${phase.id}`} aria-label={`${phase.name} resource title`} placeholder="Title" className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-400" />
+                                                        <select id={`type-${phase.id}`} aria-label={`${phase.name} resource type`} className="p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none">
                                                             <option value="link">Link</option>
                                                             <option value="image">Image</option>
                                                             <option value="video">Video</option>
                                                             <option value="file">File</option>
                                                         </select>
-                                                        <input id={`url-${phase.id}`} placeholder="URL" className="flex-[2] p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-400" />
+                                                        <input id={`url-${phase.id}`} aria-label={`${phase.name} resource URL`} placeholder="URL" className="flex-[2] p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:border-indigo-400" />
                                                         <button
                                                             type="button"
+                                                            aria-label={`Add resource to ${phase.name}`}
                                                             onClick={() => {
                                                                 const titleInput = document.getElementById(`title-${phase.id}`) as HTMLInputElement;
                                                                 const typeInput = document.getElementById(`type-${phase.id}`) as HTMLSelectElement;
@@ -407,6 +433,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                         <button
                                             key={g.id}
                                             type="button"
+                                            aria-pressed={!!templateForm.targetAudience?.grades?.includes(g.id)}
                                             onClick={() => {
                                                 const current = templateForm.targetAudience?.grades || [];
                                                 const newGrades = current.includes(g.id) ? current.filter(x => x !== g.id) : [...current, g.id];
@@ -431,6 +458,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                             {/* All Groups Option */}
                                             <button
                                                 type="button"
+                                                aria-pressed={!templateForm.targetAudience?.groups?.length}
                                                 onClick={() => {
                                                     setTemplateForm({ ...templateForm, targetAudience: { ...templateForm.targetAudience, groups: [] } });
                                                 }}
@@ -445,6 +473,7 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                                 <button
                                                     key={g}
                                                     type="button"
+                                                    aria-pressed={!!templateForm.targetAudience?.groups?.includes(g)}
                                                     onClick={() => {
                                                         const current = templateForm.targetAudience?.groups || [];
                                                         const newGroups = current.includes(g) ? current.filter(x => x !== g) : [...current, g];
@@ -496,8 +525,10 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                     { id: 'featured', label: 'Featured', desc: 'Visible as "Coming Soon".', icon: Star, color: 'amber', border: 'border-amber-200', activeBorder: 'border-amber-500', bg: 'bg-amber-50', activeBg: 'bg-amber-100', text: 'text-amber-600' },
                                     { id: 'assigned', label: 'Assigned', desc: 'Students can start working.', icon: Rocket, color: 'emerald', border: 'border-emerald-200', activeBorder: 'border-emerald-500', bg: 'bg-emerald-50', activeBg: 'bg-emerald-100', text: 'text-emerald-600' }
                                 ].map(opt => (
-                                    <div
+                                    <button
                                         key={opt.id}
+                                        type="button"
+                                        aria-pressed={templateForm.status === opt.id}
                                         onClick={() => setTemplateForm({ ...templateForm, status: opt.id as any })}
                                         className={`p-6 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center text-center gap-4 ${templateForm.status === opt.id ? `${opt.activeBg} ${opt.activeBorder} shadow-lg` : `bg-white ${opt.border} hover:border-slate-400 opacity-60 hover:opacity-100`}`}
                                     >
@@ -506,14 +537,14 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                                             <h4 className={`font-bold text-lg ${templateForm.status === opt.id ? 'text-slate-900' : 'text-slate-400'}`}>{opt.label}</h4>
                                             <p className="text-xs text-slate-500 mt-1">{opt.desc}</p>
                                         </div>
-                                    </div>
+                                    </button>
                                 ))}
                             </div>
 
                             {templateForm.status === 'assigned' && (
                                 <div className="animate-in fade-in slide-in-from-top-2 bg-emerald-50 p-6 rounded-2xl border border-emerald-200">
-                                    <label className={LABEL_CLASS}>Due Date (Optional)</label>
-                                    <input type="date" className={INPUT_CLASS} onChange={(e) => {
+                                    <label htmlFor="learning-project-due-date" className={LABEL_CLASS}>Due Date (Optional)</label>
+                                    <input id="learning-project-due-date" type="date" className={INPUT_CLASS} onChange={(e) => {
                                         if (e.target.valueAsDate) {
                                             setTemplateForm({ ...templateForm, dueDate: Timestamp.fromDate(e.target.valueAsDate) });
                                         }
@@ -535,9 +566,10 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                     )}
                 </div>
 
+                {saveError && <p role="alert" className="edu-learning-project-save-error mx-4 mb-2 sm:mx-6">{saveError}</p>}
                 <div className="edu-learning-project-footer flex shrink-0 flex-col-reverse gap-3 border-t border-white/10 bg-slate-950/90 p-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:p-5">
                     <div className="edu-learning-project-footer-secondary flex gap-2">
-                        <button type="button" onClick={onClose} className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold transition-colors">Cancel</button>
+                        <button type="button" onClick={onClose} disabled={saving} className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold transition-colors">Cancel</button>
                         {editingTemplateId && onArchive && (
                             <button
                                 type="button"
@@ -548,8 +580,8 @@ export const ProjectFactoryModal: React.FC<ProjectFactoryModalProps> = ({
                             </button>
                         )}
                     </div>
-                    <button type="submit" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400">
-                        {templateForm.status === 'assigned' ? 'Assign project' : templateForm.status === 'featured' ? 'Publish as featured' : 'Finish and save'}
+                    <button type="submit" disabled={saving} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-teal-300/30 bg-teal-500 px-5 py-2 text-sm font-black text-slate-950 transition-colors hover:bg-teal-400">
+                        {saving ? 'Saving...' : templateForm.status === 'assigned' ? 'Assign project' : templateForm.status === 'featured' ? 'Publish as featured' : 'Finish and save'}
                     </button>
                 </div>
             </form>

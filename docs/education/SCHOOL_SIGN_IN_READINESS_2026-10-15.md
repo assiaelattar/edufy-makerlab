@@ -1,9 +1,5 @@
 # School sign-in readiness — local candidate
 
-## 2026-10-16 follow-up
-
-The first candidate gated startup on fourteen role-dependent Firestore collections, which caused long waits for unrelated modules. Startup now waits for settings, students, programs and enrollments. Remaining listeners start after that gate, so their data continues to arrive live. Add-on request status no longer holds the module entitlement check; plan, catalog and organization access remain gated. The boot screen shows a long-wait status after eight seconds but offers Retry only for an actual error; reloading during an ordinary slow read had restarted the entire process. Signed-in timing and data acceptance are still required.
-
 ## Changelog
 
 - Removed the 2.5-second timer that opened the operational workspace before its first Firestore reads completed.

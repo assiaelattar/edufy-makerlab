@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { ArrowRight, CheckCircle, Clock, ExternalLink, GitCommit, Radio, Rocket, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, CheckCircle, Clock, ExternalLink, GitCommit, Rocket, TrendingUp, Users } from 'lucide-react';
 import { StudentProject } from '../../types';
 import { NotificationBell } from '../../components/NotificationBell';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard } from '../../components/atlas/AtlasSurface';
@@ -45,7 +45,7 @@ export const InstructorStudioDashboard: React.FC<InstructorStudioDashboardProps>
                 title="Mission control"
                 description="Review learner momentum, clear submitted work, and return to the projects that need attention."
                 icon={Rocket}
-                actions={<><NotificationBell /><AtlasActionButton icon={Radio} variant="primary">Start session</AtlasActionButton></>}
+                actions={<NotificationBell />}
             />
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

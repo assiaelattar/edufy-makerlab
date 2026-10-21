@@ -1,4 +1,62 @@
+## Learning and Portfolio nested interaction follow-up — 2026-10-20
+
+The isolated branch adds four-combination page/dialog browser coverage and synthetic success/failure checks for project creation, commit, evidence, submission, review and Setup editors. Staff saves preserve learner ownership; failed review retains feedback. The exact matrix and captures are in `docs/education/LEARNING_PORTFOLIO_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`. Authenticated school, AppContext loading/error and physical-phone acceptance remain open; no release or school write.
+
+## Learning and Portfolio Design System v1 focused completion — 2026-10-20
+
+The isolated Learning/Portfolio branch completes reachable project, Studio, review, setup and learner Portfolio surfaces under the canonical Design System. Review `docs/education/LEARNING_PORTFOLIO_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md` for the full inventory, synthetic QA and acceptance limits. Build and 27 Education checks pass. Authenticated school and physical-phone acceptance remain open; no push, deployment or school write occurred. Parent integration owns the larger rollout.
+
+## Design System v1 reference review gate — 2026-10-19
+
+The user requested a shared Notion-inspired staff UX with a full Duolingo-inspired visual vocabulary, then explicitly authorized implementation. The dashboard, Students register, enrollment wizard and complete student editor now form the local reference candidate. Read docs/education/design-system-v1/README.md, IMPLEMENTATION_REPORT.md, MODULE_BRIEF.md and ACCEPTANCE.md. Shared foundations evolve the existing Education primitives; data-edu-system="1" opts into canonical tokens. Earlier green/blue-only and neutral-counter instructions are superseded. Local review: http://127.0.0.1:5246/; real app: http://127.0.0.1:5202/. Stop for user visual approval before Programs/Attendance or further module rollout. Heartbeat remains PAUSED. Preserve unrelated unfinished Admissions/Workshops files. No deploy/push/auth/permissions/financial-rule changes or production writes.
+
+## Calendar educational pass complete — 2026-10-19
+
+The user requested continuation after Programs. Calendar / Global Schedule is complete locally: balanced light/dark styling, weekly timetable and date-grouped agenda, session/coverage/type filtering, week date jump and searchable instructor details. Read `docs/education/CALENDAR_EDUCATIONAL_2026-10-19.md` for verification and limits. Build passes; 390px and desktop browser checks pass. Real-account read-only integration shows an empty current week; populated assignment tests use isolated fixtures only. Preserve existing sync/assignment handlers, Notion-style navigation and Programs work. No push/deploy or production writes. Next: Admissions / Workshops. Stop at this phase handoff; heartbeat remains paused.
+
+## Programs full workspace pass complete — 2026-10-19
+
+The user resumed work specifically on Programs, roster and all program tabs. This pass is complete locally. Read `docs/education/PROGRAMS_WORKSPACE_2026-10-19.md` for scope, previews and verification. All seven tabs, setup, quote/QR and next-year dialogs use the restrained educational palette; roster has search and placement filters. Shared dialogs now remain mounted from detail, and closing setup retains the selected tab. Preserve the Notion-style navigation, neutral metrics, green identity, blue actions and small #FF9600 warning cues. Real-account read-only verification covered a 30-learner roster and its one unplaced learner; committed evidence is synthetic only. Build passed. No deploy/push/domain writes. This supersedes earlier Programs initial-pass notes below. Stop at this Programs handoff; heartbeat remains paused.
+
+# Latest milestone — Pulse Pickup (2026-10-16)
+
+Pickup local Pulse pass is complete: compact gate register, inline verification, visible arrival actions, persistent scheduled roster and coordinated light/dark lobby. See docs/education/EDUFY_PULSE_PICKUP_2026-10-16.md and pulse-evidence/pickup-* for checks and synthetic-versus-real acceptance boundaries. Next is Programs, then Calendar, Admissions/Workshops, Finance/Expenses and Learning/Portfolio. Attendance, Classes and Students are already complete locally. Continue automatically under the user’s authorization; no push, deployment, auth/rule changes or production writes. Preview http://127.0.0.1:5236/?theme=light; actual local app http://127.0.0.1:5202/. Heartbeat poursuivre-edufy-pulse remains active.
+
+---
+
+# Current override — Automatic local Pulse continuation (2026-10-16)
+
+The user explicitly authorized automatic local progression after each completed UI milestone. Attendance, Classes and Students have completed their current local Pulse passes; next is Pickup, followed by Programs, Calendar, Admissions/Workshops, Finance/Expenses and Learning/Portfolio. Preserve the shared Education/Atlas themes, handlers, permissions and production records. Read docs/education/EDUFY_PULSE_CLASSES_STUDENTS_2026-10-16.md for evidence and limitations. Real-school acceptance is still pending; it does not block the now-authorized local UI progression. No push or deployment. Heartbeat poursuivre-edufy-pulse is active every 30 minutes; disable when the listed local passes are complete.
+
+---
+
+# Current override — Pulse Attendance visual refinement (2026-10-16)
+
+The approved visual refinement is implemented locally: a session-time rail, continuous daily register, grouped status controls, stronger typography and coordinated light/dark layouts. Actual handlers and data contracts are unchanged. Synthetic responsive and save/error/batch checks pass. See `docs/education/EDUFY_PULSE_ATTENDANCE_VISUAL_2026-10-16.md` for captures, density tradeoff and verification. Preview: `http://127.0.0.1:5231/?theme=light`; actual app: `http://127.0.0.1:5202/` then Attendance. Real-school and physical-phone acceptance remain. Stop at this report before extending to Classes/Students; no release authorized.
+
+---
+
 # Atlas Build Context
+
+## 2026-10-16 — Edufy Pulse Attendance benchmark
+
+The user master mission replaces the broad module march with Attendance as the first quality benchmark. A separate branch preserves previous work. Compact shared header/tokens, register-first light/dark UI, pending/saved/error feedback and attendance-only first-server-snapshot readiness are locally implemented. Build and membership suite pass; 1440/766/390 actual-component browser QA and real-AppProvider synthetic readiness QA pass. School-account persistence/roles and physical-phone acceptance remain. No release. See `docs/education/EDUFY_PULSE_ATTENDANCE_2026-10-16.md`.
+
+## 2026-10-16 — Learning and Portfolio focus
+
+The designer checkout adds a real submitted-evidence/mission/studio/portfolio decision at the instructor Learning entry and a learner-only project continuation before Portfolio metrics. Scoped two-theme CSS passes a write-free 390 px visual check without horizontal overflow. No project workflow, permissions, tenant boundary, SparkQuest code or production record changed. Build passes; signed-in acceptance is pending. See `docs/education/LEARNING_PORTFOLIO_FOCUS_2026-10-16.md`.
+
+## 2026-10-16 — Finance and Expenses focus
+
+The isolated school-theme worktree now puts recurring Expenses decisions ahead of metrics, reads linked pending records as pending, and applies semantic light/dark treatments across Finance and Expenses. Existing financial actions and write controls remain. Production build passes; signed-in staff review on desktop and phone is pending. See `docs/education/FINANCE_EXPENSES_FOCUS_2026-10-16.md`.
+
+## 2026-10-16 — Local school loading parity
+
+The designer checkout now carries the three startup code files from live Edufy commit `c8806f7`: essential snapshots unblock the first school screen, optional module data hydrates afterward, and slow loading alone no longer shows Retry. Admissions/Workshops work remains local. Build and local preview response pass; signed-in real-data acceptance remains. See `.agent/LAST_HANDOFF.md`.
+
+## 2026-10-15 — Education UI family journey
+
+Admissions and Workshops now lead with real follow-up: the first tenant-safe active family and attended workshop bookings. Existing passport, calendar, contact, enrollment and CRM actions remain the operational paths. School theme tokens style the new surfaces in light and dark. Build passes; signed-in school-account phone review remains. See `docs/education/ADMISSIONS_WORKSHOPS_FOCUS_2026-10-15.md`.
 
 ## 2026-10-15 — Education UI school-day operations
 
@@ -7,10 +65,6 @@ Classes, attendance and weekly schedule now surface the next real operator actio
 ## 2026-10-15 — Education UI priority modules
 
 Programs, Students and Pickup have a focused school-theme pass in the isolated local worktree. Program readiness and demand produce the next portfolio action; the learner roster retains direct profile navigation and adds a clear next-step preview; Pickup's live gate queue now precedes the daily roster. Existing tenant data, permissions and release commands are preserved. Root build, scoped TypeScript, Pickup domain smokes, Atlas context reader and diff check pass. Signed-in desktop/phone light/dark acceptance remains. Next module by daily operational importance: Classes and attendance, then Schedule. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
-
-## 2026-10-15 — Tenant provisioning input repair
-
-The SaaS tenant form now supports an explicit custom-access path without a subscription, rejects empty access and duplicate/invalid slugs, and writes organization and admin profile atomically after account creation. Failed profile persistence attempts to remove the just-created Firebase Auth account. This focused client fix does not promote the separate multi-tenant rules, index, public-catalog, or legacy ownership migration. See `docs/releases/TENANT_PROVISION_REPAIR_2026-10-15.md`.
 
 ## 2026-10-15 — Students roster and profile UX
 
@@ -1070,3 +1124,6 @@ Domain, real emulator, isolated browser, focused TypeScript and production build
 - Coordinated release includes GitHub/Hostinger Edufy, the linked SparkQuest Vercel project, and Firestore rules/indexes. See `docs/sparkquest/PICKUP_LIFECYCLE_RELEASE_2026-10-12.md`.
 
 ---
+## 2026-10-20 — Attendance Design System v1 focused completion
+
+The isolated Attendance pass repaired the daily register's legacy status-control outline, canonical loading/error/restricted and renewal states, the learner profile Attendance history, and the installed FaceID preview. Existing data and write handlers remain authoritative. Synthetic desktop/390px light/dark QA, signed-in read-only navigation and focused checks are documented in `docs/education/ATTENDANCE_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`. Real writes, restricted-role and physical-phone acceptance remain open. No push or deployment.

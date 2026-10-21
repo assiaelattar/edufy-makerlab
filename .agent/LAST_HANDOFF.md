@@ -1,58 +1,186 @@
-## Edufy thread release candidate — 2026-10-21
+## Learning and Portfolio interaction QA follow-up — 2026-10-20
 
-The user authorized pushing and deploying the work from this thread. A clean `origin/main` worktree contains the Settings, Student Details and Attendance quality passes plus connected 011Y and recorded visual fixes, while preserving navigation v2 and the newer Attendance renewal panel. Build, 27 Design System checks, membership checks and payment-edit smoke pass. See `docs/education/THREAD_RELEASE_2026-10-21.md`. Production role/write and physical-phone acceptance remain open; no production data was used for QA.
-
----
-
-# Latest handoff — 2026-10-21 Edufy workspace navigation v2
-
-The user reported that the live application still displayed the older menu. This focused release promotes the completed compact rail, workspace panel, command search, pinned and recent destinations, mobile bottom navigation, and contextual page heading from the local Design System reference. It changes only the school shell presentation and its local preference handling; module logic, authentication, Firebase paths, and school records are unchanged. The remaining module-specific Design System candidates stay local pending their documented acceptance.
+The isolated Learning/Portfolio candidate now has a full 390px/1440px light/dark matrix for 11 Learning page families, nine reachable dialogs, and populated/empty Portfolio. Synthetic cancel/pending/failure/retry paths cover project creation, commit, step evidence, submission, review and Setup editors. Staff project saves retain learner ownership; failed review keeps feedback; missing historical snapshots cannot be restored. Read `docs/education/LEARNING_PORTFOLIO_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md` for exact evidence and gaps. Build and Education/agent checks pass locally. Authenticated and physical-phone acceptance remain open; no school write, push or deployment.
 
 ---
 
-# Previous handoff — 2026-10-20 reviewed school modules
+## Learning and Portfolio Design System v1 focused handoff — 2026-10-20
 
-The user requested publication of the completed, polished Edufy app modules. This clean `origin/main` release cut includes Programs, the Attendance desk, Classes, Calendar, Admissions/Workshops, and the shared confirmation modal. The Programs roster also formats start dates with the existing helper. It carries only their final reviewed files plus the Education tab/register/status primitives required for integration. The production build, Education System check, membership check, roster-print smoke, repository agent check and diff check pass. Repository-wide TypeScript remains red from existing diagnostics; none match the changed release files.
-
-Finance, Expenses, Student Details, Students register, Pickup, Communications, Learning/Portfolio, Team, Marketing, the unreviewed school-operations bridge, SparkQuest, and Edufy MCP remain outside this cut. The module reports retain their real-role, persistence, print, and physical-phone follow-ups; no production records or protected API/Firebase paths are part of this code release.
+Learning now exposes Studio subviews, reachable managed project and Setup editors, badge register, labeled project/step forms, recoverable Setup save errors and mobile project-board scrolling. Portfolio copy and action colors follow canonical roles without changing XP calculations. Synthetic desktop/390px light/dark inspection and save failure/retry checks are recorded in `docs/education/LEARNING_PORTFOLIO_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`. Build and 27 Education checks pass; TypeScript retains documented pre-existing errors. No authenticated school write, push or deployment. Parent task should integrate this focused commit and keep the release hold for signed-in/physical-phone review.
 
 ---
 
-# Previous handoff — 2026-10-20 scoped release review
+## Programs Design System v1 interactive acceptance — 2026-10-20
 
-Current `origin/main` is `c71d873`. A clean main-based candidate formats Programs roster start dates in desktop and mobile display using the existing `formatDate` helper. The production build, Education System check, repository agent check and diff check pass. The full school Design System rollout remains queued: its final physical-phone and designated-role acceptance is open, and the school-operations bridge `d92be59` is unreviewed. No push or deployment occurred in this review.
-
----
-
-# Previous handoff — Edufy sign-in loading
-
-On 2026-10-16 the school workspace startup gate was reduced from fourteen role-dependent Firestore snapshots to academy settings, students, programs and enrollments. Other module listeners begin after those first records; add-on request status loads separately from required entitlement checks. An eight-second wait no longer offers a reload unless an actual error occurs. The existing role, tenant and required-read failure gates remain. Build and scoped TypeScript validation are recorded in `docs/education/KNOWN_ISSUES.md`; designated signed-in phone/desktop timing and data acceptance remain pending. No production data or rules changed.
+The focused Programs audit and synthetic dialog follow-up are integrated locally. Wizard validation/cancel/save failure and success, quote/QR/brochure, rollover selection/cancel/failure/success, roster and waiting actions, and view-only restrictions were checked in a disposable fixture. Four additional 390px dialog captures and exact limits are in `docs/education/PROGRAMS_DESIGN_SYSTEM_V1_2026-10-20.md`. The brochure and cover URL fields now have accessible labels; review copy was corrected. Integrated production build and 62 Education System checks pass with existing build warnings. Print opened the synthetic form document but the browser print surface could not be inspected; actual school writes and physical-phone behavior remain unverified. No production write, push or deployment.
 
 ---
 
-# Previous handoff — Classes, attendance, schedule focus
+## Expenses Design System v1 focused local completion — 2026-10-20
+
+Expenses now has canonical overview, ledger/detail, recurring, insights and templates workspaces, responsive forms and receipt dialog. The exhaustive source/browser inventory, synthetic screenshots and acceptance boundaries are in `docs/education/EXPENSES_DESIGN_SYSTEM_V1_2026-10-20.md`. Synthetic data covered populated, empty, loading, error, read-only and financial save outcomes; the signed-in Administrator tour covered all five tabs and canceled dialogs on desktop/390px without writing school data. Build, 62 Education System checks, service-catalogue checks, agent check and focused diff check pass; only existing Firebase mixed-import and large-chunk build warnings remain. Real populated ledger/receipt, restricted-role, optional-listener error, physical phone and any authorized real financial write remain open. Preserve the unrelated dirty files. No push or deployment.
+
+---
+
+## Finance Design System v1 browser completion follow-up — 2026-10-20
+
+Standalone Chromium resolved the in-app browser control failure for isolated review. Finance Reports and populated follow-up passed at 1440px/390px in both themes; bulk family transfer proof and failed batch, transaction lifecycle success/failure, actual detail view, and receipt/report print windows passed synthetically. The real Documents panel passed 390px light/dark dialogs, failed formation/service/credit/template/correction paths, manager-only role states, unissued preview and invoice print output. Downloaded payment and accounting XLSX files were parsed and contain synthetic records. Uncleared receipt actions are now disabled in transaction detail, and its heading contrast was corrected. Build and focused checks pass; exact inventory and remaining real-ledger limits are in `docs/education/FINANCE_DESIGN_SYSTEM_V1_2026-10-20.md`. **Keep the release hold** for live role/persistence, concurrency and physical output acceptance. No real-record write, push or deployment; no Expenses or Student Details changes.
+
+---
+
+## Finance Design System v1 expanded local candidate — 2026-10-20
+
+The Finance-only worktree now includes scoped styling and accessible controls for the actual Documents panel, invoice/credit/sequence/export forms, service catalogue and service-invoice correction. A dedicated synthetic Documents preview exercised the register, required validation, issue/correction/credit, sequences, CSV mapping, catalogue create/archive/reactivate, loading/error/empty/restricted states and a failed sequence save. The main Finance preview exercised family amount/proof validation, cancel and cash allocation; signed-in earlier-checkout Finance home, loaded Collections and Documents were read-only inspected. Build, 27 Education checks, service smoke and diff checks pass. `docs/education/FINANCE_DESIGN_SYSTEM_V1_2026-10-20.md` records exact coverage and unresolved acceptance gaps. Browser interaction/viewport control became unreliable in the later pass, leaving transaction detail/output, Reports desktop/output, follow-up and some failure branches unverified. **Keep the release hold.** No production write, push or deploy; no Expenses or Student Details changes.
+
+---
+
+## Finance Design System v1 focused candidate — 2026-10-20
+
+Finance has a local UI candidate for its task launcher, period context, Collections and Transactions controls, responsive family statement, overview empty and restricted states, and document register state/action components. The full module is **not signed off**: nested document workflows and several Finance dialogs need a complete visual pass, and the available real app was at login, so current signed-in read-only QA could not run. Isolated 1440px/390px light/dark checks and synthetic save success/failure checks passed; no production write occurred. Read `docs/education/FINANCE_DESIGN_SYSTEM_V1_2026-10-20.md` for the 15-surface inventory, evidence, and exact gaps. Build, 27 Education checks, service-catalogue smoke, and diff checks pass. No push or deployment; keep the release hold.
+
+---
+
+## Settings Design System v1 candidate — 2026-10-20
+
+Settings has a local canonical UI candidate across its staff categories, student personal settings, team dialogs, role states and super-admin tools. All eight staff categories were checked synthetically at 1440px/390px in light/dark; isolated file-input tests cover CSV and logo success, invalid, no-selection and mocked failure paths. A signed-in Administrator read-only tour covered all seven accessible categories with loaded data on desktop and at 390 CSS pixels, including five staff accounts, four role views and canceled add/edit dialogs. An unfocused integration-key change event was guarded so opening that category leaves Save disabled. Acceptance remains **incomplete** for real super-admin, learner and restricted-role branches, consequential actions and physical-phone behavior. Read `docs/education/SETTINGS_DESIGN_SYSTEM_V1_2026-10-20.md` for the exhaustive inventory and test boundary. The focused Settings commit excludes unrelated dirty module work. No production write, push or deployment.
+
+---
+
+## Visual completion audit — recording-visible gaps repaired — 2026-10-20
+
+The signed-in walkthrough confirmed that several screens still mixed the canonical shell with legacy components. Classes directory/detail, Program detail tabs, Finance families/documents/catalogue, Student guidance, notifications, Recents and 011Y framing are repaired locally. Actual browser checks used loaded school data and remained read-only. Build, 60 Design System checks, service-catalogue tests and diff checks pass. Read `docs/education/EDUFY_VISUAL_COMPLETION_AUDIT_2026-10-20.md`. Continue with Settings, Expenses and remaining legacy-heavy surfaces before calling the application visually complete. No push or deployment.
+
+---
+
+## Release handoff — canonical workspace menus complete — 2026-10-19
+
+The left and top menus now match the approved Edufy Design System v1 while retaining the existing Notion-style workspace behavior. Build and signed-in read-only browser checks pass at 1440px/390px in light/dark; evidence and boundaries are in `docs/education/DESIGN_SYSTEM_NAVIGATION_RELEASE_2026-10-19.md`. The user authorized deployment of the completed UI modules. Release from a clean current `origin/main` worktree and exclude backend, auth, rule, schema and financial-logic changes.
+
+---
+
+## Design System v1 rollout complete locally — 2026-10-19
+
+Learning and Portfolio now complete the authorized local module sequence. Learning uses the canonical purple context, blue operational actions, retained route/filter/scroll state and shared responsive dialogs. The project factory mounting bug was fixed without changing its save handler. Staff Portfolios is a searchable register ordered by existing published work. Actual read-only QA loaded 28 templates, 502 projects and 188 active portfolios; no project/review/publish/reconciliation write occurred. Build, shared design checks and diff checks pass. Read `docs/education/DESIGN_SYSTEM_ROLLOUT_LEARNING_PORTFOLIO_2026-10-19.md` and `docs/education/DESIGN_SYSTEM_V1_CONSOLIDATED_HANDOFF_2026-10-19.md`. No production write, push or deploy. The rollout heartbeat can be disabled.
+
+---
+
+## Design System v1 rollout — Finance and Expenses complete — 2026-10-19
+
+Finance and Expenses now use the canonical palette, retained working context and shared responsive dialog system. Financial calculations, invoice numbering, accounting exports, recurring status logic, permissions and write handlers are unchanged. Actual signed-in read-only QA covered Finance task views, 4 invoice records, 6 due recurring charges, desktop/390px mobile and light/dark; no form was submitted. Build, Design System checks, service-catalogue tests and diff checks pass. A restricted snapshot listener still logs `permission-denied`; no security-rule change was attempted. Read `docs/education/DESIGN_SYSTEM_ROLLOUT_FINANCE_EXPENSES_2026-10-19.md`. Next: Learning and Portfolio, then consolidated handoff. No deploy, push or production write.
+
+## Design System v1 reference review gate — 2026-10-19
+
+The user requested a shared Notion-inspired staff UX with a full Duolingo-inspired visual vocabulary, then explicitly authorized implementation. The dashboard, Students register, enrollment wizard and complete student editor now form the local reference candidate. Read docs/education/design-system-v1/README.md, IMPLEMENTATION_REPORT.md, MODULE_BRIEF.md and ACCEPTANCE.md. Shared foundations evolve the existing Education primitives; data-edu-system="1" opts into canonical tokens. Earlier green/blue-only and neutral-counter instructions are superseded. Local review: http://127.0.0.1:5246/; real app: http://127.0.0.1:5202/. Stop for user visual approval before Programs/Attendance or further module rollout. Heartbeat remains PAUSED. Preserve unrelated unfinished Admissions/Workshops files. No deploy/push/auth/permissions/financial-rule changes or production writes.
+
+## Dashboard educational pass complete — 2026-10-19
+
+User redirected work to Dashboard before later modules. School/admin dashboard is complete locally, including full action/timetable disclosure, balanced light/dark styling, readable task dates, workshop follow-up dialog clipping fix and scoped payment-form details. Read `docs/education/DASHBOARD_EDUCATIONAL_2026-10-19.md` for evidence and limits. Build and desktop/390px browser checks pass; actual payment/detail navigation was read-only. No production writes/push/deploy. Notion-style navigation and domain handlers preserved. Stop at this phase handoff; heartbeat remains paused. Later role dashboards and remaining module forms are separate scope.
+
+## Calendar educational pass complete — 2026-10-19
+
+The user requested continuation after Programs. Calendar / Global Schedule is complete locally: balanced light/dark styling, weekly timetable and date-grouped agenda, session/coverage/type filtering, week date jump and searchable instructor details. Read `docs/education/CALENDAR_EDUCATIONAL_2026-10-19.md` for verification and limits. Build passes; 390px and desktop browser checks pass. Real-account read-only integration shows an empty current week; populated assignment tests use isolated fixtures only. Preserve existing sync/assignment handlers, Notion-style navigation and Programs work. No push/deploy or production writes. Next: Admissions / Workshops. Stop at this phase handoff; heartbeat remains paused.
+
+## Programs full workspace pass complete — 2026-10-19
+
+The user resumed work specifically on Programs, roster and all program tabs. This pass is complete locally. Read `docs/education/PROGRAMS_WORKSPACE_2026-10-19.md` for scope, previews and verification. All seven tabs, setup, quote/QR and next-year dialogs use the restrained educational palette; roster has search and placement filters. Shared dialogs now remain mounted from detail, and closing setup retains the selected tab. Preserve the Notion-style navigation, neutral metrics, green identity, blue actions and small #FF9600 warning cues. Real-account read-only verification covered a 30-learner roster and its one unplaced learner; committed evidence is synthetic only. Build passed. No deploy/push/domain writes. This supersedes earlier Programs initial-pass notes below. Stop at this Programs handoff; heartbeat remains paused.
+
+## Three-module visual pass complete - 2026-10-19
+
+Students directory/overview, Programs catalog/workspace and Attendance register are complete locally in the approved educational direction. The latest user correction requires neutral metric cards, lime/green identity, blue actions and restrained #FF9600 orange warning cues. Preserve the adopted Notion-style navigation and all domain/write handlers. Current evidence is *-balanced-*.png; earlier saturated orange screenshots are superseded. Read docs/education/EDUCATIONAL_ROLLOUT_2026-10-19.md before continuing. Actual app: http://127.0.0.1:5202/. Signed-in read-only desktop navigation was checked; synthetic save tests are separate. No deployment. Full student profile editor styling and later modules remain subsequent scope. Stop at this batch handoff; heartbeat paused.
+
+## Programs visual milestone - 2026-10-19
+
+Students and Programs are complete locally in the approved educational style. Next: Attendance. Preserve Notion-style navigation, existing workflows and handlers. See docs/education/EDUCATIONAL_ROLLOUT_2026-10-19.md for synthetic evidence and acceptance limits.
+
+## Approved rollout - 2026-10-19
+
+The user approved the Pickup visual direction while explicitly preserving the adopted Notion-style navigation and operational UX. Proceed sequentially Students, Programs, Attendance; approval gate is lifted for these modules. Heartbeat is ACTIVE with this updated scope.
+
+Students directory and learner overview are complete locally. Next: Programs, then Attendance. See docs/education/EDUCATIONAL_ROLLOUT_2026-10-19.md. No push/deploy or domain/auth changes.
+
+## Palette review update - 2026-10-19
+
+Pickup now uses prominent reference orange for arrivals, blue for incoming, purple for ready, green for released and yellow for attention. Build and synthetic desktop/mobile light/dark checks pass. See docs/education/PICKUP_STYLE_STUDY_2026-10-19.md. Await final acceptance; other modules and heartbeat remain paused.
+
+# Current review — Educational Pickup style (2026-10-19)
+
+The user requested an educational Duolingo-inspired Pickup study, then the reference colors. See docs/education/PICKUP_STYLE_STUDY_2026-10-19.md. The local review uses the adopted 011Y mascot, rounded typography and sampled green/blue/lime/navy colors. Await final acceptance before other modules. Heartbeat poursuivre-edufy-pulse remains PAUSED.
+
+---
+
+# User review gate — 2026-10-19
+
+The user requested viewing a completed page and confirming the final UI/UX before implementing the design across other modules. Automatic progression is paused (heartbeat poursuivre-edufy-pulse status PAUSED). Pickup is the completed review page: http://127.0.0.1:5236/?theme=light or theme=dark, synthetic data only. Await explicit design acceptance before continuing Programs or later modules. Programs preparation currently consists only of uncommitted synthetic preview harness files; no Programs application UI was changed. Preserve those files.
+
+---
+
+# Latest handoff — Pickup complete locally (2026-10-16)
+
+Pickup local Pulse pass is complete: compact gate register, inline verification, visible arrival actions, persistent scheduled roster and coordinated light/dark lobby. See docs/education/EDUFY_PULSE_PICKUP_2026-10-16.md and pulse-evidence/pickup-* for checks and synthetic-versus-real acceptance boundaries. Next is Programs, then Calendar, Admissions/Workshops, Finance/Expenses and Learning/Portfolio. Attendance, Classes and Students are already complete locally. Continue automatically under the user’s authorization; no push, deployment, auth/rule changes or production writes. Preview http://127.0.0.1:5236/?theme=light; actual local app http://127.0.0.1:5202/. Heartbeat poursuivre-edufy-pulse remains active.
+
+---
+
+# Latest handoff — Classes and Students complete locally (2026-10-16)
+
+The user explicitly authorized automatic local progression after each completed UI milestone. Attendance, Classes and Students have completed their current local Pulse passes; next is Pickup, followed by Programs, Calendar, Admissions/Workshops, Finance/Expenses and Learning/Portfolio. Preserve the shared Education/Atlas themes, handlers, permissions and production records. Read docs/education/EDUFY_PULSE_CLASSES_STUDENTS_2026-10-16.md for evidence and limitations. Real-school acceptance is still pending; it does not block the now-authorized local UI progression. No push or deployment. Heartbeat poursuivre-edufy-pulse is active every 30 minutes; disable when the listed local passes are complete.
+
+---
+
+# Latest handoff — Refined Attendance register (2026-10-16)
+
+The approved visual refinement is implemented locally: a session-time rail, continuous daily register, grouped status controls, stronger typography and coordinated light/dark layouts. Actual handlers and data contracts are unchanged. Synthetic responsive and save/error/batch checks pass. See `docs/education/EDUFY_PULSE_ATTENDANCE_VISUAL_2026-10-16.md` for captures, density tradeoff and verification. Preview: `http://127.0.0.1:5231/?theme=light`; actual app: `http://127.0.0.1:5202/` then Attendance. Real-school and physical-phone acceptance remain. Stop at this report before extending to Classes/Students; no release authorized.
+
+---
+
+# Local UI candidate — Edufy Pulse Attendance
+
+2026-10-16: user master mission implemented as a first benchmark on `agent/edufy-pulse-attendance-20261016`, from `1412bb7`. Audit commit `b0e069f`, compatible foundation commit `06cce12`; focused implementation follows. Attendance now prioritizes the register, compact progress, date/search/group controls and a renewal disclosure. Existing writes and eligibility remain; pending operations suppress premature visual success. AppContext exposes attendance-only loading/error via its existing listener, waiting for the first server snapshot without delaying overall workspace entry.
+
+Build, membership regression suite, context reader, diff check and actual-component 1440/766/390 light/dark QA pass. Real AppProvider synthetic callbacks prove cached/loading/server/error behavior. Repository TypeScript retains 235 pre-existing errors. No real data write, auth/rule/API/schema/financial change, push or deployment. Signed-in school and physical-phone acceptance remain. Security follow-up: Student Details still reveals stored `loginInfo.initialPassword`; recommend secure reset/invitation, without exposing values. See `docs/education/EDUFY_PULSE_ATTENDANCE_2026-10-16.md` for screenshots, evidence, risks and reproduction. Stop at this phase boundary.
+
+---
+
+# Local UI candidate — Learning and Portfolio focus
+
+On 2026-10-16 the designer worktree added an instructor Learning next action before signal counts and a student-only Portfolio continuation using SparkQuest's already supported `?projectId=` route. Scoped school tokens cover the command, route, cards and portfolio action in light and dark themes. A temporary write-free fixture showed no horizontal overflow at a measured 390 CSS px in either theme and was removed. Production build passes; LearningView still has pre-existing TypeScript diagnostics in unchanged code, while PortfolioView has none. Signed-in instructor and learner acceptance remains; no production write, push or deployment. The separate Finance/Expenses candidate `c465dc1` is preserved. See `docs/education/LEARNING_PORTFOLIO_FOCUS_2026-10-16.md` and `docs/education/UI_DESIGN_DELIVERY_MAP_2026-10-16.md`.
+
+---
+
+# Local UI candidate — Finance and Expenses focus
+
+On 2026-10-16 the school-theme worktree followed Admissions/Workshops with the Finance and Expenses phase. Finance retains its existing collection and verification tasks; shared scoped CSS brings its work surfaces into the light/dark school themes. Expenses now leads with selected-period recurring obligations and a next action before metrics. A linked pending ledger entry is no longer shown as paid or offered as another payment; review filters the existing ledger. Date defaults use the local calendar. Production build and diff check pass. The TypeScript scan finds no ExpensesView diagnostic; FinanceView retains pre-existing diagnostics, and its only TSX change is a CSS import. Signed-in desktop and physical-phone review of real paid/pending/due/weekly cases and both themes remains open. No production write, push or deployment. See `docs/education/FINANCE_EXPENSES_FOCUS_2026-10-16.md`.
+
+---
+
+# Local preview sync — school loading repair
+
+On 2026-10-16 the designer worktree incorporated exactly the three loading code files from production commit `c8806f7` (`context/AppContext.tsx`, `context/ModuleContext.tsx`, `components/AtlasBootScreen.tsx`). The local files matched the fix's parent before transfer, so the committed Admissions and Workshops UI remains intact. Four essential school snapshots now gate entry, optional module subscriptions follow, and Retry appears only for a real error. The production build passes; local preview ports 5174 and 5202 return HTTP 200, and Vite serves the updated AppContext. No push or deployment from this worktree. Signed-in staff verification of real data is still pending.
+
+---
+
+# Local UI candidate — Admissions and Workshops focus
+
+On 2026-10-15 the school-theme worktree added an action-first Admissions family priority and a Workshop follow-up queue for actual attended bookings. Admissions still uses its tenant-safe Today projection and keeps due dates honest. Workshop contact, enrollment and CRM buttons call their existing guarded actions only after an operator click. Light/dark school tokens now cover these task surfaces. The build, changed-file TypeScript scan, 22 Admissions selector scenarios, 11 Workshop-link scenarios, Atlas context reader and diff check pass; signed-in desktop and phone acceptance remains pending. No push, deployment, rule or production data change. See `docs/education/ADMISSIONS_WORKSHOPS_FOCUS_2026-10-15.md`.
+
+---
+
+# Local UI candidate — Classes, attendance, schedule focus
 
 On 2026-10-15 the next school-day phase added live priorities ahead of metrics: today's class groups and attendance, remaining attendance marks, and instructor coverage gaps. Class dates use the local day, attendance understands French and English weekday labels, and only attendance managers see assignment/sync controls. Light and dark surfaces stay within the school palette. The build, weekday smoke, scoped TypeScript and diff check pass. A designated staff account must still check real data and actions on desktop and phone. No push, deployment, rule or production data change. See `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`.
 
 ---
 
-# Previous handoff — Programs, Students, Pickup focus
+# Local UI candidate — Programs, Students, Pickup focus
 
 On 2026-10-15 the school-theme worktree gained a task-level pass across the first three requested modules. Programs presents its next action from real readiness, waiting families and empty groups. Students retains direct profile navigation while making passport preview explicit and consistent with the active worklist; its scoped surfaces now follow both school themes. Pickup moves the live verification queue before the full roster, adds a current handoff focus, and treats older `waiting` records as staff review rather than an invalid arrival action. No lifecycle transition, data selector, permission, API or Firebase rule was changed. Production build, scoped TypeScript, two Pickup domain smokes, Atlas context reader and whitespace check pass. Signed-in phone acceptance is pending; local review is at `http://192.168.11.105:5202/` on the same Wi-Fi (current Wi-Fi IP; it may change). No push or deployment. See `docs/education/PROGRAMS_STUDENTS_PICKUP_FOCUS_2026-10-15.md`.
 
 ---
 
-# Previous handoff — Edufy school-day themes
+# Local UI candidate — Edufy school-day themes
 
 On 2026-10-15, an isolated Edufy worktree at `agent/edufy-school-theme-20261015` gained a light-default, navy/cobalt school workspace and a tenant-persisted dark option. The dashboard leads with the real day schedule and direct actions before metrics. Follow-up `Continue` work now focuses the next scheduled session (or the latest/first when appropriate), keeps the dayline near that session, describes the action queue from its actual entries instead of an unrelated alert count, and uses the device's local calendar day for classes and workshops. Leaving Admin clears its document-level theme. The Education shell and existing module bridges share the two theme token sets; light-only legacy compatibility rules no longer overwrite dark screens. No permissions, API, or Firebase rules changed. The production build passes. A write-free synthetic visual fixture confirmed light/dark rendering, 390px horizontal fit, and scrolling, then was removed. Signed-in real-data review on desktop and phone is still needed before release. Repository-wide TypeScript has existing errors outside the changed TSX files; scoped diagnostics are tracked in this handoff. No Git push or deployment occurred.
 
 The user then reported that a real school-account “Sign in” opens Edufy before its records appear. The startup cause was a 2.5-second fail-open in `AppContext`, plus missing handling when an organization or required Firestore read failed. The local candidate now waits for settings and the first role-relevant data snapshots, displays a retry/sign-out error state instead of an empty workspace, rejects a missing organization, prevents stale tenant data by remounting the app context when user or tenant changes, and clears a previous tenant on sign-out. The dashboard also reads English and French weekday names from existing class records, including both group sessions on the same day. The public virtual demo remains separate. No data, security rules, API, or production environment was changed. Real-account acceptance on the phone remains required because this worktree has no operator credentials. See `docs/education/SCHOOL_SIGN_IN_READINESS_2026-10-15.md` for the decision, changelog and acceptance notes.
-
----
-
-# Previous handoff — Edufy tenant provisioning repair
-
-On 2026-10-15, tenant creation without a selected subscription plan failed client-side because `subscription: undefined` was sent to Firestore. The focused Edufy repair omits absent plan fields, requires either a plan or a selected module, validates a unique workspace slug, and creates the organization with its real admin UID and user profile in one Firestore batch. If the batch fails after Firebase Auth creates the admin, the fresh account is removed when possible. No production tenant was created as a test. Verify the registered Edufy build, then release and check both public Edufy clients. This fixes provisioning input and partial Firestore writes; the full cross-tenant rollout still depends on ownership, rules/index, public-catalog, and two-tenant acceptance gates. See `docs/releases/TENANT_PROVISION_REPAIR_2026-10-15.md`.
 
 ---
 
@@ -581,16 +709,21 @@ The parent card action now remains visible for every recorded parent login. When
 Authenticated browser tracing after that release isolated a second Studio failure: lazy Factory CSS imported Google Fonts after the document CSP was active, so the browser blocked the import and Vite raised `Unable to preload CSS`. The focused follow-up allows the declared Google font origins, moves every Factory font family into the shared document link, and removes the lazy stylesheet imports. Next: SparkQuest build, focused Vercel release, and retest the existing affected admin session; no production record mutation is required.
 
 ---
+
 # Latest handoff — Parent access legacy login hotfix (2026-10-15)
 
 The Edufy parent API and Student Details flow now handle a historical contact email or orphan UID by creating a verified `p.*@makerlab.academy` login, moving only consistent same-tenant family links, and preserving learner records. Platform super admins under `atlas-platform` may manage existing target organizations; other staff stay same-tenant. Staff enter the real parent name and verify the relationship. After refresh, displaying a card issues a new password and invalidates the old one; no plaintext parent password is retained. Synthetic Auth/Firestore emulator passes the orphan/external/staff-link/tenant/password cases. The Edufy build passes; repo-wide TypeScript still reports existing unrelated errors. Release status is recorded in `docs/parent/PARENT_ACCESS_LEGACY_LOGIN_HOTFIX_2026-10-15.md`. Multi-tenant ownership remediation follows as a separate phase.
 
 ---
-## Edufy Design System v1 release candidate — 2026-10-19
+## Phase 1 reference handoff — 2026-10-20
 
-The user approved deployment of the completed school workspace UI after aligning the left and top menus. This release carries the Design System v1 module surfaces and shell only. It preserves the current `origin/main` tenant provisioning, authentication, schedule write guards, API, Firestore rules, schemas and financial logic. Build and signed-in read-only checks passed for desktop/mobile and light/dark. See `docs/education/DESIGN_SYSTEM_V1_CONSOLIDATED_HANDOFF_2026-10-19.md` and `docs/education/DESIGN_SYSTEM_NAVIGATION_RELEASE_2026-10-19.md`.
+The compact rail, overlay workspace navigation, simplified context bar, keyboard command palette, responsive mobile navigation, Student Details restructure, complete student editor and contextual animated 011Y guide are ready for review. Actual school-account checks were read-only; the editor was cancelled without saving. Build and 53 Design System checks pass. Read `docs/education/EDUFY_SHELL_STUDENT_GUIDE_PHASE_1_2026-10-20.md`. Await visual approval before Settings → Finance → Expenses. No deploy, push or production write.
 
 ---
+## Programs Design System v1 focused local completion — 2026-10-20
+
+Programs catalog, all seven detail tabs, setup wizard and supporting dialogs received a scoped semantic theme pass. Synthetic browser QA covered light/dark populated, empty and read-only states; 390 CSS px had no horizontal overflow; quote error focused and described the missing parent field. Evidence and the full page inventory are in `docs/education/PROGRAMS_DESIGN_SYSTEM_V1_2026-10-20.md`. The Education System check and diff check pass. Production build is pending in a checkout with complete dependencies because this worktree's linked `node_modules` lacks `@rive-app/webgl2/rive.wasm`; automatic command policy rejected junction removal for a clean install. Whole-repository TypeScript has unrelated baseline diagnostics. No school-data write, push or deployment. Integrate this focused commit separately from Student Details, Expenses and Finance changes.
+
 
 ## Student Details Design System v1 audit — 2026-10-20
 
@@ -598,11 +731,7 @@ The isolated Student Details candidate now covers its five workspaces, local dia
 
 Follow-up: `/forms` now mounts the real enrollment wizard and App payment modal JSX with synthetic callbacks. The Student Details fixture now renders synthetic proof and the actual Activity Details audit route. Editor, enrollment edit, both certificate generators, App-owned forms and all 13 Student Details dialog families received desktop/390 px light/dark browser checks. Mobile wizard overflow, payment choice contrast and certificate failure feedback were fixed. Build, 27 Design System checks and diff check pass. Remaining gates: signed-in school record/route/submit review, physical phone, downstream audit proof overlay Close/focus, and the separately documented financial validation/security issues. No push, deployment or production write.
 
-Continued lower workspace visual pass: enrollment chips/actions, portfolio and project detail, Finance payment/promise controls, Access quick links and student preview cards now use scoped Design System styling. Synthetic desktop and narrow mobile review is captured in the Student Details audit and refined screenshots; the preview mobile action grid was corrected. Existing domain, permission and write handlers are unchanged. Signed-in and physical-phone acceptance remain open. No push, deployment or production write.
-
 ---
-## Student Details section quality pass — 2026-10-20
+## Attendance Design System v1 focused handoff — 2026-10-20
 
-The reviewed Overview benchmark now extends through Learning/Portfolio, Attendance, Finance, Access, the learner preview and connected dialogs. Section-owned `--ds-*` styles replace the obsolete opening local-color/blanket-override block. Synthetic populated, empty/no-access, read-only, long-data and failed-save states were checked at desktop and 390 CSS px in light/dark; screenshots and limits are in `docs/education/STUDENT_DETAILS_DESIGN_SYSTEM_V1_2026-10-20.md`. The editor failure retained its draft, mobile dialog scroll worked, and 390 px overflow checks passed. Build, 27 Design System checks and diff check pass. The separate signed-in/physical-phone acceptance and workflow debt listed in that document remain open. No production write, push or deployment. Stop at this Student Details handoff before the broader Settings/Expenses visual backlog.
-
----
+The isolated Attendance worktree now has a complete daily-register, learner-history and installed FaceID-preview inventory and local visual repair. Read `docs/education/ATTENDANCE_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md` before integration. Production build, Education System checker, membership suite, context reader, and desktop/390px light/dark synthetic browser checks pass; exact TypeScript status is recorded in the report. Signed-in school navigation was read-only. No push, deploy or school-data write. Stop at Attendance and preserve other modules.

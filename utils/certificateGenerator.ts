@@ -1,9 +1,9 @@
 import { Student, Enrollment, AppSettings } from '../types';
 import { formatDate } from './helpers';
 
-export const generateRegistrationCertificate = (student: Student, enrollment: Enrollment, settings: AppSettings, options?: { admissionDate?: string, issueDate?: string }): boolean => {
+export const generateRegistrationCertificate = (student: Student, enrollment: Enrollment, settings: AppSettings, options?: { admissionDate?: string, issueDate?: string }) => {
   const win = window.open('', '_blank');
-  if (!win) return false;
+  if (!win) return;
 
   const academyName = settings.documentConfig?.headerName || settings.academyName;
   const logoUrl = settings.documentConfig?.logoUrl || settings.logoUrl;
@@ -354,12 +354,11 @@ export const generateRegistrationCertificate = (student: Student, enrollment: En
 
   win.document.write(html);
   win.document.close();
-  return true;
 };
 
-export const generateCompletionCertificate = (student: Student, enrollment: Enrollment, settings: AppSettings, options: { modules: string[], academyName: string, logoUrl: string, issueDate?: string }): boolean => {
+export const generateCompletionCertificate = (student: Student, enrollment: Enrollment, settings: AppSettings, options: { modules: string[], academyName: string, logoUrl: string, issueDate?: string }) => {
   const win = window.open('', '_blank');
-  if (!win) return false;
+  if (!win) return;
 
   const academyName = options.academyName || 'Makerlab Academy';
   const logoUrl = options.logoUrl;
@@ -693,5 +692,4 @@ export const generateCompletionCertificate = (student: Student, enrollment: Enro
 
   win.document.write(html);
   win.document.close();
-  return true;
 };

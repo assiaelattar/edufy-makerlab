@@ -31,7 +31,7 @@ import {
     XCircle
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { arrayUnion, collection, collectionGroup, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where, writeBatch, type Timestamp } from 'firebase/firestore';
+import { arrayUnion, collection, collectionGroup, deleteDoc, doc, getDocs, serverTimestamp, setDoc, updateDoc, writeBatch, type Timestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import { useAppContext } from '../context/AppContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -322,59 +322,48 @@ export const SaasAdminView: React.FC = () => {
         if (!newOrgName || !tenantAdminEmail || !tenantAdminPass || !db) return;
         setCreating(true);
         try {
-            const firestore = db;
-            const slug = (newOrgSlug.trim() || newOrgName.trim()).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-            if (!slug) throw new Error('Enter a workspace slug using letters or numbers.');
-            const matchingSlugs = await getDocs(query(collection(firestore, 'organizations'), where('slug', '==', slug)));
-            if (!matchingSlugs.empty) throw new Error('This workspace slug is already in use. Choose another.');
+            const slug = newOrgSlug || newOrgName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
             const selectedPlan = plans.find(plan => plan.id === selectedPlanId);
-            if (selectedPlanId && !selectedPlan) throw new Error('The selected plan is no longer available. Reload plans and try again.');
             const finalModules = { ...modules };
-            selectedPlan?.includedModules?.forEach(moduleId => { finalModules[moduleId] = true; });
-            if (!selectedPlan && !Object.values(finalModules).some(Boolean)) {
-                throw new Error('Choose a subscription plan or enable at least one starting module.');
-            }
+            selectedPlan?.includedModules.forEach(moduleId => { finalModules[moduleId] = true; });
             const nextBilling = new Date();
             const subscriptionStatus: 'active' | 'trial' = selectedPlan?.trialDays ? 'trial' : 'active';
             if (selectedPlan?.trialDays) nextBilling.setDate(nextBilling.getDate() + selectedPlan.trialDays);
             else nextBilling.setMonth(nextBilling.getMonth() + 1);
 
-            const orgRef = doc(collection(firestore, 'organizations'));
-            await createSecondaryUser(tenantAdminEmail.trim(), tenantAdminPass, async uid => {
-                const batch = writeBatch(firestore);
-                batch.set(orgRef, {
-                    id: orgRef.id,
-                    name: newOrgName.trim(),
-                    slug,
-                    status: 'active',
-                    createdAt: serverTimestamp(),
-                    ownerUid: uid,
-                    modules: finalModules,
-                    installedApps: [],
-                    ...(selectedPlan ? {
-                        subscription: {
-                            planId: selectedPlan.id,
-                            status: subscriptionStatus,
-                            startDate: serverTimestamp(),
-                            nextBillingDate: nextBilling,
-                            interval: 'month',
-                            ...(typeof selectedPlan.priceMonthly === 'number' ? { customPrice: selectedPlan.priceMonthly } : {}),
-                            addOns: []
-                        },
-                        ...(selectedPlan.limits ? { limits: selectedPlan.limits } : {})
-                    } : {})
-                });
-                batch.set(doc(firestore, 'users', uid), {
-                    uid,
-                    email: tenantAdminEmail.trim(),
-                    name: `Admin ${newOrgName.trim()}`,
-                    role: 'admin',
-                    organizationId: orgRef.id,
-                    status: 'active',
-                    createdAt: serverTimestamp()
-                });
-                await batch.commit();
+            const orgRef = doc(collection(db, 'organizations'));
+            await setDoc(orgRef, {
+                id: orgRef.id,
+                name: newOrgName.trim(),
+                slug,
+                status: 'active',
+                createdAt: serverTimestamp(),
+                ownerUid: '',
+                modules: finalModules,
+                installedApps: [],
+                subscription: selectedPlan ? {
+                    planId: selectedPlan.id,
+                    status: subscriptionStatus,
+                    startDate: serverTimestamp(),
+                    nextBillingDate: nextBilling,
+                    interval: 'month',
+                    customPrice: selectedPlan.priceMonthly,
+                    addOns: []
+                } : undefined,
+                limits: selectedPlan?.limits
             });
+
+            const uid = await createSecondaryUser(tenantAdminEmail, tenantAdminPass);
+            await setDoc(doc(db, 'users', uid), {
+                uid,
+                email: tenantAdminEmail,
+                name: `Admin ${newOrgName.trim()}`,
+                role: 'admin',
+                organizationId: orgRef.id,
+                status: 'active',
+                createdAt: serverTimestamp()
+            });
+            await updateDoc(orgRef, { ownerUid: uid });
 
             setShowCreateModal(false);
             setNewOrgName('');
@@ -819,10 +808,10 @@ export const SaasAdminView: React.FC = () => {
                 {showCreateModal && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) setShowCreateModal(false); }}>
                         <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-xl border border-white/10 bg-slate-900 shadow-2xl">
-                            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-slate-900/95 p-5 backdrop-blur"><div><h2 className="text-lg font-black">Provision tenant</h2><p className="mt-1 text-xs text-slate-500">Create the academy, admin account, and initial access.</p></div><button type="button" aria-label="Close" onClick={() => setShowCreateModal(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-white/[0.05] hover:text-white"><X size={18} /></button></div>
+                            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-slate-900/95 p-5 backdrop-blur"><div><h2 className="text-lg font-black">Provision tenant</h2><p className="mt-1 text-xs text-slate-500">Create the academy, owner account, subscription, and initial access.</p></div><button type="button" aria-label="Close" onClick={() => setShowCreateModal(false)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-white/[0.05] hover:text-white"><X size={18} /></button></div>
                             <form onSubmit={handleCreateOrg} className="space-y-6 p-5">
                                 <div className="grid gap-4 sm:grid-cols-2"><div><label className={labelClass}>Academy name</label><input required value={newOrgName} onChange={event => setNewOrgName(event.target.value)} className={inputClass} placeholder="Future Tech School" /></div><div><label className={labelClass}>Workspace slug</label><input value={newOrgSlug} onChange={event => setNewOrgSlug(event.target.value)} className={inputClass} placeholder="future-tech" /></div><div><label className={labelClass}>Admin email</label><input required type="email" value={tenantAdminEmail} onChange={event => setTenantAdminEmail(event.target.value)} className={inputClass} placeholder="admin@school.com" /></div><div><label className={labelClass}>Temporary password</label><input required minLength={6} value={tenantAdminPass} onChange={event => setTenantAdminPass(event.target.value)} className={inputClass} placeholder="At least 6 characters" type="password" /></div></div>
-                                <section><AtlasSectionHeader title="Subscription" description="Select a starting offer, or provision custom access using the modules below." icon={CreditCard} /><div className="mt-3 grid gap-3 sm:grid-cols-3"><button type="button" onClick={() => setSelectedPlanId('')} className={`rounded-lg border p-3 text-left transition-colors ${!selectedPlanId ? 'border-teal-300/50 bg-teal-400/10' : 'border-white/10 bg-slate-950/40 hover:border-white/20'}`}><span className="text-xs font-black text-white">Custom access</span><span className="mt-2 block text-xs text-slate-400">Select at least one starting module. No subscription is created.</span></button>{plans.map(plan => <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} className={`rounded-lg border p-3 text-left transition-colors ${selectedPlanId === plan.id ? 'border-teal-300/50 bg-teal-400/10' : 'border-white/10 bg-slate-950/40 hover:border-white/20'}`}><span className="text-xs font-black text-white">{plan.name}</span><span className="mt-2 block font-mono text-lg font-black text-teal-200">{formatMoney(plan.priceMonthly, plan.currency)}<span className="text-[10px] font-normal text-slate-500">/mo</span></span></button>)}</div></section>
+                                <section><AtlasSectionHeader title="Subscription" description="Select the starting offer for this tenant." icon={CreditCard} /><div className="mt-3 grid gap-3 sm:grid-cols-3">{plans.map(plan => <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} className={`rounded-lg border p-3 text-left transition-colors ${selectedPlanId === plan.id ? 'border-teal-300/50 bg-teal-400/10' : 'border-white/10 bg-slate-950/40 hover:border-white/20'}`}><span className="text-xs font-black text-white">{plan.name}</span><span className="mt-2 block font-mono text-lg font-black text-teal-200">{formatMoney(plan.priceMonthly, plan.currency)}<span className="text-[10px] font-normal text-slate-500">/mo</span></span></button>)}</div></section>
                                 <section><AtlasSectionHeader title="Starting modules" description="Enable any published module that should be active on day one." icon={Package} /><div className="mt-3 grid gap-2 rounded-lg border border-white/10 bg-slate-950/35 p-3 sm:grid-cols-2 lg:grid-cols-3">{catalog.filter(item => item.kind === 'module' && item.isPublished).map(item => { const plan = plans.find(candidate => candidate.id === selectedPlanId); const included = planIncludesCatalogItem(plan, item) || item.billing === 'included'; const checked = included || Boolean(modules[item.id]); return <label key={item.id} className={`flex min-h-9 items-center gap-2 rounded-md px-2 text-xs ${included ? 'cursor-default text-teal-200' : 'cursor-pointer text-slate-300 hover:bg-white/[0.04]'}`}><input type="checkbox" disabled={included} checked={checked} onChange={event => setModules({ ...modules, [item.id]: event.target.checked })} className="h-4 w-4 rounded border-white/20 bg-slate-950 accent-teal-500" /><span className="truncate">{item.name}</span>{included && <BadgeCheck size={13} className="ml-auto shrink-0" />}</label>; })}</div></section>
                                 <div className="flex flex-col-reverse gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-end"><AtlasActionButton onClick={() => setShowCreateModal(false)}>Cancel</AtlasActionButton><AtlasActionButton type="submit" icon={creating ? Loader2 : Plus} variant="primary" disabled={creating} className={creating ? '[&_svg]:animate-spin' : ''}>{creating ? 'Provisioning...' : 'Provision tenant'}</AtlasActionButton></div>
                             </form>

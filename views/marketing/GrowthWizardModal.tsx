@@ -24,6 +24,9 @@ export const GrowthWizardModal: React.FC<GrowthWizardModalProps> = ({ isOpen, on
 
     useEffect(() => {
         if (!isOpen) return;
+        setStep(1);
+        setSourceProgramId('');
+        setFeedback(null);
         setCampaignType(initialCampaignType);
         setCampaignName(`${initialCampaignType === 'holiday' ? 'Holiday camp' : 'Next level'} - ${new Date().toLocaleDateString()}`);
     }, [initialCampaignType, isOpen]);
@@ -61,7 +64,8 @@ export const GrowthWizardModal: React.FC<GrowthWizardModalProps> = ({ isOpen, on
     };
 
     const handleCreateCampaign = async () => {
-        if (!db || isCreating) return;
+        const firestore = db;
+        if (!firestore || isCreating) return;
         const orgId = currentOrganization?.id;
         if (!orgId) {
             setFeedback({ kind: 'error', message: 'Select an organization before creating a campaign.' });
@@ -87,8 +91,8 @@ export const GrowthWizardModal: React.FC<GrowthWizardModalProps> = ({ isOpen, on
         setIsCreating(true);
         setFeedback(null);
         try {
-            const batch = writeBatch(db);
-            const campaignRef = doc(collection(db, 'campaigns'));
+            const batch = writeBatch(firestore);
+            const campaignRef = doc(collection(firestore, 'campaigns'));
             batch.set(campaignRef, {
                 organizationId: orgId,
                 name: campaignName.trim(),
@@ -102,7 +106,7 @@ export const GrowthWizardModal: React.FC<GrowthWizardModalProps> = ({ isOpen, on
             });
 
             eligibleStudents.forEach(student => {
-                const leadRef = doc(collection(db, 'leads'));
+                const leadRef = doc(collection(firestore, 'leads'));
                 batch.set(leadRef, {
                     organizationId: orgId,
                     name: student.name,
@@ -138,9 +142,9 @@ export const GrowthWizardModal: React.FC<GrowthWizardModalProps> = ({ isOpen, on
     ];
 
     return (
-        <Modal isOpen={isOpen} onClose={resetAndClose} title="Growth campaign">
-            <div className="flex h-[min(72vh,560px)] flex-col gap-4 text-slate-900">
-                <header className="shrink-0 rounded-lg border border-slate-800 bg-[#08111F] px-4 py-3 text-white">
+        <Modal isOpen={isOpen} onClose={resetAndClose} title="Growth campaign" designSystem>
+            <div className="edu-marketing-dialog flex h-[min(72vh,560px)] flex-col gap-4 text-slate-900">
+                <header className="marketing-dialog-hero shrink-0 rounded-lg border border-slate-800 bg-[#08111F] px-4 py-3 text-white">
                     <div className="flex items-center justify-between gap-3">
                         <div>
                             <p className="text-[10px] font-bold uppercase text-teal-300">Pipeline builder</p>
@@ -173,11 +177,11 @@ export const GrowthWizardModal: React.FC<GrowthWizardModalProps> = ({ isOpen, on
                                 <div><h3 className="text-base font-bold">Choose the campaign goal</h3><p className="mt-0.5 text-sm text-slate-500">Select the offer families should receive.</p></div>
                             </div>
                             <div className="grid gap-2 sm:grid-cols-2">
-                                <button type="button" onClick={() => { setCampaignType('holiday'); setCampaignName(`Holiday camp - ${new Date().toLocaleDateString()}`); }} className={`min-h-20 rounded-lg border p-3 text-left transition-colors ${campaignType === 'holiday' ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
+                                <button type="button" aria-pressed={campaignType === 'holiday'} onClick={() => { setCampaignType('holiday'); setCampaignName(`Holiday camp - ${new Date().toLocaleDateString()}`); }} className={`min-h-20 rounded-lg border p-3 text-left transition-colors ${campaignType === 'holiday' ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
                                     <span className="block text-sm font-bold text-slate-900">Holiday camp</span>
                                     <span className="mt-1 block text-xs text-slate-500">Fill seats for the upcoming break.</span>
                                 </button>
-                                <button type="button" onClick={() => { setCampaignType('next_level'); setCampaignName(`Next level - ${new Date().toLocaleDateString()}`); }} className={`min-h-20 rounded-lg border p-3 text-left transition-colors ${campaignType === 'next_level' ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
+                                <button type="button" aria-pressed={campaignType === 'next_level'} onClick={() => { setCampaignType('next_level'); setCampaignName(`Next level - ${new Date().toLocaleDateString()}`); }} className={`min-h-20 rounded-lg border p-3 text-left transition-colors ${campaignType === 'next_level' ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-300'}`}>
                                     <span className="block text-sm font-bold text-slate-900">Level up</span>
                                     <span className="mt-1 block text-xs text-slate-500">Move students into their next program.</span>
                                 </button>

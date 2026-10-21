@@ -172,7 +172,6 @@ const AppContent = () => {
         proofUrl: '' // Base64 string
     });
     const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
-    const paymentSubmitInFlightRef = useRef(false);
     const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [showPaymentDetails, setShowPaymentDetails] = useState(false);
@@ -553,36 +552,14 @@ const AppContent = () => {
 
     const handleSubmitPayment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!db || paymentSubmitInFlightRef.current) return;
-
-        if (paymentMode === 'parent' && !selectedParentAccount) {
-            showAlert('Validation Error', 'Please select a parent account', 'warning');
-            return;
-        }
-        if (paymentMode === 'individual' && !paymentForm.enrollmentId) {
-            showAlert('Validation Error', 'Please select a student/enrollment', 'warning');
-            return;
-        }
-        const amountPaid = Number(paymentForm.amount);
-        if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
-            showAlert('Validation Error', 'Please enter a valid payment amount', 'warning');
-            return;
-        }
-        if (paymentForm.method === 'check' && (!paymentForm.checkNumber.trim() || !paymentForm.bankName.trim())) {
-            setShowPaymentDetails(true);
-            showAlert('Check details required', 'Enter both the check number and bank.', 'warning');
-            return;
-        }
-        if (paymentForm.method === 'virement' && !paymentForm.proofUrl) {
-            setShowPaymentDetails(true);
-            showAlert('Transfer proof required', 'Attach the bank transfer proof before recording the payment.', 'warning');
-            return;
-        }
-
-        paymentSubmitInFlightRef.current = true;
-        setIsSubmittingPayment(true);
+        if (!db) return;
 
         if (paymentMode === 'parent') {
+            if (!selectedParentAccount) { showAlert("Validation Error", "Please select a parent account", "warning"); return; }
+            const amountPaid = Number(paymentForm.amount);
+            if (isNaN(amountPaid) || amountPaid <= 0) { showAlert("Validation Error", "Please enter a valid payment amount", "warning"); return; }
+
+            setIsSubmittingPayment(true);
             try {
                 let status = 'paid';
                 if (paymentForm.method === 'check') status = 'check_received';
@@ -684,13 +661,14 @@ const AppContent = () => {
                 console.error("Failed to record parent payment:", err);
                 showAlert("Error", "Failed to record parent payment", "danger");
             } finally {
-                paymentSubmitInFlightRef.current = false;
                 setIsSubmittingPayment(false);
             }
             return;
         }
 
         // Original Individual Payment Logic
+        if (!paymentForm.enrollmentId) { showAlert("Validation Error", "Please select a student/enrollment", "warning"); return; }
+        setIsSubmittingPayment(true);
         try {
             const enrollment = enrollments.find(e => e.id === paymentForm.enrollmentId);
             if (!enrollment) throw new Error("Enrollment not found");
@@ -731,7 +709,6 @@ const AppContent = () => {
             console.error(err);
             showAlert("Error", "Failed to record payment", "danger");
         } finally {
-            paymentSubmitInFlightRef.current = false;
             setIsSubmittingPayment(false);
         }
     };
@@ -1645,8 +1622,6 @@ const AppContent = () => {
                                     id="payment-amount"
                                     required
                                     type="number"
-                                    min="0.01"
-                                    step="any"
                                     inputMode="decimal"
                                     className="min-h-16 w-full rounded-lg border border-white/10 bg-[#08111F] px-4 pr-16 text-2xl font-black tabular-nums text-white outline-none transition-colors focus:border-teal-400 focus:ring-2 focus:ring-teal-400/20"
                                     value={paymentForm.amount}

@@ -1,4 +1,46 @@
+## Design System v1 source of truth — 2026-10-19
+
+Contract: docs/education/design-system-v1/README.md. Canonical scoped tokens: components/education-ui/education-system-v1.css. Typed primitives: components/education-ui/EducationPrimitives.tsx. Form reference: components/students/StudentDetailsForm.tsx and components/enrollment/EnrollmentWizard.tsx. View-state owner: components/education-ui/useWorkspaceViewState.ts. Review harness: scripts/preview-education-system.mjs; evidence: docs/education/pulse-evidence/ds-v1-*.png. Report and rollout gate: docs/education/design-system-v1/IMPLEMENTATION_REPORT.md. Existing domain owners and .agent SOT entries remain authoritative. No module-local palette reinvention.
+
+## Dashboard educational pass complete — 2026-10-19
+
+`views/dashboard/EducationDashboardV1.tsx` and `education-dashboard-playful.css` own the dashboard presentation. `DashboardView.tsx` retains summary derivation; WorkshopActionCenter retains its domain handlers; App.tsx retains payment form and commands (only a scoped CSS class added). Report: `docs/education/DASHBOARD_EDUCATIONAL_2026-10-19.md`.
+
+## Calendar rendering source of truth — 2026-10-19
+
+`views/CalendarView.tsx` and `views/school-day/education-calendar-playful.css` own the latest weekly/agenda presentation. Existing AppContext session feed, assignment/sync commands and attendance.manage remain authoritative. See `docs/education/CALENDAR_EDUCATIONAL_2026-10-19.md`; synthetic harness `scripts/preview-pulse-calendar.mjs`.
+
+## Current Programs source of truth — 2026-10-19
+
+`docs/education/PROGRAMS_WORKSPACE_2026-10-19.md` documents the complete Programs workspace pass. Implementation: `views/ProgramsView.tsx`, `views/ProgramDetailsView.tsx`, module-scoped `views/programs/education-programs-workspace.css`. Browser evidence: `docs/education/pulse-evidence/programs-workspace-*`. Earlier catalog-only milestones are historical.
+
 # Source-of-Truth Registry
+
+## Approved educational rendering
+
+Module-scoped education-students-playful.css, education-programs-playful.css and education-attendance-playful.css own this visual pass. Existing Education tokens and all domain/command owners remain authoritative. Latest color balance: neutral metrics, lime/green identity, blue actions, limited #FF9600 warnings. See EDUCATIONAL_ROLLOUT_2026-10-19.md.
+
+## Pulse Pickup owners
+
+views/PickupView.tsx and views/pickup/education-pickup-pulse.css own the local gate register. Existing modules/pickup/domain and services remain the lifecycle, daily roster and command authorities. Shared Education tokens remain canonical. Synthetic-only harness: scripts/preview-pulse-pickup.mjs.
+
+## Pulse Classes and Students owners
+
+ClassesView.tsx and education-classes-pulse.css own the itinerary/directory. EducationStudentsOperationsV1.tsx and education-students-pulse.css own the learner worklist. Existing domain selectors, callbacks and shared Education tokens remain canonical.
+
+## Pulse Attendance visual ownership — 2026-10-16
+
+Latest Attendance render/CSS owners remain `views/AbsenceView.tsx` and `views/school-day/education-attendance-pulse.css`; shared tokens, handlers and persistence are unchanged. Read `docs/education/EDUFY_PULSE_ATTENDANCE_VISUAL_2026-10-16.md` and its `refined-*` screenshots before further work. This pass trades some compactness for a clearer register structure; signed-in and physical-phone acceptance remain open. Do not extend the pattern to other modules before the Attendance benchmark is accepted.
+
+## Pulse Attendance — 2026-10-16
+
+`components/education-ui/education-ui-v1.css` remains the semantic token owner; `components/atlas/AtlasSurface.tsx` owns opt-in compact headers. `views/AbsenceView.tsx` and `views/school-day/education-attendance-pulse.css` own the register and pending display. `context/AppContext.tsx` exposes attendance loading/error on its existing listener; it does not alter the main startup gate. See `docs/education/EDUFY_PULSE_ATTENDANCE_2026-10-16.md`.
+
+Education UI Learning and Portfolio focus: `views/LearningView.tsx` owns the instructor entry and existing mission/review/studio destinations; `views/PortfolioView.tsx` owns the learner self-portfolio entry; `views/learning/education-learning-focus.css` owns scoped school-theme and 390 px presentation. `sparkquest/App.tsx` consumes the existing student `?projectId=` link. See `docs/education/LEARNING_PORTFOLIO_FOCUS_2026-10-16.md` and `docs/education/UI_DESIGN_DELIVERY_MAP_2026-10-16.md`.
+
+Education UI Finance and Expenses focus: `views/FinanceView.tsx` owns the existing collection and verification task routes; `views/ExpensesView.tsx` owns recurring obligation projection, ledger navigation and expense controls; `views/finance/education-finance-focus.css` owns shared light/dark presentation. The stored expense status and existing write handlers remain canonical. See `docs/education/FINANCE_EXPENSES_FOCUS_2026-10-16.md`.
+
+Education UI Admissions and Workshops focus: `modules/admissions/ui/EducationAdmissionsReadOnlyV1.tsx` and `education-admissions-v1.css` own the family priority and passport expression; the canonical order and evidence remain in `modules/admissions/domain/admissionSelectors.ts` and its adapter. `views/WorkshopsView.tsx` and `views/programs/education-workshops-focus.css` own attended-booking follow-up and the existing calendar, enrollment and CRM action entry points. See `docs/education/ADMISSIONS_WORKSHOPS_FOCUS_2026-10-15.md`.
 
 Education UI school-day focus: `views/ClassesView.tsx`, `views/AbsenceView.tsx`, and `views/CalendarView.tsx` own the daily class, attendance and weekly coverage flows; `utils/schoolSchedule.ts` normalizes English/French weekday labels; `views/school-day/education-school-day-v1.css` owns scoped light/dark presentation. Eligibility remains in `utils/membershipLifecycle.ts`, and schedule writes retain their existing permission boundary. See `docs/education/CLASSES_ATTENDANCE_SCHEDULE_FOCUS_2026-10-15.md`.
 
@@ -80,3 +122,10 @@ Update this table whenever a canonical implementation is introduced or supersede
 | `SOT:SERVICE_CATALOGUE_UI` | `components/finance/ServiceCataloguePanel.tsx`, `ServiceInvoiceModal.tsx`, `service-catalogue.css` | catalogue CRUD/search and rapid service invoicing | current/local |
 | `SOT:FINANCE_DOCUMENTS` | `types/finance.ts`, `services/financeDocuments.ts`, `components/finance/FinanceDocumentsPanel.tsx` | existing immutable UI ledger, shared numbering, normalization, credits and register | current/protected |
 | `SOT:FINANCE_PRINT_EXPORT` | `utils/financeDocumentGenerator.ts`, `utils/accountingExport.ts` | snapshot print/PDF and existing accounting exports | current/protected |
+## Phase 1 shell and learner reference — 2026-10-20
+
+Global shell ownership: `components/layouts/EducationAdminShellV1.tsx` and `components/layouts/education-navigation-v2.css`. Organization/user preferences and module scroll restoration: `components/layouts/AdminLayout.tsx`. Guide contract: `components/education-ui/EducationGuide.tsx` and `education-guide.css`; Rive rendering remains in `sparkquest/components/ParentO11Y.tsx`. Learner experience: `views/StudentDetailsView.tsx` and `views/student-details/education-student-details-v1.css`; existing domain tabs and handlers remain authoritative. Report: `docs/education/EDUFY_SHELL_STUDENT_GUIDE_PHASE_1_2026-10-20.md`.
+
+## Programs Design System v1 acceptance — 2026-10-20
+
+`docs/education/PROGRAMS_DESIGN_SYSTEM_V1_2026-10-20.md` records the latest Programs visual and interactive acceptance, synthetic evidence, decisions and remaining limits. `components/programs/ProgramSetupWizard.tsx`, `components/programs/AcademicYearRolloverModal.tsx`, `views/ProgramsView.tsx`, `views/ProgramDetailsView.tsx` and module-scoped CSS retain presentation ownership; existing AppContext, AuthContext, Firestore handlers and enrollment domain logic remain authoritative. The disposable QA harness is `scripts/preview-pulse-programs.mjs` with `scripts/fixtures/pulse-programs-adapter.jsx`.

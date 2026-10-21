@@ -38,6 +38,8 @@ import { db } from '../services/firebase';
 import { GalleryItem } from '../types';
 import { compressImage } from '../utils/helpers';
 import './team-operations/education-team-operations-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
 
 type MediaVisibility = 'families' | 'staff';
 type SortMode = 'newest' | 'oldest' | 'caption';
@@ -561,7 +563,7 @@ export const MediaView = () => {
     const inputClass = 'h-10 w-full rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/10';
 
     return (
-        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-media-v1' : ''}`} data-testid={showEducationTeamOperationsV1 ? 'education-media-v1' : undefined}>
+        <div className={`space-y-5 pb-24 md:pb-8 ${showEducationTeamOperationsV1 ? 'edu-v1 edu-school-ops-v1 edu-media-v1' : ''}`} data-edu-system={showEducationTeamOperationsV1 ? '1' : undefined} data-testid={showEducationTeamOperationsV1 ? 'education-media-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Organization media"
                 title={viewMode === 'capture' ? 'Capture Route' : linkedStudent ? `${linkedStudent.name.split(' ')[0]}'s Gallery` : 'Media Library'}
@@ -720,7 +722,7 @@ export const MediaView = () => {
                 </div>
             ) : <AtlasEmptyState title="Capture access required" description="Ask an administrator for media management permission." icon={ShieldCheck} />}
 
-            <Modal isOpen={isUploadModalOpen} onClose={closeUploadModal} title="Add media">
+            <Modal isOpen={isUploadModalOpen} onClose={closeUploadModal} title="Add media" designSystem={showEducationTeamOperationsV1}>
                 <form onSubmit={handleSaveMedia} className="space-y-4">
                     <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-slate-950 p-1" role="tablist" aria-label="Image source">
                         <button type="button" role="tab" aria-selected={sourceMode === 'file'} onClick={() => { setSourceMode('file'); setUploadError(''); }} className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-bold ${sourceMode === 'file' ? 'bg-white/[0.08] text-white' : 'text-slate-500'}`}><Upload size={15} /> File</button>
@@ -752,7 +754,7 @@ export const MediaView = () => {
                 </form>
             </Modal>
 
-            <Modal isOpen={Boolean(editingItem)} onClose={() => !isEditing && setEditingItem(null)} title="Media details">
+            <Modal isOpen={Boolean(editingItem)} onClose={() => !isEditing && setEditingItem(null)} title="Media details" designSystem={showEducationTeamOperationsV1}>
                 {editingItem && <form onSubmit={handleUpdateItem} className="space-y-4">
                     <img src={editingItem.url} alt={editingItem.caption || 'Media preview'} className="max-h-64 w-full rounded-lg border border-white/10 bg-slate-950 object-contain" />
                     <label className="block space-y-1"><span className="text-xs font-bold text-slate-400">Caption</span><input value={editCaption} onChange={event => setEditCaption(event.target.value)} maxLength={160} disabled={!canManage} className={`${inputClass} disabled:opacity-70`} /></label>
@@ -768,7 +770,7 @@ export const MediaView = () => {
                 </form>}
             </Modal>
 
-            <Modal isOpen={Boolean(capturingStudent)} onClose={closeCapture} title={capturingStudent ? `Capture for ${capturingStudent.name}` : 'Capture'}>
+            <Modal isOpen={Boolean(capturingStudent)} onClose={closeCapture} title={capturingStudent ? `Capture for ${capturingStudent.name}` : 'Capture'} designSystem={showEducationTeamOperationsV1}>
                 {capturingStudent && <div className="space-y-4">
                     <div className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-3"><span className="text-sm font-bold text-white">{getStudentPhotosForDate(capturingStudent.id).length} photos today</span><span className="text-xs text-slate-500">Family visible</span></div>
                     <div className="relative flex min-h-72 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">

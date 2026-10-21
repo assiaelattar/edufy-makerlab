@@ -1,0 +1,31 @@
+import React, { useSyncExternalStore } from 'react';
+import { fixtureStudents, fixturePrograms, fixtureEnrollments } from './pulse-modules-adapter';
+export { AppProvider, db } from './pulse-attendance-adapter';
+const scenario = new URLSearchParams(location.search).get('scenario');
+const date = new Date().toISOString().slice(0,10);
+const students = fixtureStudents.map((s,i)=>({...s,parentLoginInfo:i===4?undefined:{uid:`family-${i}`}}));
+const programs = fixturePrograms.map(p=>({...p,organizationId:'synthetic-only'}));
+const enrollments = fixtureEnrollments.map(e=>({...e,organizationId:'synthetic-only'}));
+const stamp = { seconds: Math.floor(Date.now()/1000)-600 };
+let queue = students.slice(0,4).map((s,i)=>({id:`synthetic-only_${s.id}_${date}_daily`,organizationId:'synthetic-only',studentId:s.id,studentName:s.name,pickerName:s.parentName,parentName:s.parentName,sessionDate:date,status:['arrived','ready','on_the_way','released'][i],createdAt:stamp,notifiedAt:stamp,arrivedAt:stamp,readyAt:stamp,releasedAt:stamp}));
+if(scenario==='empty') queue=[];
+if(scenario==='legacy') queue[0]={...queue[0],id:'legacy-example',sessionDate:undefined};
+let revision=0, action='', confirmation=null, fail=false;
+const listeners=new Set();
+const notify=()=>{revision++;listeners.forEach(f=>f());};
+const subscribe=f=>{listeners.add(f);return()=>listeners.delete(f);};
+const useRevision=()=>useSyncExternalStore(subscribe,()=>revision);
+export const useAuth=()=>({currentOrganization:scenario==='no-org'?null:{id:'synthetic-only'},userProfile:{uid:'synthetic-staff',role:new URLSearchParams(location.search).get('role')==='readonly'?'parent':'admin'}});
+export const useAppContext=()=>{useRevision();return {pickupQueue:queue,students,enrollments:scenario==='empty'?[]:enrollments,programs};};
+export const useConfirm=()=>({alert:async(title,message)=>{action=`${title}: ${message}`;notify();},confirm:options=>new Promise(resolve=>{confirmation={...options,resolve};notify();})});
+export const advancePickup=async(_db,id,from,to,_uid,evidence)=>{
+  if(fail) throw new Error('Synthetic connection failure. No release recorded.');
+  action=`Synthetic transition: ${from} → ${to}${evidence?' · verification evidence supplied':''}`;
+  queue=queue.map(e=>e.id===id?{...e,status:to}:e);notify();
+};
+export const announcePickup=async(_db,student,_uid,pickerName)=>{
+  if(fail) throw new Error('Synthetic connection failure');
+  const id=`synthetic-only_${student.id}_${date}_daily`;
+  queue=[...queue,{id,organizationId:'synthetic-only',studentId:student.id,studentName:student.name,pickerName,sessionDate:date,status:'on_the_way',createdAt:stamp}];notify();return id;
+};
+export const ModuleFixtureControls=()=>{useRevision();return <aside aria-label="Synthetic QA controls" style={{marginTop:24,padding:16,borderTop:'1px solid var(--edu-border)'}}><strong>Synthetic UI preview · no school records</strong><p role="status">{action}</p><label><input type="checkbox" checked={fail} onChange={e=>{fail=e.target.checked;notify();}}/> Simulate command failure</label>{confirmation&&<div role="dialog" aria-label={confirmation.title}><p>{confirmation.message}</p><button onClick={()=>{const c=confirmation;confirmation=null;c.resolve(true);notify();}}>{confirmation.confirmText}</button><button onClick={()=>{const c=confirmation;confirmation=null;c.resolve(false);notify();}}>Cancel confirmation</button></div>}</aside>;};

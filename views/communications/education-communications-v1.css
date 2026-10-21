@@ -1,0 +1,120 @@
+/* Communications owns layout and legacy class mapping; the Education tokens own color. */
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-command-header {
+  background: var(--ds-green-soft) !important;
+  border-color: var(--ds-green) !important;
+  border-bottom-color: var(--ds-green-edge) !important;
+  box-shadow: none !important;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-signal-card:nth-child(n) {
+  min-height: 108px;
+  color: var(--ds-ink) !important;
+  background: var(--ds-surface) !important;
+  border-color: var(--ds-border) !important;
+  box-shadow: none !important;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-signal-card:nth-child(n) :is(p, span, svg) {
+  color: inherit;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .edu-ds-tabs {
+  margin-inline: 0;
+  background: var(--ds-canvas);
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 :is([role="tabpanel"] > div > div, article) {
+  min-width: 0;
+  background: var(--ds-surface) !important;
+  border: 2px solid var(--ds-border) !important;
+  border-bottom: 4px solid var(--ds-depth) !important;
+  border-radius: var(--ds-radius-card) !important;
+  box-shadow: none !important;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 :is([role="tabpanel"] > div > div, article) :is(.bg-slate-950\/55, .bg-slate-950\/60, .bg-slate-950\/70) {
+  background: var(--ds-subtle) !important;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .edu-communications-access {
+  color: var(--ds-orange-ink);
+  background: var(--ds-orange-soft);
+  border: 2px solid var(--ds-orange-edge);
+  border-radius: var(--ds-radius-control);
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .edu-communications-access span {
+  display: block;
+  margin-top: 4px;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 :is([role="tabpanel"] button:not(.atlas-action), [role="tabpanel"] select, [role="tabpanel"] input, [role="tabpanel"] textarea) {
+  min-height: 44px;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 [role="tabpanel"] textarea {
+  min-height: 220px;
+  line-height: 1.55;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 [role="tabpanel"] button:not(.atlas-action):not(:disabled) {
+  border-color: var(--ds-border);
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 [role="tabpanel"] button:not(.atlas-action):hover {
+  background: var(--ds-blue-soft) !important;
+  color: var(--ds-blue-ink) !important;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 :is(.atlas-toolbar, .atlas-empty-state) {
+  border-bottom: 4px solid var(--ds-depth) !important;
+  border-radius: var(--ds-radius-card) !important;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-toolbar {
+  gap: 16px;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-toolbar > * {
+  min-width: 0;
+}
+
+body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .edu-ds-state {
+  text-align: left;
+}
+
+[data-edu-system="1"].edu-communications-dialog {
+  color: var(--ds-ink);
+}
+
+[data-edu-system="1"].edu-communications-dialog > div > div[class*="bg-slate"] {
+  background: var(--ds-subtle) !important;
+  border-color: var(--ds-border) !important;
+}
+
+[data-edu-system="1"].edu-communications-dialog .h-2 {
+  background: var(--ds-subtle) !important;
+}
+
+[data-edu-system="1"].edu-communications-dialog .h-2 > div {
+  background: var(--ds-blue) !important;
+}
+
+@media (max-width: 640px) {
+  body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .edu-communications-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-toolbar > div:last-child {
+    width: 100%;
+  }
+
+  body.education-ui-v1-active[data-edu-theme] [data-edu-system="1"].edu-communications-v1 .atlas-toolbar > div:last-child > * {
+    flex: 1 1 auto;
+  }
+}

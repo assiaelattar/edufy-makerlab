@@ -343,9 +343,9 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
             : 'border-slate-600 bg-slate-800 text-slate-300';
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Lead profile" size="lg">
-            <div className="flex h-[min(76vh,660px)] flex-col gap-4 text-slate-900">
-                <section className="shrink-0 rounded-lg border border-slate-800 bg-[#08111F] p-4 text-white">
+        <Modal isOpen={isOpen} onClose={onClose} title="Lead profile" size="lg" designSystem>
+            <div className="edu-marketing-dialog flex h-[min(76vh,660px)] flex-col gap-4 text-slate-900">
+                <section className="marketing-dialog-hero shrink-0 rounded-lg border border-slate-800 bg-[#08111F] p-4 text-white">
                     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
                         <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-teal-400/30 bg-[#0F1B2D] text-lg font-black text-teal-300">
@@ -489,7 +489,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                                         >
                                             {CALL_OUTCOMES.map(outcome => <option key={outcome.value} value={outcome.value}>{outcome.label}</option>)}
                                         </select>
-                                        <input value={callNote} onChange={event => setCallNote(event.target.value)} placeholder="Optional follow-up note" className="h-10 min-w-0 rounded-lg border border-teal-200 bg-white px-3 text-sm outline-none focus:border-[#14B8A6] focus:ring-2 focus:ring-teal-100" />
+                                        <input aria-label="Optional call follow-up note" value={callNote} onChange={event => setCallNote(event.target.value)} placeholder="Optional follow-up note" className="h-10 min-w-0 rounded-lg border border-teal-200 bg-white px-3 text-sm outline-none focus:border-[#14B8A6] focus:ring-2 focus:ring-teal-100" />
                                         <button type="submit" disabled={!callOutcome || pendingAction !== null} className="h-10 rounded-lg bg-[#14B8A6] px-4 text-sm font-bold text-[#08111F] hover:bg-teal-300 disabled:opacity-50">
                                             {pendingAction === 'call' ? 'Saving...' : 'Save outcome'}
                                         </button>

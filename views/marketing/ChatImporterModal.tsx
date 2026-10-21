@@ -112,9 +112,9 @@ export const ChatImporterModal: React.FC<ChatImporterModalProps> = ({ isOpen, on
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={resetAndClose} title="Import WhatsApp chat">
-            <div className="flex h-[min(68vh,520px)] flex-col gap-4 text-slate-900">
-                <header className="shrink-0 rounded-lg border border-slate-800 bg-[#08111F] px-4 py-3 text-white">
+        <Modal isOpen={isOpen} onClose={resetAndClose} title="Import WhatsApp chat" designSystem>
+            <div className="edu-marketing-dialog flex h-[min(68vh,520px)] flex-col gap-4 text-slate-900">
+                <header className="marketing-dialog-hero shrink-0 rounded-lg border border-slate-800 bg-[#08111F] px-4 py-3 text-white">
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-400/30 bg-[#0F1B2D] text-teal-300"><ClipboardPaste size={19} /></div>
                         <div className="min-w-0"><p className="text-[10px] font-bold uppercase text-teal-300">Timeline import</p><h2 className="truncate text-base font-bold">Bring conversation history into {lead.name}</h2></div>

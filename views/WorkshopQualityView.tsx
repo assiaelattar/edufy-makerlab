@@ -19,6 +19,8 @@ import {
     AtlasSignalCard
 } from '../components/atlas/AtlasSurface';
 import './programs/education-programs-v1.css';
+import '../components/education-ui/education-system-v1.css';
+import '../components/education-ui/education-system-v1-modules.css';
 
 export const WorkshopQualityView = () => {
     const { teamMembers, workshopEvaluations = [], classSessions } = useAppContext();
@@ -183,7 +185,7 @@ export const WorkshopQualityView = () => {
     };
 
     return (
-        <div className={`space-y-5 pb-20 animate-in fade-in duration-200 ${showEducationProgramsV1 ? 'edu-v1 edu-workshop-quality-v1' : ''}`} data-testid={showEducationProgramsV1 ? 'education-workshop-quality-v1' : undefined}>
+        <div className={`space-y-5 pb-20 animate-in fade-in duration-200 ${showEducationProgramsV1 ? 'edu-v1 edu-school-ops-v1 edu-workshop-quality-v1' : ''}`} data-edu-system={showEducationProgramsV1 ? '1' : undefined} data-testid={showEducationProgramsV1 ? 'education-workshop-quality-v1' : undefined}>
             <AtlasCommandHeader
                 eyebrow="Academic quality"
                 title="Workshop quality"

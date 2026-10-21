@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { Plus, TrendingUp, Layers, GraduationCap, Sparkles, Factory } from 'lucide-react';
+import { Plus, TrendingUp, Layers, GraduationCap, Sparkles, Factory, ArrowRight } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { ProjectTemplate, StationType, Program } from '../../types';
-import { StationCard } from '../../components/StationCard';
-import { STATION_THEMES } from '../../utils/theme';
+import { STATION_THEMES, getTheme } from '../../utils/theme';
 import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard } from '../../components/atlas/AtlasSurface';
 
 interface FactoryDashboardProps {
@@ -67,15 +67,19 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <section className="space-y-4">
                 <AtlasSectionHeader title="Station catalog" description="Open a station to review its curriculum or create a mission in context." icon={Layers} />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {allStations.map(station => (
-                        <StationCard
-                            key={station}
-                            station={station}
-                            projectCount={stats.byStation[station] || 0}
-                            onAddProject={() => onAddProject(station)}
-                            onClick={() => onViewStation(station)}
-                        />
-                    ))}
+                    {allStations.map(station => {
+                        const theme = getTheme(station);
+                        const Icon = (LucideIcons as any)[theme.icon] || LucideIcons.Circle;
+                        return <article key={station} className="edu-learning-station-card">
+                            <div className="edu-learning-station-icon"><Icon size={28} aria-hidden="true" /></div>
+                            <h3>{STATION_THEMES[station].label}</h3>
+                            <p>{stats.byStation[station] || 0} {(stats.byStation[station] || 0) === 1 ? 'project' : 'projects'}</p>
+                            <div className="edu-learning-station-actions">
+                                <button type="button" onClick={() => onViewStation(station)}>Open projects <ArrowRight size={16} aria-hidden="true" /></button>
+                                <button type="button" onClick={() => onAddProject(station)}><Plus size={16} aria-hidden="true" /> New mission</button>
+                            </div>
+                        </article>;
+                    })}
                 </div>
             </section>
 
@@ -87,8 +91,12 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                         {Object.entries(stats.byGrade).map(([grade, count]) => (
                             <div
                                 key={grade}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Create project for ${grade}`}
                                 className="cursor-pointer rounded-lg border border-white/10 bg-slate-900/80 p-4 transition-colors hover:border-teal-300/40 hover:bg-slate-900"
                                 onClick={() => onAddProject(undefined, grade)}
+                                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onAddProject(undefined, grade); } }}
                             >
                                 <div className="text-center">
                                     <div className="mb-1 font-mono text-2xl font-black text-teal-300">{count}</div>

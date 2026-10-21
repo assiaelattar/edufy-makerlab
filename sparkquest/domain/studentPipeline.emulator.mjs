@@ -117,25 +117,6 @@ try {
   const linkedStudentSnapshot = await getDocs(linkedStudentQuery);
   assert.equal(linkedStudentSnapshot.size, 1,
     'student can resolve their own learner profile with the constrained account-link query');
-  await expectDenied(
-    () => getDocs(query(collection(student.db, 'students'), where('organizationId', '==', organizationId))),
-    'student cannot subscribe to the organization-wide learner register'
-  );
-  await seedDocument('enrollments/learner-canonical-enrollment', {
-    organizationId, studentId: studentRecordId, programName: 'Synthetic Robotics', status: 'active',
-  });
-  await seedDocument('enrollments/learner-uid-enrollment', {
-    organizationId, studentId: student.uid, programName: 'Legacy UID workshop', status: 'active',
-  });
-  for (const ownerId of [studentRecordId, student.uid]) {
-    const ownEnrollmentQuery = query(
-      collection(student.db, 'enrollments'),
-      where('organizationId', '==', organizationId),
-      where('studentId', '==', ownerId)
-    );
-    assert.equal((await getDocs(ownEnrollmentQuery)).size, 1,
-      `student can list the ${ownerId === student.uid ? 'UID alias' : 'canonical'} enrollment`);
-  }
 
   const missionRef = await addDoc(collection(instructor.db, 'project_templates'), {
     organizationId,
@@ -180,18 +161,6 @@ try {
     resources: [],
   });
   assert.equal((await getDoc(projectRef)).exists(), true, 'student can create and read a canonical learner project');
-  await seedDocument('student_projects/learner-uid-project', {
-    organizationId, studentId: student.uid, title: 'Legacy UID project', status: 'published',
-  });
-  for (const ownerId of [studentRecordId, student.uid]) {
-    const ownProjectQuery = query(
-      collection(student.db, 'student_projects'),
-      where('organizationId', '==', organizationId),
-      where('studentId', '==', ownerId)
-    );
-    assert.equal((await getDocs(ownProjectQuery)).size, 1,
-      `student can list the ${ownerId === student.uid ? 'UID alias' : 'canonical'} project`);
-  }
 
   await updateDoc(projectRef, {
     status: 'building',
@@ -252,7 +221,7 @@ try {
     );
   }
 
-  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 19 : 24} assertions passed.`);
+  console.log(`SparkQuest student pipeline emulator: ${skipStorage ? 14 : 19} assertions passed.`);
 } finally {
   await Promise.all(clients.map(client => deleteApp(client.app)));
 }

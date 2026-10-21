@@ -112,13 +112,13 @@
 .edu-finance-v1__mobile-list { padding: 10px; background: #eef2ec; }
 .edu-finance-v1__mobile-list > article { padding: 14px; border: 1px solid #dfe4dc; border-radius: 17px; background: var(--edu-surface); box-shadow: 0 4px 14px rgba(27,33,24,.045); }
 .edu-finance-v1__mobile-list > article + article { margin-top: 9px; }
-.edu-finance-v1__mobile-list > article[data-selected='true'] { border-color: #a9cc4e; background: #f5fadf; }
+.edu-finance-v1__mobile-list > article[data-selected='true'] { border-color: var(--ds-blue); background: var(--ds-blue-soft); }
 .edu-finance-v1__mobile-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .edu-finance-v1__mobile-card-head > div { min-width: 0; }
 .edu-finance-v1__mobile-card-head strong { display: block; overflow: hidden; color: var(--edu-ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .edu-finance-v1__mobile-card-head span { display: block; overflow: hidden; margin-top: 3px; color: var(--edu-muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .edu-finance-v1__mobile-card-head > b { flex: 0 0 auto; color: var(--edu-ink); font-family: 'JetBrains Mono',monospace; font-size: 13px; text-align: right; }
-.edu-finance-v1__mobile-card-head > b[data-open='true'] { color: #9a4f2a; }
+.edu-finance-v1__mobile-card-head > b[data-open='true'] { color: var(--ds-orange-ink); }
 .edu-finance-v1__mobile-card-head > b small { display: block; margin-top: 3px; color: var(--edu-muted); font-family: inherit; font-size: 8px; font-weight: 700; text-transform: uppercase; }
 .edu-finance-v1__mobile-payment-title { display: flex; align-items: flex-start; gap: 9px; }
 .edu-finance-v1__mobile-payment-title > input { width: 17px; height: 17px; flex: 0 0 auto; margin-top: 1px; accent-color: #9bc51d; }
@@ -170,7 +170,7 @@
 
 .edu-finance-v1 > .space-y-4 > section.grid > div,
 .edu-finance-v1 > .space-y-4 > section.grid > button,
-.edu-finance-v1 > section,
+.edu-finance-v1 > section:not(.edu-finance-workspace__header):not(.edu-finance-workspace__view-header),
 .edu-finance-v1 > div[class*='overflow-hidden'] { border-color: var(--edu-border) !important; border-radius: 22px !important; background: var(--edu-surface) !important; box-shadow: var(--edu-shadow-sm); }
 .edu-finance-v1 button { min-height: 44px; }
 .edu-finance-v1 [class*='sticky'][class*='bg-slate'] { border-color: #dfe4dc !important; background: rgba(247,249,245,.96) !important; }
@@ -195,6 +195,8 @@
 
 .edu-activity-details-v1 > section,
 .edu-activity-details-v1 > div:not(.atlas-command-header) { border-color: var(--edu-border) !important; border-radius: 22px !important; background: var(--edu-surface) !important; box-shadow: var(--edu-shadow-sm); }
+.edu-activity-details-v1 .atlas-section-header .atlas-text-strong { color: var(--edu-ink) !important; }
+.edu-activity-details-v1 .atlas-section-header .atlas-text-subtle { color: var(--edu-muted) !important; }
 .edu-activity-details-v1 table { border-radius: 16px; overflow: hidden; }
 .edu-activity-details-v1 button { min-height: 44px; }
 

@@ -6,8 +6,6 @@ import { Student, Program, Enrollment, Payment, Expense, ExpenseTemplate, AppSet
 import { translations } from '../utils/translations';
 import { useAuth } from './AuthContext';
 import { addDoc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
-import { resolveLinkedStudentRecord } from '../sparkquest/services/studentIdentity';
-import { verifyStudentRecord } from '../sparkquest/domain/studentIdentity';
 
 interface AppContextType {
   students: Student[];
@@ -122,7 +120,6 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { userProfile, currentOrganization } = useAuth();
-  const learnerStudentPointer = (userProfile as (UserProfile & { studentId?: string }) | null)?.studentId;
   const [students, setStudents] = useState<Student[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -287,150 +284,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // Learners must not subscribe to the organization-wide student or school
-    // collections. Resolve the Auth-linked record, then listen only to that
-    // record and its own enrollment/project IDs under the existing rules.
-    if (userProfile?.role === 'student') {
-      setStudents([]);
-      setPrograms([]);
-      setEnrollments([]);
-      setPayments([]);
-      setExpenses([]);
-      setExpenseTemplates([]);
-      setWorkshopTemplates([]);
-      setWorkshopSlots([]);
-      setBookings([]);
-      setWorkshopEvaluations([]);
-      setClassSessions([]);
-      setAttendanceRecords([]);
-      setStaffAttendanceRecords([]);
-      setTasks([]);
-      setProjects([]);
-      setChatMessages([]);
-      setTeamMembers([]);
-      setMarketingPosts([]);
-      setCampaigns([]);
-      setLeads([]);
-      setProjectTemplates([]);
-      setStudentProjects([]);
-      setProcessTemplates([]);
-      setStations([]);
-      setBadges([]);
-      setToolLinks([]);
-      setArchiveLinks([]);
-      setGalleryItems([]);
-      setAssets([]);
-      setPickupQueue([]);
-      setAttendanceLoading(false);
-
-      const authUid = userProfile.uid;
-      if (!authUid || userProfile.organizationId !== orgId) {
-        setWorkspaceError('This learner account is not assigned to the active academy. Contact your administrator.');
-        setLoading(false);
-        return;
-      }
-
-      let disposed = false;
-      const unsubs: Array<() => void> = [];
-      const required = new Set(['settings', 'student', 'enrollments', 'student_projects']);
-      const markReady = (name: string) => {
-        required.delete(name);
-        if (!disposed && required.size === 0) setLoading(false);
-      };
-      const fail = (label: string, error: unknown) => {
-        if (disposed) return;
-        console.error(`Unable to load learner ${label}:`, error);
-        setWorkspaceError(`We could not load your ${label}. Check your connection or contact the academy.`);
-        setLoading(false);
-      };
-
-      unsubs.push(onSnapshot(doc(firestore, 'organizations', orgId, 'settings', 'global'), snapshot => {
-        const savedData = snapshot.exists() ? snapshot.data() as AppSettings : DEFAULT_SETTINGS;
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...savedData,
-          studentFormConfig: { ...DEFAULT_SETTINGS.studentFormConfig, ...savedData.studentFormConfig }
-        });
-        markReady('settings');
-      }, error => fail('academy settings', error)));
-
-      void resolveLinkedStudentRecord({
-        db: firestore,
-        authUid,
-        organizationId: orgId,
-        pointedStudentId: learnerStudentPointer || authUid
-      }).then(async linked => {
-        if (!linked && learnerStudentPointer && learnerStudentPointer !== authUid) {
-          linked = await resolveLinkedStudentRecord({
-            db: firestore,
-            authUid,
-            organizationId: orgId,
-            pointedStudentId: authUid
-          });
-        }
-        if (disposed) return;
-        if (!linked) {
-          setWorkspaceError('This learner account is not linked to a student record. Contact the academy.');
-          setLoading(false);
-          return;
-        }
-
-        unsubs.push(onSnapshot(doc(firestore, 'students', linked.id), snapshot => {
-          const record = snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } as Student : null;
-          if (!record || !verifyStudentRecord(record, authUid, orgId)) {
-            setStudents([]);
-            fail('student record', new Error('The learner link is missing or no longer valid.'));
-            return;
-          }
-          setStudents([record]);
-          markReady('student');
-        }, error => fail('student record', error)));
-
-        const ownerIds = Array.from(new Set([linked.id, authUid]));
-        const enrollmentSnapshots = new Map<string, Enrollment[]>();
-        const projectSnapshots = new Map<string, StudentProject[]>();
-        ownerIds.forEach(ownerId => {
-          unsubs.push(onSnapshot(query(collection(firestore, 'enrollments'), where('organizationId', '==', orgId), where('studentId', '==', ownerId)), snapshot => {
-            enrollmentSnapshots.set(ownerId, snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Enrollment)));
-            setEnrollments(Array.from(enrollmentSnapshots.values()).flat());
-            if (enrollmentSnapshots.size === ownerIds.length) markReady('enrollments');
-          }, error => fail('enrollments', error)));
-          unsubs.push(onSnapshot(query(collection(firestore, 'student_projects'), where('organizationId', '==', orgId), where('studentId', '==', ownerId)), snapshot => {
-            projectSnapshots.set(ownerId, snapshot.docs.map(item => ({ id: item.id, ...item.data() } as StudentProject)));
-            setStudentProjects(Array.from(projectSnapshots.values()).flat());
-            if (projectSnapshots.size === ownerIds.length) markReady('student_projects');
-          }, error => fail('projects', error)));
-        });
-        unsubs.push(onSnapshot(query(collection(firestore, 'badges'), where('organizationId', '==', orgId)), snapshot => {
-          setBadges(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Badge)));
-        }, error => console.error('Unable to load learner badge catalogue:', error)));
-      }).catch(error => fail('student record', error));
-
-      // Studio uses these public catalogues to show the learner's missions,
-      // class choices, workflows and stations. Never subscribe to staff-only
-      // operational collections from a learner account.
-      unsubs.push(onSnapshot(query(collection(firestore, 'programs'), where('organizationId', '==', orgId)), snapshot => {
-        setPrograms(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Program)));
-      }, error => console.error('Unable to load learner program catalogue:', error)));
-      unsubs.push(onSnapshot(collection(firestore, 'project_templates'), snapshot => {
-        setProjectTemplates(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as ProjectTemplate))
-          .filter(item => !item.organizationId || item.organizationId === orgId));
-      }, error => console.error('Unable to load learner mission catalogue:', error)));
-      unsubs.push(onSnapshot(collection(firestore, 'process_templates'), snapshot => {
-        setProcessTemplates(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as ProcessTemplate))
-          .filter(item => !item.organizationId || item.organizationId === orgId));
-      }, error => console.error('Unable to load learner workflow catalogue:', error)));
-      unsubs.push(onSnapshot(collection(firestore, 'stations'), snapshot => {
-        setStations(snapshot.docs.map(item => ({ id: item.id, ...item.data() } as Station))
-          .filter(item => !item.organizationId || item.organizationId === orgId));
-      }, error => console.error('Unable to load learner station catalogue:', error)));
-
-      return () => {
-        disposed = true;
-        unsubs.forEach(unsubscribe => unsubscribe());
-      };
-    }
-
     // Open the workspace once the records that define its primary school view
     // are ready. Module collections continue to hydrate from their listeners.
     const required = new Set([
@@ -583,7 +436,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (optionalTimer) clearTimeout(optionalTimer);
       unsubs.forEach(u => u());
     };
-  }, [currentOrganization, userProfile?.role, userProfile?.uid, learnerStudentPointer]);
+  }, [currentOrganization, userProfile?.role]);
 
   // Separate effect for Notifications based on userProfile
   useEffect(() => {

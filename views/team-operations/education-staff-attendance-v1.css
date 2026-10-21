@@ -1,0 +1,45 @@
+/* Staff attendance details on top of the shared Education workspace tokens. */
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-card {
+  min-width: 0;
+  color: var(--ds-ink);
+  background: var(--ds-surface) !important;
+  border: 2px solid var(--ds-border) !important;
+  border-bottom: 4px solid var(--ds-depth) !important;
+  border-radius: var(--ds-radius-card);
+}
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-card[data-status="late"] { border-left: 5px solid var(--ds-orange) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-card[data-status="absent"] { border-left: 5px solid var(--ds-red) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-card[data-status="present"] { border-left: 5px solid var(--ds-green) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status,
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice {
+  color: var(--ds-muted) !important;
+  background: var(--ds-subtle) !important;
+  border: 2px solid var(--ds-border) !important;
+}
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status[data-status="present"],
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice[data-status="present"][aria-pressed="true"] { color: var(--ds-green-ink) !important; background: var(--ds-green-soft) !important; border-color: var(--ds-green) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status[data-status="late"],
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice[data-status="late"][aria-pressed="true"] { color: var(--ds-orange-ink) !important; background: var(--ds-orange-soft) !important; border-color: var(--ds-orange) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status[data-status="absent"],
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice[data-status="absent"][aria-pressed="true"] { color: var(--ds-red-ink) !important; background: var(--ds-red-soft) !important; border-color: var(--ds-red) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status[data-status="leave"],
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice[data-status="leave"][aria-pressed="true"] { color: var(--ds-purple-ink) !important; background: var(--ds-purple-soft) !important; border-color: var(--ds-purple) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status[data-status="excused"],
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice[data-status="excused"][aria-pressed="true"] { color: var(--ds-blue-ink) !important; background: var(--ds-blue-soft) !important; border-color: var(--ds-blue) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-status[data-status="unmarked"] { color: var(--ds-muted) !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice { min-width: 0; min-height: 44px; border-bottom-width: 4px !important; border-radius: var(--ds-radius-control); }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice:not(:disabled):active { transform: translateY(2px); border-bottom-width: 2px !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice:focus-visible,
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-save:focus-visible,
+[data-edu-system="1"].edu-staff-attendance-v1 button:focus-visible { outline: 3px solid var(--ds-blue) !important; outline-offset: 2px; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-save { min-height: 44px; color: var(--ds-blue-ink) !important; background: var(--ds-blue-soft) !important; border: 2px solid var(--ds-blue) !important; border-bottom-width: 4px !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-report-search { display: flex; width: min(100%, 440px); align-items: center; gap: 12px; padding-left: 12px; color: var(--ds-muted); background: var(--ds-surface); border: 2px solid var(--ds-border); border-radius: var(--ds-radius-control); }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-report-search input { width: 100%; min-width: 0; border: 0 !important; background: transparent !important; }
+[data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-report-search:focus-within { border-color: var(--ds-blue); }
+@media (max-width: 640px) {
+  [data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-card { padding: 16px; }
+  [data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-report-search { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-edu-system="1"].edu-staff-attendance-v1 .staff-attendance-choice { transition: none !important; }
+}

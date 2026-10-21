@@ -33,6 +33,8 @@
 .edu-students-v1 .edu-student-playful .edu-student-ops__smart-views button[data-view='attention'][aria-pressed='true'] { background:var(--ds-orange); color:var(--ds-on-color); border-color:var(--ds-orange-edge); box-shadow:0 3px 0 var(--ds-orange-edge); }
 .edu-students-v1 .edu-student-playful .edu-student-ops__student-row { padding:14px 8px; }
 .edu-students-v1 .edu-student-playful .edu-student-ops__student-row[data-selected='true'] { border-radius:12px; background:var(--edu-surface-muted); box-shadow:inset 4px 0 var(--ds-blue); }
+.edu-students-v1 .edu-student-playful .edu-student-ops__student-row[data-selectable='false'] { grid-template-columns:minmax(0,1fr) 44px; }
+.edu-students-v1 .edu-student-playful .edu-student-ops__student-row[data-selectable='false'] .edu-student-ops__student-main { padding-left:12px; }
 .edu-students-v1 .edu-student-playful .edu-student-ops__avatar { border:2px solid var(--ds-green-edge); border-bottom-width:4px; border-radius:14px; background:var(--ds-green-soft); color:var(--ds-on-color); font-weight:900; }
 .edu-students-v1 .edu-student-playful [data-needs-action='true'] .edu-student-ops__avatar { background:var(--ds-orange); color:var(--ds-on-color); border-color:var(--ds-orange-edge); }
 .edu-students-v1 .edu-student-playful .edu-student-ops__student-copy strong { font-size:16px; font-weight:900; }
@@ -75,4 +77,51 @@
 
 .edu-students-v1 .edu-student-playful .edu-student-ops__avatar { color:var(--ds-green-ink); }
 .edu-students-v1 .edu-student-playful .edu-student-ops__passport-person > span { color:var(--ds-on-color); }
+
+/* Register-owned dialogs use the same scoped controls as the reference forms. */
+.edu-students-v1 .edu-students-dialog,.edu-students-v1 .edu-students-statement { display:grid; gap:20px; color:var(--ds-ink); }
+.edu-students-v1 .edu-students-dialog__selection,.edu-students-v1 .edu-students-statement__summary { padding:16px; border:2px solid var(--ds-border); border-radius:16px; background:var(--ds-subtle); }
+.edu-students-v1 .edu-students-dialog__selection>strong { display:block; margin-bottom:10px; font:800 16px var(--ds-font-heading); }
+.edu-students-v1 .edu-students-dialog__chips { display:flex; flex-wrap:wrap; gap:8px; max-height:112px; overflow:auto; }
+.edu-students-v1 .edu-students-dialog__chips>span { padding:6px 10px; border:1px solid var(--ds-border); border-radius:10px; background:var(--ds-surface); font-size:13px; }
+.edu-students-v1 .edu-students-dialog__lookup { position:relative; }
+.edu-students-v1 .edu-students-dialog__suggestions,.edu-students-v1 .edu-students-dialog__no-results { position:absolute; z-index:5; top:100%; left:0; right:0; max-height:180px; overflow:auto; border:2px solid var(--ds-border); border-radius:12px; background:var(--ds-surface); box-shadow:0 4px 0 var(--ds-depth); }
+.edu-students-v1 .edu-students-dialog__suggestions button { display:grid; gap:2px; width:100%; min-height:44px; padding:9px 12px; text-align:left; color:var(--ds-ink); border-bottom:1px solid var(--ds-border); }
+.edu-students-v1 .edu-students-dialog__suggestions button:hover,.edu-students-v1 .edu-students-dialog__suggestions button:focus-visible { background:var(--ds-blue-soft); }
+.edu-students-v1 .edu-students-dialog__suggestions small,.edu-students-v1 .edu-students-dialog__no-results { color:var(--ds-muted); font-size:13px; }
+.edu-students-v1 .edu-students-dialog__no-results { padding:12px; }
+.edu-students-v1 .edu-students-dialog__fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.edu-students-v1 .edu-students-dialog__warning { margin:0; padding:12px 14px; border:2px solid var(--ds-orange); border-radius:12px; background:var(--ds-orange-soft); color:var(--ds-orange-ink); font-size:13px; }
+.edu-students-v1 .edu-students-dialog__actions,.edu-students-v1 .edu-students-statement__actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; }
+.edu-students-v1 .edu-students-statement__filters { display:grid; gap:14px; padding:16px; border:2px solid var(--ds-border); border-radius:16px; background:var(--ds-subtle); }
+.edu-students-v1 .edu-students-statement__filters>div:first-child { display:flex; justify-content:space-between; align-items:start; gap:12px; }
+.edu-students-v1 .edu-students-statement__filters h4,.edu-students-v1 .edu-students-statement__learner h4 { margin:0; font:800 17px var(--ds-font-heading); }
+.edu-students-v1 .edu-students-statement__filters p,.edu-students-v1 .edu-students-statement__summary p { margin:4px 0 0; color:var(--ds-muted); font-size:13px; }
+.edu-students-v1 .edu-students-statement__programs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.edu-students-v1 .edu-students-statement__programs label { display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 10px; border:2px solid var(--ds-border); border-radius:12px; background:var(--ds-surface); cursor:pointer; }
+.edu-students-v1 .edu-students-statement__programs label[data-checked='true'] { border-color:var(--ds-blue); background:var(--ds-blue-soft); color:var(--ds-blue-ink); }
+.edu-students-v1 .edu-students-statement__programs span { overflow-wrap:anywhere; }
+.edu-students-v1 .edu-students-statement__summary { display:flex; justify-content:space-between; gap:20px; }
+.edu-students-v1 .edu-students-statement__summary h3 { margin:0; font:900 22px var(--ds-font-heading); }
+.edu-students-v1 .edu-students-statement__total { display:grid; gap:3px; text-align:right; }
+.edu-students-v1 .edu-students-statement__total strong { color:var(--ds-green-ink); font:900 28px var(--ds-font-heading); }
+.edu-students-v1 .edu-students-statement__total[data-due='true'] strong { color:var(--ds-orange-ink); }
+.edu-students-v1 .edu-students-statement__total small { color:var(--ds-muted); font-size:12px; }
+.edu-students-v1 .edu-students-statement__learners { display:grid; gap:12px; }
+.edu-students-v1 .edu-students-statement__learner,.edu-students-v1 .edu-students-statement__empty { padding:16px; border:2px solid var(--ds-border); border-radius:16px; background:var(--ds-surface); }
+.edu-students-v1 .edu-students-statement__learner-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.edu-students-v1 .edu-students-statement__profile { min-height:40px; padding:7px 10px; border:2px solid var(--ds-blue); border-radius:10px; color:var(--ds-blue-ink); background:var(--ds-blue-soft); font-weight:700; }
+.edu-students-v1 .edu-students-statement__enrollments { display:grid; gap:10px; }
+.edu-students-v1 .edu-students-statement__enrollment { display:grid; gap:5px; padding-top:10px; border-top:1px solid var(--ds-border); }
+.edu-students-v1 .edu-students-statement__enrollment>div { display:flex; flex-wrap:wrap; gap:6px 14px; color:var(--ds-muted); font-size:12px; }
+.edu-students-v1 .edu-students-statement__enrollment b { color:var(--ds-green-ink); }
+.edu-students-v1 .edu-students-statement__enrollment b[data-due='true'] { color:var(--ds-orange-ink); }
+.edu-students-v1 .edu-students-statement__actions { padding-top:16px; border-top:2px solid var(--ds-border); }
+.edu-students-v1 .edu-student-ops__family-actions { grid-template-columns:1fr; }
+.edu-students-v1 .edu-student-ops__family-summary[data-finance='false'] { grid-template-columns:1fr; }
+.edu-students-v1 .edu-student-ops__family-summary[data-finance='false'] > div { color:var(--ds-green-ink); background:var(--ds-green-soft); }
+.edu-students-v1 .edu-student-playful .edu-student-ops__family-list b[data-due='true'] { color:var(--ds-orange-ink); }
+.edu-students-v1 .edu-student-playful .edu-student-ops__family-list b[data-due='false'] { color:var(--ds-green-ink); }
+.edu-students-v1 .edu-student-playful .edu-student-ops__empty button { min-height:44px; border:2px solid var(--ds-blue-edge); border-radius:12px; background:var(--ds-blue); color:var(--ds-on-color); box-shadow:0 3px 0 var(--ds-blue-edge); }
+@media(max-width:640px) { .edu-students-v1 .edu-students-dialog__fields,.edu-students-v1 .edu-students-statement__programs { grid-template-columns:1fr; } .edu-students-v1 .edu-students-statement__summary { flex-direction:column; } .edu-students-v1 .edu-students-statement__total { text-align:left; } .edu-students-v1 .edu-students-dialog__actions>button,.edu-students-v1 .edu-students-statement__actions>button { flex:1; } }
 .edu-students-v1 .edu-student-playful .edu-student-ops__smart-views { scrollbar-width:thin; }

@@ -1,5 +1,18 @@
 # Finance known issues
 
+## 2026-10-20 — Expanded Finance candidate acceptance
+
+- The signed-in app at port 5202 serves an earlier checkout. Its Finance home, loaded Collections and Documents register were inspected read-only, but this patch's styling was verified in synthetic previews.
+- The dedicated Documents preview now covers nested success, failure, loading, error, empty and manager-boundary states at 390px in both themes. Synthetic invoice, receipt and report print windows and downloaded payment/accounting XLSX rows were inspected; physical Save as PDF and import into a real accounting package remain open.
+- Synthetic transfer proof attachment, failed family batch, transaction-detail destination, lifecycle success/failure, follow-up reminder interception, and Reports desktop/empty states passed in standalone Chromium. Real persisted reconciliation, actual role claims, concurrent sequence/correction behavior, external reminder handoff and physical-phone/print behavior remain open.
+- The legacy `ActivityDetailsView` status action still updates payment and enrollment in separate writes. The Finance transaction editor uses an atomic path; this older detail action needs a separate ledger-safety review before real lifecycle sign-off. No production write was made in this pass.
+- Aggregate transaction summaries are now gated by `finance.view_totals`. Individual permitted payment and family rows retain amounts under the existing `finance.view` contract; any broader amount restriction requires a separate permission decision.
+
+## 2026-10-20 — Design System v1 acceptance gaps
+
+- The earlier candidate's login and Documents-stub limitations were superseded by the expanded pass above. Its remaining output, role and responsive gaps are consolidated there.
+- Repository-wide TypeScript reports errors in `FinanceView.tsx` for context/settings typings and filter callbacks; these areas predate this visual patch. Production build passes. Keep this type debt visible until separately resolved.
+
 ## Existing constraints retained
 
 - Nested Finance documents, counters and accounting templates are organization-manager-only in current Firestore rules, although existing Finance UI grants include accountant/admission officer permissions. New service features deliberately match actual persistence: active owners, admins and super admins. Enabling non-manager staff requires an explicit permission-alignment phase across all invoice transactions and rules.
