@@ -71,6 +71,33 @@ body .edu-v1.edu-attendance-pulse .atlas-command-header__icon { display:none; }
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-toolbar input::placeholder { color:var(--edu-muted); }
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session { border:0 !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; }
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session__head { background:var(--edu-surface-muted) !important; border-color:var(--edu-border) !important; }
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session {
+  color:var(--edu-ink) !important;
+  background:var(--edu-surface) !important;
+  border-color:var(--edu-border) !important;
+}
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session__body {
+  border-color:var(--edu-border) !important;
+}
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session__head {
+  background:var(--edu-surface-muted) !important;
+  border-color:var(--edu-border) !important;
+}
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-row {
+  background:var(--edu-surface) !important;
+  border-color:var(--edu-border) !important;
+}
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-row:hover {
+  background:var(--edu-surface-muted) !important;
+}
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session__head :is(.text-white,.text-slate-300,.text-slate-400,.text-slate-500),
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-row :is(.text-white,.text-slate-300,.text-slate-400,.text-slate-500) {
+  color:var(--edu-ink) !important;
+}
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-session__head p,
+.education-ui-v1-active[data-edu-theme='light'] .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-row__state {
+  color:var(--edu-muted) !important;
+}
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button { color:var(--edu-muted) !important; border-color:transparent !important; background:transparent !important; box-shadow:none !important; }
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button:hover:not(:disabled) { color:var(--edu-ink) !important; background:var(--edu-surface) !important; border-color:var(--edu-border) !important; }
 .education-ui-v1-active .edu-shell-v1__content-inner .edu-attendance-pulse .pulse-attendance-marks button[aria-pressed='true'][data-mark='present'] { color:var(--edu-success) !important; background:var(--edu-success-soft) !important; border-color:var(--edu-success) !important; }
