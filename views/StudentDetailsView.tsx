@@ -494,7 +494,7 @@ export const StudentDetailsView = ({
         } finally { setIsGeneratingAccess(false); }
     };
 
-    const handleCreateParentAccess = async (action: ParentAccessAction, reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string): Promise<'success' | 'name_required' | 'login_missing' | 'error' | 'cancelled'> => {
+    const handleCreateParentAccess = async (action: ParentAccessAction, reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string, separateParentVerified?: boolean): Promise<'success' | 'name_required' | 'login_missing' | 'error' | 'cancelled'> => {
         if (!student) return 'cancelled';
         if (action === 'replace') {
             const approved = await confirm({ title: 'Replace parent login', message: 'A recorded parent account will be retired and its linked learners will move to the new SparkQuest login. If the recorded login belongs to staff, Edufy will require a separate confirmation to detach only this learner while keeping staff access active. Share the new one-time password with the verified parent.', variant: 'warning', confirmText: 'Replace login' });
@@ -514,7 +514,7 @@ export const StudentDetailsView = ({
             if (!organizationId || organizationId !== student.organizationId) throw new Error('Select the learner’s organization before managing parent access.');
             let result;
             try {
-                result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: verifiedParentName || student.parentName, aliasBasis, relationshipVerified, reuseParentUid, reuseParentEmail });
+                result = await manageParentAccess({ action, studentId: student.id, organizationId, parentName: verifiedParentName || student.parentName, aliasBasis, relationshipVerified, reuseParentUid, reuseParentEmail, separateParentVerified });
             } catch (error: any) {
                 if (action !== 'replace' || error?.code !== 'staff_login_mislinked') throw error;
                 const approved = await confirm({ title: 'Repair mistaken staff link', message: 'This learner’s recorded parent login belongs to an Edufy staff account. Keep the staff login active, remove only this learner’s mistaken family link, and issue a dedicated SparkQuest parent login?', variant: 'warning', confirmText: 'Repair learner link' });

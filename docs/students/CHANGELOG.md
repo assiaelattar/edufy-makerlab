@@ -1,5 +1,11 @@
 # Students experience changelog
 
+## 2026-10-22 — Parent login duplication guard
+
+- Parent access now checks active same-tenant family logins with the proposed alias before issuing another suffixed ID. Staff must explicitly confirm a distinct parent to proceed.
+- The account dialog shows matching login IDs and linked learners, explains that contact-based family grouping is separate from SparkQuest guardian links, and flags conflicting recorded parent names before a transfer.
+- Added an Auth/Firestore emulator regression for the second-child duplicate and explicit distinct-parent override; the full parent-access emulator suite and production build pass in this isolated worktree.
+
 ## 2026-10-20 — Register and owned dialogs
 
 - Kept the canonical register as the Students route and disabled its legacy query escape.

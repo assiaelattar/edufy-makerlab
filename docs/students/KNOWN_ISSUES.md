@@ -1,5 +1,10 @@
 # Students experience known issues
 
+## 2026-10-22
+
+- Live DAKY records show separate parent login IDs: Kamyl has `p.daky-3@makerlab.academy`, Nassym has `p.daky-4@makerlab.academy`. The first appears in Nassym's verified-family selector, but Nassym's recorded parent name differs from that login's profile name. Exact family identity and retained account require staff verification before a production transfer; no account was merged or disabled.
+- The local duplication guard passed API syntax, focused TS transpilation, full production build and the Auth/Firestore parent-access emulator suite after installing the lockfile dependencies in an isolated worktree. Signed-in parent account consolidation remains unverified; do not change the real family accounts until exact identity and retained login are confirmed.
+
 ## 2026-10-20
 
 - Signed-in tenant acceptance remains open. This worktree's browser QA used synthetic records and mutation stubs; real persistence, archived-list refresh/reactivation, AppContext loading/error states, and route/data authorization require integrated checks. See `STUDENTS_REGISTER_DS_2026-10-20.md`.

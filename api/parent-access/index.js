@@ -162,6 +162,14 @@ const createIssuedParent = async (auth, aliasBasis, parentName) => {
   throw Object.assign(new Error('No available parent login could be issued.'), { status: 409 });
 };
 
+const existingAliasFamilies = async (db, organizationId, aliasBasis, excludedUid = '') => {
+  const alias = parentAliasBase(aliasBasis);
+  const accounts = await parentDirectory(db, organizationId);
+  return accounts.filter(account => account.uid !== excludedUid &&
+    (account.email.toLowerCase() === `${alias}@makerlab.academy` ||
+      new RegExp(`^${alias.replaceAll('.', '\\.')}-\\d+@makerlab\\.academy$`, 'i').test(account.email)));
+};
+
 const parentDirectory = async (db, organizationId) => {
   const [profiles, links, learners] = await Promise.all([
     db.collection('users').where('organizationId', '==', organizationId).get(),
@@ -226,7 +234,7 @@ export default async function handler(req, res) {
     const db = getDb();
     const actorDoc = await db.doc(`users/${actor.uid}`).get();
     const actorProfile = actorDoc.data();
-    const { action, studentId, organizationId, reuseParentUid, reuseParentEmail, parentName, aliasBasis, relationshipVerified } = req.body || {};
+    const { action, studentId, organizationId, reuseParentUid, reuseParentEmail, parentName, aliasBasis, relationshipVerified, separateParentVerified } = req.body || {};
     const platformAdmin = actorProfile?.role === 'super_admin' && actorProfile.organizationId === 'atlas-platform';
     if (!actorProfile || actorProfile.status !== 'active' || !staffRoles.has(actorProfile.role) ||
       typeof organizationId !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(organizationId) ||
@@ -503,6 +511,9 @@ export default async function handler(req, res) {
       }
       const family = linkedStudents.docs;
       const familyIds = new Set(family.map(item => item.id));
+      if (separateParentVerified !== true && (await existingAliasFamilies(db, organizationId, aliasBasis || confirmedParentName, oldUid)).length) {
+        return response(res, 409, { ok: false, code: 'existing_family_login', error: 'A family login with this alias already exists. Verify the exact parent account and move these learners to it, or confirm this is a different parent.' });
+      }
       const issued = await createIssuedParent(auth, aliasBasis || confirmedParentName, confirmedParentName);
       try {
         await db.runTransaction(async transaction => {
@@ -585,6 +596,9 @@ export default async function handler(req, res) {
       verifiedParentName = verifiedNameCandidate(recordedParentName) || confirmedParentName;
       if (verifiedParentName.length < 2 || (verifiedNameCandidate(recordedParentName) && confirmedParentName && confirmedParentName !== recordedParentName)) {
         return response(res, 400, { ok: false, code: 'parent_name_required', error: 'Enter and verify the real parent name before issuing a login.' });
+      }
+      if (separateParentVerified !== true && (await existingAliasFamilies(db, organizationId, aliasBasis || verifiedParentName.replace(/ family$/i, ''))).length) {
+        return response(res, 409, { ok: false, code: 'existing_family_login', error: 'A family login with this alias already exists. Verify the exact parent account and link this learner to it, or confirm this is a different parent.' });
       }
       const issued = await createIssuedParent(auth, aliasBasis || verifiedParentName.replace(/ family$/i, ''), verifiedParentName);
       ({ uid, email, password } = issued);

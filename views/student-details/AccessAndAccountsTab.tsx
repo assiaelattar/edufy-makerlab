@@ -9,7 +9,7 @@ import { RecipientQuickAccess } from './RecipientQuickAccess';
 interface AccessAndAccountsTabProps {
   student: Student;
   handleGenerateAccess: () => void;
-  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'recover', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string) => Promise<'success' | 'name_required' | 'login_missing' | 'error' | 'cancelled'>;
+  handleCreateParentAccess: (action: 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'recover', reuseParentUid?: string, aliasBasis?: string, relationshipVerified?: boolean, verifiedParentName?: string, reuseParentEmail?: string, separateParentVerified?: boolean) => Promise<'success' | 'name_required' | 'login_missing' | 'error' | 'cancelled'>;
   isGeneratingAccess: boolean;
   generateAccessCardPrint: (student: Student, settings: any) => void;
   shareAccount: (role: 'student' | 'parent', channel: 'email' | 'whatsapp') => void;
@@ -67,6 +67,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const [aliasBasis, setAliasBasis] = useState(parentAliasFromName(recordedRealParentName(student.parentName)) || suggestedFamily.alias);
   const [aliasManuallyEdited, setAliasManuallyEdited] = useState(false);
   const [relationshipVerified, setRelationshipVerified] = useState(false);
+  const [separateParentVerified, setSeparateParentVerified] = useState(false);
   const [verifiedParentName, setVerifiedParentName] = useState(recordedRealParentName(student.parentName));
   const [exactParentEmail, setExactParentEmail] = useState('');
   const [exactLookup, setExactLookup] = useState<ParentAccessResult | null>(null);
@@ -74,12 +75,15 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
   const selectedParentAccount = directoryAccounts.find(account => account.uid === reuseParentUid);
   const aliasPreview = aliasBasis.normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '').slice(0, 48).replace(/\.+$/, '');
+  const aliasFamilyCandidates = directoryAccounts.filter(account => account.uid !== student.parentLoginInfo?.uid &&
+    new RegExp(`^p\\.${aliasPreview.replaceAll('.', '\\.')}(?:-\\d+)?@makerlab\\.academy$`, 'i').test(account.email));
 
   useEffect(() => {
     setReuseParentUid('');
     setAliasBasis(parentAliasFromName(recordedRealParentName(student.parentName)) || familyFromStudent(student.name, student.parentLoginInfo?.email).alias);
     setAliasManuallyEdited(false);
     setRelationshipVerified(false);
+    setSeparateParentVerified(false);
     setVerifiedParentName(recordedRealParentName(student.parentName));
     setExactParentEmail('');
     setExactLookup(null);
@@ -384,16 +388,22 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             <input value={verifiedParentName} onChange={event => { setVerifiedParentName(event.target.value); if (!aliasManuallyEdited) setAliasBasis(parentAliasFromName(event.target.value)); }} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="Parent’s real full name" />
           </label>}
           <label className="block text-xs font-bold uppercase text-slate-400" htmlFor="parent-alias-basis">Login alias basis</label>
-          <input id="parent-alias-basis" value={aliasBasis} onChange={event => { setAliasBasis(event.target.value); setAliasManuallyEdited(true); }} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
+          <input id="parent-alias-basis" value={aliasBasis} onChange={event => { setAliasBasis(event.target.value); setAliasManuallyEdited(true); setSeparateParentVerified(false); }} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
           <p className="text-xs text-slate-300">Preview: <strong className="break-all text-teal-300">{aliasPreview ? `p.${aliasPreview}@makerlab.academy` : 'Enter an alias basis'}</strong>. An existing login gets a numeric suffix.</p>
           <p className="text-xs text-slate-400">This email-shaped ID is for SparkQuest sign-in only. It does not need to receive messages.</p>
           <label className="flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={relationshipVerified} onChange={event => setRelationshipVerified(event.target.checked)} className="mt-1" />I verified the real parent identity and this learner’s relationship. I am not relying on a shared surname.</label>
+          {aliasFamilyCandidates.length > 0 && <div className="rounded-lg border-2 border-amber-400 bg-amber-50 p-3 text-sm text-amber-950" role="alert">
+            <strong>Possible existing family login</strong>
+            <p className="mt-1">The Students family view groups contact records; it does not link SparkQuest parent accounts. Check the exact parent and use “Move to an existing family login” below if they are the same person.</p>
+            <ul className="mt-2 list-disc pl-5">{aliasFamilyCandidates.map(account => <li key={account.uid}>{account.email} · {account.children.map(child => child.name).join(', ')}</li>)}</ul>
+          </div>}
+          {aliasFamilyCandidates.length > 0 && <label className="flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={separateParentVerified} onChange={event => setSeparateParentVerified(event.target.checked)} className="mt-1" />I checked these accounts and verified this is a different parent who needs a separate login.</label>}
           <button 
             onClick={async () => {
-              const result = await handleCreateParentAccess(student.parentLoginInfo?.uid ? 'replace' : 'issue', undefined, aliasBasis, relationshipVerified, verifiedParentName);
+              const result = await handleCreateParentAccess(student.parentLoginInfo?.uid ? 'replace' : 'issue', undefined, aliasBasis, relationshipVerified, verifiedParentName, undefined, separateParentVerified);
               if (result === 'success') setIsParentChoiceModalOpen(false);
             }}
-            disabled={!verifiedParentName.trim() || !aliasPreview || !relationshipVerified || isGeneratingAccess || !canManageParentAccess}
+            disabled={!verifiedParentName.trim() || !aliasPreview || !relationshipVerified || isDirectoryLoading || (aliasFamilyCandidates.length > 0 && !separateParentVerified) || isGeneratingAccess || !canManageParentAccess}
             className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
           >
             {student.parentLoginInfo?.uid ? 'Replace parent login' : 'Issue new parent login'}
@@ -413,9 +423,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
               <p><strong className="text-white">Linked learners:</strong> {selectedParentAccount.children.map(child => child.name).join(', ')}</p>
               <p className="break-all"><strong className="text-white">Exact parent UID:</strong> {selectedParentAccount.uid}</p>
               <p className="mt-2 text-amber-200">Confirm this is the same real parent of {student.name}. The service checks its active parent profile and guardian link.</p>
+              {student.parentName?.trim() && student.parentName.trim() !== selectedParentAccount.parentName && <p className="mt-2 rounded border border-amber-400/50 bg-amber-400/10 p-2 text-amber-100">This learner records “{student.parentName.trim()}” as the parent, while this login records “{selectedParentAccount.parentName}”. Verify the real parent and correct the learner’s parent name in the student profile before moving access.</p>}
             </div>}
             {student.parentLoginInfo?.uid && <p className="mt-3 text-xs leading-5 text-amber-200">The older login will be disabled after this learner moves. This action requires that it belongs only to this learner.</p>}
-            <button type="button" disabled={!reuseParentUid || !verifiedParentName.trim() || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess(student.parentLoginInfo?.uid ? 'transfer' : 'link', reuseParentUid, undefined, relationshipVerified, verifiedParentName); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{student.parentLoginInfo?.uid ? 'Move to selected family login' : 'Link selected parent'}</button>
+            <button type="button" disabled={!reuseParentUid || !verifiedParentName.trim() || verifiedParentName.trim() !== selectedParentAccount?.parentName || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess(student.parentLoginInfo?.uid ? 'transfer' : 'link', reuseParentUid, undefined, relationshipVerified, verifiedParentName); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{student.parentLoginInfo?.uid ? 'Move to selected family login' : 'Link selected parent'}</button>
             <label className="mt-4 block text-xs font-bold uppercase text-slate-400">Exact existing SparkQuest login ID
               <input type="email" value={exactParentEmail} onChange={event => { setExactParentEmail(event.target.value); setExactLookup(null); }} className="mt-2 min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="p.parent@makerlab.academy" autoComplete="off" />
             </label>

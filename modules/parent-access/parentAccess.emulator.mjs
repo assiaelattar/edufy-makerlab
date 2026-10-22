@@ -65,7 +65,11 @@ assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().name, 'Samira
 assert.equal((await db.doc(`users/${firstAuth.uid}`).get()).data().accessVersion, 2);
 assert.equal((await issue('child-a')).statusCode, 409);
 
-const second = await issue('child-b');
+const duplicateFamily = await issue('child-b');
+assert.equal(duplicateFamily.statusCode, 409);
+assert.equal(duplicateFamily.body.code, 'existing_family_login');
+assert.equal((await db.doc('students/child-b').get()).data().parentLoginInfo, undefined);
+const second = await invoke(staffToken, { action: 'issue', studentId: 'child-b', organizationId: 'org-a', parentName: 'Samira Ajlane', aliasBasis: 'Ajlane', relationshipVerified: true, separateParentVerified: true });
 assert.equal(second.statusCode, 200);
 assert.equal(second.body.email, 'p.ajlane-2@makerlab.academy');
 assert.equal((await adminAuth.getUserByEmail(second.body.email)).displayName, 'Samira Ajlane');
@@ -300,7 +304,8 @@ assert.equal((await invoke(staffToken, { ...replaceRequest, parentName: 'Other P
 await db.doc('students/child-h').set({ organizationId: 'org-a', name: 'Child h', parentName: 'Different Parent', parentLoginInfo: { uid: legacy.uid, email: legacy.email }, parentUids: [legacy.uid] });
 assert.equal((await invoke(staffToken, replaceRequest)).statusCode, 409);
 await db.doc('students/child-h').delete();
-const replaced = await invoke(staffToken, replaceRequest);
+assert.equal((await invoke(staffToken, replaceRequest)).body.code, 'existing_family_login');
+const replaced = await invoke(staffToken, { ...replaceRequest, separateParentVerified: true });
 assert.equal(replaced.statusCode, 200, JSON.stringify(replaced.body?.error));
 assert.equal(replaced.body.email, 'p.ajlane-3@makerlab.academy');
 assert.equal(replaced.body.linkedLearnerCount, 2);

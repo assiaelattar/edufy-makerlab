@@ -40,6 +40,7 @@ export const manageParentAccess = async (request: {
   parentName?: string;
   aliasBasis?: string;
   relationshipVerified?: boolean;
+  separateParentVerified?: boolean;
   reuseParentUid?: string;
   reuseParentEmail?: string;
 }): Promise<ParentAccessResult> => {
