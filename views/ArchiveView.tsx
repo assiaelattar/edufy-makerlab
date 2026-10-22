@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from 'react';
-import './resources/education-resources-v1.css';
+import React, { useEffect, useMemo, useState } from 'react';
+import './resources/education-archive-v1.css';
 import '../components/education-ui/education-system-v1.css';
 import '../components/education-ui/education-system-v1-modules.css';
 import {
     Archive,
     ArchiveRestore,
-    ArrowDownAZ,
     CheckCircle2,
     Clipboard,
     ExternalLink,
@@ -19,7 +18,6 @@ import {
     Plus,
     RotateCcw,
     Search,
-    ShieldAlert,
     Trash2,
     X
 } from 'lucide-react';
@@ -30,7 +28,8 @@ import {
     runTransaction,
     serverTimestamp
 } from 'firebase/firestore';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
+import { AtlasCommandHeader, AtlasSignalCard } from '../components/atlas/AtlasSurface';
+import { EducationActionMenu, EducationBadge, EducationButton, EducationDetailPanel, EducationField, EducationNotice, EducationSectionHeader, EducationState, EducationStatusPill, EducationToolbar } from '../components/education-ui/EducationPrimitives';
 import { Modal } from '../components/Modal';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -56,6 +55,9 @@ interface LinkFormState {
     url: string;
     category: ArchiveCategory;
     description: string;
+}
+class ArchiveFieldError extends Error {
+    constructor(public field: keyof LinkFormState, message: string) { super(message); }
 }
 
 const EMPTY_FORM: LinkFormState = {
@@ -89,6 +91,10 @@ const getTimestampMillis = (value: unknown): number => {
 };
 
 const getErrorMessage = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
+const formatRecordDate = (value: unknown) => {
+    const timestamp = getTimestampMillis(value);
+    return timestamp ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(timestamp) : 'Not recorded';
+};
 
 const normalizeResourceUrl = (value: string) => {
     const input = value.trim();
@@ -125,7 +131,6 @@ const normalizeExistingUrl = (link: ArchiveRecord) => {
 };
 
 export const ArchiveView = () => {
-    const showEducationResourcesV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
     const { archiveLinks = [], loading } = useAppContext();
     const { userProfile, currentOrganization, can } = useAuth();
     const { confirm } = useConfirm();
@@ -143,10 +148,12 @@ export const ArchiveView = () => {
     const [editingLink, setEditingLink] = useState<ArchiveRecord | null>(null);
     const [linkForm, setLinkForm] = useState<LinkFormState>(EMPTY_FORM);
     const [formError, setFormError] = useState('');
+    const [formErrorField, setFormErrorField] = useState<keyof LinkFormState | null>(null);
     const [operationError, setOperationError] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [mutatingId, setMutatingId] = useState<string | null>(null);
     const [copyingId, setCopyingId] = useState<string | null>(null);
+    const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
 
     const tenantLinks = useMemo(
         () => (archiveLinks as ArchiveRecord[]).filter(link => Boolean(organizationId) && link.organizationId === organizationId),
@@ -178,18 +185,26 @@ export const ArchiveView = () => {
     }, [searchTerm, selectedCategory, sortOption, statusFilter, tenantLinks]);
 
     const hasFilters = Boolean(searchTerm.trim()) || selectedCategory !== 'all' || statusFilter !== 'active' || sortOption !== 'updated_desc';
+    const selectedLink = filteredLinks.find(link => link.id === selectedLinkId) || null;
+    useEffect(() => {
+        if (!selectedLinkId || !selectedLink) return;
+        const frame = requestAnimationFrame(() => document.getElementById('archive-detail')?.scrollIntoView({ block: 'nearest' }));
+        return () => cancelAnimationFrame(frame);
+    }, [selectedLinkId, selectedLink]);
 
     const resetModal = () => {
         setIsModalOpen(false);
         setEditingLink(null);
         setLinkForm(EMPTY_FORM);
         setFormError('');
+        setFormErrorField(null);
     };
 
     const openAddModal = () => {
         setEditingLink(null);
         setLinkForm(EMPTY_FORM);
         setFormError('');
+        setFormErrorField(null);
         setOperationError('');
         setIsModalOpen(true);
     };
@@ -207,6 +222,7 @@ export const ArchiveView = () => {
             description: link.description || ''
         });
         setFormError('');
+        setFormErrorField(null);
         setOperationError('');
         setIsModalOpen(true);
     };
@@ -214,13 +230,15 @@ export const ArchiveView = () => {
     const validateForm = () => {
         const title = linkForm.title.trim().replace(/\s+/g, ' ');
         const description = linkForm.description.trim();
-        if (title.length < 2) throw new Error('Use a title with at least 2 characters.');
-        if (title.length > 120) throw new Error('Keep the title under 120 characters.');
-        if (description.length > 500) throw new Error('Keep the description under 500 characters.');
-        if (!CATEGORY_IDS.has(linkForm.category)) throw new Error('Choose a valid resource category.');
-        const normalized = normalizeResourceUrl(linkForm.url);
+        if (title.length < 2) throw new ArchiveFieldError('title', 'Use a title with at least 2 characters.');
+        if (title.length > 120) throw new ArchiveFieldError('title', 'Keep the title under 120 characters.');
+        if (description.length > 500) throw new ArchiveFieldError('description', 'Keep the description under 500 characters.');
+        if (!CATEGORY_IDS.has(linkForm.category)) throw new ArchiveFieldError('category', 'Choose a valid resource category.');
+        let normalized: ReturnType<typeof normalizeResourceUrl>;
+        try { normalized = normalizeResourceUrl(linkForm.url); }
+        catch (error) { throw new ArchiveFieldError('url', getErrorMessage(error, 'Enter a valid resource URL.')); }
         const duplicate = tenantLinks.find(link => link.id !== editingLink?.id && normalizeExistingUrl(link) === normalized.normalizedUrl);
-        if (duplicate) throw new Error(`This URL is already saved as "${duplicate.title}".`);
+        if (duplicate) throw new ArchiveFieldError('url', `This URL is already saved as "${duplicate.title}".`);
         return { title, description, ...normalized };
     };
 
@@ -234,6 +252,7 @@ export const ArchiveView = () => {
     const handleSaveLink = async (event: React.FormEvent) => {
         event.preventDefault();
         setFormError('');
+        setFormErrorField(null);
         setOperationError('');
         setIsSaving(true);
 
@@ -274,6 +293,8 @@ export const ArchiveView = () => {
             resetModal();
         } catch (error) {
             setFormError(getErrorMessage(error, 'The resource could not be saved.'));
+            setFormErrorField(error instanceof ArchiveFieldError ? error.field : null);
+            if (error instanceof ArchiveFieldError) requestAnimationFrame(() => document.getElementById(`archive-${error.field}`)?.focus());
         } finally {
             setIsSaving(false);
         }
@@ -400,37 +421,30 @@ export const ArchiveView = () => {
         setSelectedCategory('all');
         setStatusFilter('active');
         setSortOption('updated_desc');
+        setSelectedLinkId(null);
     };
 
     if (!canView) {
         return (
-            <div className={`pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-school-ops-v1 edu-archive-v1' : ''}`} data-edu-system={showEducationResourcesV1 ? '1' : undefined}>
-                <AtlasEmptyState
-                    icon={ShieldAlert}
-                    title="Archive access is restricted"
-                    description="Your current role does not include access to organization resources."
-                />
+            <div className="edu-v1 edu-school-ops-v1 edu-archive-v1 pb-24 md:pb-8" data-edu-system="1">
+                <EducationState kind="restricted" title="Archive access is restricted" description="Your current role does not include access to organization resources." />
             </div>
         );
     }
 
     return (
-        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-school-ops-v1 edu-archive-v1' : ''}`} data-edu-system={showEducationResourcesV1 ? '1' : undefined} data-testid={showEducationResourcesV1 ? 'education-archive-v1' : undefined}>
+        <div className="edu-v1 edu-school-ops-v1 edu-archive-v1 flex h-full flex-col space-y-5 pb-24 md:pb-8" data-edu-system="1" data-testid="education-archive-v1">
             <AtlasCommandHeader
                 eyebrow="Organization knowledge"
                 title="Resource Archive"
                 description="Maintain the trusted links and working references used across the organization."
                 icon={Archive}
-                badges={<span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{canManage ? 'Managed library' : 'Read only'}</span>}
-                actions={canManage ? <AtlasActionButton variant="primary" icon={Plus} onClick={openAddModal}>Add resource</AtlasActionButton> : undefined}
+                badges={<EducationBadge status={canManage ? 'success' : 'neutral'}>{canManage ? 'Managed library' : 'Read only'}</EducationBadge>}
+                actions={canManage && organizationId ? <EducationButton variant="primary" icon={Plus} onClick={openAddModal}>Add resource</EducationButton> : undefined}
             />
 
             {!organizationId ? (
-                <AtlasEmptyState
-                    icon={ShieldAlert}
-                    title="No organization selected"
-                    description="Select an organization to load its resource archive."
-                />
+                <EducationState kind="restricted" title="No organization selected" description="Select an organization to load its resource archive." />
             ) : (
                 <>
                     <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
@@ -440,90 +454,64 @@ export const ArchiveView = () => {
                         <AtlasSignalCard label="Current view" value={filteredLinks.length} detail={hasFilters ? 'Matching filters' : 'Active resources'} icon={Search} tone="slate" />
                     </div>
 
-                    {operationError && (
-                        <div role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                            <div className="flex min-w-0 items-start gap-2">
-                                <ShieldAlert className="mt-0.5 shrink-0 text-red-300" size={17} />
-                                <span>{operationError}</span>
-                            </div>
-                            <button type="button" onClick={() => setOperationError('')} className="shrink-0 rounded-md p-1 text-red-200 hover:bg-red-400/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300" aria-label="Dismiss message">
-                                <X size={15} />
-                            </button>
-                        </div>
-                    )}
+                    {operationError && <div className="edu-archive-error"><EducationNotice status="danger">{operationError}</EducationNotice><EducationButton variant="quiet" onClick={() => setOperationError('')} aria-label="Dismiss message" icon={X}>Dismiss</EducationButton></div>}
 
-                    <AtlasToolbar
-                        leading={
-                            <div className="relative w-full lg:max-w-sm">
-                                <label htmlFor="archive-search" className="sr-only">Search resources</label>
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={17} />
-                                <input
-                                    id="archive-search"
-                                    type="search"
-                                    placeholder="Search title, URL, description..."
-                                    className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/10"
-                                    value={searchTerm}
-                                    onChange={event => setSearchTerm(event.target.value)}
-                                />
-                            </div>
-                        }
-                        trailing={
-                            <div className="flex w-full gap-2 sm:w-auto">
-                                <label htmlFor="archive-status" className="sr-only">Filter by status</label>
-                                <select id="archive-status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as StatusFilter)} className="h-10 min-w-28 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 text-xs font-bold text-slate-200 outline-none focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/10 sm:flex-none">
+                    <EducationToolbar label="Find and filter archive resources">
+                        <div className="edu-archive-toolbar">
+                            <EducationField label="Search resources">
+                                <input id="archive-search" type="search" placeholder="Title, URL, description or owner" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} />
+                            </EducationField>
+                            <EducationField label="Status">
+                                <select id="archive-status" value={statusFilter} onChange={event => { setStatusFilter(event.target.value as StatusFilter); setSelectedLinkId(null); }}>
                                     <option value="active">Active</option>
                                     <option value="archived">Archived</option>
                                     <option value="all">All statuses</option>
                                 </select>
-                                <label htmlFor="archive-sort" className="sr-only">Sort resources</label>
-                                <select id="archive-sort" value={sortOption} onChange={event => setSortOption(event.target.value as SortOption)} className="h-10 min-w-36 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 text-xs font-bold text-slate-200 outline-none focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/10 sm:flex-none">
+                            </EducationField>
+                            <EducationField label="Sort by">
+                                <select id="archive-sort" value={sortOption} onChange={event => setSortOption(event.target.value as SortOption)}>
                                     <option value="updated_desc">Recently updated</option>
                                     <option value="created_desc">Recently added</option>
                                     <option value="title_asc">Title A-Z</option>
                                     <option value="title_desc">Title Z-A</option>
                                 </select>
-                            </div>
-                        }
-                    >
-                        <div className="flex w-full gap-2 overflow-x-auto pb-1 lg:pb-0" aria-label="Resource categories">
+                            </EducationField>
+                        </div>
+                        <div className="edu-archive-categories" role="group" aria-label="Resource categories">
                             {CATEGORY_OPTIONS.map(category => (
                                 <button
                                     key={category.id}
                                     type="button"
-                                    onClick={() => setSelectedCategory(category.id)}
+                                    onClick={() => { setSelectedCategory(category.id); setSelectedLinkId(null); }}
                                     aria-pressed={selectedCategory === category.id}
-                                    className={`flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 ${selectedCategory === category.id ? 'border-teal-300/30 bg-teal-400/10 text-teal-200' : 'border-white/10 bg-slate-950 text-slate-400 hover:border-white/20 hover:text-white'}`}
+                                    className="edu-archive-category"
                                 >
                                     <category.icon size={14} />
                                     {category.label}
                                 </button>
                             ))}
                         </div>
-                    </AtlasToolbar>
+                    </EducationToolbar>
 
                     <section className="space-y-4" aria-labelledby="archive-results-title">
-                        <AtlasSectionHeader
+                        <EducationSectionHeader
+                            eyebrow="Resource library"
                             title={statusFilter === 'archived' ? 'Archived resources' : statusFilter === 'all' ? 'All resources' : 'Active resources'}
                             description={canManage ? 'Keep references current, or archive links that are no longer in daily use.' : 'Open or copy trusted organization resources.'}
-                            icon={FolderOpen}
-                            meta={<span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-400">{filteredLinks.length} shown</span>}
-                            actions={hasFilters ? <AtlasActionButton icon={RotateCcw} variant="quiet" onClick={clearFilters}>Reset filters</AtlasActionButton> : undefined}
+                            action={hasFilters ? <EducationButton icon={RotateCcw} variant="quiet" onClick={clearFilters}>Reset filters</EducationButton> : <EducationBadge status="info">{filteredLinks.length} shown</EducationBadge>}
                         />
                         <span id="archive-results-title" className="sr-only">Archive search results</span>
 
                         {loading ? (
-                            <div className="flex min-h-48 items-center justify-center rounded-lg border border-white/10 bg-slate-950/50 text-sm text-slate-400" role="status">
-                                <Loader2 className="mr-2 animate-spin text-teal-300" size={18} /> Loading organization resources
-                            </div>
+                            <EducationState kind="loading" title="Loading resources" description="Gathering this organization's saved references." />
                         ) : filteredLinks.length === 0 ? (
-                            <AtlasEmptyState
+                            <EducationState
                                 title={tenantLinks.length === 0 ? 'Start the organization archive' : 'No resources match this view'}
                                 description={tenantLinks.length === 0 ? 'Add the first trusted link for your team.' : 'Adjust the filters or search to return to available resources.'}
-                                icon={Archive}
-                                action={tenantLinks.length === 0 && canManage ? <AtlasActionButton variant="primary" icon={Plus} onClick={openAddModal}>Add first resource</AtlasActionButton> : hasFilters ? <AtlasActionButton icon={RotateCcw} onClick={clearFilters}>Reset filters</AtlasActionButton> : undefined}
-                            />
+                            >{tenantLinks.length === 0 && canManage ? <EducationButton variant="primary" icon={Plus} onClick={openAddModal}>Add first resource</EducationButton> : hasFilters ? <EducationButton icon={RotateCcw} onClick={clearFilters}>Reset filters</EducationButton> : null}</EducationState>
                         ) : (
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="edu-archive-results">
+                            <div className="edu-archive-grid">
                                 {filteredLinks.map(link => {
                                     const category = CATEGORY_OPTIONS.find(option => option.id === link.category);
                                     const CategoryIcon = category?.icon || LinkIcon;
@@ -537,82 +525,63 @@ export const ArchiveView = () => {
                                     }
 
                                     return (
-                                        <article key={link.id} className="group flex min-h-56 flex-col rounded-lg border border-white/10 bg-slate-900/80 p-4 transition-colors hover:border-teal-300/30">
-                                            <div className="mb-3 flex items-start justify-between gap-3">
-                                                <div className="flex min-w-0 items-center gap-3">
-                                                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${isArchived ? 'border-amber-300/20 bg-amber-300/10 text-amber-200' : 'border-teal-400/20 bg-teal-400/10 text-teal-300'}`}>
-                                                        <CategoryIcon size={18} />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <h3 className="truncate text-sm font-black text-white" title={link.title}>{link.title}</h3>
-                                                        <div className="mt-1 flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase text-slate-500">
-                                                            <span>{category?.label || 'Other'}</span>
-                                                            <span aria-hidden="true">/</span>
-                                                            <span className={isArchived ? 'text-amber-200' : 'text-emerald-300'}>{isArchived ? 'Archived' : 'Active'}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                {canManage && (
-                                                    <div className="flex shrink-0 gap-1 sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                                                        <button type="button" onClick={() => handleEditLink(link)} disabled={isMutating} className="rounded-lg p-2 text-slate-400 hover:bg-white/[0.05] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 disabled:opacity-40" aria-label={`Edit ${link.title}`} title="Edit resource"><Pencil size={14} /></button>
-                                                        <button type="button" onClick={() => handleStatusChange(link)} disabled={isMutating} className="rounded-lg p-2 text-slate-400 hover:bg-amber-300/10 hover:text-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 disabled:opacity-40" aria-label={`${isArchived ? 'Restore' : 'Archive'} ${link.title}`} title={isArchived ? 'Restore resource' : 'Archive resource'}>{isMutating ? <Loader2 className="animate-spin" size={14} /> : isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}</button>
-                                                        <button type="button" onClick={() => handleDeleteLink(link)} disabled={isMutating} className="rounded-lg p-2 text-slate-400 hover:bg-red-500/10 hover:text-red-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60 disabled:opacity-40" aria-label={`Delete ${link.title}`} title="Delete resource"><Trash2 size={14} /></button>
-                                                    </div>
-                                                )}
+                                        <article key={link.id} aria-label={link.title} className="edu-archive-card" data-selected={selectedLink?.id === link.id || undefined}>
+                                            <div className="edu-archive-card__heading">
+                                                <span className="edu-archive-card__icon" data-edu-accent={isArchived ? 'orange' : 'blue'}><CategoryIcon size={20} aria-hidden="true" /></span>
+                                                <div><h3 title={link.title}>{link.title}</h3><span>{category?.label || 'Other'}</span></div>
+                                                <EducationStatusPill status={isArchived ? 'warning' : 'success'}>{isArchived ? 'Archived' : 'Active'}</EducationStatusPill>
                                             </div>
-
-                                            <p className="mb-4 line-clamp-3 flex-1 text-xs leading-5 text-slate-400">{link.description || 'No description provided.'}</p>
-                                            <div className="mb-3 flex min-w-0 items-center gap-2 rounded-md bg-slate-950/70 px-3 py-2 text-xs text-slate-500" title={link.url}>
-                                                <Globe2 className="shrink-0" size={13} />
-                                                <span className="truncate">{hostname}</span>
-                                            </div>
-                                            <div className="grid grid-cols-[1fr_40px] gap-2">
-                                                <button type="button" onClick={() => handleOpenLink(link)} className="flex h-10 min-w-0 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-slate-200 transition-colors hover:border-teal-300/30 hover:bg-teal-400/10 hover:text-teal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">
-                                                    <ExternalLink size={14} /> Open resource
-                                                </button>
-                                                <button type="button" onClick={() => handleCopyLink(link)} disabled={copyingId === link.id} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-400 transition-colors hover:border-white/20 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60 disabled:opacity-50" aria-label={`Copy link for ${link.title}`} title="Copy link">
-                                                    {copyingId === link.id ? <Loader2 className="animate-spin" size={14} /> : <Clipboard size={14} />}
-                                                </button>
+                                            <p className="edu-archive-card__description">{link.description || 'No description provided.'}</p>
+                                            <p className="edu-archive-card__host"><Globe2 size={16} aria-hidden="true" />{hostname}</p>
+                                            <div className="edu-archive-card__actions">
+                                                <EducationButton onClick={() => setSelectedLinkId(current => current === link.id ? null : link.id)} aria-expanded={selectedLink?.id === link.id} aria-controls={selectedLink?.id === link.id ? 'archive-detail' : undefined}>{selectedLink?.id === link.id ? 'Hide details' : 'View details'}</EducationButton>
+                                                <EducationButton icon={ExternalLink} variant="primary" onClick={() => handleOpenLink(link)}>Open</EducationButton>
+                                                <EducationActionMenu label="More actions">
+                                                    <button type="button" onClick={() => handleCopyLink(link)} disabled={copyingId === link.id}><Clipboard size={16} />Copy link</button>
+                                                    {canManage && <button type="button" onClick={() => handleEditLink(link)} disabled={isMutating}><Pencil size={16} />Edit</button>}
+                                                    {canManage && <button type="button" onClick={() => handleStatusChange(link)} disabled={isMutating}>{isMutating ? <Loader2 size={16} className="animate-spin" /> : isArchived ? <ArchiveRestore size={16} /> : <Archive size={16} />}{isArchived ? 'Restore' : 'Archive'}</button>}
+                                                    {canManage && <button type="button" className="edu-archive-danger" onClick={() => handleDeleteLink(link)} disabled={isMutating}><Trash2 size={16} />Delete</button>}
+                                                </EducationActionMenu>
                                             </div>
                                         </article>
                                     );
                                 })}
+                            </div>
+                            {selectedLink && <EducationDetailPanel id="archive-detail" label={`Details for ${selectedLink.title}`} className="edu-archive-detail">
+                                <div className="edu-archive-detail__heading"><div><span className="edu-v1-kicker">Resource details</span><h3>{selectedLink.title}</h3></div><EducationStatusPill status={getRecordStatus(selectedLink) === 'archived' ? 'warning' : 'success'}>{getRecordStatus(selectedLink) === 'archived' ? 'Archived' : 'Active'}</EducationStatusPill></div>
+                                <p>{selectedLink.description || 'No description provided.'}</p>
+                                <dl><div><dt>Category</dt><dd>{CATEGORY_OPTIONS.find(category => category.id === selectedLink.category)?.label || 'Other'}</dd></div><div><dt>Added</dt><dd>{formatRecordDate(selectedLink.createdAt)}</dd></div><div><dt>Last updated</dt><dd>{formatRecordDate(selectedLink.updatedAt || selectedLink.createdAt)}</dd></div><div><dt>Saved by</dt><dd>{selectedLink.createdBy || 'Not recorded'}</dd></div></dl>
+                                <div className="edu-archive-detail__link"><span>Resource URL</span><code>{selectedLink.url}</code></div>
+                                <div className="edu-archive-detail__actions"><EducationButton icon={ExternalLink} variant="primary" onClick={() => handleOpenLink(selectedLink)}>Open resource</EducationButton><EducationButton icon={Clipboard} onClick={() => handleCopyLink(selectedLink)} disabled={copyingId === selectedLink.id}>Copy link</EducationButton>{canManage && <EducationButton icon={Pencil} onClick={() => handleEditLink(selectedLink)}>Edit details</EducationButton>}<EducationButton variant="quiet" onClick={() => setSelectedLinkId(null)}>Close details</EducationButton></div>
+                            </EducationDetailPanel>}
                             </div>
                         )}
                     </section>
                 </>
             )}
 
-            <Modal isOpen={isModalOpen} onClose={() => { if (!isSaving) resetModal(); }} title={editingLink ? 'Edit resource' : 'Add resource'} designSystem={showEducationResourcesV1}>
-                <form onSubmit={handleSaveLink} className="space-y-4" noValidate>
-                    {formError && <div id="archive-form-error" role="alert" className="rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-100">{formError}</div>}
-                    <div>
-                        <label htmlFor="archive-title" className="mb-1 block text-xs font-bold text-slate-400">Title</label>
-                        <input id="archive-title" type="text" required maxLength={120} autoFocus className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-white outline-none focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" value={linkForm.title} onChange={event => setLinkForm(current => ({ ...current, title: event.target.value }))} placeholder="Resource name" aria-describedby={formError ? 'archive-form-error' : undefined} />
-                        <div className="mt-1 text-right text-[10px] text-slate-600">{linkForm.title.length}/120</div>
-                    </div>
-                    <div>
-                        <label htmlFor="archive-url" className="mb-1 block text-xs font-bold text-slate-400">URL</label>
-                        <input id="archive-url" type="url" required inputMode="url" className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-white outline-none focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" value={linkForm.url} onChange={event => setLinkForm(current => ({ ...current, url: event.target.value }))} placeholder="https://example.com/resource" aria-describedby={formError ? 'archive-form-error' : undefined} />
-                    </div>
-                    <div>
-                        <label htmlFor="archive-category" className="mb-1 block text-xs font-bold text-slate-400">Category</label>
-                        <select id="archive-category" className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-white outline-none focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" value={linkForm.category} onChange={event => setLinkForm(current => ({ ...current, category: event.target.value as ArchiveCategory }))}>
+            <Modal isOpen={isModalOpen} onClose={() => { if (!isSaving) resetModal(); }} title={editingLink ? 'Edit resource' : 'Add resource'} designSystem={true}>
+                <form onSubmit={handleSaveLink} className="edu-archive-form" noValidate>
+                    {formError && !formErrorField && <EducationNotice status="danger">{formError}</EducationNotice>}
+                    <EducationField label="Title" hint={`${linkForm.title.length}/120 characters`} error={formErrorField === 'title' ? formError : undefined}>
+                        <input id="archive-title" type="text" required maxLength={120} autoFocus value={linkForm.title} onChange={event => setLinkForm(current => ({ ...current, title: event.target.value }))} placeholder="Resource name" />
+                    </EducationField>
+                    <EducationField label="URL" hint="Use a complete http:// or https:// address." error={formErrorField === 'url' ? formError : undefined}>
+                        <input id="archive-url" type="url" required inputMode="url" value={linkForm.url} onChange={event => setLinkForm(current => ({ ...current, url: event.target.value }))} placeholder="https://example.com/resource" />
+                    </EducationField>
+                    <EducationField label="Category" error={formErrorField === 'category' ? formError : undefined}>
+                        <select id="archive-category" value={linkForm.category} onChange={event => setLinkForm(current => ({ ...current, category: event.target.value as ArchiveCategory }))}>
                             {CATEGORY_OPTIONS.filter(category => category.id !== 'all').map(category => <option key={category.id} value={category.id}>{category.label}</option>)}
                         </select>
-                    </div>
-                    <div>
-                        <div className="mb-1 flex items-center justify-between gap-3">
-                            <label htmlFor="archive-description" className="text-xs font-bold text-slate-400">Description</label>
-                            <span className="text-[10px] text-slate-600">{linkForm.description.length}/500</span>
-                        </div>
-                        <textarea id="archive-description" maxLength={500} className="h-24 w-full resize-y rounded-lg border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10" value={linkForm.description} onChange={event => setLinkForm(current => ({ ...current, description: event.target.value }))} placeholder="Owner, purpose, or usage context" />
-                    </div>
-                    <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-                        <AtlasActionButton type="button" variant="secondary" onClick={resetModal} disabled={isSaving}>Cancel</AtlasActionButton>
-                        <AtlasActionButton type="submit" variant="primary" icon={isSaving ? Loader2 : editingLink ? Pencil : Plus} disabled={isSaving} className={isSaving ? '[&_svg]:animate-spin' : ''}>
+                    </EducationField>
+                    <EducationField label="Description" hint={`${linkForm.description.length}/500 characters`} error={formErrorField === 'description' ? formError : undefined}>
+                        <textarea id="archive-description" maxLength={500} value={linkForm.description} onChange={event => setLinkForm(current => ({ ...current, description: event.target.value }))} placeholder="Owner, purpose, or usage context" />
+                    </EducationField>
+                    <div className="edu-archive-form__actions">
+                        <EducationButton type="button" onClick={resetModal} disabled={isSaving}>Cancel</EducationButton>
+                        <EducationButton type="submit" variant="primary" icon={isSaving ? Loader2 : editingLink ? Pencil : Plus} disabled={isSaving} aria-busy={isSaving}>
                             {isSaving ? 'Saving...' : editingLink ? 'Save changes' : 'Add resource'}
-                        </AtlasActionButton>
+                        </EducationButton>
                     </div>
                 </form>
             </Modal>
