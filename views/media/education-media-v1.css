@@ -1,0 +1,75 @@
+/* Media layout and state styling. Palette comes exclusively from Education System v1. */
+[data-edu-system="1"].edu-media-v1 { min-width:0; }
+[data-edu-system="1"].edu-media-v1 .atlas-command-header__actions { flex-wrap:wrap; }
+[data-edu-system="1"].edu-media-v1 .atlas-toolbar { gap:12px; }
+[data-edu-system="1"].edu-media-v1 .atlas-toolbar :is(input,select) { min-height:44px; }
+[data-edu-system="1"].edu-media-v1 article.group {
+  min-width:0; overflow:hidden; border:2px solid var(--ds-border)!important;
+  border-bottom:4px solid var(--ds-depth)!important; border-radius:var(--ds-radius-card)!important;
+  background:var(--ds-surface)!important; color:var(--ds-ink);
+}
+[data-edu-system="1"].edu-media-v1 article.group:has([aria-pressed="true"]) {
+  border-color:var(--ds-blue)!important; background:var(--ds-blue-soft)!important;
+}
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square { background:var(--ds-subtle)!important; }
+[data-edu-system="1"].edu-media-v1 article.group img { opacity:1; }
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > button:first-child { width:100%; height:100%; }
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > button:nth-child(2) {
+  width:44px; height:44px; border:2px solid var(--ds-border); border-radius:12px;
+  background:var(--ds-surface); color:var(--ds-blue-ink); box-shadow:none;
+}
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > button[aria-pressed="false"] svg { opacity:.4; }
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > button[aria-pressed="true"] {
+  background:var(--ds-blue)!important; border-color:var(--ds-blue-edge)!important; color:var(--ds-on-color)!important;
+}
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > span {
+  display:flex; gap:4px; width:auto; min-width:44px; height:44px; padding:0 10px;
+  border:2px solid var(--ds-border); border-radius:12px; background:var(--ds-surface); color:var(--ds-ink);
+}
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > span:has(svg.lucide-eye-off) { background:var(--ds-orange-soft); color:var(--ds-orange-ink); border-color:var(--ds-orange-edge); }
+[data-edu-system="1"].edu-media-v1 article.group .aspect-square > span:has(svg.lucide-eye) { background:var(--ds-green-soft); color:var(--ds-green-ink); border-color:var(--ds-green-edge); }
+[data-edu-system="1"].edu-media-v1 article.group .flex.shrink-0 button { width:44px; height:44px; border-radius:12px; color:var(--ds-blue-ink); }
+[data-edu-system="1"].edu-media-v1 article.group .flex.shrink-0 button:hover { background:var(--ds-blue-soft); }
+[data-edu-system="1"].edu-media-v1 article.group .flex.shrink-0 button:disabled { color:var(--ds-muted); }
+[data-edu-system="1"].edu-media-v1 .atlas-section-header { margin-top:20px; }
+[data-edu-system="1"].edu-media-v1 .atlas-section-header + .atlas-empty-state { margin-top:14px; }
+[data-edu-system="1"].edu-media-v1 button[aria-label="Previous day"],
+[data-edu-system="1"].edu-media-v1 button[aria-label="Next day"] {
+  min-width:44px; min-height:44px; border:2px solid var(--ds-border); border-bottom:4px solid var(--ds-depth); color:var(--ds-blue-ink);
+}
+[data-edu-system="1"].edu-media-v1 .max-w-4xl section button {
+  border:2px solid var(--ds-border)!important; border-bottom:4px solid var(--ds-depth)!important;
+  border-radius:18px!important; background:var(--ds-surface)!important; color:var(--ds-ink)!important;
+}
+[data-edu-system="1"].edu-media-v1 .max-w-4xl section button:hover { border-color:var(--ds-blue)!important; }
+[data-edu-system="1"].edu-media-v1 .max-w-4xl section button .h-11 { background:var(--ds-green-soft)!important; color:var(--ds-green-ink)!important; border-color:var(--ds-green-edge)!important; }
+@media (max-width:640px) {
+  [data-edu-system="1"].edu-media-v1 .atlas-command-header__actions { width:100%; display:flex; flex-direction:column; align-items:stretch; }
+  [data-edu-system="1"].edu-media-v1 .atlas-command-header__actions [role="tablist"] { width:100%; height:auto; min-height:48px; overflow:visible; display:grid; grid-template-columns:1fr 1fr; }
+  [data-edu-system="1"].edu-media-v1 .atlas-command-header__actions [role="tab"] { justify-content:center; }
+  [data-edu-system="1"].edu-media-v1 .atlas-command-header__actions > .atlas-action { width:100%; }
+  [data-edu-system="1"].edu-media-v1 .atlas-toolbar :is(input,select) { width:100%; }
+  [data-edu-system="1"].edu-media-v1 article.group .flex.shrink-0 { gap:0; }
+}
+[data-edu-system="1"] .edu-media-form { min-width:0; color:var(--ds-ink); }
+[data-edu-system="1"] .edu-media-form :is(input,select) {
+  min-height:46px; border:2px solid var(--ds-border)!important; border-radius:12px!important;
+  background:var(--ds-surface)!important; color:var(--ds-ink)!important; font-size:16px;
+}
+[data-edu-system="1"] .edu-media-form :is(input,select):focus-visible { border-color:var(--ds-blue)!important; }
+[data-edu-system="1"] .edu-media-form :is(label,span,p) { color:var(--ds-ink); }
+[data-edu-system="1"] .edu-media-form label > span:first-child { font-size:13px; font-weight:800; }
+[data-edu-system="1"] .edu-media-form .text-slate-500,
+[data-edu-system="1"] .edu-media-form .text-slate-600 { color:var(--ds-muted)!important; }
+[data-edu-system="1"] .edu-media-form [role="tablist"] { background:var(--ds-subtle)!important; border:2px solid var(--ds-border)!important; border-radius:14px; }
+[data-edu-system="1"] .edu-media-form [role="tab"] { min-height:44px; color:var(--ds-muted)!important; }
+[data-edu-system="1"] .edu-media-form [role="tab"][aria-selected="true"] { background:var(--ds-blue-soft)!important; color:var(--ds-blue-ink)!important; border:2px solid var(--ds-blue)!important; }
+[data-edu-system="1"] .edu-media-form .border-dashed { background:var(--ds-subtle)!important; border:2px dashed var(--ds-border)!important; border-radius:18px; }
+[data-edu-system="1"] .edu-media-form [role="alert"] { background:var(--ds-red-soft)!important; border-color:var(--ds-red-edge)!important; color:var(--ds-red-ink)!important; }
+[data-edu-system="1"] .edu-media-form [role="alert"] * { color:inherit!important; }
+[data-edu-system="1"] .edu-media-form :is(.border-t,.border-b) { border-color:var(--ds-border)!important; }
+[data-edu-system="1"] .edu-media-form .atlas-action { min-height:44px; }
+@media (max-width:640px) {
+  [data-edu-system="1"] .edu-media-form .flex.justify-end.gap-2 { flex-wrap:wrap; }
+  [data-edu-system="1"] .edu-media-form .flex.justify-end.gap-2 > * { flex:1; }
+}

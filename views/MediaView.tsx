@@ -40,6 +40,7 @@ import { compressImage } from '../utils/helpers';
 import './team-operations/education-team-operations-v1.css';
 import '../components/education-ui/education-system-v1.css';
 import '../components/education-ui/education-system-v1-modules.css';
+import './media/education-media-v1.css';
 
 type MediaVisibility = 'families' | 'staff';
 type SortMode = 'newest' | 'oldest' | 'caption';
@@ -66,6 +67,8 @@ const getTimestampMs = (value: unknown) => {
     const parsed = new Date(value as string | number | Date).getTime();
     return Number.isNaN(parsed) ? 0 : parsed;
 };
+
+const localDateKey = (value: Date) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 
 const getDataUrlBytes = (value: string) => {
     if (!value.startsWith('data:')) return 0;
@@ -113,7 +116,7 @@ export const MediaView = () => {
     const isStudent = userProfile?.role === 'student';
 
     const [viewMode, setViewMode] = useState<'gallery' | 'capture'>('gallery');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(localDateKey(new Date()));
     const [searchQuery, setSearchQuery] = useState('');
     const [albumFilter, setAlbumFilter] = useState('all');
     const [visibilityFilter, setVisibilityFilter] = useState<'all' | MediaVisibility>('all');
@@ -163,17 +166,22 @@ export const MediaView = () => {
         return tenantStudents.find(student => student.parentLoginInfo?.uid === user.uid) || null;
     }, [isParent, isStudent, tenantStudents, user]);
 
-    const albums = useMemo(
-        () => Array.from(new Set(tenantItems.map(item => normalizeText(item.album || '', 60)).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
-        [tenantItems]
-    );
-
-    const visibleItems = useMemo(() => {
+    const accessibleItems = useMemo(() => {
         let items = tenantItems;
         if (isParent || isStudent) {
             if (!linkedStudent) return [];
             items = items.filter(item => item.studentId === linkedStudent.id && (item.visibility || 'families') === 'families');
         }
+        return items;
+    }, [isParent, isStudent, linkedStudent, tenantItems]);
+
+    const albums = useMemo(
+        () => Array.from(new Set(accessibleItems.map(item => normalizeText(item.album || '', 60)).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+        [accessibleItems]
+    );
+
+    const visibleItems = useMemo(() => {
+        let items = accessibleItems;
 
         const query = searchQuery.trim().toLowerCase();
         if (query) {
@@ -190,7 +198,7 @@ export const MediaView = () => {
             const difference = getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt);
             return sortMode === 'newest' ? difference : -difference;
         });
-    }, [albumFilter, associationFilter, isParent, isStudent, linkedStudent, searchQuery, sortMode, tenantItems, visibilityFilter]);
+    }, [accessibleItems, albumFilter, associationFilter, searchQuery, sortMode, visibilityFilter]);
 
     const selectedItems = useMemo(
         () => tenantItems.filter(item => selectedIds.has(item.id)),
@@ -235,14 +243,14 @@ export const MediaView = () => {
         if (item.studentId !== studentId) return false;
         const timestamp = getTimestampMs(item.createdAt);
         if (!timestamp) return false;
-        return new Date(timestamp).toISOString().split('T')[0] === selectedDate;
+        return localDateKey(new Date(timestamp)) === selectedDate;
     });
 
     const capturedStudentIds = useMemo(() => new Set(
         tenantItems
             .filter(item => {
                 const timestamp = getTimestampMs(item.createdAt);
-                return timestamp && new Date(timestamp).toISOString().split('T')[0] === selectedDate;
+                return timestamp && localDateKey(new Date(timestamp)) === selectedDate;
             })
             .map(item => item.studentId)
             .filter(Boolean)
@@ -313,6 +321,7 @@ export const MediaView = () => {
 
     const handleSaveMedia = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (savePhase !== 'idle') return;
         if (!requireManager() || !db) return;
 
         setUploadError('');
@@ -366,6 +375,7 @@ export const MediaView = () => {
     };
 
     const updateSelectedMetadata = async (updates: { album?: string; visibility?: MediaVisibility }) => {
+        if (isBulkSaving) return;
         if (!requireManager() || !db || selectedItems.length === 0) return;
         if (selectedItems.length > 450) {
             await showAlert('Selection too large', 'Update up to 450 photos at a time.', 'warning');
@@ -389,6 +399,7 @@ export const MediaView = () => {
     };
 
     const handleDeleteItems = async (items: MediaRecord[]) => {
+        if (isBulkSaving) return;
         if (!requireManager() || !db || items.length === 0) return;
         const ownedItems = items.filter(item => item.organizationId === organizationId);
         if (ownedItems.length !== items.length) {
@@ -437,6 +448,7 @@ export const MediaView = () => {
 
     const handleUpdateItem = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (isEditing || isBulkSaving) return;
         if (!requireManager() || !db || !editingItem || editingItem.organizationId !== organizationId) return;
         const student = editStudentId ? tenantStudents.find(candidate => candidate.id === editStudentId) : undefined;
         if (editStudentId && !student) {
@@ -511,6 +523,7 @@ export const MediaView = () => {
     };
 
     const handleConfirmCapture = async () => {
+        if (isUploading) return;
         if (!requireManager() || !db || !pendingFile || !capturingStudent) return;
         const student = tenantStudents.find(candidate => candidate.id === capturingStudent.id);
         if (!student) {
@@ -547,7 +560,7 @@ export const MediaView = () => {
     const shiftDate = (days: number) => {
         const date = new Date(`${selectedDate}T12:00:00`);
         date.setDate(date.getDate() + days);
-        setSelectedDate(date.toISOString().split('T')[0]);
+        setSelectedDate(localDateKey(date));
     };
 
     const clearFilters = () => {
@@ -569,9 +582,9 @@ export const MediaView = () => {
                 title={viewMode === 'capture' ? 'Capture Route' : linkedStudent ? `${linkedStudent.name.split(' ')[0]}'s Gallery` : 'Media Library'}
                 description={viewMode === 'capture'
                     ? 'Move through the session roster and publish each capture to the correct family.'
-                    : 'Search, organize, protect, and share the organization\'s visual records.'}
+                    : isParent || isStudent ? 'View photos shared with your linked learner profile.' : 'Search, organize, protect, and share the organization\'s visual records.'}
                 icon={Camera}
-                badges={<span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{linkedStudent ? 'Personal view' : 'Tenant protected'}</span>}
+                badges={<span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{isParent || isStudent ? 'Family view' : 'Tenant protected'}</span>}
                 actions={canManage ? <>
                     <div className="flex h-10 rounded-lg border border-white/10 bg-slate-950 p-1" role="tablist" aria-label="Media workspace">
                         <button type="button" role="tab" aria-selected={viewMode === 'gallery'} onClick={() => setViewMode('gallery')} className={`flex items-center gap-2 rounded-md px-3 text-xs font-bold ${viewMode === 'gallery' ? 'bg-teal-400/15 text-teal-200' : 'text-slate-500 hover:text-white'}`}><ImageIcon size={15} /> Library</button>
@@ -581,12 +594,12 @@ export const MediaView = () => {
                 </> : undefined}
             />
 
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {canManage && <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <AtlasSignalCard label="Media records" value={tenantItems.length} detail="Owned by this organization" icon={ImageIcon} tone="teal" />
                 <AtlasSignalCard label="Albums" value={albums.length} detail="Named collections" icon={Folder} tone="blue" />
                 <AtlasSignalCard label="Staff only" value={staffOnlyCount} detail="Hidden from family views" icon={EyeOff} tone={staffOnlyCount ? 'amber' : 'slate'} />
                 <AtlasSignalCard label="Capture progress" value={`${captureStats.captured}/${captureStats.total}`} detail={`${dayOfWeek} roster`} icon={CheckCircle2} tone={captureStats.total > 0 && captureStats.captured === captureStats.total ? 'emerald' : 'slate'} />
-            </div>
+            </div>}
 
             {viewMode === 'gallery' ? (
                 <div className="space-y-4">
@@ -605,11 +618,11 @@ export const MediaView = () => {
                                 <option value="families">Family visible</option>
                                 <option value="staff">Staff only</option>
                             </select>}
-                            <select aria-label="Filter by student association" value={associationFilter} onChange={event => setAssociationFilter(event.target.value as AssociationFilter)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-200 outline-none focus:border-teal-400/50">
+                            {!isParent && !isStudent && <select aria-label="Filter by student association" value={associationFilter} onChange={event => setAssociationFilter(event.target.value as AssociationFilter)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-200 outline-none focus:border-teal-400/50">
                                 <option value="all">All media</option>
                                 <option value="tagged">Student tagged</option>
                                 <option value="general">General media</option>
-                            </select>
+                            </select>}
                         </>}
                         trailing={<>
                             <select aria-label="Sort media" value={sortMode} onChange={event => setSortMode(event.target.value as SortMode)} className="h-10 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-slate-200 outline-none focus:border-teal-400/50">
@@ -620,7 +633,7 @@ export const MediaView = () => {
                             {hasFilters && <AtlasActionButton variant="quiet" icon={X} onClick={clearFilters}>Clear</AtlasActionButton>}
                         </>}
                     >
-                        <span className="text-xs text-slate-500">{visibleItems.length} of {tenantItems.length} records</span>
+                        <span className="text-xs text-slate-500">{visibleItems.length} of {accessibleItems.length} records</span>
                     </AtlasToolbar>
 
                     {canManage && visibleItems.length > 0 && (
@@ -633,7 +646,7 @@ export const MediaView = () => {
                             </div>
                             {selectedItems.length > 0 && <>
                                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                                    <input list="media-albums" value={bulkAlbum} onChange={event => setBulkAlbum(event.target.value)} placeholder="Move to album" maxLength={60} className="h-10 min-w-44 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/50 sm:max-w-xs" />
+                                    <input aria-label="Move selected media to album" list="media-albums" value={bulkAlbum} onChange={event => setBulkAlbum(event.target.value)} placeholder="Move to album" maxLength={60} className="h-10 min-w-44 flex-1 rounded-lg border border-white/10 bg-slate-950 px-3 text-sm text-white outline-none focus:border-teal-400/50 sm:max-w-xs" />
                                     <datalist id="media-albums">{albums.map(name => <option key={name} value={name} />)}</datalist>
                                     <AtlasActionButton icon={Folder} disabled={isBulkSaving || !bulkAlbum.trim()} onClick={() => void updateSelectedMetadata({ album: normalizeText(bulkAlbum, 60) })}>Assign album</AtlasActionButton>
                                     <AtlasActionButton icon={Eye} disabled={isBulkSaving} onClick={() => void updateSelectedMetadata({ visibility: 'families' })}>Family visible</AtlasActionButton>
@@ -648,8 +661,8 @@ export const MediaView = () => {
 
                     {visibleItems.length === 0 ? (
                         <AtlasEmptyState
-                            title={tenantItems.length === 0 ? 'Start the media library' : 'No media matches this view'}
-                            description={tenantItems.length === 0 ? 'Add the first organization photo and choose who may see it.' : 'Clear filters or try a broader search.'}
+                            title={!linkedStudent && (isParent || isStudent) ? 'No linked gallery' : (isParent || isStudent) && accessibleItems.length === 0 ? 'No photos shared yet' : tenantItems.length === 0 ? 'Start the media library' : 'No media matches this view'}
+                            description={!linkedStudent && (isParent || isStudent) ? 'A linked learner profile is needed to view family photos.' : (isParent || isStudent) && accessibleItems.length === 0 ? 'Family-visible photos for this learner will appear here.' : tenantItems.length === 0 ? 'Add the first organization photo and choose who may see it.' : 'Clear filters or try a broader search.'}
                             icon={ImageIcon}
                             action={canManage ? <AtlasActionButton variant="primary" icon={tenantItems.length === 0 ? Plus : X} onClick={tenantItems.length === 0 ? () => setIsUploadModalOpen(true) : clearFilters}>{tenantItems.length === 0 ? 'Add first photo' : 'Clear filters'}</AtlasActionButton> : undefined}
                         />
@@ -661,11 +674,11 @@ export const MediaView = () => {
                                 return (
                                     <article key={item.id} className={`group relative overflow-hidden rounded-lg border bg-slate-900 transition-colors ${selected ? 'border-teal-300/70 ring-2 ring-teal-400/15' : 'border-white/10 hover:border-white/20'}`}>
                                         <div className="relative aspect-square overflow-hidden bg-slate-950">
-                                            <button type="button" onClick={() => canManage ? toggleSelection(item.id) : openEditor(item)} className="block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400" aria-label={canManage ? `${selected ? 'Deselect' : 'Select'} ${item.caption || 'photo'}` : `View ${item.caption || 'photo'}`}>
+                                            <button type="button" onClick={() => openEditor(item)} className="block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-400" aria-label={`View ${item.caption || 'photo'}`}>
                                                 <img src={item.url} loading="lazy" alt={item.caption || `${item.studentName || 'Organization'} photo`} className="h-full w-full object-cover opacity-90 transition-[opacity,transform] duration-200 group-hover:scale-[1.02] group-hover:opacity-100" />
                                             </button>
-                                            {canManage && <button type="button" onClick={() => toggleSelection(item.id)} className={`absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border shadow-lg ${selected ? 'border-teal-200 bg-teal-400 text-slate-950' : 'border-white/20 bg-slate-950/85 text-white'}`} aria-label={selected ? 'Deselect photo' : 'Select photo'}>{selected ? <Check size={15} /> : null}</button>}
-                                            <span className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border shadow-lg ${itemVisibility === 'staff' ? 'border-amber-300/30 bg-amber-300/15 text-amber-200' : 'border-emerald-300/30 bg-emerald-300/15 text-emerald-200'}`} title={itemVisibility === 'staff' ? 'Staff only' : 'Family visible'}>{itemVisibility === 'staff' ? <EyeOff size={14} /> : <Eye size={14} />}</span>
+                                            {canManage && <button type="button" onClick={() => toggleSelection(item.id)} className={`absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border shadow-lg ${selected ? 'border-teal-200 bg-teal-400 text-slate-950' : 'border-white/20 bg-slate-950/85 text-white'}`} aria-label={selected ? 'Deselect photo' : 'Select photo'} aria-pressed={selected}><Check size={15} aria-hidden="true" /></button>}
+                                            <span className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-md border shadow-lg ${itemVisibility === 'staff' ? 'border-amber-300/30 bg-amber-300/15 text-amber-200' : 'border-emerald-300/30 bg-emerald-300/15 text-emerald-200'}`} title={itemVisibility === 'staff' ? 'Staff only' : 'Family visible'}>{itemVisibility === 'staff' ? <EyeOff size={14} /> : <Eye size={14} />}<span className="text-[10px] font-bold">{itemVisibility === 'staff' ? 'Staff' : 'Family'}</span></span>
                                         </div>
                                         <div className="space-y-2 p-3">
                                             <div className="min-w-0">
@@ -693,7 +706,7 @@ export const MediaView = () => {
                         <button type="button" onClick={() => shiftDate(-1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:bg-white/[0.05]" aria-label="Previous day"><ArrowLeft size={18} /></button>
                         <div className="text-center">
                             <p className="text-[10px] font-bold uppercase text-slate-500">{dayOfWeek}</p>
-                            <input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} className="bg-transparent text-center text-lg font-black text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-400" />
+                            <input type="date" aria-label="Capture date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)} className="bg-transparent text-center text-lg font-black text-white outline-none focus-visible:ring-2 focus-visible:ring-teal-400" />
                         </div>
                         <button type="button" onClick={() => shiftDate(1)} className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 text-slate-300 hover:bg-white/[0.05]" aria-label="Next day"><ArrowRight size={18} /></button>
                     </div>
@@ -723,7 +736,7 @@ export const MediaView = () => {
             ) : <AtlasEmptyState title="Capture access required" description="Ask an administrator for media management permission." icon={ShieldCheck} />}
 
             <Modal isOpen={isUploadModalOpen} onClose={closeUploadModal} title="Add media" designSystem={showEducationTeamOperationsV1}>
-                <form onSubmit={handleSaveMedia} className="space-y-4">
+                <form onSubmit={handleSaveMedia} className="edu-media-form space-y-4">
                     <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-slate-950 p-1" role="tablist" aria-label="Image source">
                         <button type="button" role="tab" aria-selected={sourceMode === 'file'} onClick={() => { setSourceMode('file'); setUploadError(''); }} className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-bold ${sourceMode === 'file' ? 'bg-white/[0.08] text-white' : 'text-slate-500'}`}><Upload size={15} /> File</button>
                         <button type="button" role="tab" aria-selected={sourceMode === 'url'} onClick={() => { setSourceMode('url'); setUploadError(''); }} className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-bold ${sourceMode === 'url' ? 'bg-white/[0.08] text-white' : 'text-slate-500'}`}><Copy size={15} /> Image URL</button>
@@ -754,8 +767,8 @@ export const MediaView = () => {
                 </form>
             </Modal>
 
-            <Modal isOpen={Boolean(editingItem)} onClose={() => !isEditing && setEditingItem(null)} title="Media details" designSystem={showEducationTeamOperationsV1}>
-                {editingItem && <form onSubmit={handleUpdateItem} className="space-y-4">
+            <Modal isOpen={Boolean(editingItem)} onClose={() => !isEditing && !isBulkSaving && setEditingItem(null)} title="Media details" designSystem={showEducationTeamOperationsV1}>
+                {editingItem && <form onSubmit={handleUpdateItem} className="edu-media-form space-y-4">
                     <img src={editingItem.url} alt={editingItem.caption || 'Media preview'} className="max-h-64 w-full rounded-lg border border-white/10 bg-slate-950 object-contain" />
                     <label className="block space-y-1"><span className="text-xs font-bold text-slate-400">Caption</span><input value={editCaption} onChange={event => setEditCaption(event.target.value)} maxLength={160} disabled={!canManage} className={`${inputClass} disabled:opacity-70`} /></label>
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -764,14 +777,14 @@ export const MediaView = () => {
                     </div>
                     <label className="block space-y-1"><span className="text-xs font-bold text-slate-400">Student</span><select value={editStudentId} onChange={event => setEditStudentId(event.target.value)} disabled={!canManage} className={`${inputClass} disabled:opacity-70`}><option value="">General media</option>{tenantStudents.filter(student => student.status === 'active').sort((a, b) => a.name.localeCompare(b.name)).map(student => <option key={student.id} value={student.id}>{student.name}</option>)}</select></label>
                     <div className="flex flex-col-reverse gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-between">
-                        {canManage ? <AtlasActionButton variant="danger" icon={Trash2} disabled={isEditing} onClick={() => void handleDeleteItems([editingItem])}>Delete</AtlasActionButton> : <AtlasActionButton icon={ImageIcon} onClick={() => window.open(editingItem.url, '_blank', 'noopener,noreferrer')}>Open image</AtlasActionButton>}
-                        <div className="flex gap-2"><AtlasActionButton onClick={() => setEditingItem(null)} disabled={isEditing}>{canManage ? 'Cancel' : 'Close'}</AtlasActionButton>{canManage && <AtlasActionButton type="submit" variant="primary" icon={isEditing ? Loader2 : Check} disabled={isEditing} className={isEditing ? '[&_svg]:animate-spin' : ''}>{isEditing ? 'Saving...' : 'Save changes'}</AtlasActionButton>}</div>
+                        {canManage ? <AtlasActionButton variant="danger" icon={Trash2} disabled={isEditing || isBulkSaving} onClick={() => void handleDeleteItems([editingItem])}>Delete</AtlasActionButton> : <AtlasActionButton icon={ImageIcon} onClick={() => window.open(editingItem.url, '_blank', 'noopener,noreferrer')}>Open image</AtlasActionButton>}
+                        <div className="flex gap-2"><AtlasActionButton onClick={() => setEditingItem(null)} disabled={isEditing || isBulkSaving}>{canManage ? 'Cancel' : 'Close'}</AtlasActionButton>{canManage && <AtlasActionButton type="submit" variant="primary" icon={isEditing ? Loader2 : Check} disabled={isEditing || isBulkSaving} className={isEditing ? '[&_svg]:animate-spin' : ''}>{isEditing ? 'Saving...' : 'Save changes'}</AtlasActionButton>}</div>
                     </div>
                 </form>}
             </Modal>
 
             <Modal isOpen={Boolean(capturingStudent)} onClose={closeCapture} title={capturingStudent ? `Capture for ${capturingStudent.name}` : 'Capture'} designSystem={showEducationTeamOperationsV1}>
-                {capturingStudent && <div className="space-y-4">
+                {capturingStudent && <div className="edu-media-form space-y-4">
                     <div className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-3"><span className="text-sm font-bold text-white">{getStudentPhotosForDate(capturingStudent.id).length} photos today</span><span className="text-xs text-slate-500">Family visible</span></div>
                     <div className="relative flex min-h-72 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-black">
                         {capturePreview ? <img src={capturePreview} alt="Capture preview" className="max-h-[55vh] w-full object-contain" /> : <label className="flex min-h-72 w-full cursor-pointer flex-col items-center justify-center p-8 text-center focus-within:ring-2 focus-within:ring-inset focus-within:ring-teal-400"><Camera size={36} className="mb-3 text-teal-300" /><span className="text-sm font-bold text-white">Choose or take a photo</span><span className="mt-1 text-xs text-slate-500">JPG, PNG, or WebP up to 12 MB</span><input type="file" accept={ALLOWED_IMAGE_TYPES.join(',')} capture="environment" onChange={handleCaptureFile} className="sr-only" /></label>}
