@@ -126,3 +126,6 @@ The isolated fixture proves visual and interaction states, including the App-own
 ## 2026-10-20 — Attendance acceptance boundary
 
 Synthetic checks cover individual and batch saves, failure/retry, clear/cancel, permission display and responsive layouts. Real writes, restricted-role sign-in, actual report print/WhatsApp handoff, shared confirmation focus containment, multi-chunk batch failure and physical-phone testing remain open. FaceID Attendance is a visual preview with no connected recognition or scan persistence. See `ATTENDANCE_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`.
+## 2026-10-22 — Toolkit acceptance boundary
+
+The isolated Toolkit fixture covers visual states and in-memory actions, but the signed-in local app was unavailable for a real-account read-only check. Real admin/restricted role, physical phone, external provider and consequential write acceptance remain open. AppContext lacks an error callback for `assets` and `tool_links` listeners, so a dataset-specific Firestore failure cannot be surfaced through Toolkit alone. Clipboard rejection is available in the fixture but was not exercised. See `TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md`.

@@ -144,3 +144,6 @@ See the dated focus reports in this directory for validation and pending accepta
 ## 2026-10-20 — Attendance Design System v1 focused completion
 
 Completed the daily register state audit, canonical renewal treatment, learner Attendance history status/action styling and installed FaceID preview shell. Isolated browser checks covered desktop/390px light/dark and synthetic write paths; the signed-in school app was read-only. See `ATTENDANCE_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`.
+## 2026-10-22 — Toolkit Design System v1 candidate
+
+Migrated Digital resources and Hardware inventory to canonical Education surfaces, added scoped responsive styling and an isolated in-memory review fixture. Search, filter, detail, create/edit/delete and custody flows were checked synthetically. Signed-in and physical-phone acceptance remain open; see `TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md`. No push or deployment.

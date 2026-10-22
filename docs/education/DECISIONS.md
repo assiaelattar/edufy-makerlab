@@ -143,3 +143,6 @@ The follow-up fixture mounts the actual enrollment wizard and extracts the payme
 ## 2026-10-20 — Attendance presentation and preview truth
 
 Keep the daily Attendance register's date, session, selection and write handlers as the sole operational path. Use neutral record surfaces and canonical status colors, with orange limited to late/renewal follow-up. In the installed FaceID app, label the local toggle as a preview because its camera, recognition and scan persistence are not connected. See `ATTENDANCE_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`.
+## 2026-10-22 — Toolkit Design System v1 scope
+
+Toolkit opts into the canonical Education System on both routes, including under the legacy-shell query. Use Education primitives and Toolkit-scoped token layout; retain organization/role guards, Firestore transactions and external provider boundaries. Keep synthetic write verification distinct from signed-in read-only acceptance. See `TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md`.

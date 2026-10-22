@@ -1,24 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import {
-    AlertCircle,
-    ArrowUpDown,
-    Box,
-    CheckCircle2,
-    CheckSquare,
-    Copy,
-    Cpu,
-    ExternalLink,
-    Hammer,
-    Library,
-    PackageCheck,
-    Pencil,
-    Plus,
-    RotateCcw,
-    Search,
-    Trash2,
-    User,
-    Wrench
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, CheckSquare, Copy, Cpu, ExternalLink, Hammer, Library, PackageCheck, Pencil, Plus, RotateCcw, Search, Trash2, User, Wrench, X } from 'lucide-react';
 import { addDoc, collection, doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -27,10 +8,10 @@ import { useNotifications } from '../context/NotificationContext';
 import { Modal } from '../components/Modal';
 import { db } from '../services/firebase';
 import { Asset, ToolLink } from '../types';
-import { AtlasActionButton, AtlasCommandHeader, AtlasEmptyState, AtlasSectionHeader, AtlasSignalCard, AtlasToolbar } from '../components/atlas/AtlasSurface';
-import './resources/education-resources-v1.css';
+import { EducationActionMenu, EducationButton, EducationDetailPanel, EducationField, EducationIcon, EducationNotice, EducationRegister, EducationState, EducationStatusPill, EducationTabs, EducationToolbar } from '../components/education-ui/EducationPrimitives';
 import '../components/education-ui/education-system-v1.css';
 import '../components/education-ui/education-system-v1-modules.css';
+import './resources/education-toolkit-v1.css';
 
 type ToolkitTab = 'digital' | 'inventory';
 type SortOption = 'name' | 'category' | 'newest' | 'status';
@@ -39,8 +20,6 @@ type Feedback = { type: 'success' | 'error' | 'info'; message: string };
 const TOOL_CATEGORIES: Array<ToolLink['category']> = ['robotics', 'coding', 'design', 'engineering', 'multimedia', 'other'];
 const ASSET_CATEGORIES: Array<Asset['category']> = ['robotics', 'computer', 'tools', 'other'];
 const ASSET_STATUSES: Array<Asset['status']> = ['available', 'in_use', 'maintenance', 'lost'];
-
-const fieldClassName = 'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white outline-none transition-colors placeholder:text-slate-600 focus:border-teal-400/60 focus:ring-2 focus:ring-teal-400/10 disabled:cursor-not-allowed disabled:opacity-60';
 
 const normalizeText = (value?: string) => (value || '').trim().replace(/\s+/g, ' ');
 
@@ -73,8 +52,7 @@ const statusLabel = (status: Asset['status']) => ({
 }[status]);
 
 export const ToolkitView = () => {
-    const showEducationResourcesV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { toolLinks, assets, students } = useAppContext();
+    const { toolLinks, assets, students, loading, workspaceError } = useAppContext();
     const { currentOrganization, can } = useAuth();
     const { confirm } = useConfirm();
     const { addToast } = useNotifications();
@@ -100,6 +78,11 @@ export const ToolkitView = () => {
     const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
     const [assignStudentId, setAssignStudentId] = useState('');
+    const [detail, setDetail] = useState<{ kind: ToolkitTab; id: string } | null>(null);
+
+    useEffect(() => {
+        if (detail) document.getElementById('toolkit-detail')?.focus();
+    }, [detail]);
 
     const ownedToolLinks = useMemo(
         () => toolLinks.filter(tool => Boolean(orgId) && tool.organizationId === orgId),
@@ -185,6 +168,7 @@ export const ToolkitView = () => {
             return;
         }
         setEditingTool(tool || null);
+        setFeedback(null);
         setToolForm(tool
             ? { title: tool.title, url: tool.url, category: tool.category, description: tool.description || '' }
             : { title: '', url: '', category: 'other', description: '' });
@@ -198,6 +182,7 @@ export const ToolkitView = () => {
             return;
         }
         setEditingAsset(asset || null);
+        setFeedback(null);
         setAssetForm(asset
             ? { name: asset.name, category: asset.category, status: asset.status, serialNumber: asset.serialNumber || '', notes: asset.notes || '' }
             : { name: '', category: 'robotics', status: 'available', serialNumber: '', notes: '' });
@@ -207,6 +192,13 @@ export const ToolkitView = () => {
     const openCreateModal = () => {
         if (activeTab === 'digital') openToolModal();
         else openAssetModal();
+    };
+
+    const openCheckoutModal = (asset: Asset) => {
+        setFeedback(null);
+        setSelectedAsset(asset);
+        setAssignStudentId('');
+        setIsCheckoutModalOpen(true);
     };
 
     const handleSaveTool = async (event: React.FormEvent) => {
@@ -513,222 +505,135 @@ export const ToolkitView = () => {
 
     const switchTab = (tab: ToolkitTab) => {
         setActiveTab(tab);
+        setDetail(null);
         setCategoryFilter('all');
         setStatusFilter('all');
         setSearchQuery('');
         if (tab === 'digital' && sortBy === 'status') setSortBy('name');
     };
 
+    const closeDetail = () => {
+        const opener = detail && Array.from(document.querySelectorAll<HTMLButtonElement>('[data-toolkit-detail-id]'))
+            .find(button => button.dataset.toolkitDetailId === `${detail.kind}:${detail.id}`);
+        setDetail(null);
+        opener?.focus();
+    };
+
+    const detailTool = detail?.kind === 'digital' ? ownedToolLinks.find(tool => tool.id === detail.id) : undefined;
+    const detailAsset = detail?.kind === 'inventory' ? ownedAssets.find(asset => asset.id === detail.id) : undefined;
+    const assetTone = (status: Asset['status']) => status === 'available' ? 'success' : status === 'in_use' ? 'info' : status === 'maintenance' ? 'warning' : 'danger';
+
     return (
-        <div className={`flex h-full flex-col space-y-5 pb-24 md:pb-8 ${showEducationResourcesV1 ? 'edu-v1 edu-school-ops-v1 edu-toolkit-v1' : ''}`} data-edu-system={showEducationResourcesV1 ? '1' : undefined} data-testid={showEducationResourcesV1 ? 'education-toolkit-v1' : undefined}>
-            <AtlasCommandHeader
-                eyebrow="Organization resources"
-                title="Toolkit"
-                description="Keep trusted external resources and accountable equipment ready for daily operations."
-                icon={Hammer}
-                badges={<span className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase text-slate-300">{activeTab === 'digital' ? 'Resource directory' : 'Inventory register'}</span>}
-                actions={canManage ? <AtlasActionButton variant="primary" icon={Plus} onClick={openCreateModal}>Add {activeTab === 'digital' ? 'resource' : 'item'}</AtlasActionButton> : undefined}
-            />
-
-            {!orgId && (
-                <div className="flex items-start gap-3 rounded-lg border border-amber-300/20 bg-amber-300/[0.06] p-3 text-sm text-amber-100" role="alert">
-                    <AlertCircle className="mt-0.5 shrink-0" size={17} /> Select an organization to load and manage its toolkit.
+        <div className="edu-toolkit-v1 edu-school-ops-v1" data-edu-system="1" data-testid="education-toolkit-v1">
+            <header className="edu-toolkit-v1__hero">
+                <div className="edu-toolkit-v1__hero-icon"><Hammer size={27} aria-hidden="true" /></div>
+                <div className="edu-toolkit-v1__hero-copy">
+                    <span className="edu-toolkit-v1__eyebrow">Organization resources</span>
+                    <h1>Toolkit</h1>
+                    <p>Keep trusted links and school equipment ready for daily use.</p>
                 </div>
-            )}
+                {canManage && orgId && !loading && !workspaceError && <EducationButton variant="primary" icon={Plus} onClick={openCreateModal}>Add {activeTab === 'digital' ? 'resource' : 'item'}</EducationButton>}
+            </header>
 
-            {feedback && (
-                <div className={`flex items-start justify-between gap-3 rounded-lg border p-3 text-sm ${feedback.type === 'error' ? 'border-red-400/20 bg-red-500/[0.06] text-red-100' : feedback.type === 'success' ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-100' : 'border-sky-400/20 bg-sky-400/[0.06] text-sky-100'}`} role={feedback.type === 'error' ? 'alert' : 'status'} aria-live="polite">
-                    <div className="flex items-start gap-2">
-                        {feedback.type === 'error' ? <AlertCircle className="mt-0.5 shrink-0" size={16} /> : <CheckCircle2 className="mt-0.5 shrink-0" size={16} />}
-                        <span>{feedback.message}</span>
-                    </div>
-                    <button type="button" onClick={() => setFeedback(null)} className="shrink-0 text-xs font-bold opacity-70 hover:opacity-100" aria-label="Dismiss message">Dismiss</button>
+            {!orgId && <EducationState kind="restricted" title="Choose an organization" description="Select an organization to view its resources and inventory." />}
+            {orgId && loading && <EducationState kind="loading" title="Loading the toolkit" description="Gathering this organization's resources and inventory." />}
+            {orgId && workspaceError && <EducationState kind="error" title="Toolkit data is unavailable" description={workspaceError}><EducationButton onClick={() => window.location.reload()}>Retry loading</EducationButton></EducationState>}
+            {feedback && <div className="edu-toolkit-v1__feedback"><EducationNotice status={feedback.type === 'error' ? 'danger' : feedback.type === 'success' ? 'success' : 'info'}>{feedback.message}</EducationNotice><EducationButton variant="quiet" onClick={() => setFeedback(null)}>Dismiss</EducationButton></div>}
+
+            {orgId && !loading && !workspaceError && <>
+                <div className="edu-toolkit-v1__summary" aria-label="Toolkit summary">
+                    <div><EducationIcon icon={Library} accent="purple" /><span><strong>{ownedToolLinks.length}</strong><small>Digital resources</small></span></div>
+                    <div><EducationIcon icon={Cpu} accent="blue" /><span><strong>{ownedAssets.length}</strong><small>Hardware items</small></span></div>
+                    <div><EducationIcon icon={PackageCheck} accent="green" /><span><strong>{availableAssets}</strong><small>Ready to use</small></span></div>
+                    <div><EducationIcon icon={attentionAssets ? Wrench : User} accent={attentionAssets ? 'orange' : 'yellow'} /><span><strong>{attentionAssets || assignedAssets}</strong><small>{attentionAssets ? 'Need attention' : 'Checked out'}</small></span></div>
                 </div>
-            )}
 
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <AtlasSignalCard label="Digital resources" value={ownedToolLinks.length} detail="Validated external links" icon={Library} tone="teal" />
-                <AtlasSignalCard label="Hardware assets" value={ownedAssets.length} detail="Organization inventory" icon={Cpu} tone="blue" />
-                <AtlasSignalCard label="Ready to use" value={availableAssets} detail="Available for checkout" icon={PackageCheck} tone="emerald" />
-                <AtlasSignalCard label={attentionAssets ? 'Needs attention' : 'Checked out'} value={attentionAssets || assignedAssets} detail={attentionAssets ? 'Maintenance or missing' : `${assignedAssets} assigned`} icon={attentionAssets ? Wrench : User} tone={attentionAssets ? 'amber' : 'slate'} />
-            </div>
+                <EducationTabs
+                    label="Toolkit sections"
+                    value={activeTab}
+                    onChange={id => switchTab(id as ToolkitTab)}
+                    items={[{ id: 'digital', label: 'Digital resources', icon: ExternalLink, count: ownedToolLinks.length }, { id: 'inventory', label: 'Hardware inventory', icon: Box, count: ownedAssets.length, status: attentionAssets ? 'attention' : undefined }]}
+                    idPrefix="toolkit"
+                />
 
-            <AtlasToolbar
-                leading={
-                    <div className="flex h-10 rounded-lg border border-white/10 bg-slate-950 p-1" role="tablist" aria-label="Toolkit sections">
-                        <button type="button" role="tab" aria-selected={activeTab === 'digital'} onClick={() => switchTab('digital')} className={`flex items-center gap-2 rounded-md px-3 text-xs font-bold transition-colors ${activeTab === 'digital' ? 'bg-teal-400/15 text-teal-200' : 'text-slate-500 hover:text-white'}`}>
-                            <ExternalLink size={15} /> Resources
-                        </button>
-                        <button type="button" role="tab" aria-selected={activeTab === 'inventory'} onClick={() => switchTab('inventory')} className={`flex items-center gap-2 rounded-md px-3 text-xs font-bold transition-colors ${activeTab === 'inventory' ? 'bg-teal-400/15 text-teal-200' : 'text-slate-500 hover:text-white'}`}>
-                            <Box size={15} /> Hardware
-                        </button>
-                    </div>
-                }
-                trailing={
-                    <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-[minmax(14rem,1fr)_10rem]">
-                        <label className="relative block">
-                            <span className="sr-only">Search {activeTab === 'digital' ? 'resources' : 'inventory'}</span>
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                            <input type="search" placeholder={activeTab === 'digital' ? 'Search name, URL, details' : 'Search item, serial, assignee'} value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="h-10 w-full rounded-lg border border-white/10 bg-slate-950 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-teal-400/50 focus:ring-2 focus:ring-teal-400/10" />
-                        </label>
-                        <label className="relative block">
-                            <span className="sr-only">Sort results</span>
-                            <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                            <select value={sortBy} onChange={event => setSortBy(event.target.value as SortOption)} className="h-10 w-full appearance-none rounded-lg border border-white/10 bg-slate-950 pl-8 pr-3 text-xs font-bold text-slate-300 outline-none focus:border-teal-400/50">
-                                <option value="name">Name</option>
-                                <option value="category">Category</option>
-                                <option value="newest">Newest</option>
-                                {activeTab === 'inventory' && <option value="status">Status</option>}
-                            </select>
-                        </label>
-                    </div>
-                }
-            >
-                <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 lg:pb-0">
-                    <button type="button" onClick={() => setCategoryFilter('all')} aria-pressed={categoryFilter === 'all'} className={`h-8 shrink-0 rounded-lg border px-3 text-[10px] font-bold uppercase transition-colors ${categoryFilter === 'all' ? 'border-teal-300/30 bg-teal-400/10 text-teal-200' : 'border-white/10 bg-slate-950 text-slate-500 hover:border-white/20 hover:text-white'}`}>All categories</button>
-                    {(activeTab === 'digital' ? TOOL_CATEGORIES : ASSET_CATEGORIES).map(category => (
-                        <button type="button" key={category} onClick={() => setCategoryFilter(category)} aria-pressed={categoryFilter === category} className={`h-8 shrink-0 rounded-lg border px-3 text-[10px] font-bold uppercase transition-colors ${categoryFilter === category ? 'border-teal-300/30 bg-teal-400/10 text-teal-200' : 'border-white/10 bg-slate-950 text-slate-500 hover:border-white/20 hover:text-white'}`}>
-                            {category}
-                        </button>
-                    ))}
-                    {activeTab === 'inventory' && (
-                        <select aria-label="Filter inventory by status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | Asset['status'])} className="h-8 shrink-0 rounded-lg border border-white/10 bg-slate-950 px-3 text-[10px] font-bold uppercase text-slate-300 outline-none focus:border-teal-400/50">
-                            <option value="all">All statuses</option>
-                            {ASSET_STATUSES.map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}
-                        </select>
-                    )}
-                    {hasActiveFilters && <button type="button" onClick={clearFilters} className="h-8 shrink-0 px-2 text-xs font-bold text-slate-400 hover:text-white">Clear</button>}
+                <EducationToolbar label="Find toolkit items">
+                    <label className="edu-toolkit-v1__search"><Search size={17} aria-hidden="true" /><span className="sr-only">Search {activeTab === 'digital' ? 'resources' : 'inventory'}</span><input type="search" placeholder={activeTab === 'digital' ? 'Search names, links, or notes' : 'Search item, serial, or student'} value={searchQuery} onChange={event => setSearchQuery(event.target.value)} /></label>
+                    <label className="edu-toolkit-v1__sort"><span>Sort</span><select value={sortBy} onChange={event => setSortBy(event.target.value as SortOption)}><option value="name">Name</option><option value="category">Category</option><option value="newest">Newest</option>{activeTab === 'inventory' && <option value="status">Status</option>}</select></label>
+                </EducationToolbar>
+                <div className="edu-toolkit-v1__filters" role="group" aria-label="Category filters">
+                    <button type="button" aria-pressed={categoryFilter === 'all'} onClick={() => setCategoryFilter('all')}>All categories</button>
+                    {(activeTab === 'digital' ? TOOL_CATEGORIES : ASSET_CATEGORIES).map(category => <button type="button" key={category} aria-pressed={categoryFilter === category} onClick={() => setCategoryFilter(category)}>{category}</button>)}
+                    {activeTab === 'inventory' && <label><span>Status</span><select aria-label="Filter inventory by status" value={statusFilter} onChange={event => setStatusFilter(event.target.value as 'all' | Asset['status'])}><option value="all">All statuses</option>{ASSET_STATUSES.map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></label>}
+                    {hasActiveFilters && <EducationButton variant="quiet" onClick={clearFilters}>Clear filters</EducationButton>}
                 </div>
-            </AtlasToolbar>
 
-            {activeTab === 'digital' ? (
-                <section className="space-y-4" role="tabpanel">
-                    <AtlasSectionHeader title="Digital resources" description="External providers open in a new tab; availability and access remain controlled by each provider." icon={ExternalLink} meta={<span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-400">{filteredTools.length} shown</span>} />
-                    {filteredTools.length === 0 ? (
-                        <AtlasEmptyState
-                            title={ownedToolLinks.length === 0 ? 'Build the resource directory' : 'No resources match this view'}
-                            description={ownedToolLinks.length === 0 ? 'Add approved software, references, and provider links used by your organization.' : 'Clear the current filters or search for another resource.'}
-                            icon={Library}
-                            action={hasActiveFilters ? <AtlasActionButton onClick={clearFilters}>Clear filters</AtlasActionButton> : canManage ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => openToolModal()}>Add resource</AtlasActionButton> : undefined}
-                        />
-                    ) : (
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                            {filteredTools.map(tool => {
-                                const safeUrl = normalizeResourceUrl(tool.url);
-                                return (
-                                    <article key={tool.id} className="group flex min-h-52 flex-col rounded-lg border border-white/10 bg-slate-900/80 p-4 transition-colors hover:border-teal-300/30">
-                                        <div className="mb-3 flex items-start justify-between gap-3">
-                                            <div className="flex min-w-0 items-center gap-3">
-                                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-teal-400/20 bg-teal-400/10 text-sm font-black text-teal-200">{tool.title.charAt(0).toUpperCase()}</div>
-                                                <div className="min-w-0"><h3 className="truncate text-sm font-black text-white">{tool.title}</h3><span className="text-[10px] font-bold uppercase text-slate-500">{tool.category}</span></div>
-                                            </div>
-                                            {canManage && (
-                                                <div className="flex shrink-0 gap-1">
-                                                    <button type="button" onClick={() => openToolModal(tool)} disabled={busyId === tool.id} className="rounded-lg p-2 text-slate-500 hover:bg-white/[0.06] hover:text-white disabled:opacity-50" aria-label={`Edit ${tool.title}`} title="Edit resource"><Pencil size={15} /></button>
-                                                    <button type="button" onClick={() => handleDeleteTool(tool)} disabled={busyId === tool.id} className="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50" aria-label={`Delete ${tool.title}`} title="Delete resource"><Trash2 size={15} /></button>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="line-clamp-3 flex-1 text-xs leading-5 text-slate-400">{tool.description || 'No operational notes have been added.'}</p>
-                                        <div className="mt-4 grid grid-cols-[2.5rem_1fr] gap-2">
-                                            <button type="button" onClick={() => handleCopyUrl(tool)} disabled={!safeUrl} className="flex h-10 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Copy ${tool.title} URL`} title={safeUrl ? 'Copy URL' : 'Invalid URL'}><Copy size={15} /></button>
-                                            {safeUrl ? (
-                                                <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] text-xs font-bold text-slate-200 transition-colors hover:border-teal-300/30 hover:bg-teal-400/10 hover:text-teal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/60">Open resource <ExternalLink size={14} /></a>
-                                            ) : (
-                                                <button type="button" disabled className="h-10 rounded-lg border border-red-400/20 bg-red-500/[0.05] text-xs font-bold text-red-200">Invalid URL</button>
-                                            )}
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    )}
-                </section>
-            ) : (
-                <section className="space-y-4" role="tabpanel">
-                    <AtlasSectionHeader title="Hardware inventory" description="Track availability, exceptions, assignments, and returns with an explicit custody record." icon={Box} meta={<span className="rounded-md bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-slate-400">{filteredAssets.length} shown</span>} />
-                    {filteredAssets.length === 0 ? (
-                        <AtlasEmptyState
-                            title={ownedAssets.length === 0 ? 'Start the hardware register' : 'No inventory matches this view'}
-                            description={ownedAssets.length === 0 ? 'Add organization equipment to track availability and student responsibility.' : 'Clear the current filters or search for another item.'}
-                            icon={Box}
-                            action={hasActiveFilters ? <AtlasActionButton onClick={clearFilters}>Clear filters</AtlasActionButton> : canManage ? <AtlasActionButton icon={Plus} variant="primary" onClick={() => openAssetModal()}>Add item</AtlasActionButton> : undefined}
-                        />
-                    ) : (
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                            {filteredAssets.map(asset => {
-                                const isAvailable = asset.status === 'available';
-                                const isInUse = asset.status === 'in_use';
-                                const statusStyle = isAvailable
-                                    ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-                                    : isInUse
-                                        ? 'border-amber-300/20 bg-amber-300/10 text-amber-200'
-                                        : 'border-red-400/20 bg-red-500/10 text-red-200';
-                                return (
-                                    <article key={asset.id} className="group flex min-h-60 flex-col rounded-lg border border-white/10 bg-slate-900/80 p-4 transition-colors hover:border-teal-300/30">
-                                        <div className="mb-3 flex items-start justify-between gap-3">
-                                            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-sky-400/20 bg-sky-400/10 text-sky-300"><Cpu size={20} /></div>
-                                            <div className="flex items-center gap-1">
-                                                <span className={`rounded-md border px-2 py-1 text-[10px] font-bold uppercase ${statusStyle}`}>{statusLabel(asset.status)}</span>
-                                                {canManage && <button type="button" onClick={() => openAssetModal(asset)} disabled={busyId === asset.id} className="rounded-lg p-2 text-slate-500 hover:bg-white/[0.06] hover:text-white disabled:opacity-50" aria-label={`Edit ${asset.name}`} title="Edit item"><Pencil size={15} /></button>}
-                                                {canManage && <button type="button" onClick={() => handleDeleteAsset(asset)} disabled={busyId === asset.id || isInUse} className="rounded-lg p-2 text-slate-500 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35" aria-label={`Delete ${asset.name}`} title={isInUse ? 'Return item before deleting' : 'Delete item'}><Trash2 size={15} /></button>}
-                                            </div>
-                                        </div>
-                                        <h3 className="text-sm font-black text-white">{asset.name}</h3>
-                                        <p className="mt-1 font-mono text-[10px] text-slate-500">ID: {asset.serialNumber || 'Not assigned'}</p>
-                                        <div className="my-4 flex-1">
-                                            {isInUse ? (
-                                                <div className="flex items-center gap-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.05] p-3">
-                                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.06] text-xs font-black text-white">{asset.assignedToName?.charAt(0) || '?'}</div>
-                                                    <div className="min-w-0"><div className="text-[10px] font-bold uppercase text-amber-200">Assigned to</div><div className="truncate text-xs font-bold text-white">{asset.assignedToName || 'Unknown student'}</div></div>
-                                                </div>
-                                            ) : (
-                                                <p className="line-clamp-3 text-xs leading-5 text-slate-500">{asset.notes || (isAvailable ? 'Ready for checkout.' : 'Review the item notes and lifecycle status before use.')}</p>
-                                            )}
-                                        </div>
-                                        {canManage ? (
-                                            isAvailable ? <AtlasActionButton variant="primary" icon={CheckSquare} className="w-full" disabled={busyId === asset.id} onClick={() => { setSelectedAsset(asset); setAssignStudentId(''); setIsCheckoutModalOpen(true); }}>Check out</AtlasActionButton>
-                                                : isInUse ? <AtlasActionButton icon={RotateCcw} className="w-full" disabled={busyId === asset.id} onClick={() => handleCheckIn(asset)}>{busyId === asset.id ? 'Returning...' : 'Return item'}</AtlasActionButton>
-                                                    : <AtlasActionButton icon={Pencil} className="w-full" onClick={() => openAssetModal(asset)}>Review status</AtlasActionButton>
-                                        ) : (
-                                            <div className={`rounded-lg py-2 text-center text-xs font-bold ${isAvailable ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.04] text-slate-400'}`}>{isAvailable ? 'Available' : statusLabel(asset.status)}</div>
-                                        )}
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    )}
-                </section>
-            )}
+                {detailTool && <EducationDetailPanel id="toolkit-detail" tabIndex={-1} label={`Resource details for ${detailTool.title}`} className="edu-toolkit-v1__detail">
+                    <div className="edu-toolkit-v1__detail-head"><EducationIcon icon={ExternalLink} accent="purple" /><div><span>Digital resource</span><h2>{detailTool.title}</h2></div><EducationButton variant="quiet" icon={X} onClick={closeDetail}>Close details</EducationButton></div>
+                    <EducationStatusPill status="info">{detailTool.category}</EducationStatusPill>
+                    <p>{detailTool.description || 'No operational notes have been added.'}</p>
+                    <p className="edu-toolkit-v1__url">{detailTool.url}</p>
+                    <div className="edu-toolkit-v1__detail-actions"><EducationButton icon={Copy} disabled={!normalizeResourceUrl(detailTool.url)} onClick={() => handleCopyUrl(detailTool)}>Copy link</EducationButton>{normalizeResourceUrl(detailTool.url) && <a className="edu-ds-button edu-toolkit-v1__link-button" href={normalizeResourceUrl(detailTool.url)!} target="_blank" rel="noopener noreferrer">Open resource <ExternalLink size={15} aria-hidden="true" /></a>}{canManage && <EducationButton icon={Pencil} onClick={() => openToolModal(detailTool)}>Edit resource</EducationButton>}</div>
+                </EducationDetailPanel>}
 
-            <Modal isOpen={isToolModalOpen} onClose={() => { if (!isSaving) setIsToolModalOpen(false); }} title={editingTool ? 'Edit Resource' : 'Add Resource'} designSystem={showEducationResourcesV1}>
-                <form onSubmit={handleSaveTool} className="space-y-4">
-                    <div><label htmlFor="tool-title" className="mb-1 block text-xs font-bold text-slate-400">Resource name</label><input id="tool-title" required maxLength={80} className={fieldClassName} value={toolForm.title || ''} onChange={event => setToolForm({ ...toolForm, title: event.target.value })} placeholder="e.g. Arduino IDE" /></div>
-                    <div><label htmlFor="tool-url" className="mb-1 block text-xs font-bold text-slate-400">External URL</label><input id="tool-url" type="url" inputMode="url" required className={fieldClassName} value={toolForm.url || ''} onChange={event => setToolForm({ ...toolForm, url: event.target.value })} placeholder="https://provider.example.com" /><p className="mt-1 text-[11px] leading-4 text-slate-500">Only http and https links are accepted. Provider accounts and availability are managed outside Edufy.</p></div>
-                    <div><label htmlFor="tool-category" className="mb-1 block text-xs font-bold text-slate-400">Category</label><select id="tool-category" className={`${fieldClassName} capitalize`} value={toolForm.category} onChange={event => setToolForm({ ...toolForm, category: event.target.value as ToolLink['category'] })}>{TOOL_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select></div>
-                    <div><label htmlFor="tool-description" className="mb-1 block text-xs font-bold text-slate-400">Operational notes</label><textarea id="tool-description" maxLength={240} className={`${fieldClassName} min-h-24 resize-y`} value={toolForm.description || ''} onChange={event => setToolForm({ ...toolForm, description: event.target.value })} placeholder="Who uses it, when, and any access notes" /><div className="mt-1 text-right text-[10px] text-slate-600">{(toolForm.description || '').length}/240</div></div>
-                    <AtlasActionButton type="submit" variant="primary" className="w-full" disabled={isSaving}>{isSaving ? 'Saving...' : editingTool ? 'Save changes' : 'Add resource'}</AtlasActionButton>
+                {detailAsset && <EducationDetailPanel id="toolkit-detail" tabIndex={-1} label={`Inventory details for ${detailAsset.name}`} className="edu-toolkit-v1__detail">
+                    <div className="edu-toolkit-v1__detail-head"><EducationIcon icon={Cpu} accent="blue" /><div><span>Hardware item</span><h2>{detailAsset.name}</h2></div><EducationButton variant="quiet" icon={X} onClick={closeDetail}>Close details</EducationButton></div>
+                    <EducationStatusPill status={assetTone(detailAsset.status)}>{statusLabel(detailAsset.status)}</EducationStatusPill>
+                    <dl><div><dt>Category</dt><dd>{detailAsset.category}</dd></div><div><dt>Serial / inventory ID</dt><dd>{detailAsset.serialNumber || 'Not recorded'}</dd></div>{detailAsset.status === 'in_use' && <div><dt>Assigned to</dt><dd>{detailAsset.assignedToName || 'Unknown student'}</dd></div>}</dl>
+                    <p>{detailAsset.notes || 'No condition or handling notes have been added.'}</p>
+                    {canManage && <div className="edu-toolkit-v1__detail-actions">{detailAsset.status === 'available' && <EducationButton variant="primary" icon={CheckSquare} onClick={() => openCheckoutModal(detailAsset)}>Check out</EducationButton>}{detailAsset.status === 'in_use' && <EducationButton icon={RotateCcw} disabled={busyId === detailAsset.id} onClick={() => handleCheckIn(detailAsset)}>{busyId === detailAsset.id ? 'Returning…' : 'Return item'}</EducationButton>}<EducationButton icon={Pencil} onClick={() => openAssetModal(detailAsset)}>Edit item</EducationButton></div>}
+                </EducationDetailPanel>}
+
+                {activeTab === 'digital' ? <div role="tabpanel" id="toolkit-panel-digital" aria-labelledby="toolkit-digital">
+                    <EducationRegister title="Digital resources" description="Approved provider links for the school team. External access stays with each provider." icon={Library} actions={<span>{filteredTools.length} shown</span>}>
+                        {filteredTools.length === 0 ? <EducationState title={ownedToolLinks.length ? 'No matching resources' : 'Build the resource directory'} description={ownedToolLinks.length ? 'Try another search or clear the current filters.' : 'Add the software, references, and provider links your team uses.'}>{hasActiveFilters ? <EducationButton onClick={clearFilters}>Clear filters</EducationButton> : canManage && <EducationButton variant="primary" icon={Plus} onClick={() => openToolModal()}>Add resource</EducationButton>}</EducationState> :
+                            <div className="edu-toolkit-v1__resource-grid">{filteredTools.map(tool => { const safeUrl = normalizeResourceUrl(tool.url); return <article key={tool.id} className="edu-toolkit-v1__resource">
+                                <div className="edu-toolkit-v1__card-top"><EducationIcon icon={ExternalLink} accent="purple" /><EducationStatusPill status="info">{tool.category}</EducationStatusPill></div>
+                                <h3>{tool.title}</h3><p>{tool.description || 'No operational notes have been added.'}</p>
+                                {!safeUrl && <EducationNotice status="danger">The saved URL needs correction before this resource can open.</EducationNotice>}
+                                <div className="edu-toolkit-v1__card-actions"><EducationButton data-toolkit-detail-id={`digital:${tool.id}`} onClick={() => setDetail({ kind: 'digital', id: tool.id })}>View details</EducationButton>{safeUrl && <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="edu-ds-button edu-toolkit-v1__link-button">Open <ExternalLink size={15} aria-hidden="true" /></a>}{canManage && <EducationActionMenu label={`Actions for ${tool.title}`}><button type="button" onClick={() => openToolModal(tool)}>Edit resource</button><button type="button" onClick={() => handleCopyUrl(tool)} disabled={!safeUrl}>Copy link</button><button type="button" onClick={() => handleDeleteTool(tool)} disabled={busyId === tool.id}>Delete resource</button></EducationActionMenu>}</div>
+                            </article>; })}</div>}
+                    </EducationRegister>
+                </div> : <div role="tabpanel" id="toolkit-panel-inventory" aria-labelledby="toolkit-inventory">
+                    <EducationRegister title="Hardware inventory" description="Availability and custody for equipment assigned to learners." icon={Box} actions={<span>{filteredAssets.length} shown</span>}>
+                        {filteredAssets.length === 0 ? <EducationState title={ownedAssets.length ? 'No matching items' : 'Start the hardware register'} description={ownedAssets.length ? 'Try another search or clear the current filters.' : 'Add equipment to track availability and student responsibility.'}>{hasActiveFilters ? <EducationButton onClick={clearFilters}>Clear filters</EducationButton> : canManage && <EducationButton variant="primary" icon={Plus} onClick={() => openAssetModal()}>Add item</EducationButton>}</EducationState> :
+                            <div className="edu-toolkit-v1__inventory-list">{filteredAssets.map(asset => <article key={asset.id} className="edu-toolkit-v1__inventory-row">
+                                <EducationIcon icon={Cpu} accent="blue" /><div className="edu-toolkit-v1__item-main"><h3>{asset.name}</h3><p>{asset.serialNumber || 'No serial recorded'} · {asset.category}{asset.status === 'in_use' && ` · Assigned to ${asset.assignedToName || 'unknown student'}`}</p></div>
+                                <EducationStatusPill status={assetTone(asset.status)}>{statusLabel(asset.status)}</EducationStatusPill>
+                                <div className="edu-toolkit-v1__row-actions"><EducationButton data-toolkit-detail-id={`inventory:${asset.id}`} onClick={() => setDetail({ kind: 'inventory', id: asset.id })}>View details</EducationButton>{canManage && asset.status === 'available' && <EducationButton variant="primary" icon={CheckSquare} onClick={() => openCheckoutModal(asset)}>Check out</EducationButton>}{canManage && asset.status === 'in_use' && <EducationButton icon={RotateCcw} disabled={busyId === asset.id} onClick={() => handleCheckIn(asset)}>{busyId === asset.id ? 'Returning…' : 'Return item'}</EducationButton>}{canManage && <EducationActionMenu label={`Actions for ${asset.name}`}><button type="button" onClick={() => openAssetModal(asset)}>Edit item</button><button type="button" onClick={() => handleDeleteAsset(asset)} disabled={busyId === asset.id || asset.status === 'in_use'}>Delete item</button></EducationActionMenu>}</div>
+                            </article>)}</div>}
+                    </EducationRegister>
+                </div>}
+                {!canManage && <EducationNotice status="info">Your role can view this toolkit. An organization manager can add, assign, edit, or remove items.</EducationNotice>}
+            </>}
+
+            <Modal isOpen={isToolModalOpen} onClose={() => { if (!isSaving) setIsToolModalOpen(false); }} title={editingTool ? 'Edit resource' : 'Add resource'} designSystem={true}>
+                <form onSubmit={handleSaveTool} className="edu-toolkit-v1__form">
+                    <p>Keep the link recognizable so the team can find and trust it later.</p>
+                    {feedback?.type === 'error' && <EducationNotice status="danger">{feedback.message}</EducationNotice>}
+                    <EducationField label="Resource name"><input required minLength={2} maxLength={80} value={toolForm.title || ''} onChange={event => setToolForm({ ...toolForm, title: event.target.value })} placeholder="e.g. Arduino IDE" /></EducationField>
+                    <EducationField label="External URL" hint="Only http and https links are accepted. Provider access is managed outside Edufy."><input type="url" inputMode="url" required value={toolForm.url || ''} onChange={event => setToolForm({ ...toolForm, url: event.target.value })} placeholder="https://provider.example.com" /></EducationField>
+                    <EducationField label="Category"><select value={toolForm.category} onChange={event => setToolForm({ ...toolForm, category: event.target.value as ToolLink['category'] })}>{TOOL_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select></EducationField>
+                    <EducationField label="Operational notes" hint={`${(toolForm.description || '').length}/240 characters`}><textarea maxLength={240} value={toolForm.description || ''} onChange={event => setToolForm({ ...toolForm, description: event.target.value })} placeholder="Who uses it, when, and any access notes" /></EducationField>
+                    <div className="edu-toolkit-v1__form-actions"><EducationButton onClick={() => setIsToolModalOpen(false)} disabled={isSaving}>Cancel</EducationButton><EducationButton type="submit" variant="primary" disabled={isSaving}>{isSaving ? 'Saving…' : editingTool ? 'Save changes' : 'Add resource'}</EducationButton></div>
                 </form>
             </Modal>
-
-            <Modal isOpen={isAssetModalOpen} onClose={() => { if (!isSaving) setIsAssetModalOpen(false); }} title={editingAsset ? 'Edit Inventory Item' : 'Add Inventory Item'} designSystem={showEducationResourcesV1}>
-                <form onSubmit={handleSaveAsset} className="space-y-4">
-                    <div><label htmlFor="asset-name" className="mb-1 block text-xs font-bold text-slate-400">Item name</label><input id="asset-name" required maxLength={100} className={fieldClassName} value={assetForm.name || ''} onChange={event => setAssetForm({ ...assetForm, name: event.target.value })} placeholder="e.g. Robotics kit 05" /></div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div><label htmlFor="asset-category" className="mb-1 block text-xs font-bold text-slate-400">Category</label><select id="asset-category" className={`${fieldClassName} capitalize`} value={assetForm.category} onChange={event => setAssetForm({ ...assetForm, category: event.target.value as Asset['category'] })}>{ASSET_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select></div>
-                        <div><label htmlFor="asset-status" className="mb-1 block text-xs font-bold text-slate-400">Status</label><select id="asset-status" disabled={editingAsset?.status === 'in_use'} className={`${fieldClassName} capitalize`} value={assetForm.status} onChange={event => setAssetForm({ ...assetForm, status: event.target.value as Asset['status'] })}>{ASSET_STATUSES.filter(status => status !== 'in_use' || editingAsset?.status === 'in_use').map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}</select>{editingAsset?.status === 'in_use' && <p className="mt-1 text-[10px] text-amber-200">Return this item before changing its status.</p>}</div>
-                    </div>
-                    <div><label htmlFor="asset-serial" className="mb-1 block text-xs font-bold text-slate-400">Serial / inventory ID</label><input id="asset-serial" maxLength={80} className={fieldClassName} value={assetForm.serialNumber || ''} onChange={event => setAssetForm({ ...assetForm, serialNumber: event.target.value })} placeholder="Recommended for duplicate control" /></div>
-                    <div><label htmlFor="asset-notes" className="mb-1 block text-xs font-bold text-slate-400">Notes</label><textarea id="asset-notes" maxLength={500} className={`${fieldClassName} min-h-24 resize-y`} value={assetForm.notes || ''} onChange={event => setAssetForm({ ...assetForm, notes: event.target.value })} placeholder="Condition, location, accessories, or handling requirements" /><div className="mt-1 text-right text-[10px] text-slate-600">{(assetForm.notes || '').length}/500</div></div>
-                    <AtlasActionButton type="submit" variant="primary" className="w-full" disabled={isSaving}>{isSaving ? 'Saving...' : editingAsset ? 'Save changes' : 'Add to inventory'}</AtlasActionButton>
+            <Modal isOpen={isAssetModalOpen} onClose={() => { if (!isSaving) setIsAssetModalOpen(false); }} title={editingAsset ? 'Edit inventory item' : 'Add inventory item'} designSystem={true}>
+                <form onSubmit={handleSaveAsset} className="edu-toolkit-v1__form">
+                    <p>Record the item and its condition before it enters the checkout queue.</p>
+                    {feedback?.type === 'error' && <EducationNotice status="danger">{feedback.message}</EducationNotice>}
+                    <EducationField label="Item name"><input required minLength={2} maxLength={100} value={assetForm.name || ''} onChange={event => setAssetForm({ ...assetForm, name: event.target.value })} placeholder="e.g. Robotics kit 05" /></EducationField>
+                    <div className="edu-toolkit-v1__form-grid"><EducationField label="Category"><select value={assetForm.category} onChange={event => setAssetForm({ ...assetForm, category: event.target.value as Asset['category'] })}>{ASSET_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}</select></EducationField><EducationField label="Status" hint={editingAsset?.status === 'in_use' ? 'Return this item before changing its status.' : undefined}><select disabled={editingAsset?.status === 'in_use'} value={assetForm.status} onChange={event => setAssetForm({ ...assetForm, status: event.target.value as Asset['status'] })}>{ASSET_STATUSES.filter(status => status !== 'in_use' || editingAsset?.status === 'in_use').map(status => <option key={status} value={status}>{statusLabel(status)}</option>)}</select></EducationField></div>
+                    <EducationField label="Serial / inventory ID" hint="Recommended for duplicate control."><input maxLength={80} value={assetForm.serialNumber || ''} onChange={event => setAssetForm({ ...assetForm, serialNumber: event.target.value })} placeholder="Unique inventory reference" /></EducationField>
+                    <EducationField label="Condition and handling notes" hint={`${(assetForm.notes || '').length}/500 characters`}><textarea maxLength={500} value={assetForm.notes || ''} onChange={event => setAssetForm({ ...assetForm, notes: event.target.value })} placeholder="Condition, location, accessories, or handling requirements" /></EducationField>
+                    <div className="edu-toolkit-v1__form-actions"><EducationButton onClick={() => setIsAssetModalOpen(false)} disabled={isSaving}>Cancel</EducationButton><EducationButton type="submit" variant="primary" disabled={isSaving}>{isSaving ? 'Saving…' : editingAsset ? 'Save changes' : 'Add to inventory'}</EducationButton></div>
                 </form>
             </Modal>
-
-            <Modal isOpen={isCheckoutModalOpen} onClose={() => { if (!isSaving) setIsCheckoutModalOpen(false); }} title={`Check Out: ${selectedAsset?.name || 'Item'}`} designSystem={showEducationResourcesV1}>
-                <form onSubmit={handleCheckout} className="space-y-4">
-                    <p className="text-sm leading-5 text-slate-500">Assign this item to an active student. The register will retain custody until an authorized return is recorded.</p>
-                    <div><label htmlFor="checkout-student" className="mb-1 block text-xs font-bold text-slate-400">Student</label><select id="checkout-student" required className={fieldClassName} value={assignStudentId} onChange={event => setAssignStudentId(event.target.value)}><option value="">Choose student</option>{eligibleStudents.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}</select>{eligibleStudents.length === 0 && <p className="mt-1 text-[11px] text-amber-200">No active students are available in this organization.</p>}</div>
-                    <AtlasActionButton type="submit" variant="primary" className="w-full" disabled={!assignStudentId || isSaving}>{isSaving ? 'Assigning...' : 'Assign item'}</AtlasActionButton>
+            <Modal isOpen={isCheckoutModalOpen} onClose={() => { if (!isSaving) setIsCheckoutModalOpen(false); }} title={`Check out: ${selectedAsset?.name || 'item'}`} designSystem={true}>
+                <form onSubmit={handleCheckout} className="edu-toolkit-v1__form">
+                    <p>Assign this item to an active student. It remains in their custody until an authorized return is recorded.</p>
+                    {feedback?.type === 'error' && <EducationNotice status="danger">{feedback.message}</EducationNotice>}
+                    <EducationField label="Student" hint={eligibleStudents.length ? undefined : 'No active students are available in this organization.'}><select required value={assignStudentId} onChange={event => setAssignStudentId(event.target.value)}><option value="">Choose student</option>{eligibleStudents.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}</select></EducationField>
+                    <div className="edu-toolkit-v1__form-actions"><EducationButton onClick={() => setIsCheckoutModalOpen(false)} disabled={isSaving}>Cancel</EducationButton><EducationButton type="submit" variant="primary" disabled={!assignStudentId || isSaving}>{isSaving ? 'Assigning…' : 'Assign item'}</EducationButton></div>
                 </form>
             </Modal>
         </div>

@@ -735,3 +735,8 @@ Follow-up: `/forms` now mounts the real enrollment wizard and App payment modal 
 ## Attendance Design System v1 focused handoff — 2026-10-20
 
 The isolated Attendance worktree now has a complete daily-register, learner-history and installed FaceID-preview inventory and local visual repair. Read `docs/education/ATTENDANCE_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md` before integration. Production build, Education System checker, membership suite, context reader, and desktop/390px light/dark synthetic browser checks pass; exact TypeScript status is recorded in the report. Signed-in school navigation was read-only. No push, deploy or school-data write. Stop at Attendance and preserve other modules.
+## Toolkit Design System v1 focused local handoff — 2026-10-22
+
+Digital resources and Hardware inventory now use canonical Education surfaces, responsive Toolkit-owned CSS, inline detail and feedback, and the existing role/tenant/transaction rules. The isolated fixture covers populated/empty/loading/error/restricted/no-org states plus create/edit/delete, checkout/return and failure/pending paths at desktop and 390px in light/dark. Read `docs/education/TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md` and its QA matrix for exact evidence. Build and 62 Education checks pass. Signed-in, physical-phone, dataset listener failure and real-write acceptance remain open. No push or deployment.
+
+---
