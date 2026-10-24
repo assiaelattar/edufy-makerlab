@@ -410,12 +410,6 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workshop_templates/$(templateId)).data.organizationId == orgId;
     }
 
-    function workshopSlotMatchesOrg(slotId, orgId, templateId) {
-      return exists(/databases/$(database)/documents/workshop_slots/$(slotId)) &&
-        get(/databases/$(database)/documents/workshop_slots/$(slotId)).data.organizationId == orgId &&
-        get(/databases/$(database)/documents/workshop_slots/$(slotId)).data.workshopTemplateId == templateId;
-    }
-
     function workshopSlotMatchesOrgAfter(slotId, orgId, templateId, bookingId) {
       return existsAfter(/databases/$(database)/documents/workshop_slots/$(slotId)) &&
         getAfter(/databases/$(database)/documents/workshop_slots/$(slotId)).data.organizationId == orgId &&
