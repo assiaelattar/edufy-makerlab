@@ -79,6 +79,7 @@ export const StudentDetailsView = ({
 
     useEffect(() => {
         if (!student || isStudentRole) return;
+        if (viewParams.studentTab) setActiveTab(viewParams.studentTab);
         if (viewParams.studentEditField && can('students.edit')) {
             const intent = `${student.id}:edit:${viewParams.studentEditField}`;
             if (openedRouteIntent.current === intent) return;
@@ -88,7 +89,7 @@ export const StudentDetailsView = ({
                 birthDate: student.birthDate,
                 parentName: student.parentName,
                 parentPhone: student.parentPhone,
-                email: student.email,
+                parentEmail: student.parentEmail || student.email,
                 address: student.address,
                 school: student.school,
                 medicalInfo: student.medicalInfo,
@@ -104,7 +105,7 @@ export const StudentDetailsView = ({
             setActiveTab('Learning');
             setEditEnrollment(enrollment);
         }
-    }, [student, isStudentRole, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments, can]);
+    }, [student, isStudentRole, viewParams.studentTab, viewParams.studentEditField, viewParams.studentEnrollmentId, enrollments, can]);
 
     const badgeTone: Record<string, string> = {
         blue: 'bg-blue-950/30 text-blue-300 border-blue-500/30',
@@ -142,7 +143,7 @@ export const StudentDetailsView = ({
             birthDate: student.birthDate,
             parentName: student.parentName,
             parentPhone: student.parentPhone,
-            email: student.email,
+            parentEmail: student.parentEmail || student.email,
             address: student.address,
             school: student.school,
             medicalInfo: student.medicalInfo,
@@ -680,9 +681,8 @@ export const StudentDetailsView = ({
             : `Hello, here is your ${academyName} SparkQuest family access for ${student.name}.\n\nSign in: ${parentPortalUrl}\nLogin ID: ${account.email}\n\nFor a lost password, contact the academy for a new one-time card.`;
 
         if (channel === 'email') {
-            const recipient = role === 'parent'
-                ? (student.email && student.email !== account.email ? student.email : '')
-                : (student.email && student.email !== account.email ? student.email : student.parentLoginInfo?.email || '');
+            const recordedContact = student.parentEmail || (student.email !== account.email ? student.email : '') || '';
+            const recipient = recordedContact !== account.email ? recordedContact : '';
             window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
             return;
         }

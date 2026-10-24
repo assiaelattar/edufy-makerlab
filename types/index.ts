@@ -337,6 +337,8 @@ export interface Student {
   sourceLeadId?: string;
   name: string;
   email?: string;
+  /** Parent contact address. This is never a portal login or proof of a guardian relationship. */
+  parentEmail?: string;
   parentPhone: string;
   parentName?: string;
   address?: string;
@@ -1124,12 +1126,13 @@ export interface StaffAttendanceRecord {
 
 
 // Navigation Types
-export type ViewState = 'dashboard' | 'classes' | 'students' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms' | 'staff-attendance' | 'workshop-quality';
+export type ViewState = 'dashboard' | 'classes' | 'students' | 'parents' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms' | 'staff-attendance' | 'workshop-quality';
 
 export interface ViewParams {
   programId?: string; // NEW
   classId?: { pId: string, gId: string, grpId: string };
   studentId?: string;
+  studentTab?: 'Overview' | 'Learning' | 'Attendance' | 'Finance' | 'Access';
   studentEditField?: 'name' | 'parentName' | 'parentPhone' | 'birthDate' | 'school';
   studentEnrollmentId?: string;
   projectId?: string; // Add projectId here

@@ -13,6 +13,7 @@ import { buildAdmissionOfferSnapshot, normalizeAdmissionPaymentPlan, type Admiss
 import { resolveProgramPackStandardPrice } from './utils/programPackPricing';
 import { DashboardView } from './views/DashboardView';
 import { StudentsView } from './views/StudentsView';
+import { ParentsView } from './views/ParentsView';
 import { ClassesView } from './views/ClassesView';
 import { ProgramsView } from './views/ProgramsView';
 import { FinanceView, computeAcademicYear } from './views/FinanceView';
@@ -902,13 +903,11 @@ const AppContent = () => {
                 // DUPLICATE CHECK
                 const normalizedCandidateName = studentName.trim().toLowerCase().replace(/\s+/g, ' ');
                 const normalizedCandidatePhone = normalizePhone(enrollStudentForm.parentPhone);
-                const normalizedCandidateEmail = enrollStudentForm.email.trim().toLowerCase();
                 const duplicateStudent = students.find(student => {
                     const sameName = student.name.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedCandidateName;
                     const samePhone = Boolean(normalizedCandidatePhone && normalizePhone(student.parentPhone) === normalizedCandidatePhone);
                     const sameBirthDate = Boolean(enrollStudentForm.birthDate && student.birthDate === enrollStudentForm.birthDate);
-                    const sameEmail = Boolean(normalizedCandidateEmail && student.email?.trim().toLowerCase() === normalizedCandidateEmail);
-                    return sameEmail || (sameName && (samePhone || sameBirthDate));
+                    return sameName && (samePhone || sameBirthDate);
                 });
 
                 if (duplicateStudent) {
@@ -925,8 +924,10 @@ const AppContent = () => {
                     }
                 }
 
+                const { email: parentContactEmail, ...learnerRecord } = enrollStudentForm;
                 const sRef = await addDoc(collection(db, 'students'), {
-                    ...enrollStudentForm,
+                    ...learnerRecord,
+                    ...(parentContactEmail.trim() ? { parentEmail: parentContactEmail.trim().toLowerCase() } : {}),
                     status: 'active',
                     organizationId: currentOrganization.id,
                     createdAt: serverTimestamp()
@@ -1233,6 +1234,7 @@ const AppContent = () => {
         switch (currentView) {
             case 'dashboard': return <DashboardView onRecordPayment={handleOpenPaymentModal} />;
             case 'students': return <StudentsView onAddStudent={() => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(null); setEnrollmentLearnerMode('new'); setIsEnrollmentModalOpen(true); }} onEditStudent={(s, field) => navigateTo('student-details', { studentId: s.id, studentEditField: field || 'name' })} onEditEnrollment={(studentId, enrollmentId) => navigateTo('student-details', { studentId, studentEnrollmentId: enrollmentId })} onQuickEnroll={(id) => { setEnrollmentAdmissionOrigin(null); setQuickEnrollStudentId(id || null); setEnrollmentLearnerMode('existing'); setIsEnrollmentModalOpen(true); }} onViewProfile={(id) => navigateTo('student-details', { studentId: id })} />;
+            case 'parents': return <ParentsView />;
             case 'classes': return <ClassesView onEnroll={handleEnrollFromGroup} />;
             case 'programs': return <ProgramsView onEnrollLead={handleEnrollLead} />;
             case 'finance': return <FinanceView onRecordPayment={handleOpenPaymentModal} />;

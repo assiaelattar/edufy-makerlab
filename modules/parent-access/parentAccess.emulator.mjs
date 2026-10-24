@@ -426,6 +426,53 @@ assert.equal((await db.doc('students/legacy-transfer').get()).data().parentLogin
 assert.equal((await db.doc(`users/${oldExact.uid}`).get()).exists, false);
 assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_legacy-transfer`).get()).data().status, 'active');
 assert.equal((await adminAuth.getUser(oldExact.uid)).disabled, true);
-console.log('Parent access emulator: verified naming, platform-admin authorization, same-tenant directory, legacy contact/orphan conversion, external Auth replacement, sibling links, password invalidation, cross-tenant and role denial, staff-link repair, recovery, and plaintext checks passed.');
-await Promise.all([deleteClientApp(app), deleteClientApp(familyApp)]);
+
+// A recorded contact email is ignored when one generated MakerLab login is issued for selected siblings.
+await Promise.all([
+  db.doc('students/family-one').set({ organizationId: 'org-a', name: 'Family One', parentName: 'Leila Mansouri', parentEmail: 'shared.parent@example.test', email: 'legacy.parent@example.test', loginInfo: { uid: 'learner-family-one' } }),
+  db.doc('students/family-two').set({ organizationId: 'org-a', name: 'Family Two', parentName: 'Leila Mansouri', parentEmail: 'shared.parent@example.test' }),
+  db.doc('students/family-three').set({ organizationId: 'org-a', name: 'Family Three', parentName: 'Leila Mansouri' }),
+  db.doc('students/family-conflict').set({ organizationId: 'org-a', name: 'Family Conflict', parentName: 'Different Parent' })
+]);
+const issuedFamily = await invoke(staffToken, {
+  action: 'issueFamily', studentIds: ['family-one', 'family-two'], organizationId: 'org-a',
+  parentName: 'Leila Mansouri', aliasBasis: 'Mansouri', relationshipVerified: true
+});
+assert.equal(issuedFamily.statusCode, 200, JSON.stringify(issuedFamily.body?.error));
+assert.match(issuedFamily.body.email, /^p\.mansouri(?:-\d+)?@makerlab\.academy$/);
+assert.notEqual(issuedFamily.body.email, 'shared.parent@example.test');
+assert.equal((await db.doc('students/family-one').get()).data().parentEmail, 'shared.parent@example.test');
+assert.equal((await db.doc('students/family-one').get()).data().email, 'legacy.parent@example.test');
+const issuedFamilyUid = (await db.doc('students/family-one').get()).data().parentLoginInfo.uid;
+assert.equal((await db.doc('students/family-two').get()).data().parentLoginInfo.uid, issuedFamilyUid);
+assert.equal((await db.doc(`guardian_links/${issuedFamilyUid}_learner-family-one`).get()).data().studentId, 'family-one');
+assert.equal((await invoke(staffToken, {
+  action: 'issueFamily', studentIds: ['family-three', 'foreign'], organizationId: 'org-a',
+  parentName: 'Leila Mansouri', aliasBasis: 'Mansouri', relationshipVerified: true
+})).statusCode, 404);
+assert.equal((await invoke(staffToken, {
+  action: 'issueFamily', studentIds: ['family-three', 'family-conflict'], organizationId: 'org-a',
+  parentName: 'Leila Mansouri', aliasBasis: 'Mansouri', relationshipVerified: true
+})).statusCode, 409);
+const linkedFamily = await invoke(staffToken, {
+  action: 'linkFamily', studentIds: ['family-three'], organizationId: 'org-a',
+  parentName: 'Leila Mansouri', reuseParentUid: issuedFamilyUid, reuseParentEmail: issuedFamily.body.email,
+  relationshipVerified: true
+});
+assert.equal(linkedFamily.statusCode, 200, JSON.stringify(linkedFamily.body?.error));
+assert.equal(linkedFamily.body.password, undefined);
+assert.equal((await db.doc('students/family-three').get()).data().parentLoginInfo.uid, issuedFamilyUid);
+
+const batchFamilyApp = initializeClientApp({ apiKey: 'demo-key', authDomain: 'localhost', projectId: process.env.GCLOUD_PROJECT }, 'issued-batch-family');
+const batchFamilyAuth = getClientAuth(batchFamilyApp);
+connectAuthEmulator(batchFamilyAuth, `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
+await signInWithEmailAndPassword(batchFamilyAuth, issuedFamily.body.email, issuedFamily.body.password);
+const batchFamilyDb = getFirestore(batchFamilyApp);
+connectFirestoreEmulator(batchFamilyDb, firestoreHost, Number(firestorePort));
+const batchLinks = await getDocs(query(collection(batchFamilyDb, 'guardian_links'), where('parentUid', '==', issuedFamilyUid), where('organizationId', '==', 'org-a')));
+assert.deepEqual(new Set(batchLinks.docs.map(link => link.data().studentId)), new Set(['family-one', 'family-two', 'family-three']));
+for (const studentId of ['family-one', 'family-two', 'family-three']) assert.equal((await getDoc(doc(batchFamilyDb, 'students', studentId))).exists(), true);
+
+console.log('Parent access emulator: verified naming, generated MakerLab family logins, ignored contact emails, atomic sibling links, platform-admin authorization, same-tenant directory, legacy repair, password invalidation, cross-tenant and role denial, and plaintext checks passed.');
+await Promise.all([deleteClientApp(app), deleteClientApp(familyApp), deleteClientApp(batchFamilyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());

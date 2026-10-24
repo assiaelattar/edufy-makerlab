@@ -1,6 +1,6 @@
 import { auth } from './firebase';
 
-export type ParentAccessAction = 'issue' | 'link' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover' | 'directory';
+export type ParentAccessAction = 'issue' | 'link' | 'issueFamily' | 'linkFamily' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover' | 'directory';
 
 export interface ParentDirectoryAccount {
   uid: string;
@@ -36,6 +36,7 @@ const parentAccessEndpoint = (): string => {
 export const manageParentAccess = async (request: {
   action: ParentAccessAction;
   studentId?: string;
+  studentIds?: string[];
   organizationId: string;
   parentName?: string;
   aliasBasis?: string;

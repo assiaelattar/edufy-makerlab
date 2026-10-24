@@ -2,7 +2,7 @@ import React from 'react';
 import { Heart, School, Users, UserRound } from 'lucide-react';
 import { EducationButton, EducationField, EducationFormSection, EducationNotice } from '../education-ui/EducationPrimitives';
 
-export type StudentDetailsDraft = { name?:string; birthDate?:string; parentName?:string; parentPhone?:string; email?:string; school?:string; address?:string; medicalInfo?:string };
+export type StudentDetailsDraft = { name?:string; birthDate?:string; parentName?:string; parentPhone?:string; parentEmail?:string; school?:string; address?:string; medicalInfo?:string };
 export const StudentDetailsForm = ({ value, onChange, onSubmit, onCancel, busy=false, error='', focusedField='name' }: {
   value:StudentDetailsDraft; onChange:(value:StudentDetailsDraft)=>void; onSubmit:(event:React.FormEvent)=>void;
   onCancel:()=>void; busy?:boolean; error?:string; focusedField?:string;
@@ -17,7 +17,7 @@ export const StudentDetailsForm = ({ value, onChange, onSubmit, onCancel, busy=f
     <EducationFormSection title="Family contact" icon={Users} accent="blue">
       <EducationField label="Parent name">{input('parentName')}</EducationField>
       <EducationField label="Parent phone">{input('parentPhone','tel',true)}</EducationField>
-      <EducationField label="Email" hint="Optional">{input('email','email')}</EducationField>
+      <EducationField label="Parent contact email" hint="Optional · kept separate from the MakerLab login">{input('parentEmail','email')}</EducationField>
       <EducationField label="Address">{input('address')}</EducationField>
     </EducationFormSection>
     <EducationFormSection title="School & care" icon={School} accent="purple">
