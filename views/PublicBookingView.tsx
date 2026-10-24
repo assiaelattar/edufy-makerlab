@@ -204,7 +204,7 @@ export const PublicBookingView = () => {
                         <p className="ml-trial-eyebrow">Imaginer · Créer · Expérimenter</p>
                         <h1>{template?.title}</h1>
                         <p className="ml-trial-meta"><Clock size={13} /> {durationLabel} <span>· {template?.capacityPerSlot} places</span></p>
-                        {template && <p className="ml-trial-meta"><Calendar size={13} /> {getWorkshopScheduleLabel(template)}</p>}
+                        {template && <p className="ml-trial-meta"><Calendar size={13} /> {getWorkshopScheduleLabel(template, 'fr')}</p>}
                     </div>
                     <img src={getWorkshopOgImageUrl(template?.imageUrl)} alt={template?.title || 'Atelier MakerLab'} onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = `${window.location.origin}/images/makerlab-tello-python-hero-v1.png`; }} />
                 </section>}

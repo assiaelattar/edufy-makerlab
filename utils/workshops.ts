@@ -80,22 +80,28 @@ export const getWorkshopDayName = (dateKey: string, locale = 'en-GB'): string =>
   formatWorkshopDate(dateKey, { weekday: 'long' }, locale)
 );
 
-export const getWorkshopScheduleLabel = (template: Pick<WorkshopTemplate, 'recurrenceType' | 'recurrencePattern'>): string => {
-  const time = template.recurrencePattern?.time || 'time to be confirmed';
+export const getWorkshopScheduleLabel = (
+  template: Pick<WorkshopTemplate, 'recurrenceType' | 'recurrencePattern'>,
+  locale: 'en' | 'fr' = 'en'
+): string => {
+  const time = template.recurrencePattern?.time || (locale === 'fr' ? 'horaire à confirmer' : 'time to be confirmed');
 
   if (template.recurrenceType === 'weekly') {
     const selectedDays = normalizeWorkshopDays(template.recurrencePattern?.days);
     const labels = selectedDays
-      .map(dayValue => WORKSHOP_WEEKDAYS.find(day => day.value === dayValue)?.label)
+      .map(dayValue => locale === 'fr'
+        ? ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][dayValue]
+        : WORKSHOP_WEEKDAYS.find(day => day.value === dayValue)?.label)
       .filter((label): label is string => Boolean(label));
 
+    if (locale === 'fr') return labels.length > 0 ? `Chaque ${labels.join(', ')} à ${time}` : `Chaque semaine à ${time}`;
     return labels.length > 0 ? `Every ${labels.join(', ')} at ${time}` : `Weekly at ${time}`;
   }
 
   const date = template.recurrencePattern?.date
-    ? formatWorkshopDate(template.recurrencePattern.date)
-    : 'Date to be confirmed';
-  return `${date} at ${time}`;
+    ? formatWorkshopDate(template.recurrencePattern.date, undefined, locale === 'fr' ? 'fr-FR' : 'en-GB')
+    : (locale === 'fr' ? 'Date à confirmer' : 'Date to be confirmed');
+  return `${date} ${locale === 'fr' ? 'à' : 'at'} ${time}`;
 };
 
 type WorkshopShareDetails = Pick<WorkshopTemplate, 'title' | 'description' | 'duration' | 'capacityPerSlot' | 'recurrenceType' | 'recurrencePattern' | 'imageUrl'>;
