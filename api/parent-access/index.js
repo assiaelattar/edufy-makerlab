@@ -78,7 +78,9 @@ const parentEvidence = async (get, db, uid, email, organizationId, confirmedName
     get(db.collection('students').where('loginInfo.uid', '==', uid))
   ]);
   const familyIds = new Set(recorded.docs.map(item => item.id));
-  const familySubjects = new Map(recorded.docs.map(item => [item.id, new Set(guardianSubjects({ id: item.id, ...item.data() }))]));
+  const accessStudents = new Map([...recorded.docs, ...uidStudents.docs].map(item => [item.id, item.data()]));
+  const accessSubjects = new Map([...accessStudents].map(([id, data]) => [id, new Set(guardianSubjects({ id, ...data }))]));
+  const activelyLinkedIds = new Set(links.docs.filter(item => item.data().status === 'active').map(item => item.data().studentId));
   const profileData = profile.data();
   const names = new Set([verifiedNameCandidate(profileData?.name), ...recorded.docs.map(item => verifiedNameCandidate(item.data().parentName))].filter(Boolean));
   if (learnerLogins.size || !recorded.size || names.size > 1 ||
@@ -87,10 +89,11 @@ const parentEvidence = async (get, db, uid, email, organizationId, confirmedName
       (profileData.status && profileData.status !== 'active') || (profileData.email && profileData.email.toLowerCase() !== email))) ||
     recorded.docs.some(item => item.data().organizationId !== organizationId ||
       item.data().parentLoginInfo?.email?.toLowerCase() !== email) ||
-    uidStudents.docs.some(item => item.data().organizationId !== organizationId || !familyIds.has(item.id)) ||
+    uidStudents.docs.some(item => item.data().organizationId !== organizationId ||
+      (!familyIds.has(item.id) && !activelyLinkedIds.has(item.id))) ||
     links.docs.some(item => item.data().status === 'active' &&
-      (item.data().organizationId !== organizationId || !familyIds.has(item.data().studentId) ||
-        !familySubjects.get(item.data().studentId)?.has(item.data().subjectId) || linkIdMismatch(item, uid)))) {
+      (item.data().organizationId !== organizationId || !accessStudents.has(item.data().studentId) ||
+        !accessSubjects.get(item.data().studentId)?.has(item.data().subjectId) || linkIdMismatch(item, uid)))) {
     throw Object.assign(new Error('This login has conflicting identity or family links. An administrator must review it.'), { status: 409 });
   }
   const knownName = [...names][0] || '';
@@ -183,15 +186,15 @@ const parentDirectory = async (db, organizationId) => {
     if (data.status !== 'active' || data.organizationId !== organizationId ||
       link.id !== `${data.parentUid}_${data.subjectId}`) continue;
     const learner = learnerById.get(data.studentId);
-    if (!learner || learner.parentLoginInfo?.uid !== data.parentUid ||
+    if (!learner || (![...(Array.isArray(learner.parentUids) ? learner.parentUids : []), learner.parentLoginInfo?.uid]
+      .filter(Boolean).includes(data.parentUid)) ||
       !guardianSubjects({ id: data.studentId, ...learner }).includes(data.subjectId)) continue;
     if (!childrenByParent.has(data.parentUid)) childrenByParent.set(data.parentUid, new Map());
     childrenByParent.get(data.parentUid).set(data.studentId, { id: data.studentId, name: cleanName(learner.name) || 'Learner' });
   }
   return profiles.docs.flatMap(item => {
     const profile = item.data();
-    const children = [...(childrenByParent.get(item.id)?.values() || [])]
-      .filter(child => learnerById.get(child.id)?.parentLoginInfo?.email?.toLowerCase() === profile.email?.toLowerCase());
+    const children = [...(childrenByParent.get(item.id)?.values() || [])];
     if (profile.role !== 'parent' || profile.status !== 'active' || profile.organizationId !== organizationId ||
       !/^p\.[^@\s]{1,80}@makerlab\.academy$/i.test(profile.email || '') || !cleanName(profile.name) || !children.length) return [];
     return [{ uid: item.id, email: profile.email, parentName: cleanName(profile.name), children }];
@@ -265,16 +268,6 @@ export default async function handler(req, res) {
       if (selectedDocs.some(item => !item.exists || item.data().organizationId !== organizationId)) {
         return response(res, 404, { ok: false, error: 'One or more learners were not found in this workspace.' });
       }
-      if (selectedDocs.some(item => item.data().parentLoginInfo?.uid)) {
-        return response(res, 409, { ok: false, error: 'One or more selected learners already have parent access. Resolve those accounts before linking this family.' });
-      }
-      if (selectedDocs.some(item => {
-        const recorded = verifiedNameCandidate(item.data().parentName);
-        return recorded && recorded !== confirmedName;
-      })) {
-        return response(res, 409, { ok: false, error: 'The selected learners have conflicting recorded parent names. Review their contact records first.' });
-      }
-
       let familyUid;
       let familyEmail;
       let familyPassword;
@@ -288,8 +281,10 @@ export default async function handler(req, res) {
           (exactEmail && user.email.toLowerCase() !== exactEmail) || !(await linkedParent(db, user.uid, organizationId))) {
           return response(res, 403, { ok: false, error: 'Select an existing verified parent account in this workspace.' });
         }
-        const evidence = await parentEvidence(ref => ref.get(), db, user.uid, user.email.toLowerCase(), organizationId, confirmedName);
-        if (!evidence.name || evidence.name !== confirmedName) {
+        const profile = await db.doc(`users/${user.uid}`).get();
+        if (!profile.exists || profile.data().role !== 'parent' || profile.data().status !== 'active' ||
+          profile.data().organizationId !== organizationId || cleanName(profile.data().name) !== confirmedName ||
+          profile.data().email?.toLowerCase() !== user.email.toLowerCase()) {
           return response(res, 409, { ok: false, error: 'The verified parent name does not match the selected family login.' });
         }
         familyUid = user.uid;
@@ -309,7 +304,7 @@ export default async function handler(req, res) {
         await db.runTransaction(async transaction => {
           const currentDocs = await Promise.all(studentRefs.map(ref => transaction.get(ref)));
           if (currentDocs.some((item, index) => !item.exists || item.data().organizationId !== organizationId ||
-            item.data().parentLoginInfo?.uid || cleanName(item.data().parentName) !== cleanName(selectedDocs[index].data().parentName))) {
+            item.data().parentLoginInfo?.uid !== selectedDocs[index].data().parentLoginInfo?.uid)) {
             throw Object.assign(new Error('Parent access changed. Refresh the family record.'), { status: 409 });
           }
           if (createdFamily) transaction.create(db.doc(`users/${familyUid}`), {
@@ -319,9 +314,11 @@ export default async function handler(req, res) {
           for (const item of currentDocs) {
             const data = item.data();
             transaction.update(item.ref, {
-              parentLoginInfo: { uid: familyUid, email: familyEmail },
               parentUids: FieldValue.arrayUnion(familyUid),
-              ...(!verifiedNameCandidate(data.parentName) ? { parentName: confirmedName } : {})
+              ...(!data.parentLoginInfo?.uid ? {
+                parentLoginInfo: { uid: familyUid, email: familyEmail },
+                ...(!verifiedNameCandidate(data.parentName) ? { parentName: confirmedName } : {})
+              } : {})
             });
             for (const subjectId of guardianSubjects({ id: item.id, ...data })) {
               transaction.set(db.doc(`guardian_links/${familyUid}_${subjectId}`), {

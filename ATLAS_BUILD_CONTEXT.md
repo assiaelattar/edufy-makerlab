@@ -38,6 +38,10 @@ The approved visual refinement is implemented locally: a session-time rail, cont
 
 # Atlas Build Context
 
+## Latest loop — Parent and care-group workspace correction (2026-10-24)
+
+The Parents module now presents contact-based family review records instead of one row per generated Auth account, so duplicate account attempts remain visible inside one family Access tab. The approved Education Design System v1 is applied across directory, detail tabs, billing and responsive Add learner flow. Verified staff may attach any same-tenant learner as an additional care relationship; the learner keeps an existing primary login while the caregiver receives canonical SparkQuest guardian links. Contact email remains ignored for sign-in and every new account uses a generated `p.*@makerlab.academy` ID. The production build, endpoint syntax, diff checks and isolated Auth/Firestore suite pass. No real family data was changed during QA.
+
 ## 2026-10-16 — Edufy Pulse Attendance benchmark
 
 The user master mission replaces the broad module march with Attendance as the first quality benchmark. A separate branch preserves previous work. Compact shared header/tokens, register-first light/dark UI, pending/saved/error feedback and attendance-only first-server-snapshot readiness are locally implemented. Build and membership suite pass; 1440/766/390 actual-component browser QA and real-AppProvider synthetic readiness QA pass. School-account persistence/roles and physical-phone acceptance remain. No release. See `docs/education/EDUFY_PULSE_ATTENDANCE_2026-10-16.md`.

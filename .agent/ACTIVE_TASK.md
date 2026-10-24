@@ -340,3 +340,8 @@ Complete the focused parent access hotfix in an isolated worktree. Verify synthe
 Present the local global shell, Student Details, complete student form and animated 011Y guide for visual approval. Use `http://127.0.0.1:5202/` for the signed-in real-data read-only review and `http://127.0.0.1:5203/` for the safe demo. Do not begin Settings, Finance or Expenses until approval. Read `docs/education/EDUFY_SHELL_STUDENT_GUIDE_PHASE_1_2026-10-20.md`. No deploy or push.
 
 ---
+# Current task — Parent and care-group experience correction (2026-10-24)
+
+Complete the user-requested family-first Parents module correction and coordinated Edufy client/trusted API release. Preserve generated MakerLab login IDs, explicit relationship verification, tenant boundaries, existing primary family logins, Finance ownership and real family records. Verify the release without creating or modifying a production family.
+
+---

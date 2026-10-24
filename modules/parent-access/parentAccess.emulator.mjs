@@ -72,8 +72,9 @@ assert.equal((await db.doc('students/child-b').get()).data().parentLoginInfo, un
 const second = await invoke(staffToken, { action: 'issue', studentId: 'child-b', organizationId: 'org-a', parentName: 'Samira Ajlane', aliasBasis: 'Ajlane', relationshipVerified: true, separateParentVerified: true });
 assert.equal(second.statusCode, 200);
 assert.equal(second.body.email, 'p.ajlane-2@makerlab.academy');
-assert.equal((await adminAuth.getUserByEmail(second.body.email)).displayName, 'Samira Ajlane');
-assert.notEqual((await adminAuth.getUserByEmail(second.body.email)).uid, firstAuth.uid);
+const secondAuth = await adminAuth.getUserByEmail(second.body.email);
+assert.equal(secondAuth.displayName, 'Samira Ajlane');
+assert.notEqual(secondAuth.uid, firstAuth.uid);
 
 const sibling = await invoke(staffToken, { action: 'link', studentId: 'child-c', organizationId: 'org-a', reuseParentUid: firstAuth.uid, relationshipVerified: true });
 assert.equal(sibling.statusCode, 200);
@@ -463,6 +464,20 @@ assert.equal(linkedFamily.statusCode, 200, JSON.stringify(linkedFamily.body?.err
 assert.equal(linkedFamily.body.password, undefined);
 assert.equal((await db.doc('students/family-three').get()).data().parentLoginInfo.uid, issuedFamilyUid);
 
+// A verified caregiver may receive access to a learner who keeps another family's primary login.
+const careLinked = await invoke(staffToken, {
+  action: 'linkFamily', studentIds: ['child-b'], organizationId: 'org-a',
+  parentName: 'Leila Mansouri', reuseParentUid: issuedFamilyUid, reuseParentEmail: issuedFamily.body.email,
+  relationshipVerified: true
+});
+assert.equal(careLinked.statusCode, 200, JSON.stringify(careLinked.body?.error));
+const caredForLearner = (await db.doc('students/child-b').get()).data();
+assert.equal(caredForLearner.parentLoginInfo.uid, secondAuth.uid);
+assert(caredForLearner.parentUids.includes(secondAuth.uid) && caredForLearner.parentUids.includes(issuedFamilyUid));
+assert.equal((await db.doc(`guardian_links/${issuedFamilyUid}_child-b`).get()).data().status, 'active');
+const careDirectory = await invoke(staffToken, { action: 'directory', organizationId: 'org-a' });
+assert(careDirectory.body.accounts.find(account => account.uid === issuedFamilyUid).children.some(child => child.id === 'child-b'));
+
 const batchFamilyApp = initializeClientApp({ apiKey: 'demo-key', authDomain: 'localhost', projectId: process.env.GCLOUD_PROJECT }, 'issued-batch-family');
 const batchFamilyAuth = getClientAuth(batchFamilyApp);
 connectAuthEmulator(batchFamilyAuth, `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
@@ -470,9 +485,11 @@ await signInWithEmailAndPassword(batchFamilyAuth, issuedFamily.body.email, issue
 const batchFamilyDb = getFirestore(batchFamilyApp);
 connectFirestoreEmulator(batchFamilyDb, firestoreHost, Number(firestorePort));
 const batchLinks = await getDocs(query(collection(batchFamilyDb, 'guardian_links'), where('parentUid', '==', issuedFamilyUid), where('organizationId', '==', 'org-a')));
-assert.deepEqual(new Set(batchLinks.docs.map(link => link.data().studentId)), new Set(['family-one', 'family-two', 'family-three']));
-for (const studentId of ['family-one', 'family-two', 'family-three']) assert.equal((await getDoc(doc(batchFamilyDb, 'students', studentId))).exists(), true);
+assert.deepEqual(new Set(batchLinks.docs.map(link => link.data().studentId)), new Set(['family-one', 'family-two', 'family-three', 'child-b']));
+for (const studentId of ['family-one', 'family-two', 'family-three', 'child-b']) assert.equal((await getDoc(doc(batchFamilyDb, 'students', studentId))).exists(), true);
+const familyResetAfterCareLink = await invoke(staffToken, { action: 'reset', studentId: 'family-one', organizationId: 'org-a', parentName: 'Leila Mansouri', relationshipVerified: true });
+assert.equal(familyResetAfterCareLink.statusCode, 200, JSON.stringify(familyResetAfterCareLink.body?.error));
 
-console.log('Parent access emulator: verified naming, generated MakerLab family logins, ignored contact emails, atomic sibling links, platform-admin authorization, same-tenant directory, legacy repair, password invalidation, cross-tenant and role denial, and plaintext checks passed.');
+console.log('Parent access emulator: generated logins, shared siblings, additional caregivers without primary-login replacement, directory visibility, legacy repair, reset, tenant and role denial, and plaintext checks passed.');
 await Promise.all([deleteClientApp(app), deleteClientApp(familyApp), deleteClientApp(batchFamilyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());
