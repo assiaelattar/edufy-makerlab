@@ -26,6 +26,10 @@ Students directory and learner overview are complete locally. Next: Programs, th
 
 # Context Map
 
+## Parent accounts and public booking repair — 2026-10-24
+
+Read `docs/parent/PARENT_FAMILY_MODULE_2026-10-24.md`, `docs/workshops/PUBLIC_BOOKING_REPAIR_2026-10-24.md`, `views/ParentsView.tsx`, `api/parent-access/index.js`, `services/publicWorkshopBooking.ts`, and the public booking section of `firestore.rules`. Contact email is never a login identity. New family Auth accounts must use generated MakerLab IDs. Learner links require explicit same-tenant selection and staff relationship verification. Booking and capacity must remain one atomic transaction.
+
 ## Latest Pulse continuation — Programs next
 
 Read docs/education/EDUFY_PULSE_PICKUP_2026-10-16.md. Pickup is complete locally; continue Programs without repeating earlier passes. Preserve existing lifecycle handlers and separate local synthetic checks from real-school acceptance.

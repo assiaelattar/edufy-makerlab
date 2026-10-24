@@ -9,6 +9,17 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Edufy" />
   <meta name="description" content="Edufy - the everyday workspace for schools, learning centers, and their teams." />
+  <script>
+    if (/^\/w\/[^/]+\/?$/.test(window.location.pathname)) {
+      document.documentElement.lang = 'fr';
+      document.documentElement.setAttribute('translate', 'no');
+      document.documentElement.classList.add('notranslate');
+      var noTranslateMeta = document.createElement('meta');
+      noTranslateMeta.name = 'google';
+      noTranslateMeta.content = 'notranslate';
+      document.head.appendChild(noTranslateMeta);
+    }
+  </script>
 
   <title>Edufy</title>
   <link rel="manifest" href="./manifest.json" />

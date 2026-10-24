@@ -416,6 +416,20 @@ service cloud.firestore {
         get(/databases/$(database)/documents/workshop_slots/$(slotId)).data.workshopTemplateId == templateId;
     }
 
+    function workshopSlotMatchesOrgAfter(slotId, orgId, templateId, bookingId) {
+      return existsAfter(/databases/$(database)/documents/workshop_slots/$(slotId)) &&
+        getAfter(/databases/$(database)/documents/workshop_slots/$(slotId)).data.organizationId == orgId &&
+        getAfter(/databases/$(database)/documents/workshop_slots/$(slotId)).data.workshopTemplateId == templateId &&
+        getAfter(/databases/$(database)/documents/workshop_slots/$(slotId)).data.lastBookingId == bookingId;
+    }
+
+    function bookingMatchesSlotAfter(bookingId, slotId, orgId, templateId) {
+      return existsAfter(/databases/$(database)/documents/bookings/$(bookingId)) &&
+        getAfter(/databases/$(database)/documents/bookings/$(bookingId)).data.organizationId == orgId &&
+        getAfter(/databases/$(database)/documents/bookings/$(bookingId)).data.workshopSlotId == slotId &&
+        getAfter(/databases/$(database)/documents/bookings/$(bookingId)).data.workshopTemplateId == templateId;
+    }
+
     function organizationOwnedByRequester(orgId) {
       return isSignedIn() &&
         exists(/databases/$(database)/documents/organizations/$(orgId)) &&
@@ -682,7 +696,7 @@ service cloud.firestore {
         request.resource.data.createdAt == request.time;
     }
 
-    function validPublicWorkshopSlotCreate() {
+    function validPublicWorkshopSlotCreate(slotId) {
       return requestHasOrg() &&
         request.resource.data.keys().hasOnly([
           'organizationId',
@@ -692,26 +706,32 @@ service cloud.firestore {
           'endTime',
           'capacity',
           'bookedCount',
-          'status'
+          'status',
+          'lastBookingId'
         ]) &&
         request.resource.data.workshopTemplateId is string &&
         workshopTemplateMatchesOrg(request.resource.data.workshopTemplateId, request.resource.data.organizationId) &&
-        request.resource.data.bookedCount == 0 &&
+        request.resource.data.bookedCount == 1 &&
         request.resource.data.capacity is int &&
         request.resource.data.capacity > 0 &&
-        request.resource.data.status == 'available';
+        request.resource.data.lastBookingId is string &&
+        request.resource.data.status == (request.resource.data.capacity == 1 ? 'full' : 'available') &&
+        bookingMatchesSlotAfter(request.resource.data.lastBookingId, slotId, request.resource.data.organizationId, request.resource.data.workshopTemplateId);
     }
 
-    function validPublicWorkshopSlotIncrement() {
+    function validPublicWorkshopSlotIncrement(slotId) {
       return resourceHasOrg() &&
         request.resource.data.organizationId == resource.data.organizationId &&
         request.resource.data.workshopTemplateId == resource.data.workshopTemplateId &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookedCount']) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookedCount', 'status', 'lastBookingId']) &&
         request.resource.data.bookedCount == resource.data.bookedCount + 1 &&
-        request.resource.data.bookedCount <= resource.data.capacity;
+        request.resource.data.bookedCount <= resource.data.capacity &&
+        request.resource.data.lastBookingId is string &&
+        request.resource.data.status == (request.resource.data.bookedCount == resource.data.capacity ? 'full' : 'available') &&
+        bookingMatchesSlotAfter(request.resource.data.lastBookingId, slotId, request.resource.data.organizationId, request.resource.data.workshopTemplateId);
     }
 
-    function validPublicBookingCreate() {
+    function validPublicBookingCreate(bookingId) {
       return requestHasOrg() &&
         request.resource.data.keys().hasOnly([
           'organizationId',
@@ -731,7 +751,7 @@ service cloud.firestore {
         request.resource.data.workshopTemplateId is string &&
         request.resource.data.workshopSlotId is string &&
         workshopTemplateMatchesOrg(request.resource.data.workshopTemplateId, request.resource.data.organizationId) &&
-        workshopSlotMatchesOrg(request.resource.data.workshopSlotId, request.resource.data.organizationId, request.resource.data.workshopTemplateId) &&
+        workshopSlotMatchesOrgAfter(request.resource.data.workshopSlotId, request.resource.data.organizationId, request.resource.data.workshopTemplateId, bookingId) &&
         request.resource.data.status == 'confirmed' &&
         request.resource.data.bookedAt == request.time;
     }
@@ -1134,14 +1154,14 @@ service cloud.firestore {
 
     match /workshop_slots/{slotId} {
       allow read: if true;
-      allow create: if canCreateTenantDoc() || validPublicWorkshopSlotCreate();
-      allow update: if canUpdateTenantDoc() || validPublicWorkshopSlotIncrement();
+      allow create: if canCreateTenantDoc() || validPublicWorkshopSlotCreate(slotId);
+      allow update: if canUpdateTenantDoc() || validPublicWorkshopSlotIncrement(slotId);
       allow delete: if canDeleteTenantDoc();
     }
 
     match /bookings/{bookingId} {
       allow read: if canReadTenantDoc();
-      allow create: if canCreateTenantDoc() || validPublicBookingCreate();
+      allow create: if canCreateTenantDoc() || validPublicBookingCreate(bookingId);
       allow update: if canUpdateTenantDoc();
       allow delete: if canDeleteTenantDoc();
     }

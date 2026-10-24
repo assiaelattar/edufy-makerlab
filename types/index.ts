@@ -578,6 +578,8 @@ export interface WorkshopSlot {
   crmLeadId?: string;
   location?: string;
   notes?: string;
+  /** Public booking id that produced the latest atomic capacity increment. */
+  lastBookingId?: string;
 }
 
 export interface Booking {

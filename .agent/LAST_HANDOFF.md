@@ -1,3 +1,9 @@
+## Parent family accounts and public booking repair — 2026-10-24
+
+The Parents module now separates contact email from the generated `p.*@makerlab.academy` login, issues one verified account for explicitly selected same-tenant learners, links additional siblings atomically, shows billing context, and routes conflicts to the existing transfer/repair flow. Shared parent email no longer marks a learner as a duplicate. Public workshop booking now commits booking and capacity atomically with an idempotent browser-attempt ID, and the French route blocks browser translation from mutating React markup. Parent and booking emulator suites and the production build pass. Release the parent/account slice and workshop/rules slice as separate commits, then deploy Edufy, the trusted parent API, and Firestore rules. See `docs/parent/PARENT_FAMILY_MODULE_2026-10-24.md` and `docs/workshops/PUBLIC_BOOKING_REPAIR_2026-10-24.md`.
+
+---
+
 ## Learning and Portfolio interaction QA follow-up — 2026-10-20
 
 The isolated Learning/Portfolio candidate now has a full 390px/1440px light/dark matrix for 11 Learning page families, nine reachable dialogs, and populated/empty Portfolio. Synthetic cancel/pending/failure/retry paths cover project creation, commit, step evidence, submission, review and Setup editors. Staff project saves retain learner ownership; failed review keeps feedback; missing historical snapshots cannot be restored. Read `docs/education/LEARNING_PORTFOLIO_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md` for exact evidence and gaps. Build and Education/agent checks pass locally. Authenticated and physical-phone acceptance remain open; no school write, push or deployment.

@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AlertCircle, CheckCircle2, Calendar, ArrowLeft, RefreshCw, Clock, Users, ShieldCheck, ArrowRight, ChevronDown } from 'lucide-react';
 import { db } from '../services/firebase';
-import { collection, onSnapshot, query, where, addDoc, updateDoc, doc, serverTimestamp, getDocs, increment } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, getDocs } from 'firebase/firestore';
 import { WorkshopTemplate, WorkshopSlot } from '../types';
 import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { formatWorkshopDate, getWorkshopDayName, getWorkshopOgImageUrl, getWorkshopScheduleLabel } from '../utils/workshops';
+import { createPublicWorkshopBooking } from '../services/publicWorkshopBooking';
 
 import { MakerLabFormHeader } from '../components/public/MakerLabFormHeader';
 import '../components/public/makerlab-forms.css';
@@ -27,6 +28,23 @@ export const PublicBookingView = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingError, setBookingError] = useState('');
     const [showAllSlots, setShowAllSlots] = useState(false);
+    const bookingAttemptId = useRef('');
+
+    useEffect(() => {
+        const root = document.documentElement;
+        const previousLang = root.lang;
+        const previousTranslate = root.getAttribute('translate');
+        const hadNoTranslateClass = root.classList.contains('notranslate');
+        root.lang = 'fr';
+        root.setAttribute('translate', 'no');
+        root.classList.add('notranslate');
+        return () => {
+            root.lang = previousLang;
+            if (previousTranslate === null) root.removeAttribute('translate');
+            else root.setAttribute('translate', previousTranslate);
+            if (!hadNoTranslateClass) root.classList.remove('notranslate');
+        };
+    }, []);
 
     // Helpers for Dynamic Form
     const getFormConfig = (audience?: string) => {
@@ -62,15 +80,16 @@ export const PublicBookingView = () => {
         const params = new URLSearchParams(window.location.search);
         const pathMatch = window.location.pathname.match(/^\/w\/([^/]+)\/?$/);
         const slugParam = params.get('slug') || (pathMatch ? decodeURIComponent(pathMatch[1]) : '');
+        const firestore = db;
         let unsubscribeSlots: (() => void) | undefined;
         let cancelled = false;
 
-        if (!slugParam || !db) {
+        if (!slugParam || !firestore) {
             setStep('not-found');
             return;
         }
 
-        const q = query(collection(db, 'workshop_templates'), where('shareableSlug', '==', slugParam));
+        const q = query(collection(firestore, 'workshop_templates'), where('shareableSlug', '==', slugParam));
         getDocs(q).then(snap => {
             if (cancelled) return;
             if (snap.empty) {
@@ -84,7 +103,7 @@ export const PublicBookingView = () => {
                 setTemplate(data);
                 setStep('calendar');
 
-                unsubscribeSlots = onSnapshot(query(collection(db, 'workshop_slots'), where('workshopTemplateId', '==', data.id)), (slotSnap) => {
+                unsubscribeSlots = onSnapshot(query(collection(firestore, 'workshop_slots'), where('workshopTemplateId', '==', data.id)), (slotSnap) => {
                     setExistingSlots(slotSnap.docs.map(d => ({ id: d.id, ...d.data() } as WorkshopSlot)));
                 });
             }
@@ -115,7 +134,7 @@ export const PublicBookingView = () => {
     const visibleSlots = showAllSlots ? availableSlots : availableSlots.slice(0, 6);
     const durationLabel = template
         ? template.duration % 60 === 0
-            ? `${template.duration / 60} ${template.duration === 60 ? 'hour' : 'hours'}`
+            ? `${template.duration / 60} ${template.duration === 60 ? 'heure' : 'heures'}`
             : `${template.duration} min`
         : '';
 
@@ -126,46 +145,17 @@ export const PublicBookingView = () => {
         setIsSubmitting(true);
 
         try {
-            let slotId = selectedSlot.slotId;
-
-            // 1. If real slot doesn't exist, create it
-            if (!slotId) {
-                const slotRef = await addDoc(collection(db, 'workshop_slots'), {
-                    organizationId: template.organizationId, // Inherit from template
-                    workshopTemplateId: template.id,
-                    date: selectedSlot.dateStr,
-                    startTime: selectedSlot.startTime,
-                    endTime: selectedSlot.endTime,
-                    capacity: template.capacityPerSlot,
-                    bookedCount: 0,
-                    status: 'available'
-                });
-                slotId = slotRef.id;
+            if (!bookingAttemptId.current) {
+                bookingAttemptId.current = `public_${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`}`;
             }
-
-            // 2. Create Booking
-            await addDoc(collection(db, 'bookings'), {
-                organizationId: template.organizationId, // Inherit from template
-                workshopSlotId: slotId,
-                workshopTemplateId: template.id,
-                parentName: bookingForm.parentName,
-                phoneNumber: bookingForm.phone,
-                kidName: bookingForm.kidName,
-                kidAge: Number(bookingForm.kidAge),
-                kidInterests: bookingForm.kidInterests,
-                status: 'confirmed',
-                bookedAt: serverTimestamp()
-            });
-
-            // 3. Increment Booked Count
-            await updateDoc(doc(db, 'workshop_slots', slotId), {
-                bookedCount: increment(1)
-            });
+            await createPublicWorkshopBooking(db, template, selectedSlot, bookingAttemptId.current, bookingForm);
 
             setStep('success');
         } catch (err) {
             console.error(err);
-            setBookingError('We could not confirm this booking. Please check your connection and try again.');
+            const code = (err as { code?: string }).code;
+            if (code === 'slot-full' || code === 'slot-unavailable') setBookingError((err as Error).message);
+            else setBookingError('La réservation n’a pas pu être confirmée. Vérifiez votre connexion puis réessayez : votre tentative ne sera pas dupliquée.');
         } finally {
             setIsSubmitting(false);
         }
@@ -177,8 +167,8 @@ export const PublicBookingView = () => {
         <div className="min-h-screen bg-[#EDF2F7] text-[#0B1726] flex flex-col items-center justify-center p-6 text-center">
             <MakerLabWordmark className="mb-6 h-12 w-[132px]" />
             <Calendar className="mb-4 text-[#E87722]" size={28} />
-            <h1 className="text-2xl font-bold mb-2">Workshop not found</h1>
-            <p className="max-w-sm text-[#52606D]">This booking link may be invalid or no longer available.</p>
+            <h1 className="text-2xl font-bold mb-2">Atelier introuvable</h1>
+            <p className="max-w-sm text-[#52606D]">Ce lien de réservation est peut-être invalide ou n’est plus disponible.</p>
         </div>
     );
 
@@ -206,7 +196,7 @@ export const PublicBookingView = () => {
     );
 
     return (
-        <div className={`makerlab-public pb-8 ${import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'edu-public-booking-v1' : ''}`} data-testid={import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'education-public-booking-v1' : undefined}>
+        <div lang="fr" translate="no" className={`notranslate makerlab-public pb-8 ${import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'edu-public-booking-v1' : ''}`} data-testid={import.meta.env.DEV && new URLSearchParams(window.location.search).get('ui') === 'education-v1' ? 'education-public-booking-v1' : undefined}>
             <MakerLabFormHeader label="Atelier découverte" />
             <main className="mx-auto max-w-3xl px-3 sm:px-5">
                 {step === 'calendar' && <section className="ml-trial-intro">
@@ -232,7 +222,7 @@ export const PublicBookingView = () => {
                                     const isFull = slot.bookedCount >= slot.capacity;
                                     const spotsLeft = Math.max(0, slot.capacity - slot.bookedCount);
                                     return (
-                                        <button key={`${slot.dateStr}-${slot.startTime}`} onClick={() => { setSelectedSlot(slot); setBookingError(''); setStep('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={isFull} className="group min-h-[104px] overflow-hidden rounded-xl border border-[#D8E0EA] bg-[#FAFBFD] p-3 text-left transition-colors hover:border-[#E87722] hover:bg-[#FFF8F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E87722]/40 disabled:cursor-not-allowed disabled:opacity-55">
+                                        <button key={`${slot.dateStr}-${slot.startTime}`} onClick={() => { bookingAttemptId.current = ''; setSelectedSlot(slot); setBookingError(''); setStep('form'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} disabled={isFull} className="group min-h-[104px] overflow-hidden rounded-xl border border-[#D8E0EA] bg-[#FAFBFD] p-3 text-left transition-colors hover:border-[#E87722] hover:bg-[#FFF8F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E87722]/40 disabled:cursor-not-allowed disabled:opacity-55">
                                             <div className="flex h-full flex-col justify-between">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <span className="text-[10px] font-black uppercase tracking-[0.1em] text-[#C64F12]">{getWorkshopDayName(slot.dateStr, 'fr-FR')}</span>
