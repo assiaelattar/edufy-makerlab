@@ -164,7 +164,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                     email: lead.email || '',
                     admissionCaseId: lead.id,
                     crmLeadId: lead.id,
-                    status: 'confirmed',
+                    status: 'requested',
                     bookedAt: serverTimestamp(),
                     notes: 'Booked via CRM Lead Profile',
                     paymentStatus: 'pending'
@@ -177,7 +177,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
 
             setIsBookingMode(false);
             setActiveTab('workshops');
-            setFeedback({ kind: 'success', message: 'Demo workshop booked and added to the lead timeline.' });
+            setFeedback({ kind: 'success', message: 'Workshop request added to the lead timeline. Assign an instructor and confirm it in Workshops.' });
         } catch (error) {
             console.error('Workshop booking failed', error);
             const message = error instanceof Error && error.message === 'duplicate-booking'
@@ -248,7 +248,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
                     email: lead.email || '',
                     admissionCaseId: lead.id,
                     crmLeadId: lead.id,
-                    status: 'confirmed',
+                    status: 'requested',
                     bookedAt: serverTimestamp(),
                     notes: [customDemo.location.trim(), customDemo.notes.trim()].filter(Boolean).join(' · ') || 'Custom demo booked from CRM',
                     paymentStatus: 'waived'
@@ -265,7 +265,7 @@ export const LeadProfileModal: React.FC<LeadProfileModalProps> = ({ isOpen, onCl
             });
             setIsBookingMode(false);
             setActiveTab('workshops');
-            setFeedback({ kind: 'success', message: 'Custom demo added to the workshop calendar and lead timeline.' });
+            setFeedback({ kind: 'success', message: 'Custom demo request added to the workshop calendar. Assign an instructor and confirm it in Workshops.' });
         } catch (error) {
             console.error('Custom demo booking failed', error);
             setFeedback({ kind: 'error', message: 'The custom demo could not be saved. Check the connection and try again.' });

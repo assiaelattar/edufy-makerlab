@@ -38,6 +38,8 @@ export interface Group {
   time: string;
   capacity?: number;
   scheduleBlocks?: ProgramScheduleSlot[];
+  instructorId?: string;
+  instructorName?: string;
   campSessionId?: string;
   campWeekId?: string;
   campShiftId?: string;
@@ -538,6 +540,7 @@ export interface ClassSession {
   gradeId?: string;
   groupId?: string;
   workshopSlotId?: string;
+  workshopTemplateId?: string;
   instructorId?: string;
   instructorName?: string;
   status: 'scheduled' | 'completed' | 'cancelled';
@@ -562,6 +565,8 @@ export interface WorkshopTemplate {
   shareableSlug: string;
   targetAudience?: 'Child' | 'School' | 'Teacher' | 'Professional';
   imageUrl?: string;
+  instructorId?: string;
+  instructorName?: string;
   createdAt: Timestamp;
 }
 
@@ -582,6 +587,8 @@ export interface WorkshopSlot {
   notes?: string;
   /** Public booking id that produced the latest atomic capacity increment. */
   lastBookingId?: string;
+  instructorId?: string;
+  instructorName?: string;
 }
 
 export interface Booking {
@@ -594,7 +601,7 @@ export interface Booking {
   kidName: string;
   kidAge: number;
   kidInterests?: string;
-  status: 'confirmed' | 'attended' | 'no-show' | 'cancelled' | 'reminder_sent' | 'feedback_requested' | 'converted';
+  status: 'requested' | 'confirmed' | 'attended' | 'no-show' | 'cancelled' | 'reminder_sent' | 'feedback_requested' | 'converted';
   bookedAt: Timestamp;
   admissionCaseId?: string;
   crmLeadId?: string;

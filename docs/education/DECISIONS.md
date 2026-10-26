@@ -146,3 +146,7 @@ Keep the daily Attendance register's date, session, selection and write handlers
 ## 2026-10-22 — Toolkit Design System v1 scope
 
 Toolkit opts into the canonical Education System on both routes, including under the legacy-shell query. Use Education primitives and Toolkit-scoped token layout; retain organization/role guards, Firestore transactions and external provider boundaries. Keep synthetic write verification distinct from signed-in read-only acceptance. See `TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md`.
+
+## 2026-10-26 — Workshop request transition
+
+Keep a newly submitted public booking and its capacity increment in one idempotent transaction, with status `requested`. During rollout, allow both `confirmed` and `requested` in the public create rule so an open older client remains functional. Assign instructors to dated workshop slots and program groups; confirmation requires an assigned active instructor. Open WhatsApp as a manual draft without recording delivery. See `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.

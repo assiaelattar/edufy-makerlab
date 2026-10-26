@@ -17,7 +17,7 @@ import type {
 import { isBookingStableLinkedToLead, normalizeAdmissionsPhone } from './admissionWorkshopLinks.ts';
 
 const COMPLETED_BOOKING_STATUSES = new Set(['attended', 'feedback_requested', 'converted']);
-const BOOKED_BOOKING_STATUSES = new Set(['confirmed', 'reminder_sent']);
+const BOOKED_BOOKING_STATUSES = new Set(['requested', 'confirmed', 'reminder_sent']);
 
 const NEXT_ACTION_BY_STAGE: Record<AdmissionStage, AdmissionNextAction> = {
   new_inquiry: { kind: 'contact_parent', label: 'Contact the parent', source: 'compatibility_default', dueAt: null },

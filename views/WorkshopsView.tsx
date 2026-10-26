@@ -7,10 +7,10 @@ import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
 import { AtlasCommandHeader, AtlasSignalCard } from '../components/atlas/AtlasSurface';
 import { useConfirm } from '../context/ConfirmContext';
-import { WorkshopTemplate, Booking } from '../types';
+import { WorkshopTemplate, WorkshopSlot, Booking } from '../types';
 import { getGeneratedSlots, VirtualSlot } from '../utils/helpers';
 import { WorkshopReportModal } from '../components/WorkshopReportModal';
-import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, getWorkshopShareVersion, normalizeWorkshopDays, normalizeWorkshopImageUrl, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
+import { buildWorkshopWhatsAppMessage, formatWorkshopDate, getWorkshopBookingUrl, getWorkshopConfirmationWhatsAppUrl, getWorkshopOgImageUrl, getWorkshopScheduleLabel, getWorkshopShareVersion, normalizeWorkshopDays, normalizeWorkshopImageUrl, toLocalDateKey, WORKSHOP_WEEKDAYS } from '../utils/workshops';
 import { findBookingPhoneCandidateLeadIds, resolveBookingAdmissionLead } from '../modules/admissions/domain';
 import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 import '../components/education-ui/education-system-v1.css';
@@ -28,7 +28,7 @@ interface WorkshopEnrollmentPrefill {
 }
 
 export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (attendee: WorkshopEnrollmentPrefill) => void }) => {
-    const { workshopTemplates, workshopSlots, bookings, leads } = useAppContext();
+    const { workshopTemplates, workshopSlots, bookings, leads, teamMembers } = useAppContext();
     const { currentOrganization, can, user } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
     const workspaceScope = `workshops:${currentOrganization?.id || 'none'}:${user?.uid || 'guest'}`;
@@ -50,6 +50,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
     const [viewingBookingsTemplateId, setViewingBookingsTemplateId] = useState<string | null>(null); // For history modal
     const [isSavingTemplate, setIsSavingTemplate] = useState(false);
     const [savingBookingIds, setSavingBookingIds] = useState<string[]>([]);
+    const [savingSlotIds, setSavingSlotIds] = useState<string[]>([]);
     const [copiedTemplateId, setCopiedTemplateId] = useState<string | null>(null);
 
     const [templateForm, setTemplateForm] = useState<Partial<WorkshopTemplate>>({
@@ -293,6 +294,18 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             await showAlert('Booking unavailable', 'This booking is not available in the active organization.', 'warning');
             return;
         }
+        if (newStatus === 'confirmed' && booking.status !== 'confirmed') {
+            const slot = workshopSlots.find(item => item.id === booking.workshopSlotId && item.organizationId === currentOrganization.id);
+            const assigned = teamMembers.some(member => member.uid === slot?.instructorId && member.organizationId === currentOrganization.id && member.status === 'active');
+            if (!assigned) {
+                await showAlert('Affectation requise', 'Choisissez un instructeur actif pour cette séance avant de confirmer la famille.', 'warning');
+                return;
+            }
+        }
+        if (booking.status === 'requested' && !['requested', 'confirmed', 'cancelled'].includes(newStatus)) {
+            await showAlert('Confirmation requise', 'Confirmez la demande avant de poursuivre le suivi de cet atelier.', 'warning');
+            return;
+        }
         if (newStatus === 'cancelled' && booking.status !== 'cancelled') {
             const approved = await confirm({
                 title: 'Cancel this booking?',
@@ -312,6 +325,15 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 if (!bookingSnapshot.exists()) throw new Error('Booking no longer exists.');
                 const bookingData = bookingSnapshot.data() as Booking;
                 if (bookingData.organizationId !== currentOrganization.id) throw new Error('Booking ownership changed.');
+                if (bookingData.status === 'requested' && !['requested', 'confirmed', 'cancelled'].includes(newStatus)) throw new Error('CONFIRMATION_REQUIRED');
+
+                if (newStatus === 'confirmed' && bookingData.status !== 'confirmed') {
+                    const assignment = await transaction.get(doc(firestore, 'workshop_slots', bookingData.workshopSlotId));
+                    const assignedSlot = assignment.exists() ? assignment.data() as WorkshopSlot : null;
+                    if (!assignedSlot || assignedSlot.organizationId !== currentOrganization.id || !assignedSlot.instructorId || assignedSlot.status === 'cancelled') {
+                        throw new Error('ASSIGNMENT_REQUIRED');
+                    }
+                }
 
                 const previousStatus = bookingData.status;
                 const releasesSeat = previousStatus !== 'cancelled' && newStatus === 'cancelled';
@@ -343,6 +365,10 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
             console.error('Workshop booking status update failed', error);
             const message = error instanceof Error && error.message === 'CAPACITY_FULL'
                 ? 'This workshop is full. Increase capacity before restoring the booking.'
+                : error instanceof Error && error.message === 'ASSIGNMENT_REQUIRED'
+                    ? 'Affectez un instructeur actif à cette séance avant de confirmer la demande.'
+                : error instanceof Error && error.message === 'CONFIRMATION_REQUIRED'
+                    ? 'Confirmez la demande avant de poursuivre le suivi de cet atelier.'
                 : error instanceof Error ? error.message : 'Check your connection and try again.';
             await showAlert('Status was not updated', message, 'danger');
         } finally {
@@ -350,15 +376,58 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         }
     };
 
-    const openWhatsApp = async (phone: string, name: string) => {
-        const normalizedPhone = phone.replace(/[^0-9]/g, '');
-        if (normalizedPhone.length < 8) {
-            await showAlert('Phone number required', 'Add a valid parent phone number before opening WhatsApp.', 'warning');
+    const handleSlotInstructorChange = async (slot: VirtualSlot, instructorId: string) => {
+        if (!db || !currentOrganization || !slot.slotId || !can('workshops.manage') || savingSlotIds.includes(slot.slotId)) return;
+        const existing = workshopSlots.find(item => item.id === slot.slotId && item.organizationId === currentOrganization.id);
+        const instructor = teamMembers.find(member => member.uid === instructorId && member.organizationId === currentOrganization.id && member.status === 'active' && ['instructor', 'admin', 'owner'].includes(member.role));
+        if (!existing || (instructorId && !instructor)) {
+            await showAlert('Instructeur indisponible', 'Choisissez un instructeur actif de cette organisation.', 'warning');
             return;
         }
-        const opened = window.open(`https://wa.me/${normalizedPhone}?text=${encodeURIComponent(`Hi ${name}, regarding your workshop booking...`)}`, '_blank');
+        setSavingSlotIds(ids => [...ids, slot.slotId!]);
+        try {
+            await updateDoc(doc(db, 'workshop_slots', slot.slotId), {
+                instructorId: instructor?.uid || '',
+                instructorName: instructor?.name || '',
+                instructorAssignedAt: serverTimestamp(),
+                instructorAssignedBy: user?.uid || ''
+            });
+        } catch (error) {
+            console.error('Workshop instructor assignment failed', error);
+            await showAlert('Affectation non enregistrée', 'Vérifiez votre connexion et vos droits, puis réessayez.', 'danger');
+        } finally {
+            setSavingSlotIds(ids => ids.filter(id => id !== slot.slotId));
+        }
+    };
+
+    const openWhatsApp = async (booking: Booking, slot: VirtualSlot) => {
+        if (!currentOrganization || booking.status !== 'confirmed') {
+            await showAlert('Confirmation requise', 'Confirmez la demande avant de préparer le message WhatsApp.', 'warning');
+            return;
+        }
+        const assignedSlot = workshopSlots.find(item => item.id === slot.slotId && item.organizationId === currentOrganization.id);
+        if (!assignedSlot?.instructorId) {
+            await showAlert('Affectation requise', 'Affectez un instructeur avant de préparer la confirmation.', 'warning');
+            return;
+        }
+        const url = getWorkshopConfirmationWhatsAppUrl({ parentName: booking.parentName, childName: booking.kidName, phone: booking.phoneNumber, title: slot.templateTitle, date: slot.dateStr, startTime: slot.startTime, endTime: slot.endTime, organizationName: currentOrganization.name, location: assignedSlot.location });
+        if (!url) {
+            await showAlert('Coordonnées incomplètes', 'Vérifiez le numéro WhatsApp et les horaires exacts de cette séance.', 'warning');
+            return;
+        }
+        const opened = window.open(url, '_blank');
         if (opened) opened.opener = null;
         else await showAlert('WhatsApp did not open', 'Allow pop-ups for Edufy and try again.', 'warning');
+    };
+
+    const openBookingContact = async (booking: Booking) => {
+        const phone = booking.phoneNumber.replace(/\D/g, '');
+        if (phone.length < 8) {
+            await showAlert('Numéro requis', 'Ajoutez un numéro WhatsApp valide.', 'warning');
+            return;
+        }
+        const opened = window.open(`https://wa.me/${phone}?text=${encodeURIComponent(`Bonjour ${booking.parentName}, nous vous contactons au sujet de l’atelier de ${booking.kidName}.`)}`, '_blank');
+        if (opened) opened.opener = null;
     };
 
     const handleConvertToStudent = async (booking: Booking) => {
@@ -630,7 +699,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                             <div className="edu-workshops-v1__followup-date"><CalendarIcon size={15} /><span>{slot?.date || 'Date unavailable'}</span><small>{slot?.startTime || ''}</small></div>
                             <div className="edu-workshops-v1__followup-person"><strong>{booking.kidName}</strong><span>{booking.parentName} · {title}</span><small>{booking.followUpStatus === 'feedback_received' ? 'Feedback recorded' : 'Attended · follow-up open'}</small></div>
                             {can('workshops.manage') && <div className="edu-workshops-v1__followup-actions">
-                                <button type="button" onClick={() => void openWhatsApp(booking.phoneNumber, booking.parentName)}><MessageCircle size={15} />Contact</button>
+                                <button type="button" onClick={() => void openBookingContact(booking)}><MessageCircle size={15} />Contact</button>
                                 <button type="button" onClick={() => void handleConvertToStudent(booking)}><UserCheck size={15} />Start enrollment</button>
                                 <button type="button" onClick={() => void handlePushToCRM(booking, title)}><Magnet size={15} />Send to CRM</button>
                             </div>}
@@ -769,6 +838,16 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                     {/* Expanded Details */}
                                                     {isExpanded && (
                                                         <div className="border-t border-slate-800 bg-slate-900/50 p-3 md:p-4 animate-in slide-in-from-top-2">
+                                                            <div className="edu-workshops-v1__assignment mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-slate-800 bg-slate-950 p-3">
+                                                                <label className="min-w-[220px] flex-1 text-xs font-bold" htmlFor={`workshop-instructor-${uniqueId}`}>
+                                                                    Instructeur pour cette séance
+                                                                    <select id={`workshop-instructor-${uniqueId}`} className="mt-2 w-full px-3 py-2" value={workshopSlots.find(item => item.id === slot.slotId)?.instructorId || ''} onChange={event => void handleSlotInstructorChange(slot, event.target.value)} disabled={!slot.slotId || !can('workshops.manage') || savingSlotIds.includes(slot.slotId)}>
+                                                                        <option value="">À affecter</option>
+                                                                        {teamMembers.filter(member => member.organizationId === currentOrganization?.id && member.status === 'active' && member.uid && ['instructor', 'admin', 'owner'].includes(member.role)).map(member => <option key={member.uid} value={member.uid}>{member.name}</option>)}
+                                                                    </select>
+                                                                </label>
+                                                                <p className="max-w-xs text-xs text-slate-500">{slot.slotId ? 'Cette affectation apparaît dans le Pass de l’instructeur.' : 'La séance sera affectable dès la première demande.'}</p>
+                                                            </div>
                                                             <div className="flex justify-between items-center mb-4">
                                                                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendee List</h5>
                                                                 <button
@@ -811,6 +890,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                                                     onClick={(e) => e.stopPropagation()}
                                                                                 >
                                                                 <option value="confirmed">Confirmed</option>
+                                                                <option value="requested">À confirmer</option>
                                                                 <option value="reminder_sent">Reminder sent</option>
                                                                 <option value="attended">Attended</option>
                                                                 <option value="feedback_requested">Feedback requested</option>
@@ -820,7 +900,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                             </select>
 
                                                                                 {can('workshops.manage') && <div className="flex gap-1">
-                                                                <button onClick={(e) => { e.stopPropagation(); void openWhatsApp(booking.phoneNumber, booking.parentName); }} className="p-1.5 text-emerald-500 hover:bg-emerald-950/30 rounded transition-colors" title="WhatsApp"><MessageCircle size={14} /></button>
+                                                                <button onClick={(e) => { e.stopPropagation(); void openWhatsApp(booking, slot); }} disabled={booking.status !== 'confirmed'} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300/50 bg-emerald-50 px-2 py-1.5 text-xs font-bold text-emerald-800 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-35" title="Préparer la confirmation WhatsApp en français"><MessageCircle size={14} /><span className="hidden xl:inline">WhatsApp</span></button>
                                                                                     {booking.status === 'attended' && (
                                                                                         <button onClick={(e) => { e.stopPropagation(); void handleConvertToStudent(booking); }} className="p-1.5 text-blue-500 hover:bg-blue-950/30 rounded transition-colors" title="Start student enrollment"><UserCheck size={14} /></button>
                                                                                     )}

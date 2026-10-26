@@ -67,7 +67,7 @@ export const createPublicWorkshopBooking = async (
       kidName: bookingForm.kidName.trim(),
       kidAge: Number(bookingForm.kidAge || 0),
       kidInterests: bookingForm.kidInterests.trim(),
-      status: 'confirmed',
+      status: 'requested',
       bookedAt: serverTimestamp()
     });
   });

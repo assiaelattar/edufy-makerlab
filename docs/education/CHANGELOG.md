@@ -147,3 +147,7 @@ Completed the daily register state audit, canonical renewal treatment, learner A
 ## 2026-10-22 — Toolkit Design System v1 candidate
 
 Migrated Digital resources and Hardware inventory to canonical Education surfaces, added scoped responsive styling and an isolated in-memory review fixture. Search, filter, detail, create/edit/delete and custody flows were checked synthetically. Signed-in and physical-phone acceptance remain open; see `TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md`. No push or deployment.
+
+## 2026-10-26 — Workshop request and instructor release candidate
+
+Integrated the local request/confirmation flow onto current `main` without replacing its atomic public booking repair. Added dated instructor assignment, group assignment, Instructor Pass and a French WhatsApp confirmation draft. Production build, 62 Education checks, focused smokes and the requested/legacy booking emulator checks pass. The transitional Firestore rule and client remain local pending protected-path approval; see `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.

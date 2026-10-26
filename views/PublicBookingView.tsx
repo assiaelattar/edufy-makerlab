@@ -155,7 +155,7 @@ export const PublicBookingView = () => {
             console.error(err);
             const code = (err as { code?: string }).code;
             if (code === 'slot-full' || code === 'slot-unavailable') setBookingError((err as Error).message);
-            else setBookingError('La réservation n’a pas pu être confirmée. Vérifiez votre connexion puis réessayez : votre tentative ne sera pas dupliquée.');
+            else setBookingError('La demande n’a pas pu être enregistrée. Vérifiez votre connexion puis réessayez : votre tentative ne sera pas dupliquée.');
         } finally {
             setIsSubmitting(false);
         }
@@ -181,14 +181,14 @@ export const PublicBookingView = () => {
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF1E8] text-[#C64F12]">
                     <CheckCircle2 size={27} />
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#C64F12]">Réservation confirmée</p>
-                <h2 className="mt-1 text-2xl font-black tracking-[-0.035em]">Votre place est réservée</h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#C64F12]">Demande reçue</p>
+                <h2 className="mt-1 text-2xl font-black tracking-[-0.035em]">Nous allons confirmer votre atelier</h2>
                 <p className="mt-1 text-sm text-[#617065]">{bookingForm.kidName || bookingForm.parentName} · {template?.title}</p>
                 <div className="my-5 flex items-center justify-between gap-4 rounded-xl border border-[#F3C8AA] bg-[#FFF5EE] p-4 text-left">
                     <div><p className="font-black text-[#0B1726]">{getWorkshopDayName(selectedSlot?.dateStr || '', 'fr-FR')}, {formatWorkshopDate(selectedSlot?.dateStr || '', { day: 'numeric', month: 'short' }, 'fr-FR')}</p><p className="mt-0.5 text-xs text-[#617065]">{formatWorkshopDate(selectedSlot?.dateStr || '', { year: 'numeric' }, 'fr-FR')}</p></div>
                     <span className="shrink-0 text-sm font-black text-[#C64F12]">{selectedSlot?.startTime}–{selectedSlot?.endTime}</span>
                 </div>
-                <p className="mb-5 flex items-center justify-center gap-1.5 text-xs text-[#617065]"><ShieldCheck size={14} /> Les informations pratiques vous seront envoyées sur WhatsApp.</p>
+                <p className="mb-5 flex items-center justify-center gap-1.5 text-xs text-[#617065]"><ShieldCheck size={14} /> Notre équipe vérifiera la demande et vous contactera pour confirmer l’horaire et le lieu.</p>
                 <button onClick={() => window.location.reload()} className="min-h-11 w-full rounded-xl bg-[#0B1726] px-4 text-sm font-bold text-white transition-colors hover:bg-[#162840]">Réserver une autre séance</button>
                 </div>
             </div>

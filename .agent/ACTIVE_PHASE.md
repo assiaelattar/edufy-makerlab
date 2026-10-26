@@ -1,3 +1,9 @@
+## Workshop request → instructor local phase — 2026-10-26
+
+The dated workshop assignment and request/confirmation UI candidate is complete locally. The Instructor Pass projection, French WhatsApp draft and Workshops theme repair are included. Stop at this module boundary; coordinate the Firestore rule and frontend rollout before any live test. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+---
+
 ## Design System v1 Expenses focused completion — 2026-10-20
 
 Expenses has a local canonical workspace across overview, register/detail, recurring charges, insights, templates and financial dialogs. Synthetic populated/empty/failure/permission checks and signed-in Administrator read-only desktop/390px navigation are documented in `docs/education/EXPENSES_DESIGN_SYSTEM_V1_2026-10-20.md`. Stop at this module boundary. Real writes, physical-phone and restricted-role acceptance remain open; no push or deployment.

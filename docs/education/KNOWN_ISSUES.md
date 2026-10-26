@@ -129,3 +129,7 @@ Synthetic checks cover individual and batch saves, failure/retry, clear/cancel, 
 ## 2026-10-22 — Toolkit acceptance boundary
 
 The isolated Toolkit fixture covers visual states and in-memory actions, but the signed-in local app was unavailable for a real-account read-only check. Real admin/restricted role, physical phone, external provider and consequential write acceptance remain open. AppContext lacks an error callback for `assets` and `tool_links` listeners, so a dataset-specific Firestore failure cannot be surfaced through Toolkit alone. Clipboard rejection is available in the fixture but was not exercised. See `TOOLKIT_DESIGN_SYSTEM_V1_2026-10-22.md`.
+
+## 2026-10-26 — Workshop request release gate
+
+The current-main candidate is locally verified but not live. `firestore.rules` is a protected release path under `$hostinger-main-release`; deploy its one-line transitional status rule before the client, then verify a disposable public request and instructor assignment on the live account. Ahmed/two-instructor and physical-phone acceptance remain open. Template-wide default instructor editing is outside this slice. See `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.

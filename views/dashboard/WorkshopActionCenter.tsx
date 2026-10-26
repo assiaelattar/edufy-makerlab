@@ -15,7 +15,7 @@ const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
 const completedFollowUps = new Set(['feedback_received', 'not_interested', 'converted']);
 
 export const WorkshopActionCenter = () => {
-    const { bookings, workshopSlots, workshopTemplates, programs, leads } = useAppContext();
+    const { bookings, workshopSlots, workshopTemplates, programs, leads, navigateTo } = useAppContext();
     const { currentOrganization, can } = useAuth();
     const { alert, confirm } = useConfirm();
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -155,7 +155,7 @@ export const WorkshopActionCenter = () => {
         [operationalBookings]
     );
     const pendingConfirmation = useMemo(
-        () => operationalBookings.filter(booking => booking.status === 'reminder_sent' || (booking.status === 'confirmed' && Boolean(booking.reminderPreparedAt))),
+        () => operationalBookings.filter(booking => booking.status === 'requested' || booking.status === 'reminder_sent' || (booking.status === 'confirmed' && Boolean(booking.reminderPreparedAt))),
         [operationalBookings]
     );
 
@@ -318,7 +318,7 @@ export const WorkshopActionCenter = () => {
 
                 <QueueColumn title="Confirmations" count={pendingConfirmation.length} icon={CheckCircle2} tone="teal">
                     {pendingConfirmation.length === 0 ? <CompactEmpty label="No confirmations waiting" /> : pendingConfirmation.map(booking => (
-                        <QueueItem key={booking.id} title={booking.kidName} detail={booking.parentName} meta={booking.status === 'reminder_sent' ? 'Legacy reminder state' : 'WhatsApp prepared'} action={<div className="grid grid-cols-2 gap-2"><AtlasActionButton variant="primary" disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'confirmed')}>Confirm</AtlasActionButton><AtlasActionButton disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'cancelled')}>Cancel</AtlasActionButton></div>} />
+                        <QueueItem key={booking.id} title={booking.kidName} detail={booking.parentName} meta={booking.status === 'requested' ? 'Nouvelle demande · affectation requise' : booking.status === 'reminder_sent' ? 'Legacy reminder state' : 'WhatsApp prepared'} action={<div className="grid grid-cols-2 gap-2"><AtlasActionButton variant="primary" onClick={() => navigateTo('workshops')}>Ouvrir l’atelier</AtlasActionButton><AtlasActionButton disabled={busyBookingIds.includes(booking.id)} onClick={() => void handleUpdateStatus(booking, 'cancelled')}>Cancel</AtlasActionButton></div>} />
                     ))}
                 </QueueColumn>
 

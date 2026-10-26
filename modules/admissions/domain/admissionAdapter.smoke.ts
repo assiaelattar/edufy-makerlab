@@ -28,6 +28,12 @@ assert.equal(adaptLeadToAdmissionCase({
   bookings: [confirmedBooking],
 }).stage, 'trial_booked', 'confirmed linked booking should outrank legacy status');
 
+assert.equal(adaptLeadToAdmissionCase({
+  tenantId: 'org-1',
+  lead: makeLead({ status: 'new' }),
+  bookings: [makeBooking({ crmLeadId: 'lead-1', status: 'requested' })],
+}).stage, 'trial_booked', 'requested workshop should enter the trial confirmation workflow');
+
 const attendedBooking = makeBooking({ crmLeadId: 'lead-1', status: 'attended' });
 assert.equal(adaptLeadToAdmissionCase({
   tenantId: 'org-1',

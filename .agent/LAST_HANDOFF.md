@@ -4,6 +4,12 @@ The focused Pickup branch keeps the existing staff `released` → selected guard
 
 ---
 
+## Workshop request and instructor assignment release integration — 2026-10-26
+
+This current-main candidate preserves the atomic, retry-safe public booking service and French translation safeguards. It adds requested-status booking, dated workshop and program-group instructor assignment, a manual French WhatsApp draft, and Instructor Pass. The staged Firestore rule accepts both confirmed and requested while old clients may still be open. Production build, 62 Education checks, focused smokes and requested/legacy booking emulator checks pass; touched types were reconciled with current main. Production rules and frontend must be coordinated before live acceptance; explicit approval is still needed for the protected `firestore.rules` path under `$hostinger-main-release`. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+---
+
 ## Parent family accounts and public booking repair — 2026-10-24
 
 The Parents module now separates contact email from the generated `p.*@makerlab.academy` login, issues one verified account for explicitly selected same-tenant learners, links additional siblings atomically, shows billing context, and routes conflicts to the existing transfer/repair flow. Shared parent email no longer marks a learner as a duplicate. Public workshop booking now commits booking and capacity atomically with an idempotent browser-attempt ID, and the French route blocks browser translation from mutating React markup. Parent and booking emulator suites and the production build pass. Release the parent/account slice and workshop/rules slice as separate commits, then deploy Edufy, the trusted parent API, and Firestore rules. See `docs/parent/PARENT_FAMILY_MODULE_2026-10-24.md` and `docs/workshops/PUBLIC_BOOKING_REPAIR_2026-10-24.md`.

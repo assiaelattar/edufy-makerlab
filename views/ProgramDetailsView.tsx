@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { arrayUnion, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, FileSpreadsheet, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { Program, Lead } from '../types';
@@ -50,7 +50,7 @@ const toExportFileSegment = (value: string) => value
     .toLowerCase();
 
 export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnrollLead, programIdProp, onClose, onPrintProgram, onEditProgram, onQuoteProgram, onOpenEnrollmentAccess, onTogglePause }) => {
-    const { programs, viewParams, navigateTo, leads, enrollments, students, settings } = useAppContext();
+    const { programs, viewParams, navigateTo, leads, enrollments, students, settings, teamMembers } = useAppContext();
     const { currentOrganization, userProfile, can } = useAuth();
     const { alert: showAlert, confirm } = useConfirm();
     const targetId = programIdProp || viewParams.programId;
@@ -59,6 +59,7 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
     const [activeTab, setActiveTab] = useWorkspaceViewState<'operations' | 'overview' | 'classes' | 'students' | 'waiting-list' | 'financials' | 'resources'>(workspaceScope, 'activeTab', 'overview');
     const [linkCopied, setLinkCopied] = useState(false);
     const [expandedGradeIds, setExpandedGradeIds] = useState<string[]>([]);
+    const [savingGroupInstructorIds, setSavingGroupInstructorIds] = useState<string[]>([]);
     const [pendingLeadAction, setPendingLeadAction] = useState<string | null>(null);
     const [rosterQuery, setRosterQuery] = useWorkspaceViewState(workspaceScope, 'rosterQuery', '');
     const [rosterPlacement, setRosterPlacement] = useWorkspaceViewState<'all' | 'placed' | 'unplaced'>(workspaceScope, 'rosterPlacement', 'all');
@@ -70,6 +71,48 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
         programs.find(p => p.id === targetId),
         [programs, targetId]
     );
+
+    const assignGroupInstructor = async (gradeId: string, groupId: string, instructorId: string) => {
+        const firestore = db;
+        if (!firestore) {
+            await showAlert('Connexion indisponible', 'La connexion Edufy est indisponible. Réessayez plus tard.', 'warning');
+            return;
+        }
+        if (!program || !currentOrganization || program.organizationId !== currentOrganization.id || savingGroupInstructorIds.includes(groupId) || !(can('programs.edit') || can('programs.manage'))) return;
+        const organizationId = currentOrganization.id;
+        const programId = program.id;
+        const instructor = teamMembers.find(member => member.uid === instructorId && member.organizationId === organizationId && member.status === 'active' && ['instructor', 'admin', 'owner'].includes(member.role));
+        if (instructorId && !instructor) {
+            await showAlert('Instructeur indisponible', 'Choisissez un instructeur actif de cette organisation.', 'warning');
+            return;
+        }
+        setSavingGroupInstructorIds(ids => [...ids, groupId]);
+        try {
+            await runTransaction(firestore, async transaction => {
+                const programRef = doc(firestore, 'programs', programId);
+                const snapshot = await transaction.get(programRef);
+                if (!snapshot.exists()) throw new Error('Programme introuvable.');
+                const latest = snapshot.data() as Program;
+                if (latest.organizationId !== organizationId) throw new Error('Ce programme appartient à une autre organisation.');
+                const grade = latest.grades?.find(item => item.id === gradeId);
+                if (!grade?.groups?.some(item => item.id === groupId)) throw new Error('Groupe introuvable.');
+                const grades = latest.grades.map(item => item.id !== gradeId ? item : {
+                    ...item,
+                    groups: item.groups.map(group => group.id !== groupId ? group : {
+                        ...group,
+                        instructorId: instructor?.uid || '',
+                        instructorName: instructor?.name || ''
+                    })
+                });
+                transaction.update(programRef, { grades });
+            });
+        } catch (error) {
+            console.error('Program group instructor assignment failed', error);
+            await showAlert('Affectation non enregistrée', error instanceof Error ? error.message : 'Vérifiez votre connexion et réessayez.', 'danger');
+        } finally {
+            setSavingGroupInstructorIds(ids => ids.filter(id => id !== groupId));
+        }
+    };
 
     useEffect(() => {
         if (!program?.id) return;
@@ -455,6 +498,14 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                                                             <span data-group-status={needsAttention ? 'attention' : isFull ? 'full' : 'ready'} className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${needsAttention ? 'bg-amber-300/10 text-amber-200' : isFull ? 'bg-sky-400/10 text-sky-300' : 'bg-teal-400/10 text-teal-300'}`}>{needsAttention ? 'Setup needed' : isFull ? 'Full' : 'Ready'}</span>
                                                         </div>
                                                         <p className={`mt-1 flex items-center gap-1.5 text-xs ${item.isScheduled ? 'text-slate-400' : 'text-amber-200'}`}><Clock size={13} />{item.isScheduled ? `${item.group.day} / ${item.group.time}` : 'Day or time missing'}</p>
+                                                        {(can('programs.edit') || can('programs.manage')) ? <label className="mt-2 block text-xs font-bold text-slate-400">
+                                                            Instructeur du groupe
+                                                            <select aria-label={`Instructeur pour ${item.group.name}`} className="mt-1 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white" value={item.group.instructorId || ''} onChange={event => void assignGroupInstructor(grade.id, item.group.id, event.target.value)} disabled={savingGroupInstructorIds.includes(item.group.id)}>
+                                                                <option value="">À affecter</option>
+                                                                {item.group.instructorId && !teamMembers.some(member => member.uid === item.group.instructorId && member.status === 'active' && member.organizationId === currentOrganization?.id) && <option value={item.group.instructorId}>{item.group.instructorName || 'Compte indisponible'}</option>}
+                                                                {teamMembers.filter(member => member.organizationId === currentOrganization?.id && member.status === 'active' && member.uid && ['instructor', 'admin', 'owner'].includes(member.role)).map(member => <option key={member.uid} value={member.uid}>{member.name}</option>)}
+                                                            </select>
+                                                        </label> : <p className="mt-2 text-xs text-slate-400">Instructeur : {item.group.instructorName || 'À affecter'}</p>}
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2 text-xs sm:block sm:text-right">
                                                         <p className="font-bold text-white">{item.roster.length} learner{item.roster.length === 1 ? '' : 's'}</p>

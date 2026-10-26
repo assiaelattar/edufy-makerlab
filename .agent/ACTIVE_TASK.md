@@ -1,3 +1,9 @@
+## Workshop request → instructor handoff — 2026-10-26
+
+Local candidate implemented and verified. Next task: coordinated rules/client release and designated real-account acceptance. Preserve the worktree until release integration. Details and gaps: `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+---
+
 ## Learning and Portfolio focused QA complete locally — 2026-10-20
 
 The isolated follow-up fixes nested project and review save behavior and documents the complete synthetic page/dialog matrix in `docs/education/LEARNING_PORTFOLIO_DESIGN_SYSTEM_V1_COMPLETION_2026-10-20.md`. Parent integration should include both focused commits. Keep the release hold for authenticated and physical-phone acceptance. No push, deployment or school write.

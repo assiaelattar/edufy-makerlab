@@ -21,6 +21,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: resolve('index.html'),
+        instructorPass: resolve('instructor-pass/index.html'),
         sw: resolve('sw.js')
       },
       output: {

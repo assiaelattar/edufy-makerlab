@@ -1,0 +1,10 @@
+{
+  "name": "Instructor Pass",
+  "short_name": "Instructor Pass",
+  "description": "Votre programme et vos priorités, reliés à Edufy.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f6f8f4",
+  "theme_color": "#f6f8f4",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

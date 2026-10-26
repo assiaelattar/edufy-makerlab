@@ -80,6 +80,31 @@ export const getWorkshopDayName = (dateKey: string, locale = 'en-GB'): string =>
   formatWorkshopDate(dateKey, { weekday: 'long' }, locale)
 );
 
+export const MAKERLAB_MAPS_URL = 'https://maps.app.goo.gl/yfReRY3KkxiNFfZC6';
+
+export const getWorkshopConfirmationWhatsAppUrl = (details: {
+  parentName: string;
+  childName: string;
+  phone: string;
+  title: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  organizationName: string;
+  location?: string;
+}): string | null => {
+  let phone = details.phone.replace(/\D/g, '');
+  if (phone.startsWith('00')) phone = phone.slice(2);
+  if (phone.startsWith('0') && phone.length === 10) phone = `212${phone.slice(1)}`;
+  if (phone.length < 8 || phone.length > 15) return null;
+  const dateLabel = formatWorkshopDate(details.date, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }, 'fr-FR');
+  if (dateLabel === '-' || !details.startTime || !details.endTime) return null;
+  const venue = details.location?.trim() || details.organizationName;
+  const mapUrl = /makerlab/i.test(details.organizationName) ? `\nItinéraire : ${MAKERLAB_MAPS_URL}` : '';
+  const message = `Bonjour ${details.parentName},\n\nNous confirmons l'atelier « ${details.title} » pour ${details.childName}, le ${dateLabel} de ${details.startTime} à ${details.endTime}.\n\nLieu : ${venue}.${mapUrl}\n\nÀ bientôt, l'équipe ${details.organizationName}.`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+};
+
 export const getWorkshopScheduleLabel = (
   template: Pick<WorkshopTemplate, 'recurrenceType' | 'recurrencePattern'>,
   locale: 'en' | 'fr' = 'en'
