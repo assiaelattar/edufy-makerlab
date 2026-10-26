@@ -1036,6 +1036,10 @@ service cloud.firestore {
       allow delete: if canDeleteTenantDoc();
     }
 
+    match /class_sessions/{sessionId} {
+      allow read: if canReadTenantDoc();
+    }
+
     match /enrollments/{enrollmentId} {
       allow read: if canReadTenantDoc() ||
         (resourceHasOrg() && (
