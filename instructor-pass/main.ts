@@ -108,17 +108,18 @@ function renderSchedule() {
   const week = projectInstructorWeek(programs, sessions, profile.organizationId, profile.uid || '', now, templates, slots);
   const today = week.filter(item => item.date === todayKey());
   const hasErrors = programsError || sessionsError || templatesError || slotsError;
-  byId('connection-state').textContent = hasErrors ? 'Données incomplètes' : 'Données Edufy';
-  byId('today-summary').textContent = hasErrors ? 'Certaines séances sont indisponibles. Réessayez dans un instant.' : `${today.length} séance${today.length === 1 ? '' : 's'} prévue${today.length === 1 ? '' : 's'} · ${formatDay(now)}`;
+  const missingSources = [programsError && 'programmes', sessionsError && 'cours planifiés', templatesError && 'modèles d’atelier', slotsError && 'séances d’atelier'].filter(Boolean).join(', ');
+  byId('connection-state').textContent = hasErrors ? 'Données partielles' : 'Données Edufy';
+  byId('today-summary').textContent = hasErrors ? `Source indisponible : ${missingSources}. Les séances accessibles restent affichées.` : `${today.length} séance${today.length === 1 ? '' : 's'} prévue${today.length === 1 ? '' : 's'} · ${formatDay(now)}`;
   byId('data-note').textContent = hasErrors
-    ? 'La lecture Edufy est incomplète. Les séances manquantes ne sont pas affichées. Les tâches personnelles restent sur cet appareil.'
+    ? `Lecture Edufy partielle (${missingSources}). Les séances accessibles restent affichées ; les tâches personnelles restent sur cet appareil.`
     : 'Séances issues des groupes et du calendrier Edufy. Les tâches personnelles restent sur cet appareil.';
   byId('today-sessions').innerHTML = today.length
     ? today.map(item => `<div class="session"><span class="time">${escapeHtml(item.startTime)}<small>${escapeHtml(item.endTime)}</small></span><span class="line"><span class="dot"></span><span class="track"></span></span><div class="session-copy"><strong>${escapeHtml(item.title)} <span class="label">${item.kind === 'workshop' ? 'Atelier' : 'Programme'}</span></strong><p>${escapeHtml(item.detail)}${item.location ? ` · ${escapeHtml(item.location)}` : ''}</p></div></div>`).join('')
     : `<p class="empty-schedule">${hasErrors ? 'Impossible de confirmer toutes vos séances.' : 'Aucune séance affectée aujourd’hui.'}</p>`;
 
   const firstDay = startOfWeek(now, { weekStartsOn: 1 });
-  byId('week-summary').textContent = hasErrors ? 'Certaines données Edufy sont indisponibles' : `${week.length} intervention${week.length === 1 ? '' : 's'} affectée${week.length === 1 ? '' : 's'} cette semaine`;
+  byId('week-summary').textContent = hasErrors ? `Source indisponible : ${missingSources}` : `${week.length} intervention${week.length === 1 ? '' : 's'} affectée${week.length === 1 ? '' : 's'} cette semaine`;
   byId('week-grid').innerHTML = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(firstDay, index);
     const key = format(date, 'yyyy-MM-dd');

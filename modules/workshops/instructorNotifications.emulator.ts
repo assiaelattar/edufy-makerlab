@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { deleteApp, initializeApp } from 'firebase/app';
 import { connectAuthEmulator, getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { collection, connectFirestoreEmulator, doc, getDocs, getFirestore, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { collection, connectFirestoreEmulator, doc, getDoc, getDocs, getFirestore, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { deleteApp as deleteAdminApp } from 'firebase-admin/app';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 // @ts-expect-error The production admin helper is JavaScript and intentionally has no declaration file.
@@ -25,6 +25,8 @@ await adminDb.doc('workshop_slots/slot-a').set({
   organizationId: 'org-a', workshopTemplateId: 'template-a', date: '2030-05-20',
   startTime: '10:00', endTime: '11:00', capacity: 2, bookedCount: 1, status: 'available'
 });
+await adminDb.doc('class_sessions/session-a').set({ organizationId: 'org-a', date: '2030-05-20', instructorId: instructor.uid });
+await adminDb.doc('class_sessions/session-b').set({ organizationId: 'org-b', date: '2030-05-20', instructorId: instructor.uid });
 
 const makeClient = async (name: string, email: string) => {
   const app = initializeApp({ apiKey: 'demo-key', authDomain: 'localhost', projectId }, name);
@@ -39,6 +41,9 @@ const makeClient = async (name: string, email: string) => {
 
 const managerClient = await makeClient('workshop-manager', 'manager@example.test');
 const instructorClient = await makeClient('workshop-instructor', 'instructor@example.test');
+assert.equal((await getDoc(doc(instructorClient.firestore, 'class_sessions', 'session-a'))).data()?.organizationId, 'org-a');
+await assert.rejects(getDoc(doc(instructorClient.firestore, 'class_sessions', 'session-b')));
+await assert.rejects(setDoc(doc(managerClient.firestore, 'class_sessions', 'new-session'), { organizationId: 'org-a' }));
 const slotRef = doc(managerClient.firestore, 'workshop_slots', 'slot-a');
 const notificationRef = doc(managerClient.firestore, 'notifications', 'assignment-a');
 await runTransaction(managerClient.firestore, async transaction => {
@@ -61,7 +66,7 @@ assert.equal(notifications.docs[0].data().workshopSlotId, 'slot-a');
 await updateDoc(doc(instructorClient.firestore, 'notifications', notifications.docs[0].id), { read: true });
 assert.equal((await adminDb.doc('notifications/assignment-a').get()).data()?.read, true);
 
-console.log('Instructor notification emulator: atomic assignment, recipient inbox query and read acknowledgement passed.');
+console.log('Instructor Pass emulator: same-tenant class-session read, foreign/write denial, atomic assignment, inbox query and read acknowledgement passed.');
 await deleteApp(managerClient.app);
 await deleteApp(instructorClient.app);
 await deleteAdminApp(adminApp);

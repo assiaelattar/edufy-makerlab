@@ -11,8 +11,9 @@ Current-main integration checks: the production build passed with 2,968 modules,
 - The Pass observed at `http://127.0.0.1:5192/instructor-pass/` had been served from the older dirty checkout. That local server was replaced with the clean feature worktree; the corrected candidate is also available on port 5174.
 - Assigned dated slots now project independently of template recurrence. A changed day or time and a paused template with an existing slot still reach the assigned instructor. Reassigned or cancelled slots leave the prior instructor's schedule.
 - Slot assignment and reassignment create durable instructor notifications in the same Firestore transaction. Booking status changes notify the assigned instructor, including cancellation from Dashboard. The Pass has an alert inbox and optional browser notifications while open. Closed-app push remains unconfigured.
-- Follow-up schedule smoke passed moved-slot and paused-template cases locally. Real Ayoub sign-in and assignment/cancellation round trip remain unverified.
+- Follow-up schedule smoke passed moved-slot and paused-template cases locally. On the corrected local server, Ayoub's signed-in Pass showed the Tuesday 27 October MakerLab trial at 18:00–19:30 in the next card and weekly view. An actual assignment/cancellation round trip remains unverified.
 - Current-main integration reran the production build and all 62 Education checks. A local Auth/Firestore emulator verified one atomic slot assignment with notification creation, the recipient's indexed inbox query and read acknowledgement. This does not replace real-account notification acceptance.
+- The existing production rules deny the optional `class_sessions` feed, leaving the Pass with partial data. This candidate adds same-tenant staff **read** access to `class_sessions` and names an unavailable source in the Pass until the rule is live. The Auth/Firestore emulator passed own-tenant read, foreign-tenant denial and client-write denial. Class-session create, update and delete permissions are outside this release.
 
 ## Changelog
 
@@ -46,7 +47,7 @@ Current-main integration checks: the production build passed with 2,968 modules,
 ## Known issues and release gate
 
 - This is a **local candidate**, not a live release. The public client now writes `requested`; production Firestore rules currently accept only `confirmed`. Publishing the client or rules alone would break one version of public booking. Release must coordinate a transitional rule, client deployment, and final rule tightening, then test a real public request.
-- Real-account acceptance is still needed with Ahmed and two different active instructors. Check organization roles, WhatsApp app handoff on a phone, and live listener timing. No production booking was changed during this pass.
+- Real-account acceptance is still needed with Ahmed and a second active instructor. Check fresh alert delivery, reassignment, cancellation, organization roles, WhatsApp app handoff on a phone, and live listener timing. Ayoub's existing dated workshop was verified read-only; no production booking was changed during this pass.
 - Template-wide default instructor editing remains separate work. This pass covers dated workshop and STEMQuest group assignment with the Pass projection.
 
 ## Handoff

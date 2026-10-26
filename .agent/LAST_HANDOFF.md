@@ -10,6 +10,8 @@ This current-main candidate preserves the atomic, retry-safe public booking serv
 
 The follow-up source commit `e314589` is included in this candidate: dated slots project despite later template recurrence changes; assignment, reassignment and booking status changes create durable Pass alerts atomically. The user's earlier localhost Pass test was served from an older checkout. The corrected clean feature checkout is now on port 5192. A local Auth/Firestore emulator verified atomic assignment, recipient inbox query and read acknowledgement. Real notification acceptance and closed-app push remain open.
 
+The source follow-up `08d9d93` was adapted to this release: Ayoub's signed-in local Pass visibly showed the Tuesday 27 October trial at 18:00–19:30, while the `class_sessions` feed was denied by current production rules. The candidate grants same-tenant staff read access only and labels partial data until deployed. Fresh real alert and write acceptance remain open.
+
 ---
 
 ## Parent family accounts and public booking repair — 2026-10-24
