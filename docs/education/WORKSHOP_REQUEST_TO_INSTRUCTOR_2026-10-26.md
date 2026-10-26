@@ -6,6 +6,14 @@ The clean release candidate is based on the newer public booking repair. It reta
 
 Current-main integration checks: the production build passed with 2,968 modules, the Education design check passed all 62 checks, the Instructor Pass schedule, WhatsApp URL and Admissions adapter smokes passed, and the local Firestore emulator passed both `requested` and legacy `confirmed` public creates plus idempotency, capacity and tenant denials. The integration restored the group, workshop-template and class-session type declarations required by the feature. The transitional `firestore.rules` change is a protected release path and remains pending explicit approval under `$hostinger-main-release`.
 
+## Instructor Pass follow-up after local testing
+
+- The Pass observed at `http://127.0.0.1:5192/instructor-pass/` had been served from the older dirty checkout. That local server was replaced with the clean feature worktree; the corrected candidate is also available on port 5174.
+- Assigned dated slots now project independently of template recurrence. A changed day or time and a paused template with an existing slot still reach the assigned instructor. Reassigned or cancelled slots leave the prior instructor's schedule.
+- Slot assignment and reassignment create durable instructor notifications in the same Firestore transaction. Booking status changes notify the assigned instructor, including cancellation from Dashboard. The Pass has an alert inbox and optional browser notifications while open. Closed-app push remains unconfigured.
+- Follow-up schedule smoke passed moved-slot and paused-template cases locally. Real Ayoub sign-in and assignment/cancellation round trip remain unverified.
+- Current-main integration reran the production build and all 62 Education checks. A local Auth/Firestore emulator verified one atomic slot assignment with notification creation, the recipient's indexed inbox query and read acknowledgement. This does not replace real-account notification acceptance.
+
 ## Changelog
 
 - Public workshop submissions and staff-created CRM workshop requests now create `requested` bookings and tell families or staff that the session needs confirmation. Requested places continue to count against capacity.

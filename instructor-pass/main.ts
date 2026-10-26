@@ -1,9 +1,9 @@
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, doc, getDoc, onSnapshot, query, where, type Unsubscribe } from 'firebase/firestore';
+import { collection, doc, getDoc, limit, onSnapshot, orderBy, query, updateDoc, where, type Unsubscribe } from 'firebase/firestore';
 import { addDays, format, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { auth, db } from '../services/firebase';
-import type { ClassSession, Program, UserProfile, WorkshopSlot, WorkshopTemplate } from '../types';
+import type { AppNotification, ClassSession, Program, UserProfile, WorkshopSlot, WorkshopTemplate } from '../types';
 import { projectInstructorWeek, type PassSession } from './schedule';
 
 const byId = (id: string): HTMLElement => {
@@ -21,6 +21,7 @@ let programs: Program[] = [];
 let sessions: ClassSession[] = [];
 let templates: WorkshopTemplate[] = [];
 let slots: WorkshopSlot[] = [];
+let notifications: AppNotification[] = [];
 let programsReady = false;
 let sessionsReady = false;
 let templatesReady = false;
@@ -35,13 +36,16 @@ let stopPrograms: Unsubscribe | null = null;
 let stopSessions: Unsubscribe | null = null;
 let stopTemplates: Unsubscribe | null = null;
 let stopSlots: Unsubscribe | null = null;
+let stopNotifications: Unsubscribe | null = null;
 let subscriptionGeneration = 0;
+let notificationsReady = false;
 
 function clearSubscriptions() {
   subscriptionGeneration++;
-  stopProfile?.(); stopPrograms?.(); stopSessions?.(); stopTemplates?.(); stopSlots?.();
-  stopProfile = stopPrograms = stopSessions = stopTemplates = stopSlots = null;
+  stopProfile?.(); stopPrograms?.(); stopSessions?.(); stopTemplates?.(); stopSlots?.(); stopNotifications?.();
+  stopProfile = stopPrograms = stopSessions = stopTemplates = stopSlots = stopNotifications = null;
   programs = []; sessions = []; templates = []; slots = [];
+  notifications = []; notificationsReady = false;
   programsReady = sessionsReady = templatesReady = slotsReady = programsError = sessionsError = templatesError = slotsError = false;
 }
 
@@ -54,6 +58,25 @@ function showGate(message = '') {
   byId('connection-state').textContent = 'Connexion requise';
   byId('today-sessions').innerHTML = '';
   byId('week-grid').innerHTML = '';
+  byId('alerts-list').innerHTML = '';
+  byId('alerts-count').textContent = '';
+}
+
+function renderNotifications() {
+  const items = notifications.filter(item => item.organizationId === profile?.organizationId && Boolean(item.workshopSlotId));
+  const unread = items.filter(item => !item.read).length;
+  byId('alerts-count').textContent = unread ? `· ${unread} nouvelle${unread > 1 ? 's' : ''}` : '';
+  byId('alerts-list').innerHTML = items.length ? items.slice(0, 5).map(item => `<div class="alert-item ${item.read ? '' : 'unread'} ${item.type === 'warning' ? 'warning' : ''}"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>${item.read ? '' : `<button type="button" data-read-alert="${escapeHtml(item.id)}">Vu</button>`}</div>`).join('') : `<p class="empty-schedule">${notificationsReady ? 'Aucune alerte d’atelier pour le moment.' : 'Chargement des alertes…'}</p>`;
+}
+
+function showDeviceNotification(item: AppNotification) {
+  if (!('Notification' in window) || Notification.permission !== 'granted' || !document.hidden) return;
+  try { new Notification(item.title, { body: item.message, tag: `pass-workshop-${item.id}` }); } catch { /* The in-app alert remains available on mobile browsers that disallow this API. */ }
+}
+
+function updateNotificationPermissionButton() {
+  const button = byId('alerts-permission') as HTMLButtonElement;
+  button.hidden = !('Notification' in window) || Notification.permission !== 'default';
 }
 
 function taskStorageKey(): string { return `instructor-pass-tasks-v1:${profile?.organizationId || ''}:${profile?.uid || ''}`; }
@@ -125,6 +148,8 @@ function subscribeToData(userProfile: UserProfile) {
   byId('connection-state').textContent = 'Chargement…';
   loadTasks();
   renderSchedule();
+  renderNotifications();
+  updateNotificationPermissionButton();
   if (!db) { programsReady = sessionsReady = templatesReady = slotsReady = programsError = sessionsError = templatesError = slotsError = true; renderSchedule(); return; }
   stopPrograms = onSnapshot(query(collection(db, 'programs'), where('organizationId', '==', orgId)), snapshot => {
     if (generation !== subscriptionGeneration) return;
@@ -146,6 +171,16 @@ function subscribeToData(userProfile: UserProfile) {
     slots = snapshot.docs.map(item => ({ ...item.data(), id: item.id } as WorkshopSlot));
     slotsReady = true; slotsError = false; renderSchedule();
   }, () => { if (generation !== subscriptionGeneration) return; slotsReady = slotsError = true; renderSchedule(); });
+  stopNotifications = onSnapshot(query(collection(db, 'notifications'), where('userId', '==', userProfile.uid), orderBy('createdAt', 'desc'), limit(100)), snapshot => {
+    if (generation !== subscriptionGeneration) return;
+    notifications = snapshot.docs.map(item => ({ ...item.data(), id: item.id } as AppNotification));
+    if (notificationsReady) snapshot.docChanges().filter(change => change.type === 'added').forEach(change => {
+      const item = { ...change.doc.data(), id: change.doc.id } as AppNotification;
+      if (item.organizationId === orgId && item.workshopSlotId) showDeviceNotification(item);
+    });
+    notificationsReady = true;
+    renderNotifications();
+  }, () => { if (generation !== subscriptionGeneration) return; notificationsReady = true; byId('alerts-list').innerHTML = '<p class="empty-schedule">Alertes indisponibles. Vérifiez votre connexion Edufy.</p>'; });
 }
 
 async function acceptProfile(uid: string) {
@@ -181,6 +216,11 @@ byId('login-form').addEventListener('submit', async event => {
   } catch { setLoginError('Connexion impossible. Vérifiez vos identifiants Edufy.'); }
 });
 byId('sign-out').addEventListener('click', () => { if (auth) void signOut(auth); });
+byId('alerts-permission').addEventListener('click', async () => {
+  if (!('Notification' in window)) return;
+  await Notification.requestPermission();
+  updateNotificationPermissionButton();
+});
 document.addEventListener('change', event => {
   const target = event.target as HTMLInputElement;
   const id = target?.dataset?.task;
@@ -189,6 +229,11 @@ document.addEventListener('change', event => {
   saveTasks(); renderTasks();
 });
 document.addEventListener('click', event => {
+  const alertId = (event.target as HTMLElement)?.dataset?.readAlert;
+  if (alertId && db && notifications.some(item => item.id === alertId && item.userId === profile?.uid)) {
+    void updateDoc(doc(db, 'notifications', alertId), { read: true }).catch(() => { byId('alerts-list').insertAdjacentHTML('afterbegin', '<p class="empty-schedule">Impossible de marquer cette alerte comme lue.</p>'); });
+    return;
+  }
   const id = (event.target as HTMLElement)?.dataset?.priority;
   if (!id) return;
   tasks = tasks.map(task => task.id === id ? { ...task, priority: task.priority === 'high' ? 'normal' : 'high' } : task);

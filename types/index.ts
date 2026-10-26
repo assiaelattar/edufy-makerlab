@@ -1025,6 +1025,8 @@ export interface PickupEntry {
 export interface AppNotification {
   id: string;
   userId: string;
+  organizationId?: string;
+  workshopSlotId?: string;
   type: 'info' | 'success' | 'warning' | 'error';
   title: string;
   message: string;

@@ -49,6 +49,11 @@ const reassignedSlot = [{
 assert.equal(projectInstructorWeek([program], [], 'makerlab', 'ayoub', monday, [template], reassignedSlot).filter(item => item.kind === 'workshop').length, 0);
 assert.equal(projectInstructorWeek([program], [], 'makerlab', 'ahmed', monday, [template], reassignedSlot).filter(item => item.kind === 'workshop').length, 1);
 assert.equal(projectInstructorWeek([program], [], 'other-tenant', 'ahmed', monday, [template], reassignedSlot).length, 0);
+const movedSlot = [{ ...reassignedSlot[0], date: '2026-10-27', startTime: '18:00', endTime: '19:30' }] as WorkshopSlot[];
+assert.deepEqual(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [template], movedSlot).map(item => item.date), ['2026-10-27']);
+assert.equal(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [template], movedSlot)[0].title, 'Discovery robotics');
+const pausedTemplate = { ...template, isActive: false } as WorkshopTemplate;
+assert.equal(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [pausedTemplate], movedSlot).length, 1);
 const adHocSlot = [{ ...reassignedSlot[0], id: 'ad-hoc', workshopTemplateId: 'none', title: 'Discovery lab' }] as WorkshopSlot[];
 assert.equal(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [], adHocSlot)[0].title, 'Discovery lab');
 console.log('Instructor Pass schedule smoke passed');

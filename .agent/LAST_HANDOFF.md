@@ -8,6 +8,8 @@ The focused Pickup branch keeps the existing staff `released` → selected guard
 
 This current-main candidate preserves the atomic, retry-safe public booking service and French translation safeguards. It adds requested-status booking, dated workshop and program-group instructor assignment, a manual French WhatsApp draft, and Instructor Pass. The staged Firestore rule accepts both confirmed and requested while old clients may still be open. Production build, 62 Education checks, focused smokes and requested/legacy booking emulator checks pass; touched types were reconciled with current main. Production rules and frontend must be coordinated before live acceptance; explicit approval is still needed for the protected `firestore.rules` path under `$hostinger-main-release`. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
 
+The follow-up source commit `e314589` is included in this candidate: dated slots project despite later template recurrence changes; assignment, reassignment and booking status changes create durable Pass alerts atomically. The user's earlier localhost Pass test was served from an older checkout. The corrected clean feature checkout is now on port 5192. A local Auth/Firestore emulator verified atomic assignment, recipient inbox query and read acknowledgement. Real notification acceptance and closed-app push remain open.
+
 ---
 
 ## Parent family accounts and public booking repair — 2026-10-24

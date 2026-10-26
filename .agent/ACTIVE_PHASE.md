@@ -1,3 +1,9 @@
+## Workshop assignment visibility and alerts follow-up — 2026-10-26
+
+The user's 5192 Pass had run an older checkout; that local server was replaced and now serves this clean candidate, also available on port 5174. Dated slots are projected directly and instructor alerts are persisted for assignment, reassignment and booking state changes. Keep this focused phase local until the coordinated Firestore/client rollout and real instructor acceptance. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+---
+
 ## Workshop request → instructor local phase — 2026-10-26
 
 The dated workshop assignment and request/confirmation UI candidate is complete locally. The Instructor Pass projection, French WhatsApp draft and Workshops theme repair are included. Stop at this module boundary; coordinate the Firestore rule and frontend rollout before any live test. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.

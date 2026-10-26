@@ -327,24 +327,24 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                 if (bookingData.organizationId !== currentOrganization.id) throw new Error('Booking ownership changed.');
                 if (bookingData.status === 'requested' && !['requested', 'confirmed', 'cancelled'].includes(newStatus)) throw new Error('CONFIRMATION_REQUIRED');
 
+                const slotRef = bookingData.workshopSlotId ? doc(firestore, 'workshop_slots', bookingData.workshopSlotId) : null;
+                const slotSnapshot = slotRef ? await transaction.get(slotRef) : null;
+                const assignedSlot = slotSnapshot?.exists() ? slotSnapshot.data() as WorkshopSlot : null;
+                if (assignedSlot && assignedSlot.organizationId !== currentOrganization.id) throw new Error('Slot ownership changed.');
                 if (newStatus === 'confirmed' && bookingData.status !== 'confirmed') {
-                    const assignment = await transaction.get(doc(firestore, 'workshop_slots', bookingData.workshopSlotId));
-                    const assignedSlot = assignment.exists() ? assignment.data() as WorkshopSlot : null;
                     if (!assignedSlot || assignedSlot.organizationId !== currentOrganization.id || !assignedSlot.instructorId || assignedSlot.status === 'cancelled') {
                         throw new Error('ASSIGNMENT_REQUIRED');
                     }
                 }
 
                 const previousStatus = bookingData.status;
+                if (previousStatus === newStatus) return;
                 const releasesSeat = previousStatus !== 'cancelled' && newStatus === 'cancelled';
                 const restoresSeat = previousStatus === 'cancelled' && newStatus !== 'cancelled';
                 let slotUpdate: { ref: ReturnType<typeof doc>; bookedCount: number; status: 'available' | 'full' | 'cancelled' } | null = null;
 
-                if ((releasesSeat || restoresSeat) && bookingData.workshopSlotId) {
-                    const slotRef = doc(firestore, 'workshop_slots', bookingData.workshopSlotId);
-                    const slotSnapshot = await transaction.get(slotRef);
-                    if (slotSnapshot.exists()) {
-                        const slotData = slotSnapshot.data() as { organizationId?: string; bookedCount?: number; capacity?: number; status?: 'available' | 'full' | 'cancelled' };
+                if ((releasesSeat || restoresSeat) && slotRef && assignedSlot) {
+                        const slotData = assignedSlot;
                         if (slotData.organizationId !== currentOrganization.id) throw new Error('Slot ownership changed.');
                         const capacity = Math.max(1, Number(slotData.capacity) || 1);
                         const currentCount = Math.max(0, Number(slotData.bookedCount) || 0);
@@ -355,11 +355,23 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                             bookedCount,
                             status: slotData.status === 'cancelled' ? 'cancelled' : bookedCount >= capacity ? 'full' : 'available'
                         };
-                    }
                 }
 
                 if (slotUpdate) transaction.update(slotUpdate.ref, { bookedCount: slotUpdate.bookedCount, status: slotUpdate.status });
                 transaction.update(bookingRef, { status: newStatus, statusUpdatedAt: serverTimestamp() });
+                if (assignedSlot?.instructorId) {
+                    const stateLabels: Partial<Record<Booking['status'], string>> = { confirmed: 'confirmée', cancelled: 'annulée', attended: 'terminée', 'no-show': 'absence signalée', reminder_sent: 'rappel préparé', feedback_requested: 'avis demandé', converted: 'inscription réalisée', requested: 'à confirmer' };
+                    transaction.set(doc(collection(firestore, 'notifications')), {
+                        userId: assignedSlot.instructorId,
+                        organizationId: currentOrganization.id,
+                        workshopSlotId: bookingData.workshopSlotId,
+                        type: newStatus === 'cancelled' || newStatus === 'no-show' ? 'warning' : 'info',
+                        title: newStatus === 'cancelled' ? 'Réservation annulée' : 'Atelier mis à jour',
+                        message: `${bookingData.kidName} · ${assignedSlot.date} ${assignedSlot.startTime}–${assignedSlot.endTime} · ${stateLabels[newStatus] || newStatus}.`,
+                        read: false,
+                        createdAt: serverTimestamp()
+                    });
+                }
             });
         } catch (error) {
             console.error('Workshop booking status update failed', error);
@@ -386,12 +398,32 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
         }
         setSavingSlotIds(ids => [...ids, slot.slotId!]);
         try {
-            await updateDoc(doc(db, 'workshop_slots', slot.slotId), {
-                instructorId: instructor?.uid || '',
-                instructorName: instructor?.name || '',
-                instructorAssignedAt: serverTimestamp(),
-                instructorAssignedBy: user?.uid || ''
+            await runTransaction(db, async transaction => {
+                const slotRef = doc(db!, 'workshop_slots', slot.slotId!);
+                const snapshot = await transaction.get(slotRef);
+                if (!snapshot.exists()) throw new Error('Cette séance n’existe plus.');
+                const latest = snapshot.data() as WorkshopSlot;
+                if (latest.organizationId !== currentOrganization.id) throw new Error('Cette séance appartient à une autre organisation.');
+                if ((latest.instructorId || '') === instructorId) return;
+                transaction.update(slotRef, {
+                    instructorId: instructor?.uid || '',
+                    instructorName: instructor?.name || '',
+                    instructorAssignedAt: serverTimestamp(),
+                    instructorAssignedBy: user?.uid || ''
+                });
+                const detail = `${slot.templateTitle} · ${latest.date} ${latest.startTime}–${latest.endTime}`;
+                if (latest.instructorId) transaction.set(doc(collection(db!, 'notifications')), {
+                    userId: latest.instructorId, organizationId: currentOrganization.id, workshopSlotId: slot.slotId,
+                    type: 'warning', title: 'Atelier réaffecté', message: `Votre affectation a changé : ${detail}.`,
+                    read: false, createdAt: serverTimestamp()
+                });
+                if (instructor?.uid) transaction.set(doc(collection(db!, 'notifications')), {
+                    userId: instructor.uid, organizationId: currentOrganization.id, workshopSlotId: slot.slotId,
+                    type: 'info', title: 'Nouvel atelier affecté', message: `${detail}. Retrouvez-le dans votre semaine.`,
+                    read: false, createdAt: serverTimestamp()
+                });
             });
+            await showAlert('Affectation enregistrée', instructor ? `${instructor.name} recevra l’atelier dans son Pass et une alerte.` : 'La séance est maintenant sans instructeur. L’ancien instructeur a été averti.', 'success');
         } catch (error) {
             console.error('Workshop instructor assignment failed', error);
             await showAlert('Affectation non enregistrée', 'Vérifiez votre connexion et vos droits, puis réessayez.', 'danger');
@@ -846,7 +878,7 @@ export const WorkshopsView = ({ onConvertProspect }: { onConvertProspect: (atten
                                                                         {teamMembers.filter(member => member.organizationId === currentOrganization?.id && member.status === 'active' && member.uid && ['instructor', 'admin', 'owner'].includes(member.role)).map(member => <option key={member.uid} value={member.uid}>{member.name}</option>)}
                                                                     </select>
                                                                 </label>
-                                                                <p className="max-w-xs text-xs text-slate-500">{slot.slotId ? 'Cette affectation apparaît dans le Pass de l’instructeur.' : 'La séance sera affectable dès la première demande.'}</p>
+                                                                <p className="max-w-xs text-xs text-slate-500" aria-live="polite">{slot.slotId ? <>Affectation actuelle : <strong>{workshopSlots.find(item => item.id === slot.slotId)?.instructorName || 'personne'}</strong>. Changez le choix pour réaffecter ; les deux instructeurs seront avertis.</> : 'La séance sera affectable dès la première demande.'}</p>
                                                             </div>
                                                             <div className="flex justify-between items-center mb-4">
                                                                 <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attendee List</h5>

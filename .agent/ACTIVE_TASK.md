@@ -1,3 +1,9 @@
+## Workshop assignment visibility follow-up — 2026-10-26
+
+Local candidate and alert inbox complete. Port 5192 now serves the current worktree. Next: release integration and a real account check in the current Pass, followed by background push planning if closed-app delivery is required. See the workshop handoff document.
+
+---
+
 ## Workshop request → instructor handoff — 2026-10-26
 
 Local candidate implemented and verified. Next task: coordinated rules/client release and designated real-account acceptance. Preserve the worktree until release integration. Details and gaps: `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.

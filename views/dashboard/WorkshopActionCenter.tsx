@@ -37,7 +37,8 @@ export const WorkshopActionCenter = () => {
     const setBookingBusy = (bookingId: string, busy: boolean) => setBusyBookingIds(ids => busy ? [...new Set([...ids, bookingId])] : ids.filter(id => id !== bookingId));
 
     const handleUpdateStatus = async (booking: Booking, status: Booking['status']) => {
-        if (!db || !currentOrganization || !can('workshops.manage') || busyBookingIds.includes(booking.id)) return false;
+        const firestore = db;
+        if (!firestore || !currentOrganization || !can('workshops.manage') || busyBookingIds.includes(booking.id)) return false;
         if (!isOwnedBooking(booking)) {
             await alert('Booking unavailable', 'This booking is not available in the active organization.', 'warning');
             return false;
@@ -55,37 +56,52 @@ export const WorkshopActionCenter = () => {
 
         setBookingBusy(booking.id, true);
         try {
-            await runTransaction(db, async transaction => {
-                const bookingRef = doc(db, 'bookings', booking.id);
+            await runTransaction(firestore, async transaction => {
+                const bookingRef = doc(firestore, 'bookings', booking.id);
                 const bookingSnapshot = await transaction.get(bookingRef);
                 if (!bookingSnapshot.exists()) throw new Error('Booking no longer exists.');
                 const bookingData = bookingSnapshot.data() as Booking;
                 if (bookingData.organizationId !== currentOrganization.id) throw new Error('Booking ownership changed.');
+                if (bookingData.status === status) return;
 
                 const releasesSeat = bookingData.status !== 'cancelled' && status === 'cancelled';
                 const restoresSeat = bookingData.status === 'cancelled' && status !== 'cancelled';
                 let slotUpdate: { ref: ReturnType<typeof doc>; bookedCount: number; status: 'available' | 'full' | 'cancelled' } | null = null;
 
-                if ((releasesSeat || restoresSeat) && bookingData.workshopSlotId) {
-                    const slotRef = doc(db, 'workshop_slots', bookingData.workshopSlotId);
+                let assignedInstructorId = '';
+                let slotDate = '';
+                let slotTime = '';
+                if (bookingData.workshopSlotId) {
+                    const slotRef = doc(firestore, 'workshop_slots', bookingData.workshopSlotId);
                     const slotSnapshot = await transaction.get(slotRef);
                     if (slotSnapshot.exists()) {
-                        const slotData = slotSnapshot.data() as { organizationId?: string; bookedCount?: number; capacity?: number; status?: 'available' | 'full' | 'cancelled' };
+                        const slotData = slotSnapshot.data() as { organizationId?: string; bookedCount?: number; capacity?: number; status?: 'available' | 'full' | 'cancelled'; instructorId?: string; date?: string; startTime?: string };
                         if (slotData.organizationId && slotData.organizationId !== currentOrganization.id) throw new Error('Slot ownership changed.');
-                        const capacity = Math.max(1, Number(slotData.capacity) || 1);
-                        const currentCount = Math.max(0, Number(slotData.bookedCount) || 0);
-                        if (restoresSeat && currentCount >= capacity) throw new Error('CAPACITY_FULL');
-                        const bookedCount = Math.max(0, currentCount + (restoresSeat ? 1 : -1));
-                        slotUpdate = {
-                            ref: slotRef,
-                            bookedCount,
-                            status: slotData.status === 'cancelled' ? 'cancelled' : bookedCount >= capacity ? 'full' : 'available'
-                        };
+                        assignedInstructorId = slotData.instructorId || '';
+                        slotDate = slotData.date || '';
+                        slotTime = slotData.startTime || '';
+                        if (releasesSeat || restoresSeat) {
+                            const capacity = Math.max(1, Number(slotData.capacity) || 1);
+                            const currentCount = Math.max(0, Number(slotData.bookedCount) || 0);
+                            if (restoresSeat && currentCount >= capacity) throw new Error('CAPACITY_FULL');
+                            const bookedCount = Math.max(0, currentCount + (restoresSeat ? 1 : -1));
+                            slotUpdate = {
+                                ref: slotRef,
+                                bookedCount,
+                                status: slotData.status === 'cancelled' ? 'cancelled' : bookedCount >= capacity ? 'full' : 'available'
+                            };
+                        }
                     }
                 }
 
                 if (slotUpdate) transaction.update(slotUpdate.ref, { bookedCount: slotUpdate.bookedCount, status: slotUpdate.status });
                 transaction.update(bookingRef, { status, statusUpdatedAt: serverTimestamp() });
+                if (assignedInstructorId) transaction.set(doc(collection(firestore, 'notifications')), {
+                    userId: assignedInstructorId, organizationId: currentOrganization.id, workshopSlotId: bookingData.workshopSlotId,
+                    type: 'warning', title: 'Réservation annulée',
+                    message: `${bookingData.kidName} · ${slotDate} ${slotTime} · réservation annulée.`,
+                    read: false, createdAt: serverTimestamp()
+                });
             });
             return true;
         } catch (error) {
@@ -259,7 +275,8 @@ export const WorkshopActionCenter = () => {
     };
 
     const handleCompleteFollowUp = async (status: 'feedback_received' | 'not_interested') => {
-        if (!selectedBooking || !db || !currentOrganization || busyBookingIds.includes(selectedBooking.id)) return;
+        const firestore = db;
+        if (!selectedBooking || !firestore || !currentOrganization || busyBookingIds.includes(selectedBooking.id)) return;
         if (feedbackNotes.trim().length < 3) {
             await alert('Follow-up note required', 'Add a short note before completing this follow-up.', 'warning');
             return;
@@ -278,8 +295,8 @@ export const WorkshopActionCenter = () => {
         const booking = selectedBooking;
         setBookingBusy(booking.id, true);
         try {
-            await runTransaction(db, async transaction => {
-                const bookingRef = doc(db, 'bookings', booking.id);
+            await runTransaction(firestore, async transaction => {
+                const bookingRef = doc(firestore, 'bookings', booking.id);
                 const snapshot = await transaction.get(bookingRef);
                 if (!snapshot.exists() || snapshot.data().organizationId !== currentOrganization.id) throw new Error('Booking is no longer available.');
                 transaction.update(bookingRef, {

@@ -81,7 +81,7 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
     }
   }
   for (const template of templates) {
-    if (template.organizationId !== organizationId) continue;
+    if (template.organizationId !== organizationId || !template.instructorId || template.isActive === false) continue;
     const startTime = template.recurrencePattern?.time;
     if (!startTime) continue;
     for (const date of dates) {
@@ -90,23 +90,20 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
         ? template.recurrencePattern.date === dateKey
         : template.recurrenceType === 'weekly' && (template.recurrencePattern.days || []).includes(getDay(date));
       if (!matchesDate) continue;
-      const slot = slots.find(item => item.organizationId === organizationId && item.workshopTemplateId === template.id && item.date === dateKey && item.startTime === startTime);
-      if (slot?.status === 'cancelled') continue;
-      if (!slot && template.isActive === false) continue;
-      const assignedId = slot && 'instructorId' in slot ? slot.instructorId : template.instructorId;
-      if (assignedId !== instructorId) continue;
-      // The dated calendar assignment overrides the reusable template default.
+      // A real dated slot owns this occurrence even if its time differs from the current template.
+      if (slots.some(item => item.organizationId === organizationId && item.workshopTemplateId === template.id && item.date === dateKey)) continue;
+      if (template.instructorId !== instructorId) continue;
       if (tenantSessions.some(session => session.date === dateKey && session.startTime === startTime && (session.instructorId || session.status === 'cancelled') && (
-        session.workshopTemplateId === template.id || (slot && session.workshopSlotId === slot.id)
+        session.workshopTemplateId === template.id
       ))) continue;
       result.push({
         id: `workshop:${template.id}:${dateKey}:${startTime}`,
         date: dateKey,
         startTime,
-        endTime: slot?.endTime || addMinutes(startTime, template.duration),
+        endTime: addMinutes(startTime, template.duration),
         title: template.title,
-        detail: slot?.instructorId ? 'Atelier · séance affectée' : 'Atelier · affectation par défaut',
-        location: slot?.location || '',
+        detail: 'Atelier · affectation par défaut',
+        location: '',
         source: 'template',
         kind: 'workshop',
       });
@@ -114,14 +111,14 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
   }
   for (const slot of slots) {
     if (slot.organizationId !== organizationId || slot.instructorId !== instructorId || slot.status === 'cancelled' || !dateKeys.has(slot.date)) continue;
-    if (templates.some(template => template.organizationId === organizationId && template.id === slot.workshopTemplateId)) continue;
-    if (tenantSessions.some(session => session.workshopSlotId === slot.id)) continue;
+    const template = templates.find(item => item.organizationId === organizationId && item.id === slot.workshopTemplateId);
+    if (tenantSessions.some(session => (session.workshopSlotId === slot.id || (session.workshopTemplateId === slot.workshopTemplateId && session.date === slot.date && session.startTime === slot.startTime)) && (session.instructorId || session.status === 'cancelled'))) continue;
     result.push({
       id: `slot:${slot.id}`,
       date: slot.date,
       startTime: slot.startTime,
       endTime: slot.endTime,
-      title: slot.title || 'Atelier d’essai',
+      title: slot.title || template?.title || 'Atelier d’essai',
       detail: 'Atelier · séance affectée',
       location: slot.location || '',
       source: 'slot',
