@@ -746,7 +746,7 @@ service cloud.firestore {
         request.resource.data.workshopSlotId is string &&
         workshopTemplateMatchesOrg(request.resource.data.workshopTemplateId, request.resource.data.organizationId) &&
         workshopSlotMatchesOrgAfter(request.resource.data.workshopSlotId, request.resource.data.organizationId, request.resource.data.workshopTemplateId, bookingId) &&
-        request.resource.data.status == 'confirmed' &&
+        request.resource.data.status in ['confirmed', 'requested'] &&
         request.resource.data.bookedAt == request.time;
     }
 
