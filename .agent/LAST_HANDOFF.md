@@ -757,3 +757,8 @@ The Parents module now groups the directory around contact-based family review r
 The trusted parent API keeps an existing `parentLoginInfo` primary account intact and adds the caregiver to `parentUids` plus canonical guardian links. SparkQuest therefore shows the learner in both authorized family sessions. Directory and reset evidence accept these exact secondary links while continuing to fail closed on foreign or malformed records. Production build, endpoint syntax, whitespace checks, and the isolated Auth/Firestore suite pass. No real family record was modified during QA.
 
 ---
+## Parent multi-child local repair — 2026-10-26
+
+Read `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`. A source learner's stale parent label no longer blocks an exact-account, staff-verified transfer to an active parent family account. Directory rows backed by recorded learner pointers show a recovery state when links are incomplete. The real family records were inspected read-only, with separate suffix logins and conflicting parent labels; no account was moved or disabled. Localhost remains blocked by the trusted API origin policy. The integrated main-based Auth/Firestore emulator and Edufy build pass; source SparkQuest family smokes pass. Repository-wide TypeScript retains unrelated legacy failures. The user chose to keep release candidates local pending acceptance. After exact retained-login confirmation, designated staff and parent-session checks, physical-phone role checks, and explicit protected-API release approval, coordinate the Edufy API/client release.
+
+---

@@ -7,6 +7,7 @@ export interface ParentDirectoryAccount {
   email: string;
   parentName: string;
   children: Array<{ id: string; name: string }>;
+  needsRecovery?: boolean;
 }
 
 export interface ParentAccessResult {

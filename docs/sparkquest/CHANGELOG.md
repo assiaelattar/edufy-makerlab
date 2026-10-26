@@ -169,3 +169,6 @@
 - Confirmed learner final submission; canonical profile/Auth UID grouping and explicit accessible progress/review buttons.
 - 45 domain assertions, all prior domain suites, localhost demo Auth/Firestore service/concurrency tests, TypeScript, both builds and desktop/phone/keyboard browser QA pass.
 - Local only. Real acceptance, review-field rule hardening and subsequent product phases remain open. Details: REVIEW_RELIABILITY_PHASE_1.md.
+# 2026-10-26 — Edufy parent multi-child repair candidate
+
+Edufy's trusted parent-access path can transfer an exactly selected single-child legacy parent login even when its old parent label is wrong, then write canonical guardian links for the destination account. The staff directory shows incomplete accounts with a recovery marker. This is a local API/client candidate; no real family data was changed. See `../parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`.

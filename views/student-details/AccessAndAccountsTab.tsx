@@ -115,9 +115,10 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
     try {
       const result = await manageParentAccess({
         action: 'lookup', studentId: student.id, organizationId,
-        reuseParentEmail: exactParentEmail, parentName: verifiedParentName, relationshipVerified
+        reuseParentEmail: exactParentEmail, relationshipVerified
       });
       setExactLookup(result);
+      if (result.parentName) setVerifiedParentName(result.parentName);
     } catch (error: any) {
       await showAlert('Could not verify parent login', error?.message || 'Review the exact login ID.', 'danger');
     } finally { setIsLookingUpParent(false); }
@@ -335,7 +336,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 disabled={isGeneratingAccess || !canManageParentAccess}
                 className="edu-parent-access-action edu-parent-access-action--primary min-h-10 w-full rounded-lg border px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50"
               >
-                Create new SparkQuest login ID and password
+                Review family login options
               </button>
               <p className="text-[11px] text-slate-400">Need to share access later? Reissue a fresh password here whenever needed. The previous password stops working and the learner’s work stays linked to this login.</p>
               <button type="button" onClick={() => shareAccount('parent', 'whatsapp')} className="edu-parent-access-action edu-parent-access-action--whatsapp flex min-h-11 w-full items-center justify-center gap-1 rounded-lg border px-2 text-xs font-bold"><MessageCircle size={14} /> Share SparkQuest sign-in by WhatsApp</button>
@@ -350,8 +351,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
                 disabled={isGeneratingAccess || !canManageParentAccess}
                 className="edu-parent-access-action edu-parent-access-action--primary flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-colors"
               >
-                {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Create Parent
-                Account
+                {isGeneratingAccess ? <Loader2 size={14} className="animate-spin" /> : <Key size={14} />} Set up parent access
               </button>
             </div>
           )}
@@ -378,15 +378,16 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
       </Modal>
       <Modal designSystem isOpen={isParentChoiceModalOpen} onClose={() => setIsParentChoiceModalOpen(false)} title="Parent access">
         <div className="space-y-4">
-          <p className="text-sm text-slate-300">Enter the verified parent’s real name and choose their MakerLab login ID. A learner surname alone does not verify a parent. Choosing an existing parent links this learner to that exact account.</p>
-          {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">This replaces a recorded parent account for all of its linked learners. If the recorded login belongs to staff, Edufy will ask separately before detaching this learner; the staff account stays active.</p>}
+          <p className="text-sm text-slate-300">Verify the real parent relationship, then choose the exact existing family login when linking siblings. A shared surname alone does not verify a parent.</p>
+          {student.parentLoginInfo?.uid && <p className="rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-xs leading-5 text-amber-100">Creating a separate replacement login moves all learners linked to the old account. Moving this learner to an existing family login requires the old account to belong only to this learner. If the recorded login belongs to staff, Edufy handles that case separately and keeps staff access active.</p>}
           <div className="rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-slate-200">
             <span className="block text-[11px] font-bold uppercase tracking-wide text-slate-400">Family display label</span>
             <strong>{recordedRealParentName(student.parentName) || 'Enter the verified parent name below'}</strong>
           </div>
-          {!recordedRealParentName(student.parentName) && <label className="block text-xs font-bold uppercase text-slate-300">Verified parent full name
-            <input value={verifiedParentName} onChange={event => { setVerifiedParentName(event.target.value); if (!aliasManuallyEdited) setAliasBasis(parentAliasFromName(event.target.value)); }} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="Parent’s real full name" />
-          </label>}
+          <label className="block text-xs font-bold uppercase text-slate-300">Verified parent name or family label
+            <input value={verifiedParentName} onChange={event => { setVerifiedParentName(event.target.value); if (!aliasManuallyEdited) setAliasBasis(parentAliasFromName(event.target.value)); }} maxLength={120} className="mt-2 min-h-11 w-full rounded-lg border border-slate-500 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="Verified parent or family label" />
+          </label>
+          <p className="text-xs leading-5 text-amber-200">If the recorded name is wrong, select the exact existing family login below. Edufy will replace this learner’s old parent label only after you verify the relationship.</p>
           <label className="block text-xs font-bold uppercase text-slate-400" htmlFor="parent-alias-basis">Login alias basis</label>
           <input id="parent-alias-basis" value={aliasBasis} onChange={event => { setAliasBasis(event.target.value); setAliasManuallyEdited(true); setSeparateParentVerified(false); }} maxLength={80} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white" placeholder="Ajlane" />
           <p className="text-xs text-slate-300">Preview: <strong className="break-all text-teal-300">{aliasPreview ? `p.${aliasPreview}@makerlab.academy` : 'Enter an alias basis'}</strong>. An existing login gets a numeric suffix.</p>
@@ -398,6 +399,7 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             <ul className="mt-2 list-disc pl-5">{aliasFamilyCandidates.map(account => <li key={account.uid}>{account.email} · {account.children.map(child => child.name).join(', ')}</li>)}</ul>
           </div>}
           {aliasFamilyCandidates.length > 0 && <label className="flex items-start gap-2 text-xs leading-5 text-slate-300"><input type="checkbox" checked={separateParentVerified} onChange={event => setSeparateParentVerified(event.target.checked)} className="mt-1" />I checked these accounts and verified this is a different parent who needs a separate login.</label>}
+          <p className="text-xs leading-5 text-sky-200">Check the existing family logins below before creating another account for a sibling.</p>
           <button 
             onClick={async () => {
               const result = await handleCreateParentAccess(student.parentLoginInfo?.uid ? 'replace' : 'issue', undefined, aliasBasis, relationshipVerified, verifiedParentName, undefined, separateParentVerified);
@@ -406,31 +408,32 @@ export const AccessAndAccountsTab: React.FC<AccessAndAccountsTabProps> = ({
             disabled={!verifiedParentName.trim() || !aliasPreview || !relationshipVerified || isDirectoryLoading || (aliasFamilyCandidates.length > 0 && !separateParentVerified) || isGeneratingAccess || !canManageParentAccess}
             className="min-h-10 w-full rounded-lg border border-teal-300/30 bg-teal-500 px-4 py-2.5 font-bold text-slate-950 transition-colors hover:bg-teal-400 disabled:opacity-50"
           >
-            {student.parentLoginInfo?.uid ? 'Replace parent login' : 'Issue new parent login'}
+            {student.parentLoginInfo?.uid ? 'Create a separate replacement login' : 'Create a separate parent login'}
           </button>
           <div className="border-t border-white/10 pt-4">
             <label className="mb-2 block text-xs font-bold uppercase text-slate-300">{student.parentLoginInfo?.uid ? 'Move to an existing family login' : 'Link an existing parent login'}</label>
-            <p className="mb-2 text-xs leading-5 text-slate-300">Only working SparkQuest family accounts appear here. An old enrollment contact email will not appear; use <strong>Create new parent login</strong> above.</p>
+            <p className="mb-2 text-xs leading-5 text-slate-300">Family logins and recorded older IDs appear here. Incomplete records are marked for recovery and cannot receive another learner until repaired.</p>
             {isDirectoryLoading && <p className="mt-2 text-xs text-slate-300">Loading verified family logins…</p>}
             {directoryError && <p className="mt-2 text-xs text-amber-200">{directoryError} You can still verify an exact login ID below.</p>}
             {!isDirectoryLoading && !directoryError && directoryAccounts.every(account => account.uid === student.parentLoginInfo?.uid) && <p className="mt-2 text-xs text-slate-300">No other verified family login is available in this workspace.</p>}
-            {directoryAccounts.some(account => account.uid !== student.parentLoginInfo?.uid) && <select value={reuseParentUid} onChange={event => { setReuseParentUid(event.target.value); setExactLookup(null); }} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
+            {directoryAccounts.some(account => account.uid !== student.parentLoginInfo?.uid) && <select value={reuseParentUid} onChange={event => { const account = directoryAccounts.find(item => item.uid === event.target.value); setReuseParentUid(event.target.value); setExactLookup(null); if (account) setVerifiedParentName(account.parentName); }} className="min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm text-white">
               <option value="">Choose the exact account</option>
-              {directoryAccounts.filter(account => account.uid !== student.parentLoginInfo?.uid).map(account => <option key={account.uid} value={account.uid}>{account.parentName} · {account.email} · {account.children.map(child => child.name).join(', ')}</option>)}
+              {directoryAccounts.filter(account => account.uid !== student.parentLoginInfo?.uid).map(account => <option key={account.uid} value={account.uid}>{account.parentName} · {account.email} · {account.children.map(child => child.name).join(', ')}{account.needsRecovery ? ' · Recovery needed' : ''}</option>)}
             </select>}
             {selectedParentAccount && <div className="mt-3 rounded-lg border border-slate-700 bg-slate-900 p-3 text-xs text-slate-300">
               <p><strong className="text-white">Recorded parent:</strong> {selectedParentAccount.parentName}</p>
               <p><strong className="text-white">Linked learners:</strong> {selectedParentAccount.children.map(child => child.name).join(', ')}</p>
               <p className="break-all"><strong className="text-white">Exact parent UID:</strong> {selectedParentAccount.uid}</p>
               <p className="mt-2 text-amber-200">Confirm this is the same real parent of {student.name}. The service checks its active parent profile and guardian link.</p>
-              {student.parentName?.trim() && student.parentName.trim() !== selectedParentAccount.parentName && <p className="mt-2 rounded border border-amber-400/50 bg-amber-400/10 p-2 text-amber-100">This learner records “{student.parentName.trim()}” as the parent, while this login records “{selectedParentAccount.parentName}”. Verify the real parent and correct the learner’s parent name in the student profile before moving access.</p>}
+              {student.parentName?.trim() && student.parentName.trim() !== selectedParentAccount.parentName && <p className="mt-2 rounded border border-amber-400/50 bg-amber-400/10 p-2 text-amber-100">This learner records “{student.parentName.trim()}” as the parent, while this login records “{selectedParentAccount.parentName}”. Verify the real relationship; Edufy will update the learner’s parent label when access moves.</p>}
+              {selectedParentAccount.needsRecovery && <p className="mt-2 text-amber-200">This older account needs recovery from one of its listed learner profiles before another learner can move to it.</p>}
             </div>}
             {student.parentLoginInfo?.uid && <p className="mt-3 text-xs leading-5 text-amber-200">The older login will be disabled after this learner moves. This action requires that it belongs only to this learner.</p>}
-            <button type="button" disabled={!reuseParentUid || !verifiedParentName.trim() || verifiedParentName.trim() !== selectedParentAccount?.parentName || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess(student.parentLoginInfo?.uid ? 'transfer' : 'link', reuseParentUid, undefined, relationshipVerified, verifiedParentName); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{student.parentLoginInfo?.uid ? 'Move to selected family login' : 'Link selected parent'}</button>
+            <button type="button" disabled={!reuseParentUid || selectedParentAccount?.needsRecovery || !verifiedParentName.trim() || verifiedParentName.trim() !== selectedParentAccount?.parentName || !relationshipVerified || isGeneratingAccess || !canManageParentAccess} onClick={() => { setIsParentChoiceModalOpen(false); handleCreateParentAccess(student.parentLoginInfo?.uid ? 'transfer' : 'link', reuseParentUid, undefined, relationshipVerified, verifiedParentName); }} className="mt-3 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{student.parentLoginInfo?.uid ? 'Move to selected family login' : 'Link selected parent'}</button>
             <label className="mt-4 block text-xs font-bold uppercase text-slate-400">Exact existing SparkQuest login ID
               <input type="email" value={exactParentEmail} onChange={event => { setExactParentEmail(event.target.value); setExactLookup(null); }} className="mt-2 min-h-11 w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-sm font-normal normal-case text-white" placeholder="p.parent@makerlab.academy" autoComplete="off" />
             </label>
-            <button type="button" disabled={!exactParentEmail.trim() || !verifiedParentName.trim() || !relationshipVerified || isLookingUpParent || !canManageParentAccess} onClick={() => void lookupExactParent()} className="mt-2 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{isLookingUpParent ? 'Checking…' : 'Verify exact login'}</button>
+            <button type="button" disabled={!exactParentEmail.trim() || !relationshipVerified || isLookingUpParent || !canManageParentAccess} onClick={() => void lookupExactParent()} className="mt-2 min-h-10 w-full rounded-lg border border-slate-600 bg-slate-800 px-4 text-sm font-bold text-white disabled:opacity-50">{isLookingUpParent ? 'Checking…' : 'Verify exact login'}</button>
             {exactLookup && <div className="mt-3 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs leading-5 text-slate-200">
               <strong className="break-all text-white">{exactLookup.email}</strong> · {exactLookup.linkedLearnerCount} linked learner(s)
               {exactLookup.needsRecovery ? <p className="mt-2 text-amber-200">This older login needs recovery on one of its recorded learner profiles before another learner can be linked.</p>

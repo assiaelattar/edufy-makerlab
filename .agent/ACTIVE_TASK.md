@@ -344,4 +344,8 @@ Present the local global shell, Student Details, complete student form and anima
 
 Complete the user-requested family-first Parents module correction and coordinated Edufy client/trusted API release. Preserve generated MakerLab login IDs, explicit relationship verification, tenant boundaries, existing primary family logins, Finance ownership and real family records. Verify the release without creating or modifying a production family.
 
+## Parent multi-child account repair — 2026-10-26
+
+Local candidate fixes the legacy parent-name conflict during exact-account sibling transfer and shows recoverable family logins in the staff directory. Synthetic emulator, SparkQuest family smokes and Edufy build passed in the source checkout. The integrated release candidate remains local under the user's current release hold. No production family write was made. Before a coordinated API/client release, confirm the exact DAKY login to retain and complete staff and parent-session acceptance. See `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`.
+
 ---

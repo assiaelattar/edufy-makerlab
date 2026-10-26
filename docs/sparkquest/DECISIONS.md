@@ -259,3 +259,6 @@ Anonymous kiosk access is disabled. A future kiosk flow must use a short-lived, 
 ## 2026-09-23 — UI direction
 
 The entry experience uses a project-workshop metaphor: clear progress, sturdy typography, grid paper, restrained MakerLab orange, and visible trust language. The design avoids a generic dashboard/login template while remaining responsive and accessible.
+# 2026-10-26 — Correct stale parent labels only during exact verified transfer
+
+A recorded learner parent label is not proof that two children share a guardian. Staff must verify the relationship and choose the exact existing parent UID in the same tenant. When transferring from a source login owned by only that learner, Edufy may replace the stale label with the destination profile label. SparkQuest continues to authorize by canonical guardian links, never a shared surname.

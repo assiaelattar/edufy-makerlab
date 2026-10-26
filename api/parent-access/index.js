@@ -127,12 +127,14 @@ const replaceableFamily = ({ profile, authUser, recorded, uidStudents, links, le
       linkIdMismatch(item, uid)));
 };
 
-const oldTransferFactsValid = ({ profile, recorded, uidStudents, links, learnerLogins }, uid, email, studentId, organizationId, verifiedName) => {
+const oldTransferFactsValid = ({ profile, recorded, uidStudents, links, learnerLogins }, uid, email, studentId, organizationId) => {
   const only = recorded.size === 1 && recorded.docs[0].id === studentId ? recorded.docs[0].data() : null;
   const subjects = only ? new Set(guardianSubjects({ id: studentId, ...only })) : new Set();
+  // A legacy learner may carry an incorrect parent label. Identity is verified
+  // by staff against the exact destination account before this check is used.
   return !!only && only.organizationId === organizationId && only.parentLoginInfo?.uid === uid &&
     only.parentLoginInfo?.email?.toLowerCase() === email.toLowerCase() &&
-    (!cleanName(only.parentName) || cleanName(only.parentName) === verifiedName) && !learnerLogins.size &&
+    !learnerLogins.size &&
     (!profile.exists || (profile.data().role === 'parent' && profile.data().status === 'active' &&
       profile.data().organizationId === organizationId && profile.data().email?.toLowerCase() === email.toLowerCase())) &&
     !uidStudents.docs.some(item => item.id !== studentId || item.data().organizationId !== organizationId) &&
@@ -181,6 +183,7 @@ const parentDirectory = async (db, organizationId) => {
   ]);
   const learnerById = new Map(learners.docs.map(item => [item.id, item.data()]));
   const childrenByParent = new Map();
+  const linkedSubjects = new Set();
   for (const link of links.docs) {
     const data = link.data();
     if (data.status !== 'active' || data.organizationId !== organizationId ||
@@ -189,16 +192,39 @@ const parentDirectory = async (db, organizationId) => {
     if (!learner || (![...(Array.isArray(learner.parentUids) ? learner.parentUids : []), learner.parentLoginInfo?.uid]
       .filter(Boolean).includes(data.parentUid)) ||
       !guardianSubjects({ id: data.studentId, ...learner }).includes(data.subjectId)) continue;
+    linkedSubjects.add(`${data.parentUid}_${data.subjectId}`);
     if (!childrenByParent.has(data.parentUid)) childrenByParent.set(data.parentUid, new Map());
     childrenByParent.get(data.parentUid).set(data.studentId, { id: data.studentId, name: cleanName(learner.name) || 'Learner' });
   }
-  return profiles.docs.flatMap(item => {
+  // Older issued logins may have a learner pointer but no canonical guardian
+  // link yet. Show them to staff as recoverable instead of hiding the account.
+  for (const learnerDoc of learners.docs) {
+    const learner = learnerDoc.data();
+    const uid = learner.parentLoginInfo?.uid;
+    if (!uid || learner.organizationId !== organizationId) continue;
+    if (!childrenByParent.has(uid)) childrenByParent.set(uid, new Map());
+    childrenByParent.get(uid).set(learnerDoc.id, { id: learnerDoc.id, name: cleanName(learner.name) || 'Learner' });
+  }
+  const directory = profiles.docs.flatMap(item => {
     const profile = item.data();
     const children = [...(childrenByParent.get(item.id)?.values() || [])];
     if (profile.role !== 'parent' || profile.status !== 'active' || profile.organizationId !== organizationId ||
       !/^p\.[^@\s]{1,80}@makerlab\.academy$/i.test(profile.email || '') || !cleanName(profile.name) || !children.length) return [];
-    return [{ uid: item.id, email: profile.email, parentName: cleanName(profile.name), children }];
-  }).sort((a, b) => a.parentName.localeCompare(b.parentName) || a.email.localeCompare(b.email));
+    const needsRecovery = profile.accessVersion !== 2 || children.some(child =>
+      guardianSubjects({ id: child.id, ...learnerById.get(child.id) }).some(subjectId => !linkedSubjects.has(`${item.id}_${subjectId}`)));
+    return [{ uid: item.id, email: profile.email, parentName: cleanName(profile.name), children, needsRecovery }];
+  });
+  const profiledUids = new Set(profiles.docs.map(item => item.id));
+  for (const [uid, childrenMap] of childrenByParent) {
+    if (profiledUids.has(uid)) continue;
+    const children = [...childrenMap.values()];
+    const records = children.map(child => learnerById.get(child.id));
+    const email = records[0]?.parentLoginInfo?.email?.toLowerCase();
+    if (!/^p\.[^@\s]{1,80}@makerlab\.academy$/i.test(email || '') ||
+      records.some(record => record?.parentLoginInfo?.uid !== uid || record.parentLoginInfo.email?.toLowerCase() !== email)) continue;
+    directory.push({ uid, email, parentName: verifiedNameCandidate(records[0]?.parentName) || 'Unverified parent', children, needsRecovery: true });
+  }
+  return directory.sort((a, b) => a.parentName.localeCompare(b.parentName) || a.email.localeCompare(b.email));
 };
 
 const repairParentFamily = async (db, authUser, email, organizationId, confirmedName, studentId) => {
@@ -432,7 +458,7 @@ export default async function handler(req, res) {
       const oldUid = student.parentLoginInfo?.uid;
       const oldEmail = student.parentLoginInfo?.email;
       const verifiedName = cleanName(parentName) || recordedParentName;
-      if (!verifiedName || (recordedParentName && verifiedName !== recordedParentName) || !oldUid || !oldEmail || oldUid === reuseParentUid ||
+      if (!verifiedName || !oldUid || !oldEmail || oldUid === reuseParentUid ||
         typeof reuseParentUid !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(reuseParentUid)) {
         return response(res, 409, { ok: false, error: 'Select a different verified parent login for this learner.' });
       }
@@ -453,7 +479,7 @@ export default async function handler(req, res) {
       if (!oldAuth || oldAuth.disabled || (oldAuth.customClaims?.role && oldAuth.customClaims.role !== 'parent') ||
         oldAuth.email?.toLowerCase() !== oldEmail.toLowerCase() ||
         !oldTransferFactsValid({ profile: oldProfile, recorded: linkedStudents, uidStudents: parentUidStudents, links: oldLinks, learnerLogins },
-          oldUid, oldEmail, student.id, organizationId, verifiedName) ||
+          oldUid, oldEmail, student.id, organizationId) ||
         !targetAuth || targetAuth.disabled || !targetAuth.email || !targetProfile.exists ||
         targetProfile.data().role !== 'parent' || targetProfile.data().status !== 'active' || targetProfile.data().organizationId !== organizationId ||
         targetProfile.data().email?.toLowerCase() !== targetAuth.email.toLowerCase() ||
@@ -475,7 +501,7 @@ export default async function handler(req, res) {
           currentStudent.data().parentLoginInfo?.email?.toLowerCase() !== oldEmail.toLowerCase() ||
           cleanName(currentStudent.data().parentName) !== recordedParentName ||
           !oldTransferFactsValid({ profile: currentOldProfile, recorded: currentLinkedStudents, uidStudents: currentUidStudents,
-            links: currentOldLinks, learnerLogins: currentLearnerLogins }, oldUid, oldEmail, student.id, organizationId, verifiedName) ||
+            links: currentOldLinks, learnerLogins: currentLearnerLogins }, oldUid, oldEmail, student.id, organizationId) ||
           !currentTargetProfile.exists || currentTargetProfile.data().role !== 'parent' || currentTargetProfile.data().status !== 'active' ||
           currentTargetProfile.data().organizationId !== organizationId ||
           currentTargetProfile.data().email?.toLowerCase() !== targetAuth.email.toLowerCase() ||
@@ -488,7 +514,7 @@ export default async function handler(req, res) {
         transaction.update(studentRef, {
           parentLoginInfo: { uid: reuseParentUid, email: targetAuth.email },
           parentUids: [...new Set([...(Array.isArray(currentStudent.data().parentUids) ? currentStudent.data().parentUids : []).filter(uid => uid !== oldUid), reuseParentUid])],
-          ...(!cleanName(currentStudent.data().parentName) ? { parentName: verifiedName } : {})
+          ...(cleanName(currentStudent.data().parentName) !== verifiedName ? { parentName: verifiedName } : {})
         });
         for (const subjectId of guardianSubjects({ id: student.id, ...currentStudent.data() })) {
           transaction.set(db.doc(`guardian_links/${reuseParentUid}_${subjectId}`), {
@@ -676,8 +702,7 @@ export default async function handler(req, res) {
       if (!email) return response(res, 409, { ok: false, error: 'The existing parent account has no login email.' });
       const profile = await db.doc(`users/${uid}`).get();
       const accountName = cleanName(profile.data()?.name);
-      if (!accountName || (recordedParentName && recordedParentName !== accountName) ||
-        (confirmedParentName && confirmedParentName !== accountName)) {
+      if (!accountName || (confirmedParentName && confirmedParentName !== accountName)) {
         return response(res, 409, { ok: false, error: 'The verified parent name does not match the existing family login.' });
       }
       verifiedParentName = accountName;
@@ -713,8 +738,7 @@ export default async function handler(req, res) {
           throw Object.assign(new Error('Existing family login changed. Verify it again.'), { status: 409 });
         }
         const currentName = cleanName(currentStudent.data().parentName);
-        if ((created && currentName !== recordedParentName) ||
-          (action === 'link' && currentName && currentName !== verifiedParentName)) {
+        if (currentName !== recordedParentName) {
           throw Object.assign(new Error('Recorded parent name changed. Refresh the learner record.'), { status: 409 });
         }
         if (created) transaction.create(db.doc(`users/${uid}`), {
@@ -723,7 +747,7 @@ export default async function handler(req, res) {
         });
         transaction.update(studentRef, {
           parentLoginInfo: { uid, email }, parentUids: FieldValue.arrayUnion(uid),
-          ...(!verifiedNameCandidate(currentName) ? { parentName: verifiedParentName } : {})
+          ...(currentName !== verifiedParentName ? { parentName: verifiedParentName } : {})
         });
         for (const subjectId of guardianSubjects({ id: student.id, ...currentStudent.data() })) {
           transaction.set(db.doc(`guardian_links/${uid}_${subjectId}`), {

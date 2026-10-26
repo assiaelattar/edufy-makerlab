@@ -179,3 +179,6 @@
 - The staff UI permission is `pickup.view`; Firestore release authorization currently follows the established instructor/elevated role contract. Use a restricted custom staff role if a reception-only identity is introduced.
 
 ---
+# Parent sibling consolidation — 2026-10-26
+
+The local Edufy client cannot reach the hosted parent-access API from `http://127.0.0.1:5174` because that origin is not allowed. The real sibling transfer and SparkQuest parent sign-in remain unverified. The staff must choose which exact parent login survives and verify the family relationship before any live account is retired. The focused API/client candidate and synthetic proof are described in `../parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`.

@@ -170,11 +170,45 @@ const directory = await invoke(staffToken, { action: 'directory', organizationId
 assert.equal(directory.statusCode, 200, JSON.stringify(directory.body?.error));
 assert(!directory.body.accounts.some(account => account.uid === foreignFamily.uid || account.uid === parentActor.uid));
 const firstDirectoryAccount = directory.body.accounts.find(account => account.uid === firstAuth.uid);
+assert.equal(firstDirectoryAccount.needsRecovery, false);
+const recoverableDirectoryAuth = await adminAuth.createUser({ email: 'p.recoverable@makerlab.academy', password: 'Demo-recoverable-password-123' });
+await Promise.all([
+  db.doc(`users/${recoverableDirectoryAuth.uid}`).set({ uid: recoverableDirectoryAuth.uid, organizationId: 'org-a', role: 'parent', status: 'active', name: 'Verified Family', email: recoverableDirectoryAuth.email }),
+  db.doc('students/recoverable-directory-child').set({ organizationId: 'org-a', name: 'Recoverable learner', parentName: 'Verified Family', parentLoginInfo: { uid: recoverableDirectoryAuth.uid, email: recoverableDirectoryAuth.email } })
+]);
+const recoverableDirectory = await invoke(staffToken, { action: 'directory', organizationId: 'org-a' });
+assert.equal(recoverableDirectory.body.accounts.find(account => account.uid === recoverableDirectoryAuth.uid)?.needsRecovery, true);
+const orphanDirectoryAuth = await adminAuth.createUser({ email: 'p.orphan@makerlab.academy', password: 'Demo-orphan-password-123' });
+await db.doc('students/orphan-directory-child').set({ organizationId: 'org-a', name: 'Orphan learner', parentName: 'Verified Family', parentLoginInfo: { uid: orphanDirectoryAuth.uid, email: orphanDirectoryAuth.email } });
+const orphanDirectory = await invoke(staffToken, { action: 'directory', organizationId: 'org-a' });
+assert.equal(orphanDirectory.body.accounts.find(account => account.uid === orphanDirectoryAuth.uid)?.needsRecovery, true);
 assert.equal(firstDirectoryAccount.email, first.body.email);
 assert.equal(firstDirectoryAccount.parentName, 'Samira Ajlane');
 assert.deepEqual(new Set(firstDirectoryAccount.children.map(child => child.id)), new Set(['child-a', 'child-c', 'child-kenza']));
 assert.deepEqual(new Set(firstDirectoryAccount.children.map(child => child.name)), new Set(['Child a', 'Child c', 'Child Kenza']));
 await db.doc(`guardian_links/${firstAuth.uid}_child-b`).delete();
+
+// A historical sibling account can have the child's name in its parent field.
+// Exact account selection plus staff relationship verification may correct it.
+const staleSibling = await adminAuth.createUser({ email: 'p.daky-4@makerlab.academy', password: 'Old-sibling-password-123' });
+await Promise.all([
+  db.doc(`users/${staleSibling.uid}`).set({ uid: staleSibling.uid, organizationId: 'org-a', role: 'parent', status: 'active', name: 'kamyl daky', email: staleSibling.email }),
+  db.doc('students/stale-sibling').set({ organizationId: 'org-a', name: 'Nassym Daky', parentName: 'kamyl daky', parentLoginInfo: { uid: staleSibling.uid, email: staleSibling.email }, parentUids: [staleSibling.uid] }),
+  db.doc(`guardian_links/${staleSibling.uid}_stale-sibling`).set({ organizationId: 'org-a', parentUid: staleSibling.uid, studentId: 'stale-sibling', subjectId: 'stale-sibling', status: 'active' })
+]);
+const correctedSibling = await invoke(staffToken, { action: 'transfer', studentId: 'stale-sibling', organizationId: 'org-a', reuseParentUid: firstAuth.uid,
+  reuseParentEmail: first.body.email, parentName: 'Samira Ajlane', relationshipVerified: true });
+assert.equal(correctedSibling.statusCode, 200, JSON.stringify(correctedSibling.body?.error));
+assert.equal((await db.doc('students/stale-sibling').get()).data().parentName, 'Samira Ajlane');
+assert.equal((await db.doc('students/stale-sibling').get()).data().parentLoginInfo.uid, firstAuth.uid);
+assert.equal((await db.doc(`guardian_links/${firstAuth.uid}_stale-sibling`).get()).data().status, 'active');
+assert.equal((await adminAuth.getUser(staleSibling.uid)).disabled, true);
+await db.doc('students/unlinked-stale-sibling').set({ organizationId: 'org-a', name: 'Another Daky learner', parentName: 'child-name daky' });
+const linkedStaleSibling = await invoke(staffToken, { action: 'link', studentId: 'unlinked-stale-sibling', organizationId: 'org-a', reuseParentUid: firstAuth.uid,
+  parentName: 'Samira Ajlane', relationshipVerified: true });
+assert.equal(linkedStaleSibling.statusCode, 200, JSON.stringify(linkedStaleSibling.body?.error));
+assert.equal((await db.doc('students/unlinked-stale-sibling').get()).data().parentName, 'Samira Ajlane');
+assert.equal((await db.doc('students/unlinked-stale-sibling').get()).data().parentLoginInfo.uid, firstAuth.uid);
 assert.equal((await invoke(foreignToken, { action: 'reset', studentId: 'child-a', organizationId: 'org-a' })).statusCode, 403);
 assert.equal((await invoke(staffToken, { action: 'reset', studentId: 'foreign', organizationId: 'org-a' })).statusCode, 404);
 assert.equal((await invoke(staffToken, { action: 'reset', studentId: 'child-e', organizationId: 'org-a' })).statusCode, 409);

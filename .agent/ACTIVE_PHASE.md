@@ -316,3 +316,8 @@ The user requested urgent repair of Edufy parent account creation before resumin
 The Notion-inspired global shell, reorganized Student Details experience and animated contextual 011Y guide are complete locally. Read `docs/education/EDUFY_SHELL_STUDENT_GUIDE_PHASE_1_2026-10-20.md`. Build, Design System checks and signed-in read-only desktop/390 px browser checks pass. Stop for the user's visual approval before Settings, Finance, Expenses or remaining module migration. Keep broad generic module edits unpublished and preserved for later reconciliation. No deploy, push, auth, permission, schema, financial-rule or production-record change.
 
 ---
+# Parent multi-child account repair — 2026-10-26
+
+The focused local repair allows a verified staff transfer from a single-child legacy parent login with a stale parent label into an exact existing family account. The directory exposes recoverable accounts rather than hiding them. The isolated Auth/Firestore emulator and Edufy build pass. No real family record has been changed. See `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`; keep this phase local until coordinated API/client release and real parent acceptance.
+
+---
