@@ -38,3 +38,5 @@ The synthetic `demo-parent-access` suite now covers the two DAKY-like siblings w
 ### Integration review — 2026-10-28
 
 The replacement path was reviewed on the main-based release branch after commits `6939f59` and `01b0c16`. A focused follow-up makes old-login retirement attempt token revocation, disabling, and deletion independently. A forced demo failure of both revocation and disabling still reached Auth deletion, and the full parent emulator suite passed. API syntax and diff checks pass. The candidate remains local under the user's release hold; no production account or API was changed.
+
+If an old Auth account still cannot be deleted, the staff credentials card withholds the new password and directs an administrator to finish cleanup before issuing a fresh password. It does not offer a copy action in that state.

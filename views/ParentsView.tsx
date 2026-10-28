@@ -332,7 +332,7 @@ export const ParentsView = () => {
       if (result.password)
         setCredentials({
           email: result.email,
-          password: result.password,
+          password: result.retirementIncomplete ? "" : result.password,
           count: result.linkedLearnerCount || studentIds.length,
           retirementIncomplete: result.retirementIncomplete,
         });
@@ -1038,7 +1038,7 @@ export const ParentsView = () => {
           <div className="edu-parent-v1__credentials">
             <EducationNotice status={credentials.retirementIncomplete ? "danger" : "success"}>
               {credentials.retirementIncomplete
-                ? "An old login could not be deleted. Ask an administrator to review it before sharing this new password."
+                ? "An old login could not be deleted. The new password is withheld. Ask an administrator to finish account cleanup, then issue a fresh password."
                 : <>One generated login now covers {credentials.count} learner{credentials.count === 1 ? "" : "s"}. Share the password securely; Edufy does not store it.</>}
             </EducationNotice>
             <div>
@@ -1047,7 +1047,7 @@ export const ParentsView = () => {
             </div>
             <div>
               <span>Temporary password</span>
-              <strong>{credentials.password}</strong>
+              <strong>{credentials.retirementIncomplete ? "Withheld until account cleanup" : credentials.password}</strong>
             </div>
             <EducationButton
               variant="primary"
