@@ -543,7 +543,21 @@ await db.doc('students/daky-extra').set({ organizationId: 'org-a', name: 'Other 
 assert.equal((await invoke(staffToken, dakyRequest)).statusCode, 409);
 assert.equal((await db.doc('students/daky-kamyl').get()).data().parentLoginInfo.uid, dakyA.uid);
 await db.doc('students/daky-extra').delete();
-const replacedDaky = await invoke(staffToken, dakyRequest);
+// A transient revoke/disable failure must not skip the final Auth deletion.
+const originalRevoke = adminAuth.revokeRefreshTokens.bind(adminAuth);
+const originalUpdateUser = adminAuth.updateUser.bind(adminAuth);
+adminAuth.revokeRefreshTokens = uid => uid === dakyB.uid
+  ? Promise.reject(Object.assign(new Error('Demo revoke failure'), { code: 'demo/revoke-failed' }))
+  : originalRevoke(uid);
+adminAuth.updateUser = (uid, properties) => uid === dakyB.uid && properties.disabled === true
+  ? Promise.reject(Object.assign(new Error('Demo disable failure'), { code: 'demo/disable-failed' }))
+  : originalUpdateUser(uid, properties);
+let replacedDaky;
+try { replacedDaky = await invoke(staffToken, dakyRequest); }
+finally {
+  adminAuth.revokeRefreshTokens = originalRevoke;
+  adminAuth.updateUser = originalUpdateUser;
+}
 assert.equal(replacedDaky.statusCode, 200, JSON.stringify(replacedDaky.body?.error));
 assert.equal(replacedDaky.body.email, 'p.daky@makerlab.academy');
 assert.equal(replacedDaky.body.retiredOldAccounts, 2);

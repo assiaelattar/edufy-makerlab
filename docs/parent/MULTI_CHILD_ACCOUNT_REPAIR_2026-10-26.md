@@ -34,3 +34,7 @@ The synthetic `demo-parent-access` suite now covers the two DAKY-like siblings w
 - Decision: retire the old Firestore profiles and guardian links for audit, but delete the old Firebase Auth users after the atomic learner move. This removes sign-in while retaining an account-change trail. If deletion fails, the API reports incomplete retirement and staff must review it before sharing the credentials.
 - Known issue: a care group inferred from contact data may not contain both DAKY learners. The Parents workspace therefore also lets staff search and select the other exact learner in the Add learner dialog, then choose the replacement action. This is a staff-verified selection, not an automatic surname merge.
 - Release gate: new API and UI are local only. Do not run the real family operation until the correct build is live and the two source accounts and learners have been verified in the signed-in Edufy workspace.
+
+### Integration review — 2026-10-28
+
+The replacement path was reviewed on the main-based release branch after commits `6939f59` and `01b0c16`. A focused follow-up makes old-login retirement attempt token revocation, disabling, and deletion independently. A forced demo failure of both revocation and disabling still reached Auth deletion, and the full parent emulator suite passed. API syntax and diff checks pass. The candidate remains local under the user's release hold; no production account or API was changed.

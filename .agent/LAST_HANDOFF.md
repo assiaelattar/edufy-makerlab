@@ -767,3 +767,8 @@ Read `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`. A source learner's 
 User selected a new generated account for both DAKY siblings and removal of their two older logins. `replaceFamily` now validates exact distinct sole-child source Auth accounts, same tenant and verified staff, creates one account, moves both learner links atomically, then revokes/deletes the old Auth users. The Parents workspace exposes the operation for duplicate-login care groups. Synthetic Auth/Firestore test and Edufy production build pass. No production data or deployment changed; current signed-out Vercel browser cannot execute live replacement. See `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`.
 
 ---
+## DAKY replacement integration review — 2026-10-28
+
+The main-based candidate now attempts each old Auth retirement step independently, so a transient revoke or disable failure does not skip deletion. The demo parent emulator passed with both failures injected for one source account; Auth deletion still succeeded. API syntax and diff checks pass. The candidate stays local under the user's release hold. Staff must verify both exact source learners and parent accounts, then after a coordinated API/client release check the new two-child SparkQuest session and denial of both old logins.
+
+---

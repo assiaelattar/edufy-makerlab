@@ -372,7 +372,15 @@ export default async function handler(req, res) {
       const retirement = await Promise.all(sources.map(async source => {
         try {
           await auth.revokeRefreshTokens(source.uid);
+        } catch (error) {
+          console.error('[parent-access] old token revocation failed', { code: error?.code || 'unknown' });
+        }
+        try {
           await auth.updateUser(source.uid, { disabled: true });
+        } catch (error) {
+          console.error('[parent-access] old account disable failed', { code: error?.code || 'unknown' });
+        }
+        try {
           await auth.deleteUser(source.uid);
           return { uid: source.uid, retired: true };
         } catch (error) {
