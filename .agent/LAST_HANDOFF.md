@@ -772,3 +772,8 @@ User selected a new generated account for both DAKY siblings and removal of thei
 The main-based candidate now attempts each old Auth retirement step independently, so a transient revoke or disable failure does not skip deletion. The demo parent emulator passed with both failures injected for one source account; Auth deletion still succeeded. API syntax and diff checks pass. The candidate stays local under the user's release hold. Staff must verify both exact source learners and parent accounts, then after a coordinated API/client release check the new two-child SparkQuest session and denial of both old logins.
 
 ---
+## Parent Access release authorization — 2026-10-28
+
+The user explicitly authorized publication of the DAKY Parent Access correction: trusted Vercel API plus Edufy Hostinger client. This permission supersedes the earlier local hold for these reviewed parent files only. Keep real family records untouched during deployment; designated staff will verify exact source accounts and perform the replacement after both live targets are confirmed. The workshop/Instructor Pass candidate and broader UI work are separate.
+
+---

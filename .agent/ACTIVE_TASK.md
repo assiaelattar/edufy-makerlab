@@ -354,3 +354,8 @@ Local candidate fixes the legacy parent-name conflict during exact-account sibli
 The user directed one new SparkQuest parent account for Kamyl and Nassym DAKY and deletion of their two old Auth logins. A focused local `replaceFamily` candidate is implemented and passes the demo Auth/Firestore suite and Edufy build. No production family record changed. Next: coordinated trusted API and Edufy client release, designated staff identity/relationship check against exact learner records, live replacement, then real SparkQuest two-child and old-login denial acceptance. Read `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`. Preserve the separate UI release hold and do not mix unrelated module changes.
 
 ---
+## Parent Access code release approved — 2026-10-28
+
+The user explicitly lifted the local hold for the DAKY correction and authorized publication of the trusted Parent Access API with the Edufy client. Release only the reviewed parent-account commits through the registered `origin/main` process. Do not create, move, or delete the real DAKY accounts as a deployment test; the signed-in staff workflow and SparkQuest two-child/old-login acceptance follow publication. The separate workshop and wider UI candidates remain outside this release.
+
+---
