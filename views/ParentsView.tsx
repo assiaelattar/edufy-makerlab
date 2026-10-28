@@ -92,6 +92,7 @@ export const ParentsView = () => {
     email: string;
     password: string;
     count: number;
+    retirementIncomplete?: boolean;
   } | null>(null);
 
   const refreshDirectory = async () => {
@@ -333,6 +334,7 @@ export const ParentsView = () => {
           email: result.email,
           password: result.password,
           count: result.linkedLearnerCount || studentIds.length,
+          retirementIncomplete: result.retirementIncomplete,
         });
       await refreshDirectory();
       setAddOpen(false);
@@ -1034,10 +1036,10 @@ export const ParentsView = () => {
       >
         {credentials && (
           <div className="edu-parent-v1__credentials">
-            <EducationNotice status="success">
-              One generated login now covers {credentials.count} learner
-              {credentials.count === 1 ? "" : "s"}. Share the password securely;
-              Edufy does not store it.
+            <EducationNotice status={credentials.retirementIncomplete ? "danger" : "success"}>
+              {credentials.retirementIncomplete
+                ? "An old login could not be deleted. Ask an administrator to review it before sharing this new password."
+                : <>One generated login now covers {credentials.count} learner{credentials.count === 1 ? "" : "s"}. Share the password securely; Edufy does not store it.</>}
             </EducationNotice>
             <div>
               <span>Sign-in ID</span>
@@ -1050,6 +1052,7 @@ export const ParentsView = () => {
             <EducationButton
               variant="primary"
               icon={Copy}
+              disabled={credentials.retirementIncomplete}
               onClick={() =>
                 void navigator.clipboard.writeText(
                   `MakerLab login: ${credentials.email}\nTemporary password: ${credentials.password}`,
