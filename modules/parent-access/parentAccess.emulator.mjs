@@ -524,6 +524,50 @@ for (const studentId of ['family-one', 'family-two', 'family-three', 'child-b'])
 const familyResetAfterCareLink = await invoke(staffToken, { action: 'reset', studentId: 'family-one', organizationId: 'org-a', parentName: 'Leila Mansouri', relationshipVerified: true });
 assert.equal(familyResetAfterCareLink.statusCode, 200, JSON.stringify(familyResetAfterCareLink.body?.error));
 
-console.log('Parent access emulator: generated logins, shared siblings, additional caregivers without primary-login replacement, directory visibility, legacy repair, reset, tenant and role denial, and plaintext checks passed.');
-await Promise.all([deleteClientApp(app), deleteClientApp(familyApp), deleteClientApp(batchFamilyApp)]);
+// Two separate legacy sibling logins can be replaced by one new account.
+const dakyA = await adminAuth.createUser({ email: 'p.daky-3@makerlab.academy', password: 'Old-Daky-3-password-123' });
+const dakyB = await adminAuth.createUser({ email: 'p.daky-6@makerlab.academy', password: 'Old-Daky-6-password-123' });
+await Promise.all([
+  db.doc(`users/${dakyA.uid}`).set({ organizationId: 'org-a', role: 'parent', status: 'active', email: dakyA.email, name: 'DAKY' }),
+  db.doc(`users/${dakyB.uid}`).set({ organizationId: 'org-a', role: 'parent', status: 'active', email: dakyB.email, name: 'kamyl daky' }),
+  db.doc('students/daky-kamyl').set({ organizationId: 'org-a', name: 'Kamyl DAKY', parentName: 'DAKY', parentLoginInfo: { uid: dakyA.uid, email: dakyA.email }, parentUids: [dakyA.uid] }),
+  db.doc('students/daky-nassym').set({ organizationId: 'org-a', name: 'Nassym DAKY', parentName: 'kamyl daky', loginInfo: { uid: 'learner-nassym' }, parentLoginInfo: { uid: dakyB.uid, email: dakyB.email }, parentUids: [dakyB.uid] })
+]);
+await db.doc(`guardian_links/${dakyA.uid}_daky-kamyl`).set({ organizationId: 'org-a', parentUid: dakyA.uid, studentId: 'daky-kamyl', subjectId: 'daky-kamyl', status: 'active' });
+const dakyRequest = { action: 'replaceFamily', studentIds: ['daky-kamyl', 'daky-nassym'], organizationId: 'org-a', parentName: 'DAKY', aliasBasis: 'DAKY', relationshipVerified: true };
+assert.equal((await invoke(staffToken, { ...dakyRequest, relationshipVerified: false })).statusCode, 400);
+assert.equal((await invoke(parentToken, dakyRequest)).statusCode, 403);
+assert.equal((await invoke(staffToken, { ...dakyRequest, organizationId: 'org-b' })).statusCode, 403);
+assert.equal((await invoke(staffToken, { ...dakyRequest, studentIds: ['daky-kamyl', 'foreign'] })).statusCode, 404);
+await db.doc('students/daky-extra').set({ organizationId: 'org-a', name: 'Other DAKY', parentLoginInfo: { uid: dakyB.uid, email: dakyB.email }, parentUids: [dakyB.uid] });
+assert.equal((await invoke(staffToken, dakyRequest)).statusCode, 409);
+assert.equal((await db.doc('students/daky-kamyl').get()).data().parentLoginInfo.uid, dakyA.uid);
+await db.doc('students/daky-extra').delete();
+const replacedDaky = await invoke(staffToken, dakyRequest);
+assert.equal(replacedDaky.statusCode, 200, JSON.stringify(replacedDaky.body?.error));
+assert.equal(replacedDaky.body.email, 'p.daky@makerlab.academy');
+assert.equal(replacedDaky.body.retiredOldAccounts, 2);
+assert.equal(replacedDaky.body.retirementIncomplete, false);
+const newDakyUid = (await adminAuth.getUserByEmail(replacedDaky.body.email)).uid;
+for (const studentId of ['daky-kamyl', 'daky-nassym']) {
+  const data = (await db.doc(`students/${studentId}`).get()).data();
+  assert.deepEqual(data.parentLoginInfo, { uid: newDakyUid, email: replacedDaky.body.email });
+  assert.equal(data.parentName, 'DAKY');
+  assert.deepEqual(data.parentUids, [newDakyUid]);
+  assert.equal((await db.doc(`guardian_links/${newDakyUid}_${studentId}`).get()).data().status, 'active');
+}
+assert.equal((await db.doc(`guardian_links/${newDakyUid}_learner-nassym`).get()).data().status, 'active');
+assert.equal((await db.doc(`guardian_links/${dakyA.uid}_daky-kamyl`).get()).data().status, 'inactive');
+await assert.rejects(adminAuth.getUser(dakyA.uid), error => error.code === 'auth/user-not-found');
+await assert.rejects(adminAuth.getUser(dakyB.uid), error => error.code === 'auth/user-not-found');
+const newDakyApp = initializeClientApp({ apiKey: 'demo-key', authDomain: 'localhost', projectId: process.env.GCLOUD_PROJECT }, 'new-daky-family');
+const newDakyAuth = getClientAuth(newDakyApp);
+connectAuthEmulator(newDakyAuth, `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}`, { disableWarnings: true });
+await signInWithEmailAndPassword(newDakyAuth, replacedDaky.body.email, replacedDaky.body.password);
+const newDakyDb = getFirestore(newDakyApp);
+connectFirestoreEmulator(newDakyDb, firestoreHost, Number(firestorePort));
+for (const studentId of ['daky-kamyl', 'daky-nassym']) assert.equal((await getDoc(doc(newDakyDb, 'students', studentId))).exists(), true);
+
+console.log('Parent access emulator: generated logins, shared siblings, multi-login replacement, additional caregivers, directory visibility, legacy repair, reset, tenant and role denial, and plaintext checks passed.');
+await Promise.all([deleteClientApp(app), deleteClientApp(familyApp), deleteClientApp(batchFamilyApp), deleteClientApp(newDakyApp)]);
 await deleteAdminApp(getFirebaseAdminApp());

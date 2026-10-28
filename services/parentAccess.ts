@@ -1,6 +1,6 @@
 import { auth } from './firebase';
 
-export type ParentAccessAction = 'issue' | 'link' | 'issueFamily' | 'linkFamily' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover' | 'directory';
+export type ParentAccessAction = 'issue' | 'link' | 'issueFamily' | 'linkFamily' | 'replaceFamily' | 'transfer' | 'reset' | 'replace' | 'repairStaffLink' | 'lookup' | 'recover' | 'directory';
 
 export interface ParentDirectoryAccount {
   uid: string;
@@ -19,6 +19,8 @@ export interface ParentAccessResult {
   parentName?: string;
   needsRecovery?: boolean;
   accounts?: ParentDirectoryAccount[];
+  retiredOldAccounts?: number;
+  retirementIncomplete?: boolean;
 }
 
 const parentAccessEndpoint = (): string => {

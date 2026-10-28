@@ -73,7 +73,7 @@ export const ParentsView = () => {
   const { students, enrollments, programs, settings, navigateTo } =
     useAppContext();
   const { can, currentOrganization } = useAuth();
-  const { alert: showAlert } = useConfirm();
+  const { alert: showAlert, confirm } = useConfirm();
   const [directory, setDirectory] = useState<ParentDirectoryAccount[]>([]);
   const [directoryLoading, setDirectoryLoading] = useState(true);
   const [directoryError, setDirectoryError] = useState("");
@@ -280,10 +280,16 @@ export const ParentsView = () => {
             .includes(q)),
     );
   }, [activeStudents, selected, learnerSearch]);
+  const replacementStudentIds = selected
+    ? unique([...selected.baseStudentIds, ...pendingStudentIds])
+    : [];
+  const canReplaceSelectedLogins = replacementStudentIds.length >= 2 &&
+    replacementStudentIds.every(id => activeStudents.some(student => student.id === id && student.parentLoginInfo?.uid)) &&
+    new Set(replacementStudentIds.map(id => activeStudents.find(student => student.id === id)?.parentLoginInfo?.uid)).size === replacementStudentIds.length;
 
   const runFamilyAction = async (
     studentIds: string[],
-    mode: "issueFamily" | "linkFamily",
+    mode: "issueFamily" | "linkFamily" | "replaceFamily",
   ) => {
     if (
       !currentOrganization?.id ||
@@ -301,13 +307,22 @@ export const ParentsView = () => {
       return;
     }
     const account = directory.find((item) => item.uid === targetUid);
+    if (mode === "replaceFamily") {
+      const approved = await confirm({
+        title: "Create one new family login",
+        message: `Move ${studentIds.length} verified learners to one new SparkQuest parent account? Their current parent logins will be revoked and deleted. Learner work, payments, and contact emails stay with their records.`,
+        variant: "warning",
+        confirmText: "Create and move learners",
+      });
+      if (!approved) return;
+    }
     setWorking(true);
     try {
       const result = await manageParentAccess({
         action: mode,
         organizationId: currentOrganization.id,
         studentIds,
-        parentName: account?.parentName || parentName,
+        parentName: mode === "replaceFamily" ? parentName : account?.parentName || parentName,
         aliasBasis,
         relationshipVerified,
         reuseParentUid: mode === "linkFamily" ? account?.uid : undefined,
@@ -323,9 +338,11 @@ export const ParentsView = () => {
       setAddOpen(false);
       setPendingStudentIds([]);
       await showAlert(
-        "Family access updated",
-        `${result.linkedLearnerCount || studentIds.length} learner${studentIds.length === 1 ? "" : "s"} can now be managed through ${result.email}.`,
-        "success",
+        result.retirementIncomplete ? "New family access created; old login needs review" : "Family access updated",
+        result.retirementIncomplete
+          ? `${result.linkedLearnerCount || studentIds.length} learners now use ${result.email}, but an old authentication account could not be deleted. Ask an administrator to review it before sharing the new access.`
+          : `${result.linkedLearnerCount || studentIds.length} learner${studentIds.length === 1 ? "" : "s"} can now be managed through ${result.email}.`,
+        result.retirementIncomplete ? "warning" : "success",
       );
     } catch (error) {
       await showAlert(
@@ -546,8 +563,8 @@ export const ParentsView = () => {
                 This family candidate contains{" "}
                 {selected.accounts.length || selected.recordedLogins.length}{" "}
                 generated logins. The learners stay together here for review.
-                Choose the account to retain, then use each affected learner’s
-                Access page to transfer the old assignment.
+                Verify the caregiver, then create one new account below or
+                transfer each learner to an exact account you choose to retain.
               </EducationNotice>
             )}
             <EducationTabs
@@ -707,7 +724,7 @@ export const ParentsView = () => {
                     </div>
                   </div>
                   <div className="edu-parent-v1__form">
-                    {!selected.accounts.length && (
+                    {(!selected.accounts.length || selected.duplicateAccess) && (
                       <>
                         <EducationField label="Verified caregiver name">
                           <input
@@ -767,6 +784,18 @@ export const ParentsView = () => {
                         ) : (
                           `Create login for ${selected.baseStudentIds.length} learner${selected.baseStudentIds.length === 1 ? "" : "s"}`
                         )}
+                      </EducationButton>
+                    )}
+                    {selected.duplicateAccess && (
+                      <EducationButton
+                        variant="primary"
+                        icon={KeyRound}
+                        disabled={working || !relationshipVerified || !parentName.trim() || !aliasBasis.trim() ||
+                          selected.baseStudentIds.length < 2 ||
+                          selected.baseStudentIds.some(id => !selected.students.find(student => student.id === id)?.parentLoginInfo?.uid)}
+                        onClick={() => void runFamilyAction(selected.baseStudentIds, "replaceFamily")}
+                      >
+                        {working ? "Creating…" : `Create one new login for ${selected.baseStudentIds.length} learners`}
                       </EducationButton>
                     )}
                   </div>
@@ -835,7 +864,8 @@ export const ParentsView = () => {
             <EducationNotice status="info">
               Choose any active learner in this workspace. Surname, phone and
               biological relationship are not used as proof; staff verification
-              is required.
+              is required. To replace separate old logins with one new account,
+              select the sibling below and use the replacement action.
             </EducationNotice>
             {selected.accounts.length > 0 && (
               <EducationField
@@ -872,6 +902,16 @@ export const ParentsView = () => {
                     value={aliasBasis}
                     onChange={(e) => setAliasBasis(e.target.value)}
                   />
+                </EducationField>
+              </div>
+            )}
+            {selected.accounts.length > 0 && (
+              <div className="edu-parent-v1__dialog-grid">
+                <EducationField label="New verified caregiver name">
+                  <input value={parentName} onChange={(e) => setParentName(e.target.value)} />
+                </EducationField>
+                <EducationField label="New login alias" hint="Used only when replacing old logins with one new account.">
+                  <input value={aliasBasis} onChange={(e) => setAliasBasis(e.target.value)} />
                 </EducationField>
               </div>
             )}
@@ -967,9 +1007,21 @@ export const ParentsView = () => {
                     Saving…
                   </>
                 ) : (
-                  `Add ${pendingStudentIds.length || ""} learner${pendingStudentIds.length === 1 ? "" : "s"}`
+                  selected.accounts.length
+                    ? `Add this caregiver to ${pendingStudentIds.length} learner${pendingStudentIds.length === 1 ? "" : "s"}`
+                    : `Add ${pendingStudentIds.length || ""} learner${pendingStudentIds.length === 1 ? "" : "s"}`
                 )}
               </EducationButton>
+              {selected.accounts.length > 0 && canReplaceSelectedLogins && (
+                <EducationButton
+                  variant="primary"
+                  icon={KeyRound}
+                  disabled={working || !relationshipVerified || !parentName.trim() || !aliasBasis.trim()}
+                  onClick={() => void runFamilyAction(replacementStudentIds, "replaceFamily")}
+                >
+                  Replace {replacementStudentIds.length} old logins with one new account
+                </EducationButton>
+              )}
             </div>
           </div>
         )}

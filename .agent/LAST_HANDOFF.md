@@ -762,3 +762,8 @@ The trusted parent API keeps an existing `parentLoginInfo` primary account intac
 Read `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`. A source learner's stale parent label no longer blocks an exact-account, staff-verified transfer to an active parent family account. Directory rows backed by recorded learner pointers show a recovery state when links are incomplete. The real family records were inspected read-only, with separate suffix logins and conflicting parent labels; no account was moved or disabled. Localhost remains blocked by the trusted API origin policy. The integrated main-based Auth/Firestore emulator and Edufy build pass; source SparkQuest family smokes pass. Repository-wide TypeScript retains unrelated legacy failures. The user chose to keep release candidates local pending acceptance. After exact retained-login confirmation, designated staff and parent-session checks, physical-phone role checks, and explicit protected-API release approval, coordinate the Edufy API/client release.
 
 ---
+## New shared DAKY parent login candidate — 2026-10-28
+
+User selected a new generated account for both DAKY siblings and removal of their two older logins. `replaceFamily` now validates exact distinct sole-child source Auth accounts, same tenant and verified staff, creates one account, moves both learner links atomically, then revokes/deletes the old Auth users. The Parents workspace exposes the operation for duplicate-login care groups. Synthetic Auth/Firestore test and Edufy production build pass. No production data or deployment changed; current signed-out Vercel browser cannot execute live replacement. See `docs/parent/MULTI_CHILD_ACCOUNT_REPAIR_2026-10-26.md`.
+
+---
