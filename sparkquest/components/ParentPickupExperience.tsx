@@ -36,13 +36,15 @@ export const ParentPickupExperience: React.FC<Props> = ({ child, parentUid, orga
   return <div className={`pf-pickup-experience is-${view}`}>
     <ParentPickupControl child={child} parentUid={parentUid} organizationId={organizationId} currentParentName={currentParentName} initialSource={pickup} previewMode={previewMode} view={view} onViewChange={onViewChange} />
     {view === 'status' && <>
-      <section className="pf-pickup-workshop" aria-labelledby="pf-next-workshop-title">
-        <div className="pf-pickup-workshop-icon"><CalendarDays size={23} /></div>
-        <div className="pf-pickup-workshop-copy"><span>SON PROCHAIN ATELIER</span><h2 id="pf-next-workshop-title">{next && date ? `${date.weekday} ${date.day} ${date.month}` : 'Date à confirmer'}</h2><p>{next ? `${next.programName}${next.groupName ? ` · ${next.groupName}` : ''}` : workshop.status === 'error' ? 'Le planning ne peut pas être chargé pour le moment.' : `Le prochain créneau de ${first} n’est pas encore visible.`}</p>
-          {next && <div className="pf-pickup-workshop-meta"><span><Clock3 size={16} /> {next.startTime}{next.endTime ? ` – ${next.endTime}` : ''}</span>{next.locationName && <span><MapPin size={16} /> {next.locationName}</span>}</div>}
-        </div>
-      </section>
-      <details className="pf-pickup-more"><summary>Planning et sécurité de la remise</summary><div><p>La date et les horaires viennent du groupe enregistré. MakerLab peut confirmer un changement de planning.</p><p><ShieldCheck size={17} /> Seule l’équipe MakerLab vérifie l’identité et enregistre la remise physique de l’enfant.</p></div></details>
+      <details className="pf-pickup-more"><summary><CalendarDays size={17} /> Prochain atelier {date ? `· ${date.full}` : ''}</summary><div>
+        <section className="pf-pickup-workshop" aria-labelledby="pf-next-workshop-title">
+          <div className="pf-pickup-workshop-icon"><CalendarDays size={23} /></div>
+          <div className="pf-pickup-workshop-copy"><span>SON PROCHAIN ATELIER</span><h2 id="pf-next-workshop-title">{next && date ? `${date.weekday} ${date.day} ${date.month}` : 'Date à confirmer'}</h2><p>{next ? `${next.programName}${next.groupName ? ` · ${next.groupName}` : ''}` : workshop.status === 'error' ? 'Le planning ne peut pas être chargé pour le moment.' : `Le prochain créneau de ${first} n’est pas encore visible.`}</p>
+            {next && <div className="pf-pickup-workshop-meta"><span><Clock3 size={16} /> {next.startTime}{next.endTime ? ` – ${next.endTime}` : ''}</span>{next.locationName && <span><MapPin size={16} /> {next.locationName}</span>}</div>}
+          </div>
+        </section>
+        <p><ShieldCheck size={17} /> L’équipe vérifie l’identité avant la remise au portail.</p>
+      </div></details>
       {!previewMode && <button type="button" className="pf-pickup-refresh" onClick={onRefresh}><RefreshCw size={17} /> Actualiser le suivi</button>}
     </>}
   </div>;

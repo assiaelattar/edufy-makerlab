@@ -1,4 +1,4 @@
-import type { Enrollment, Program, Student } from '../../../types';
+import type { AttendanceRecord, Enrollment, Program, Student } from '../../../types';
 import { isEnrollmentEligibleForAttendance } from '../../../utils/membershipLifecycle.ts';
 
 export interface DailyPickupSlot {
@@ -104,4 +104,18 @@ export const projectDailyPickupRoster = ({
     }))
     .sort((first, second) => timeMinutes(first.slots[0]?.time || '') - timeMinutes(second.slots[0]?.time || '')
       || first.studentName.localeCompare(second.studentName));
+};
+
+/** Public lobby: only learners explicitly marked present for a scheduled slot. */
+export const selectPresentPickupRoster = (
+  roster: DailyPickupRosterItem[],
+  attendance: AttendanceRecord[],
+  organizationId: string,
+  sessionDate: string,
+): DailyPickupRosterItem[] => {
+  const present = new Set(attendance
+    .filter(record => record.organizationId === organizationId && record.date === sessionDate &&
+      (record.status === 'present' || record.status === 'late'))
+    .map(record => `${record.studentId}:${record.enrollmentId}`));
+  return roster.filter(item => item.slots.some(slot => present.has(`${item.studentId}:${slot.enrollmentId}`)));
 };

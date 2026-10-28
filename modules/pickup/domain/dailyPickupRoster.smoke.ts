@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { projectDailyPickupRoster } from './dailyPickupRoster.ts';
+import { projectDailyPickupRoster, selectPresentPickupRoster } from './dailyPickupRoster.ts';
 
 const timestamp = {} as never;
 const students = [
@@ -31,5 +31,21 @@ assert.deepEqual(roster.map(item => item.studentId), ['student-a']);
 assert.deepEqual(roster[0].slots.map(slot => slot.time), ['17:30', '18:30']);
 assert.deepEqual(roster[0].slots.map(slot => slot.groupName), ['Blue', 'Green']);
 assert.equal(roster[0].slots[0].programName, 'Robotics');
+
+const lobbyRoster = projectDailyPickupRoster({
+  organizationId: 'org-a', sessionDate: '2026-10-15', weekday: 'Thursday',
+  enrollments: [enrollment('enrollment-a', 'student-a', 'Thursday 17:30'), enrollment('enrollment-b', 'student-b', 'Thursday 18:00')],
+  students: [...students], programs: [...programs],
+});
+const attendance = [
+  { id: 'present-a', organizationId: 'org-a', date: '2026-10-15', studentId: 'student-a', enrollmentId: 'enrollment-a', status: 'present' },
+  { id: 'absent-b', organizationId: 'org-a', date: '2026-10-15', studentId: 'student-b', enrollmentId: 'enrollment-b', status: 'absent' },
+  { id: 'foreign-b', organizationId: 'org-b', date: '2026-10-15', studentId: 'student-b', enrollmentId: 'enrollment-b', status: 'present' },
+  { id: 'old-b', organizationId: 'org-a', date: '2026-10-14', studentId: 'student-b', enrollmentId: 'enrollment-b', status: 'present' },
+] as never;
+assert.deepEqual(selectPresentPickupRoster(lobbyRoster, attendance, 'org-a', '2026-10-15').map(item => item.studentId), ['student-a']);
+assert.deepEqual(selectPresentPickupRoster(lobbyRoster, [
+  { id: 'late-b', organizationId: 'org-a', date: '2026-10-15', studentId: 'student-b', enrollmentId: 'enrollment-b', status: 'late' },
+] as never, 'org-a', '2026-10-15').map(item => item.studentId), ['student-b']);
 
 console.log('Daily Pickup roster smoke passed.');

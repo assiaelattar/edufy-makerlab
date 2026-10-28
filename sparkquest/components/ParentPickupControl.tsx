@@ -122,7 +122,7 @@ export const ParentPickupControl: React.FC<Props> = ({
   ].map(name => name?.trim()).filter((name): name is string => Boolean(name)))), [child.pickupProfile]);
   const [pickerName, setPickerName] = useState(pickerOptions[0] || '');
   const canConfirmReceipt = Boolean(entry?.pickerName && currentParentName &&
-    entry.pickerName.trim().toLocaleLowerCase() === currentParentName.trim().toLocaleLowerCase());
+    entry.pickerName === currentParentName);
 
   useEffect(() => setPickerName(pickerOptions[0] || ''), [child.id, pickerOptions]);
   useEffect(() => {
@@ -250,12 +250,12 @@ export const ParentPickupControl: React.FC<Props> = ({
   const canOpenNotes = Boolean(entry && entry.parentUid === parentUid);
   const previousDay = Boolean(entry?.sessionDate && entry.sessionDate !== sessionDate);
   const firstName = child.name.trim().split(/\s+/)[0] || 'votre enfant';
-  const title = !entry ? `Préparer la sortie de ${child.name}`
-    : entry.status === 'on_the_way' ? 'L’équipe vous attend'
-      : entry.status === 'arrived' ? 'La personne autorisée est sur place'
-        : entry.status === 'ready' ? `${child.name} a terminé de ranger`
-        : entry.status === 'released' ? `${child.name} a été remis par l’équipe`
-          : entry.status === 'confirmed' ? 'Récupération terminée'
+  const title = !entry ? `Sortie de ${firstName}`
+    : entry.status === 'on_the_way' ? `Sortie de ${firstName}`
+      : entry.status === 'arrived' ? `${firstName} vous rejoint`
+        : entry.status === 'ready' ? 'Prêt pour la remise'
+        : entry.status === 'released' ? 'Remise enregistrée'
+          : entry.status === 'confirmed' ? 'Sortie terminée'
             : entry.status === 'cancelled' ? 'Sortie annulée'
               : 'Vérification nécessaire par l’équipe';
 
@@ -276,9 +276,19 @@ export const ParentPickupControl: React.FC<Props> = ({
   return <section className="sq-pickup-control" aria-labelledby="sq-pickup-control-title">
     <div className="sq-pickup-control-head">
       <span><Car size={22} /></span>
-      <div><p>{previousDay ? 'SORTIE OUVERTE DEPUIS LA VEILLE' : `AUJOURD’HUI · ${entry?.sessionDate || sessionDate}`}</p><h3 id="sq-pickup-control-title">{title}</h3><small>{!entry ? 'Choisissez la personne autorisée avant de prévenir MakerLab.' : entry.status === 'on_the_way' ? `${entry.pickerName || 'La personne autorisée'} est en route. Signalez son arrivée quand elle est sur place.` : entry.status === 'arrived' ? `${firstName} prépare ses affaires. L’équipe peut vérifier la remise dès maintenant; le signal « prêt » de l’enfant est facultatif.` : entry.status === 'ready' ? `L’équipe va vérifier ${entry.pickerName || 'la personne autorisée'} avant la remise.` : entry.status === 'released' ? 'La remise a été enregistrée. La personne sélectionnée confirme la réception.' : entry.status === 'confirmed' ? 'La sortie est terminée. À bientôt pour le prochain atelier !' : 'Contactez MakerLab avant tout départ.'}</small></div>
+      <div><p>{previousDay ? 'SORTIE OUVERTE DEPUIS LA VEILLE' : 'SORTIE DU JOUR'}</p><h3 id="sq-pickup-control-title">{title}</h3><small>{!entry ? 'Choisissez qui vient chercher votre enfant.' : entry.status === 'on_the_way' ? 'Prévenez l’équipe dès votre arrivée au portail.' : entry.status === 'arrived' || entry.status === 'ready' ? 'L’équipe vérifie et prépare la remise.' : entry.status === 'released' ? 'La remise est enregistrée. Confirmez la réception au portail.' : entry.status === 'confirmed' ? 'La réception a été confirmée.' : 'Contactez l’équipe avant le départ.'}</small></div>
       {entry?.pickerName && <em>Récupération : {entry.pickerName}</em>}
     </div>
+
+    {!loading && !readError && (entry?.status === 'on_the_way' || entry?.status === 'released') &&
+      <div className="sq-pickup-quick-action" role="status">
+        <div><span>PROCHAINE ACTION</span><strong>{entry.status === 'released' ? 'Confirmer au portail' : 'Signaler votre arrivée'}</strong></div>
+        {entry.status === 'on_the_way' ? <button type="button" className="sq-pickup-primary" onClick={() => void perform('arrive')} disabled={pending !== null}>
+          {pending === 'arrive' ? <Loader2 className="sq-spin" size={18} /> : <MapPin size={18} />} Je suis sur place
+        </button> : canConfirmReceipt ? <button type="button" className="sq-pickup-primary" onClick={() => void perform('confirm')} disabled={pending !== null}>
+          {pending === 'confirm' ? <Loader2 className="sq-spin" size={18} /> : <CheckCircle2 size={18} />} J’ai récupéré {firstName}
+        </button> : <small>Seule la personne choisie et liée au compte familial peut confirmer.</small>}
+      </div>}
 
     {position >= 0 && <div className="sq-pickup-progress-summary" aria-label={`Étape ${position + 1} sur ${steps.length} : ${steps[position].label}`}><span>ÉTAPE {position + 1} / {steps.length}</span><strong>{steps[position].label}</strong><div className="sq-pickup-progress-bars" aria-hidden="true">{steps.map((step, index) => <i key={step.status} className={position >= index ? 'is-done' : ''} />)}</div></div>}
 
@@ -298,19 +308,9 @@ export const ParentPickupControl: React.FC<Props> = ({
           {pending === 'announce' ? <Loader2 className="sq-spin" size={17} /> : <Car size={17} />} Je suis en route
         </button>
       </>}
-      {entry?.status === 'on_the_way' && <>
-        <button type="button" className="sq-pickup-primary" onClick={() => void perform('arrive')} disabled={pending !== null}>
-          {pending === 'arrive' ? <Loader2 className="sq-spin" size={17} /> : <MapPin size={17} />} Je suis sur place
-        </button>
-      </>}
       {entry?.status === 'arrived' && <div className="sq-pickup-wait"><UserCheck size={22} /><div><strong>Merci d’attendre l’équipe d’accueil.</strong><p>L’équipe doit vérifier {entry.pickerName || 'la personne autorisée'} avant de remettre {child.name}.</p></div></div>}
       {entry?.status === 'ready' && <div className="sq-pickup-wait is-released"><PackageCheck size={22} /><div><strong>{child.name} est prêt.</strong><p>Son projet et ses affaires sont rangés. L’équipe doit maintenant vérifier {entry.pickerName || 'la personne autorisée'} avant le départ.</p></div></div>}
-      {entry?.status === 'released' && <>
-        <div className="sq-pickup-wait is-released"><ShieldCheck size={22} /><div><strong>L’équipe a enregistré la remise physique.</strong><p>Confirmez uniquement lorsque {child.name} est bien avec la personne autorisée.</p></div></div>
-        {canConfirmReceipt ? <button type="button" className="sq-pickup-primary" onClick={() => void perform('confirm')} disabled={pending !== null}>
-          {pending === 'confirm' ? <Loader2 className="sq-spin" size={17} /> : <CheckCircle2 size={17} />} Confirmer la réception
-        </button> : <p className="sq-pickup-inline-warning">{entry.pickerName || 'La personne autorisée'} a terminé la remise. Seule cette personne peut confirmer depuis son compte familial vérifié.</p>}
-      </>}
+      {entry?.status === 'released' && <p className="sq-pickup-receipt-note">Confirmez uniquement lorsque {firstName} est bien avec vous.</p>}
       {entry?.status === 'confirmed' && <div className="sq-pickup-complete"><CheckCircle2 size={26} /><div><strong>La remise d’aujourd’hui est terminée.</strong><p>La remise par l’équipe et la confirmation familiale restent dans l’historique.</p></div></div>}
       {(entry?.status === 'cancelled' || entry?.status === 'exception') && <div className="sq-pickup-wait"><AlertCircle size={22} /><div><strong>{entry.status === 'cancelled' ? 'Cette sortie a été annulée.' : 'Une vérification par l’équipe est nécessaire.'}</strong><p>Contactez l’académie avant tout départ avec {child.name}.</p></div></div>}
 

@@ -1,3 +1,9 @@
+## Pickup parent receipt and present-only lobby — 2026-10-28
+
+The focused Pickup branch keeps the existing staff `released` → selected guardian `confirmed` lifecycle. SparkQuest now puts the arrival/receipt action near the top and keeps it visible while scrolling; Edufy's lobby shows only active scheduled learners marked present or late, removes completed pickups, and displays live gate/receipt status without a picker's name. Staff still see the full operational roster. Both app builds, SparkQuest TypeScript, the Pickup roster smoke, desktop/phone local preview, and diff checks pass. See `docs/pickup/PARENT_RECEIPT_LOBBY_2026-10-28.md` for decisions and release checks.
+
+---
+
 ## Parent family accounts and public booking repair — 2026-10-24
 
 The Parents module now separates contact email from the generated `p.*@makerlab.academy` login, issues one verified account for explicitly selected same-tenant learners, links additional siblings atomically, shows billing context, and routes conflicts to the existing transfer/repair flow. Shared parent email no longer marks a learner as a duplicate. Public workshop booking now commits booking and capacity atomically with an idempotent browser-attempt ID, and the French route blocks browser translation from mutating React markup. Parent and booking emulator suites and the production build pass. Release the parent/account slice and workshop/rules slice as separate commits, then deploy Edufy, the trusted parent API, and Firestore rules. See `docs/parent/PARENT_FAMILY_MODULE_2026-10-24.md` and `docs/workshops/PUBLIC_BOOKING_REPAIR_2026-10-24.md`.

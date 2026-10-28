@@ -21,7 +21,7 @@ import { db } from '../services/firebase';
 import { PickupEntry } from '../types';
 import { advancePickup, announcePickup } from '../modules/pickup/services/pickupCommands';
 import { isAuthorizedPicker, isCanonicalPickupEntry, pickupSessionDate } from '../modules/pickup/domain/pickupLifecycle';
-import { projectDailyPickupRoster } from '../modules/pickup/domain/dailyPickupRoster';
+import { projectDailyPickupRoster, selectPresentPickupRoster } from '../modules/pickup/domain/dailyPickupRoster';
 import {
     AtlasActionButton,
     AtlasCommandHeader,
@@ -89,6 +89,14 @@ const getStatusLabel = (status: PickupEntry['status']): string => {
 };
 
 const getRosterStatusLabel = (status?: PickupEntry['status']): string => status ? getStatusLabel(status) : 'Scheduled today';
+const getLobbyStatusLabel = (status?: PickupEntry['status']): string => {
+    if (status === 'released') return 'With parent · confirm receipt';
+    if (status === 'confirmed') return 'Pickup complete';
+    if (status === 'arrived' || status === 'ready') return 'At the gate';
+    if (status === 'on_the_way' || status === 'waiting') return 'Pickup on the way';
+    if (status === 'exception') return 'Team is checking';
+    return 'At workshop';
+};
 
 const getRosterStatusClass = (status?: PickupEntry['status']): string => {
     if (status === 'confirmed') return 'border-emerald-300/25 bg-emerald-300/10 text-emerald-200';
@@ -101,7 +109,7 @@ const getRosterStatusClass = (status?: PickupEntry['status']): string => {
 
 export const PickupView = () => {
     const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { pickupQueue, students, enrollments, programs } = useAppContext();
+    const { pickupQueue, students, enrollments, programs, attendanceRecords, attendanceLoading, attendanceError } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
 
@@ -176,6 +184,18 @@ export const PickupView = () => {
         ...item,
         entry: todayEntryByStudent.get(item.studentId),
     })), [dailyRoster, todayEntryByStudent]);
+    const lobbyRows = useMemo(() => selectPresentPickupRoster(
+        dailyRoster, attendanceRecords, organizationId || '', todaySessionDate
+    ).map(item => ({ ...item, entry: todayEntryByStudent.get(item.studentId) }))
+        .filter(item => item.entry?.status !== 'confirmed')
+        .sort((a, b) => {
+            const rank = (status?: PickupEntry['status']) => status === 'arrived' || status === 'ready' ? 0
+                : status === 'released' ? 1 : status === 'on_the_way' || status === 'waiting' ? 2
+                    : !status ? 3 : 4;
+            return rank(a.entry?.status) - rank(b.entry?.status) || a.studentName.localeCompare(b.studentName);
+        }), [attendanceRecords, dailyRoster, organizationId, todayEntryByStudent, todaySessionDate]);
+    const lobbyAtGate = lobbyRows.filter(row => row.entry?.status === 'arrived' || row.entry?.status === 'ready').length;
+    const lobbyAwaitingReceipt = lobbyRows.filter(row => row.entry?.status === 'released').length;
 
     const queueGroups = useMemo<QueueGroup[]>(() => {
         const groups: QueueGroup[] = [];
@@ -643,20 +663,20 @@ export const PickupView = () => {
                     <main className="min-h-0 flex-1 pt-4">
                         <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-teal-300/20 bg-slate-900/70">
                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/20 bg-teal-400/[0.07] px-4 py-3">
-                                <div><h2 className="text-sm font-black uppercase tracking-wider text-teal-100">Today’s workshop pickup list</h2><p className="mt-1 text-xs text-slate-400">Scheduled learners stay visible all day; status changes update live.</p></div>
-                                <span className="font-mono text-xs text-teal-200">{dailyRosterRows.length} scheduled</span>
+                                <div><h2 className="text-sm font-black uppercase tracking-wider text-teal-100">Present today</h2><p className="mt-1 text-xs text-slate-400">Live pickup stages for learners marked present or late.</p></div>
+                                <div className="flex flex-wrap gap-2 text-xs font-bold text-teal-100"><span className="rounded-full bg-teal-300/15 px-3 py-1">{lobbyRows.length} active</span><span className="rounded-full bg-amber-300/15 px-3 py-1 text-amber-100">{lobbyAtGate} at gate</span><span className="rounded-full bg-blue-300/15 px-3 py-1 text-blue-100">{lobbyAwaitingReceipt} awaiting receipt</span></div>
                             </div>
                             <div className="grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto p-4 md:grid-cols-2 xl:grid-cols-3">
-                                {dailyRosterRows.map(row => (
-                                    <article key={row.studentId} className="rounded-xl border border-white/10 bg-slate-950 p-4">
+                                {lobbyRows.map(row => (
+                                    <article key={row.studentId} className="rounded-xl border border-white/10 bg-slate-950 p-4" data-pickup-stage={row.entry?.status || 'workshop'}>
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0"><h3 className="truncate text-xl font-black text-white">{row.studentName}</h3><p className="mt-1 truncate text-xs text-slate-400">{row.slots.map(slot => [slot.time, slot.programName, slot.groupName].filter(Boolean).join(' · ')).join(' / ')}</p></div>
-                                            <span data-status={row.entry?.status || 'scheduled'} className={`edu-pickup-v1__status shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getRosterStatusLabel(row.entry?.status)}</span>
+                                            <span data-status={row.entry?.status || 'scheduled'} className={`edu-pickup-v1__status shrink-0 rounded-md border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${getRosterStatusClass(row.entry?.status)}`}>{getLobbyStatusLabel(row.entry?.status)}</span>
                                         </div>
-                                        {row.entry?.pickerName && <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-400"><span className="truncate">{row.entry.pickerName}</span><span className="shrink-0 font-mono text-slate-500">{formatTime(row.entry)}</span></div>}
+                                        {row.entry && <p className="mt-3 text-right font-mono text-xs text-slate-400">Updated {formatTime(row.entry)}</p>}
                                     </article>
                                 ))}
-                                {dailyRosterRows.length === 0 && <div className="col-span-full flex min-h-48 items-center justify-center text-center text-sm font-bold text-slate-600">No active workshop enrollment is scheduled for {todayWeekday}.</div>}
+                                {lobbyRows.length === 0 && <div className="col-span-full flex min-h-48 items-center justify-center text-center text-sm font-bold text-slate-400">{attendanceLoading ? 'Loading today’s attendance…' : attendanceError ? 'Attendance is unavailable. Ask the team to check the desk.' : 'No learners have been marked present yet.'}</div>}
                             </div>
                         </section>
                     </main>

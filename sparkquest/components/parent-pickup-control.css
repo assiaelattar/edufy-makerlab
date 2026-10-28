@@ -1,13 +1,20 @@
-.sq-pickup-control { overflow:hidden; border:1px solid #c9d8ee; border-radius:28px; background:#fff; box-shadow:0 6px 0 #dbe5f5; color:#183052; }
+.sq-pickup-control { overflow:clip; border:1px solid #c9d8ee; border-radius:28px; background:#fff; box-shadow:0 6px 0 #dbe5f5; color:#183052; }
 .sq-pickup-control.is-locked { padding-bottom:18px; }
 .sq-pickup-control.is-locked > p { margin:18px 22px 0; color:#536a84; font-size:13px; line-height:1.5; }
-.sq-pickup-control-head { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:16px; padding:24px; background:#2448eb; color:#fff; }
+.sq-pickup-control-head { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:16px; padding:24px; border-radius:27px 27px 0 0; background:#2448eb; color:#fff; }
 .sq-pickup-control-head > span { display:grid; width:48px; height:48px; place-items:center; border-radius:16px; background:#d5f777; box-shadow:0 4px 0 #a6c956; color:#193761; }
 .sq-pickup-control-head div { min-width:0; }
 .sq-pickup-control-head p { margin:3px 0 8px; color:#d5f777; font-size:10px; font-weight:900; letter-spacing:.12em; }
 .sq-pickup-control-head h3 { max-width:21ch; margin:0; font-family:'Manrope','Nunito',system-ui,sans-serif; font-size:clamp(26px,5vw,36px); font-weight:900; letter-spacing:-.06em; line-height:1.06; }
 .sq-pickup-control-head small { display:block; max-width:47ch; margin-top:10px; color:#e6ecff; font-size:13px; font-weight:650; line-height:1.48; }
 .sq-pickup-control-head em { grid-column:2; width:fit-content; max-width:100%; border:1px solid #ffffff66; border-radius:999px; padding:6px 10px; background:#ffffff1c; color:#fff; font-size:11px; font-style:normal; font-weight:800; overflow-wrap:anywhere; }
+.sq-pickup-quick-action { position:sticky; top:8px; z-index:20; display:flex; align-items:center; justify-content:space-between; gap:14px; margin:10px 12px 0; border:1px solid #99b76d; border-radius:18px; padding:12px 14px; background:#eaf9d5; box-shadow:0 7px 20px #173a5b24; }
+.sq-pickup-quick-action > div { display:grid; gap:3px; min-width:0; }
+.sq-pickup-quick-action span { color:#3e6b36; font-size:9px; font-weight:900; letter-spacing:.12em; }
+.sq-pickup-quick-action strong { color:#214532; font-size:14px; line-height:1.2; }
+.sq-pickup-quick-action > small { max-width:25ch; color:#5b5134; font-size:12px; font-weight:750; line-height:1.35; }
+.sq-pickup-quick-action .sq-pickup-primary { width:auto; min-width:184px; min-height:48px; box-shadow:0 3px 0 #a6c956; background:#d5f777; font-size:14px; }
+.sq-pickup-receipt-note { margin:0; border-radius:12px; padding:11px 13px; background:#eff7e8; color:#3a6140; font-size:12px; font-weight:750; }
 .sq-pickup-progress-summary { display:grid; grid-template-columns:1fr auto; gap:4px 12px; padding:17px 24px 18px; border-bottom:1px solid #e2ebf6; background:#f2f7ff; }
 .sq-pickup-progress-summary > span { color:#4969ae; font-size:10px; font-weight:900; letter-spacing:.11em; }
 .sq-pickup-progress-summary > strong { color:#1e3f8d; font-size:12px; text-align:right; }
@@ -73,5 +80,7 @@
   .sq-pickup-actions { padding:19px; }
   .sq-pickup-notes-link { width:calc(100% - 38px); margin:0 19px 20px; }
   .sq-pickup-timeline { padding-inline:19px; }
+  .sq-pickup-quick-action { top:6px; display:grid; grid-template-columns:1fr; margin:8px 9px 0; padding:11px; }
+  .sq-pickup-quick-action .sq-pickup-primary { width:100%; }
 }
 @media(prefers-reduced-motion:reduce) { .sq-spin { animation:none; } }
