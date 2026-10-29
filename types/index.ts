@@ -347,6 +347,8 @@ export interface Student {
   medicalInfo?: string;
   authorizedPickups?: string[]; // Array of names allowed to pick up
   status: 'active' | 'inactive';
+  /** Date the learner was paused; earlier attendance remains visible in history. */
+  inactiveAt?: string;
   createdAt: Timestamp;
   loginInfo?: {
     username: string;
@@ -1071,6 +1073,13 @@ export interface AppSettings {
   weekStartsOn?: 0 | 1 | 6;
   receiptContact?: string;
   receiptFooter?: string;
+  paymentReminderRules?: {
+    enabled: boolean;
+    /** Days before an unpaid due date when the parent app shows a reminder. */
+    leadDays: number[];
+    /** Payment promises store a month; this day supplies its due date. */
+    dueDayOfMonth: number;
+  };
   googleReviewUrl?: string;
   defaultWorkHours?: { start: string; end: string }; // Global default
   studentFormConfig: {

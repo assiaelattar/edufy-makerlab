@@ -54,6 +54,12 @@ body .edu-v1.edu-attendance-pulse .atlas-command-header__icon { display:none; }
 .edu-attendance-pulse input[type='checkbox'] { width:20px; height:20px; accent-color:var(--edu-brand); }
 .edu-attendance-pulse .pulse-attendance-row > div:first-child > div:last-child { min-width:0; }
 .edu-attendance-pulse .pulse-attendance-row > div:first-child button { min-width:44px; min-height:44px; }
+.edu-v1.edu-attendance-pulse .pulse-attendance-session,
+.edu-v1.edu-attendance-pulse .pulse-attendance-row { background:var(--edu-surface) !important; border-color:var(--edu-border) !important; color:var(--edu-ink) !important; }
+.edu-v1.edu-attendance-pulse .pulse-attendance-session__head { background:var(--edu-surface-muted) !important; border-color:var(--edu-border) !important; }
+.edu-v1.edu-attendance-pulse .pulse-attendance-row .pulse-attendance-name { color:var(--edu-ink) !important; }
+.edu-v1.edu-attendance-pulse .pulse-attendance-row .pulse-attendance-avatar { background:var(--edu-surface-muted) !important; border-color:var(--edu-border) !important; color:var(--edu-ink) !important; }
+.edu-v1.edu-attendance-pulse .pulse-attendance-row:hover { background:var(--edu-surface-muted) !important; }
 .edu-attendance-pulse .pulse-attendance-marks { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:2px; padding:3px; border:1px solid var(--edu-border); border-radius:12px; background:var(--edu-surface-muted); }
 .edu-attendance-pulse .pulse-attendance-marks button { min-height:44px; height:auto; border:1px solid transparent; border-radius:8px; font-size:11px; font-weight:650; padding-inline:9px; }
 .edu-attendance-pulse .pulse-attendance-marks button:focus-visible { position:relative; z-index:1; }

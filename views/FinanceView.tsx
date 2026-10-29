@@ -258,6 +258,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
  //  Derived: Available Sessions 
     const availableSessions = useMemo(() => {
         const sessions = new Set<string>();
+        sessions.add(computeAcademicYear());
         if (settings.academicYear) sessions.add(settings.academicYear);
         payments.forEach(p => { if (p.session) sessions.add(p.session); });
         enrollments.forEach(e => { if (e.session) sessions.add(e.session); });
@@ -266,7 +267,7 @@ export const FinanceView = ({ onRecordPayment }: { onRecordPayment: (studentId?:
 
     useEffect(() => {
         if (availableSessions.length === 0 || availableSessions.includes(selectedSession)) return;
-        setSelectedSession(settings.academicYear && availableSessions.includes(settings.academicYear) ? settings.academicYear : availableSessions[0]);
+        setSelectedSession(computeAcademicYear());
     }, [availableSessions, selectedSession, settings.academicYear]);
 
  //  Derived: Audience matcher 

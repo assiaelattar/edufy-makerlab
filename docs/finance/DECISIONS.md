@@ -1,5 +1,11 @@
 # Finance decisions
 
+## 2026-10-29 — Reminder source and scope
+
+- Keep reminder settings per organization and disabled until staff enable them. Parent access is read-only under the existing same-organization settings rule.
+- Derive a reminder from the first unpaid payment promise. For monthly, trimester or semester plans without explicit promises, show the remaining balance against the next date derived from the latest cleared payment or enrollment start.
+- Show reminders when a linked parent opens SparkQuest. No WhatsApp, email or push delivery is inferred or triggered.
+
 ## 2026-10-20 — Finance completion boundary
 
 - Enforce manager-only Documents access inside the panel as well as the parent Finance view, matching the existing document-ledger persistence rules even when mounted directly.

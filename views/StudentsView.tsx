@@ -173,20 +173,23 @@ export const StudentsView = ({
         }
         const newStatus = student.status === 'inactive' ? 'active' : 'inactive';
         const confirmMsg = newStatus === 'inactive'
-            ? "Deactivate this student? They will be hidden from active lists but data is preserved."
-            : "Reactivate this student?";
+            ? "Pause this learner? Current rosters will hide them. Earlier attendance and payments remain available by academic year."
+            : "Resume this learner? Check that their enrollment is still valid before marking attendance.";
 
         if (await confirm({
-            title: newStatus === 'inactive' ? 'Deactivate Student' : 'Reactivate Student',
+            title: newStatus === 'inactive' ? 'Pause learner' : 'Resume learner',
             message: confirmMsg,
             variant: newStatus === 'inactive' ? 'danger' : 'success',
-            confirmText: newStatus === 'inactive' ? 'Deactivate' : 'Reactivate'
+            confirmText: newStatus === 'inactive' ? 'Pause' : 'Resume'
         })) {
             try {
-                await updateDoc(doc(firestore, 'students', student.id), { status: newStatus });
+                await updateDoc(doc(firestore, 'students', student.id), {
+                    status: newStatus,
+                    inactiveAt: newStatus === 'inactive' ? new Date().toISOString().slice(0, 10) : null
+                });
                 setSelectedIds(previous => previous.filter(id => id !== student.id));
                 await showAlert(
-                    newStatus === 'inactive' ? 'Student deactivated' : 'Student reactivated',
+                    newStatus === 'inactive' ? 'Learner paused' : 'Learner resumed',
                     `${student.name} is now ${newStatus}.`,
                     'success'
                 );
@@ -623,7 +626,7 @@ export const StudentsView = ({
                         onClick={() => { setShowArchived(previous => !previous); setDirectoryFilter('all'); }}
                         className={`flex h-11 items-center justify-center gap-2 rounded-xl border px-3 text-xs font-black transition-all ${showArchived ? 'bg-red-950/30 text-red-300 border-red-400/30' : 'bg-slate-950/80 text-slate-400 border-white/10 hover:border-white/20'}`}
                     >
-                        <Archive size={14} /> {showArchived ? 'Hide Archived' : 'Archived'}
+                        <Archive size={14} /> {showArchived ? 'Hide paused' : 'Paused'}
                     </button>
                 </div>
                 )}
@@ -749,8 +752,8 @@ export const StudentsView = ({
                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 {!isInactive && can('students.enroll') && <button onClick={(e) => { e.stopPropagation(); onQuickEnroll(student.id); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors" title="Quick Enroll"><Zap size={16} /></button>}
                                                 {can('students.edit') && <button onClick={(e) => { e.stopPropagation(); onEditStudent(student); }} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-blue-400 transition-colors" title="Edit Profile"><Pencil size={16} /></button>}
-                                                {can('students.delete') && (
-                                                    <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className={`p-2 hover:bg-slate-700 rounded-lg transition-colors ${isInactive ? 'text-emerald-500 hover:text-emerald-400' : 'text-slate-500 hover:text-red-400'}`} title={isInactive ? "Reactivate" : "Deactivate"}>
+                                                {can('students.edit') && (
+                                                    <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className={`p-2 hover:bg-slate-700 rounded-lg transition-colors ${isInactive ? 'text-emerald-500 hover:text-emerald-400' : 'text-slate-500 hover:text-red-400'}`} title={isInactive ? "Resume" : "Pause"}>
                                                         {isInactive ? <RefreshCw size={16} /> : <Archive size={16} />}
                                                     </button>
                                                 )}
@@ -828,7 +831,7 @@ export const StudentsView = ({
                                 <div className="flex border-t border-slate-900 pt-3 gap-2">
                                     {!isInactive && can('students.enroll') && <button onClick={(e) => { e.stopPropagation(); onQuickEnroll(student.id); }} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-emerald-500 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"><Zap size={12} /> Enroll</button>}
                                     {can('students.edit') && <button onClick={(e) => { e.stopPropagation(); onEditStudent(student); }} className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 text-xs font-bold border border-slate-800 flex items-center justify-center gap-1"><Pencil size={12} /> Edit</button>}
-                                    {can('students.delete') && <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className="w-10 flex items-center justify-center bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 border border-slate-800" title={isInactive ? 'Reactivate student' : 'Deactivate student'} aria-label={isInactive ? 'Reactivate student' : 'Deactivate student'}>
+                                    {can('students.edit') && <button onClick={(e) => { e.stopPropagation(); toggleStudentStatus(student); }} className="w-10 flex items-center justify-center bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-400 border border-slate-800" title={isInactive ? 'Resume learner' : 'Pause learner'} aria-label={isInactive ? 'Resume learner' : 'Pause learner'}>
                                         {isInactive ? <RefreshCw size={14} /> : <Archive size={14} />}
                                     </button>}
                                 </div>

@@ -63,14 +63,20 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 }) => {
   const [invoiceModal, setInvoiceModal] = React.useState<{ isOpen: boolean; payment: Payment | null }>({ isOpen: false, payment: null });
   const [proofUrl, setProofUrl] = React.useState<string | null>(null);
+  const [programFilter, setProgramFilter] = React.useState('all');
   const { alert: showAlert } = useConfirm();
   const { can, currentOrganization } = useAuth();
   const canManagePayments = can('finance.record_payment');
 
-  const tenantEnrollments = React.useMemo(
+  const allTenantEnrollments = React.useMemo(
     () => studentEnrollments.filter(enrollment => !currentOrganization?.id || enrollment.organizationId === currentOrganization.id),
     [studentEnrollments, currentOrganization?.id]
   );
+  const programOptions = React.useMemo(() => [...new Map(allTenantEnrollments.map(enrollment => [enrollment.programId || enrollment.programName, enrollment.programName])).entries()], [allTenantEnrollments]);
+  React.useEffect(() => {
+    if (programFilter !== 'all' && !programOptions.some(([id]) => id === programFilter)) setProgramFilter('all');
+  }, [programFilter, programOptions]);
+  const tenantEnrollments = React.useMemo(() => allTenantEnrollments.filter(enrollment => programFilter === 'all' || (enrollment.programId || enrollment.programName) === programFilter), [allTenantEnrollments, programFilter]);
   const tenantEnrollmentIds = React.useMemo(() => new Set(tenantEnrollments.map(enrollment => enrollment.id)), [tenantEnrollments]);
   const sortedPayments = React.useMemo(
     () => studentPayments
@@ -169,6 +175,14 @@ export const FinanceTab: React.FC<FinanceTabProps> = ({
 
   return (
     <div className="edu-student-finance space-y-5">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--edu-border)] bg-[var(--edu-surface)] p-3 text-sm text-[var(--edu-ink)]">
+        <label htmlFor="student-finance-program" className="font-semibold">Program</label>
+        <select id="student-finance-program" value={programFilter} onChange={event => setProgramFilter(event.target.value)} className="min-h-10 rounded-lg border border-[var(--edu-border)] bg-[var(--edu-surface-muted)] px-3 text-[var(--edu-ink)]">
+          <option value="all">All programs</option>
+          {programOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+        </select>
+        <span className="text-xs text-[var(--edu-muted)]">Balances and payments for the selected program</span>
+      </div>
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <AtlasSignalCard label="Open balance" value={formatCurrency(openBalance)} detail={openBalance > 0 ? 'Across active tenant enrollments' : 'Account settled'} icon={Wallet} tone={openBalance > 0 ? 'amber' : 'emerald'} />
         <AtlasSignalCard label="Cleared payments" value={formatCurrency(clearedTotal)} detail={`${sortedPayments.filter(isCleared).length} cleared record${sortedPayments.filter(isCleared).length === 1 ? '' : 's'}`} icon={CheckCircle2} tone="emerald" />

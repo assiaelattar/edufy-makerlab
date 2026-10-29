@@ -14,7 +14,7 @@ const normalizeDate = (value: unknown): Date | null => {
 };
 
 export const academicYearForDate = (date: Date) => {
-  const startYear = date.getMonth() >= 7 ? date.getFullYear() : date.getFullYear() - 1;
+  const startYear = date.getMonth() >= 8 ? date.getFullYear() : date.getFullYear() - 1;
   return `${startYear}-${startYear + 1}`;
 };
 

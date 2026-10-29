@@ -13,6 +13,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { db } from '../services/firebase';
 import { AttendanceRecord } from '../types';
 import { findMembershipRenewalsDue, isEnrollmentEligibleForAttendance } from '../utils/membershipLifecycle';
+import { studentActiveOnDate } from '../utils/studentAcademicYear';
 import { getScheduledSlotForWeekday } from '../utils/schoolSchedule';
 import { useWorkspaceScroll, useWorkspaceViewState } from '../components/education-ui/useWorkspaceViewState';
 import { EducationBadge, EducationButton, EducationState } from '../components/education-ui/EducationPrimitives';
@@ -62,10 +63,11 @@ export const AbsenceView = () => {
     const allScheduledStudents = useMemo(() => {
         return enrollments.filter(enrollment => {
             const program = programById.get(enrollment.programId);
-            if (!isEnrollmentEligibleForAttendance(enrollment, program, selectedDate)) return false;
+            const recordedOnDate = attendanceRecords.some(record => record.enrollmentId === enrollment.id && record.date === selectedDate);
+            if (!recordedOnDate && !isEnrollmentEligibleForAttendance(enrollment, program, selectedDate)) return false;
 
             const student = students.find(item => item.id === enrollment.studentId);
-            if (!student || student.status === 'inactive') return false;
+            if (!student || (!recordedOnDate && !studentActiveOnDate(student, selectedDate))) return false;
 
             const mainHasClass = getScheduledSlotForWeekday(enrollment.groupTime, selectedWeekday) !== null;
             const secondaryHasClass = getScheduledSlotForWeekday(enrollment.secondGroupTime, selectedWeekday) !== null;
@@ -94,7 +96,7 @@ export const AbsenceView = () => {
 
             return slots;
         });
-    }, [enrollments, students, programById, selectedDate, selectedWeekday]);
+    }, [enrollments, students, attendanceRecords, programById, selectedDate, selectedWeekday]);
 
     const scheduledStudents = useMemo(() => {
         const query = searchQuery.trim().toLowerCase();

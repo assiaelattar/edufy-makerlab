@@ -783,3 +783,8 @@ The main-based candidate now attempts each old Auth retirement step independentl
 The user explicitly authorized publication of the DAKY Parent Access correction: trusted Vercel API plus Edufy Hostinger client. This permission supersedes the earlier local hold for these reviewed parent files only. Keep real family records untouched during deployment; designated staff will verify exact source accounts and perform the replacement after both live targets are confirmed. The workshop/Instructor Pass candidate and broader UI work are separate.
 
 ---
+## Student membership, attendance and payment reminders — 2026-10-29
+
+An isolated branch adds reversible learner pause with `inactiveAt`, academic-year filters and coverage dates on the student profile, program-scoped student finance, and historical attendance visibility. The Attendance roster now uses Education theme tokens. Edufy Settings has opt-in payment reminder rules; SparkQuest Parent derives a reminder from unpaid promises or installment plans, with no automatic external message. Focused smoke checks, Education System checks and both production builds passed locally. Real tenant acceptance and publication still require the MakerLab release flow.
+
+---

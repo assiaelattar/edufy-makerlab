@@ -1,5 +1,6 @@
 import type { PickupStatus } from './pickupLifecycle';
 import type { FamilyNextWorkshop } from './parentNextWorkshop';
+import type { PaymentReminder } from './paymentReminder';
 
 export type FamilySourceStatus = 'ready' | 'unavailable' | 'error';
 
@@ -12,6 +13,7 @@ export interface FamilyFinanceSummary {
   paymentCount: number;
   pendingPaymentCount: number;
   latestPaymentDate: string | null;
+  reminder?: PaymentReminder | null;
   enrollments: Array<{ id: string; programName: string; packName: string; session: string; status: string; agreed: number; paid: number; balance: number }>;
   payments: Array<{ id: string; enrollmentId: string; date: string; amount: number; status: string; method: string }>;
 }

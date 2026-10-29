@@ -1,5 +1,11 @@
 # Students experience changelog
 
+## 2026-10-29 — Membership pause and academic-year focus
+
+- Added a reversible Pause/Resume action to the register and profile under `students.edit`, recording the pause date without deleting learner history.
+- Scoped profile enrollment, attendance and finance to a selectable academic year, and replaced the old `createdAt + 1 year` validity guess with enrollment coverage dates.
+- Added a program filter to the student Finance tab and preserved historical attendance records when a learner is paused.
+
 ## 2026-10-22 — Parent login duplication guard
 
 - Parent access now checks active same-tenant family logins with the proposed alias before issuing another suffixed ID. Staff must explicitly confirm a distinct parent to proceed.

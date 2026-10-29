@@ -1,0 +1,16 @@
+.edu-toast-stack { position:fixed; z-index:100; top:18px; right:18px; display:flex; flex-direction:column; align-items:flex-end; gap:10px; width:min(380px,calc(100vw - 28px)); pointer-events:none; }
+.edu-toast { --toast-accent:#2e8c6f; display:flex; align-items:flex-start; gap:12px; width:100%; padding:14px; border:1px solid #d9e9e2; border-left:5px solid var(--toast-accent); border-radius:17px; background:linear-gradient(135deg,#fff,#f1f9f5); color:#193a31; box-shadow:0 12px 38px #173d3125,0 3px 0 #d6e8dd; animation:edu-toast-enter .25s ease-out; }
+.edu-toast[data-tone='info'] { --toast-accent:#386bb9; background:linear-gradient(135deg,#fff,#f1f6fd); border-color:#d8e5f5; }
+.edu-toast[data-tone='warning'] { --toast-accent:#b87920; background:linear-gradient(135deg,#fff,#fff8ea); border-color:#f1dfc4; }
+.edu-toast[data-tone='error'] { --toast-accent:#bf5264; background:linear-gradient(135deg,#fff,#fff2f3); border-color:#f0d6dc; }
+.edu-toast__icon { display:grid; flex:none; width:38px; height:38px; place-items:center; border-radius:12px; background:color-mix(in srgb,var(--toast-accent) 12%,white); color:var(--toast-accent); }
+.edu-toast__copy { flex:1; min-width:0; }
+.edu-toast__copy h4 { margin:1px 0 0; font-size:14px; line-height:1.35; font-weight:780; letter-spacing:-.015em; }
+.edu-toast__copy p { margin:4px 0 0; overflow-wrap:anywhere; color:#5b7066; font-size:12px; line-height:1.45; }
+.edu-toast__copy time { display:block; margin-top:7px; color:#809087; font-size:10px; }
+.edu-toast__close { display:grid; flex:none; width:36px; height:36px; place-items:center; border:0; border-radius:10px; background:transparent; color:#687c71; cursor:pointer; }
+.edu-toast__close:hover { background:#e9f1eb; color:#193a31; }
+.edu-toast__close:focus-visible { outline:3px solid var(--toast-accent); outline-offset:2px; }
+@keyframes edu-toast-enter { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width:600px) { .edu-toast-stack { top:10px; right:14px; left:14px; width:auto; } }
+@media (prefers-reduced-motion:reduce) { .edu-toast { animation:none; } }

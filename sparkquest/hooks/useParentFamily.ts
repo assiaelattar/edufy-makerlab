@@ -9,6 +9,7 @@ import { pickupSessionDate, previousPickupDate, selectOpenPickup, type PickupSta
 import { isSafeProjectImage, resolveParentProjectImage } from '../domain/parentProjectVisual';
 import { upcomingForChild, type FamilyUpcomingMission } from '../domain/parentUpcoming';
 import { nextWorkshopFromSchedule } from '../domain/parentNextWorkshop';
+import { findPaymentReminder, type ReminderRules } from '../domain/paymentReminder';
 import { currentAcademicYear, matchesAcademicYear, normalizeAcademicYear } from '../utils/academicYear';
 
 export interface FamilyProject extends StudentProject {
@@ -58,6 +59,8 @@ interface ProjectTemplateVisual {
 interface EnrollmentRecord extends EnrollmentSummaryInput {
   organizationId?: string; studentId?: string;
   programId?: string; gradeId?: string; gradeName?: string; groupId?: string; groupName?: string;
+  paymentPromises?: Array<{ month: string; amount: number }>;
+  paymentPlan?: string; startDate?: string;
 }
 interface PaymentRecord extends PaymentSummaryInput { id: string; organizationId?: string; enrollmentId?: string }
 interface AttendanceRecord extends AttendanceSummaryInput { id: string; organizationId?: string; studentId?: string }
@@ -118,6 +121,13 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
         const links = linkDocs.docs.map(item => ({ id: item.id, ...item.data() } as GuardianFamilyLink))
           .filter(link => link.parentUid === parentUid && link.organizationId === organizationId && link.status === 'active');
         const canonicalIds = familyChildIds(links, parentUid, organizationId);
+        let reminderRules: ReminderRules | undefined;
+        try {
+          const settingsDoc = await getDoc(doc(db, 'organizations', organizationId, 'settings', 'global'));
+          reminderRules = settingsDoc.data()?.paymentReminderRules as ReminderRules | undefined;
+        } catch (cause) {
+          console.warn('Payment reminder settings unavailable', cause);
+        }
 
         const family = await Promise.all(canonicalIds.map(async (id): Promise<FamilyChild> => {
           try {
@@ -172,7 +182,10 @@ export const useParentFamily = (parentUid?: string, organizationId?: string) => 
                   if (paymentResults.some(result => result.status === 'rejected')) throw paymentResults.find(result => result.status === 'rejected')?.reason;
                   const payments = paymentResults.flatMap(result => result.status === 'fulfilled' ? result.value.docs.map(item => ({ id: item.id, ...item.data() } as PaymentRecord)) : [])
                     .filter(item => item.organizationId === organizationId && enrollments.some(enrollment => enrollment.id === item.enrollmentId));
-                  return { status: 'ready', data: summarizeFinance(enrollments, payments) };
+                  return { status: 'ready', data: {
+                    ...summarizeFinance(enrollments, payments),
+                    reminder: findPaymentReminder(enrollments, payments, reminderRules, new Date().toISOString().slice(0, 10))
+                  } };
                 } catch (cause) {
                   console.error('Unable to load family finance', id, cause);
                   return { status: 'error', reason: sourceError('Payments', cause) };

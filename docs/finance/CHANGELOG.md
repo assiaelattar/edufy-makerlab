@@ -1,5 +1,11 @@
 # Finance changelog
 
+## 2026-10-29 — Parent reminder configuration
+
+- Added opt-in tenant reminder rules in Settings for lead days and the due day of monthly payment promises.
+- SparkQuest Parent shows a contextual in-app reminder for an unpaid scheduled amount or installment plan; verified ledger payments clear it.
+- The current academic year remains the default Finance period even when only older sessions have records. Edufy notification cards now use a light Education-style surface.
+
 ## 2026-10-20 — Finance browser completion follow-up
 
 - Verified Reports, populated follow-up, bulk family payment proof/failure, transaction lifecycle/detail/receipt and nested Documents dialogs with standalone Chromium at 1440px and 390px in light/dark themes.

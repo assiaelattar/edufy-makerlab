@@ -211,6 +211,13 @@
 .pf-nav button { display:grid; min-height:57px; place-items:center; align-content:center; gap:3px; border:0; border-radius:13px; background:transparent; color:#61746a; font-size:11px; font-weight:850; }
 .pf-nav button[aria-current=page] { background:#eaf3d8; color:#2d482d; }
 .pf-nav button[aria-current=page] svg { stroke-width:2.8; }
+.pf-payment-reminder { display:flex; align-items:flex-start; gap:12px; padding:16px; border:1px solid #e8c897; border-radius:19px; background:linear-gradient(135deg,#fff9eb,#fffdf7); color:#273a2c; box-shadow:0 5px 0 #eddfc6; }
+.pf-payment-reminder__icon { display:grid; flex:none; width:42px; height:42px; place-items:center; border-radius:13px; background:#ffe5b7; color:#99540f; }
+.pf-payment-reminder div { flex:1; min-width:0; }
+.pf-payment-reminder small { display:block; margin-bottom:3px; color:#965819; font-size:10px; font-weight:850; letter-spacing:.11em; }
+.pf-payment-reminder strong { display:block; font-size:16px; letter-spacing:-.02em; }
+.pf-payment-reminder p { margin:4px 0 0; color:#637167; font-size:12px; line-height:1.45; }
+.pf-payment-reminder button { display:inline-flex; align-items:center; gap:4px; flex:none; min-height:42px; padding:0 10px; border:0; border-radius:10px; background:#28563f; color:#fff; font-size:11px; font-weight:800; }
 @media (max-width:719px) { .pf-nav.is-hidden:not(:focus-within) { transform:translateY(calc(100% + 8px)); opacity:0; pointer-events:none; } }
 @keyframes pf-slide-in { from { opacity:.45; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
 @keyframes pf-screen-enter { from { opacity:.55; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }

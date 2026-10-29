@@ -1,5 +1,10 @@
 # Students experience known issues
 
+## 2026-10-29 — Historical records
+
+- Paused learners keep their historical attendance and payment records. For older inactive students that have no `inactiveAt`, the exact pause date cannot be reconstructed; existing attendance marks remain visible, while unmarked old roster dates are omitted.
+- The repository-wide TypeScript check still reports pre-existing errors outside this slice. Both production builds, focused smoke tests and Education System checks passed locally; signed-in tenant acceptance remains open.
+
 ## 2026-10-22
 
 - Live DAKY records show separate parent login IDs: Kamyl has `p.daky-3@makerlab.academy`, Nassym has `p.daky-4@makerlab.academy`. The first appears in Nassym's verified-family selector, but Nassym's recorded parent name differs from that login's profile name. Exact family identity and retained account require staff verification before a production transfer; no account was merged or disabled.

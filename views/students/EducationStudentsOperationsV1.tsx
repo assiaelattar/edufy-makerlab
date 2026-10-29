@@ -290,7 +290,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
     const missingLabel = missingField === 'parentName' ? 'parent name' : missingField === 'birthDate' ? 'date of birth' : 'school';
     const profileAction = { label: `Add the missing ${missingLabel}`, action: () => onEditStudent(selectedStudent, missingField), button: `Add ${missingLabel}` };
     const duplicateAction = { label: 'Compare the matching records', action: () => setShowDuplicateReview(true), button: 'Compare records' };
-    if (selectedStudent.status === 'inactive' && can('students.delete')) return { label: 'Reactivate this learner', action: () => onToggleStudentStatus(selectedStudent), button: 'Reactivate' };
+    if (selectedStudent.status === 'inactive' && can('students.edit')) return { label: 'Resume this learner', action: () => onToggleStudentStatus(selectedStudent), button: 'Resume' };
     if (smartView === 'duplicates' && selectedIssues.includes('possible_duplicate')) return duplicateAction;
     if (smartView === 'profile' && selectedIssues.includes('missing_profile') && can('students.edit')) return profileAction;
     if (smartView === 'placement' && selectedIssues.includes('unassigned_group') && selectedUnassignedEnrollment && can('students.enroll')) return { label: 'Place this learner in a class', action: () => onEditEnrollment(selectedStudent.id, selectedUnassignedEnrollment.id), button: 'Choose class' };
@@ -374,7 +374,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                     <label><span>Audience</span><select value={filterAudience} onChange={event => setFilterAudience(event.target.value as 'all' | 'kids' | 'adults')}><option value="all">All ages</option><option value="kids">Kids & teens</option><option value="adults">Adult learners</option></select><ChevronDown size={14} /></label>
                     <label><span>Level</span><select value={filterGradeName} disabled={!selectedProgram} onChange={event => setFilterGradeName(event.target.value)}><option value="">All levels</option>{selectedProgram?.grades?.map((grade: any) => <option key={grade.id} value={grade.name}>{grade.name}</option>)}</select><ChevronDown size={14} /></label>
                     <label><span>Class day</span><select value={filterDay} disabled={availableDays.length === 0} onChange={event => setFilterDay(event.target.value)}><option value="">All days</option>{availableDays.map(day => <option key={day} value={day}>{day}</option>)}</select><ChevronDown size={14} /></label>
-                    <button type="button" className="edu-student-ops__archive-filter" aria-pressed={showArchived} onClick={() => { setShowArchived(value => !value); setDirectoryFilter('all'); setSmartView('all'); }}><Archive size={15} />{showArchived ? 'Showing archived' : `Archived · ${stats.inactive}`}</button>
+                    <button type="button" className="edu-student-ops__archive-filter" aria-pressed={showArchived} onClick={() => { setShowArchived(value => !value); setDirectoryFilter('all'); setSmartView('all'); }}><Archive size={15} />{showArchived ? 'Showing paused' : `Paused · ${stats.inactive}`}</button>
                   </div>
                   {hasActiveFilters && <div className="edu-student-ops__filter-summary"><Sparkles size={14} />Active filters are applied to the roster. <button type="button" onClick={clearFilters}>Clear filters</button></div>}
                 </div>
@@ -415,7 +415,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                 <>
                   <div className="edu-student-ops__passport-top">
                     <div className="pulse-students-preview-heading"><span className="edu-student-ops__passport-label">Learner overview</span><button type="button" onClick={() => { const roster = document.getElementById('pulse-students-roster'); roster?.focus({ preventScroll: true }); roster?.scrollIntoView({ block: 'start', behavior: 'auto' }); }}>Back to list</button></div>
-                    <div className="edu-student-ops__passport-person"><span>{getInitials(selectedStudent.name)}</span><div><h2>{selectedStudent.name}</h2><p>{selectedStudent.status === 'inactive' ? 'Archived learner' : `Active learner · joined ${getDate(selectedStudent.createdAt)}`}</p></div></div>
+                    <div className="edu-student-ops__passport-person"><span>{getInitials(selectedStudent.name)}</span><div><h2>{selectedStudent.name}</h2><p>{selectedStudent.status === 'inactive' ? 'Paused learner' : `Active learner · joined ${getDate(selectedStudent.createdAt)}`}</p></div></div>
                   </div>
                   <div className="edu-student-ops__passport-body">
                     {nextAction && <div className="edu-student-ops__next-action" data-attention={selectedIssues.length > 0}><span><Sparkles size={17} /></span><div><small>Next step</small><strong>{nextAction.label}</strong></div><button type="button" onClick={nextAction.action}>{nextAction.button}</button></div>}
@@ -447,7 +447,7 @@ const EducationStudentsOperationsV1: React.FC<Props> = ({
                       <button type="button" onClick={() => onViewProfile(selectedStudent.id)}><Eye size={15} />Open profile</button>
                       {can('students.edit') && <button type="button" onClick={() => onEditStudent(selectedStudent)}><Pencil size={15} />Edit record</button>}
                       {selectedStudent.status !== 'inactive' && can('students.enroll') && <button type="button" onClick={() => onQuickEnroll(selectedStudent.id)}><GraduationCap size={15} />Enroll</button>}
-                      {can('students.delete') && <button type="button" className="edu-student-ops__status-action" onClick={() => onToggleStudentStatus(selectedStudent)}>{selectedStudent.status === 'inactive' ? <RefreshCw size={15} /> : <Archive size={15} />}{selectedStudent.status === 'inactive' ? 'Reactivate' : 'Archive'}</button>}
+                      {can('students.edit') && <button type="button" className="edu-student-ops__status-action" onClick={() => onToggleStudentStatus(selectedStudent)}>{selectedStudent.status === 'inactive' ? <RefreshCw size={15} /> : <Archive size={15} />}{selectedStudent.status === 'inactive' ? 'Resume' : 'Pause'}</button>}
                     </div>
                   </div>
                 </>

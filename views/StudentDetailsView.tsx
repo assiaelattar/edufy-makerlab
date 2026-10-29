@@ -1,6 +1,6 @@
 import { StudentDetailsForm } from '../components/students/StudentDetailsForm';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight } from 'lucide-react';
+import { Users, ArrowLeft, Mail, Phone, Printer, Pencil, BookOpen, Plus, ArrowRightLeft, Wallet, Settings, Eye, CreditCard, Trash2, Calendar, AlertCircle, XCircle, Clock, Save, AlertTriangle, Loader2, Key, MessageCircle, Image as ImageIcon, ExternalLink, RefreshCw, Trophy, Zap, Code, Rocket, Target, Star, CheckCircle2, UserPlus, Copy, Share2, Award, Shield, Sparkles, GraduationCap, FolderKanban, UserRoundCog, ChevronRight, Archive } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,9 @@ import { manageParentAccess, type ParentAccessAction } from '../services/parentA
 import { Modal } from '../components/Modal';
 import { Enrollment, Payment, StudentProject } from '../types';
 import { getTheme } from '../utils/theme';
+import { academicYearForDate, currentAcademicYear, normalizeAcademicYear } from '../utils/academicYear';
+import { enrollmentInAcademicYear } from '../utils/studentAcademicYear';
+import { getEnrollmentCoverageState, resolveEnrollmentCoverage } from '../utils/membershipLifecycle';
 import { config } from '../utils/config';
 
 const parentSparkQuestUrl = () => new URL('?role=parent', config.sparkQuestUrl).toString();
@@ -65,6 +68,7 @@ export const StudentDetailsView = ({
     const [selectedScheduleProgramId, setSelectedScheduleProgramId] = useState('');
     const [confirmModal, setConfirmModal] = useState<any>({ isOpen: false, title: '', message: '', type: 'danger', isLoading: false, action: async () => { } });
     const [activeTab, setActiveTab] = useState<'Overview' | 'Learning' | 'Attendance' | 'Finance' | 'Access'>('Overview');
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState(currentAcademicYear);
     const [learningView, setLearningView] = useState<'enrollments' | 'portfolio'>('enrollments');
     const [studentGuideState, setStudentGuideState] = useState<GuideState | null>(null);
     const [isEditingStudent, setIsEditingStudent] = useState(false);
@@ -151,6 +155,24 @@ export const StudentDetailsView = ({
         setIsEditingStudent(true);
     };
 
+    const handlePauseStudent = async () => {
+        if (!db || !can('students.edit') || !currentOrganization?.id || student.organizationId !== currentOrganization.id) return;
+        const pausing = student.status !== 'inactive';
+        if (!await confirm({
+            title: pausing ? 'Pause learner' : 'Resume learner',
+            message: pausing ? 'Hide this learner from current rosters? Their earlier attendance and payments stay in the academic-year history.' : 'Resume this learner? Check their membership validity before attendance.',
+            confirmText: pausing ? 'Pause' : 'Resume',
+            variant: pausing ? 'warning' : 'success'
+        })) return;
+        try {
+            await updateDoc(doc(db, 'students', student.id), { status: pausing ? 'inactive' : 'active', inactiveAt: pausing ? new Date().toISOString().slice(0, 10) : null });
+            await showAlert(pausing ? 'Learner paused' : 'Learner resumed', `${student.name}'s record was updated.`, 'success');
+        } catch (error) {
+            console.error('Could not update learner status', error);
+            await showAlert('Status not saved', 'Check your connection and try again.', 'danger');
+        }
+    };
+
     const handleSaveStudent = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!db || !student.id || isSavingStudent || !can('students.edit')) return;
@@ -185,8 +207,6 @@ export const StudentDetailsView = ({
     const studentPayments = payments.filter(p => studentEnrollments.some(e => e.id === p.enrollmentId));
     const publishedProjects = studentProjects.filter(p => p.studentId === student.id && p.status === 'published');
     const studentAttendance = attendanceRecords.filter(r => r.studentId === student.id).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const absenceCount = studentAttendance.filter(r => r.status === 'absent').length;
-    const lateCount = studentAttendance.filter(r => r.status === 'late').length;
 
     const isAdult = studentEnrollments.some(e => {
         const prog = programs.find(p => p.id === e.programId);
@@ -712,16 +732,30 @@ export const StudentDetailsView = ({
 
 
 
-    const stemEnrollment = studentEnrollments.find(e => e.programName.toLowerCase().includes('stem'));
-    let membershipEndStr = null;
-    if (stemEnrollment && stemEnrollment.createdAt) {
-        const rawStart = stemEnrollment.createdAt as any;
-        const start = rawStart?.toDate ? rawStart.toDate() : new Date(rawStart);
-        start.setFullYear(start.getFullYear() + 1);
-        membershipEndStr = start.toLocaleDateString('fr-MA', { month: 'long', year: 'numeric' });
-    }
-
-    const activeEnrollments = studentEnrollments.filter(enrollment => enrollment.status === 'active');
+    const academicYears = new Set([currentAcademicYear()]);
+    studentEnrollments.forEach(enrollment => {
+        const coverage = resolveEnrollmentCoverage(enrollment, programs.find(program => program.id === enrollment.programId));
+        const first = coverage.startDate ? Number(coverage.startDate.slice(0, 4)) - 1 : 0;
+        const last = coverage.endDate ? Number(coverage.endDate.slice(0, 4)) : first;
+        if (first > 2000 && last - first < 20) {
+            for (let year = first; year <= last; year++) {
+                if (enrollmentInAcademicYear(enrollment, programs.find(program => program.id === enrollment.programId), `${year}-${year + 1}`)) academicYears.add(`${year}-${year + 1}`);
+            }
+        } else if (coverage.startDate) academicYears.add(academicYearForDate(new Date(`${coverage.startDate}T12:00:00`)));
+        else if (normalizeAcademicYear(enrollment.session)) academicYears.add(normalizeAcademicYear(enrollment.session)!);
+    });
+    studentAttendance.forEach(record => { if (record.date) academicYears.add(academicYearForDate(new Date(`${record.date.slice(0, 10)}T12:00:00`))); });
+    const visibleEnrollments = studentEnrollments.filter(enrollment => enrollmentInAcademicYear(enrollment, programs.find(program => program.id === enrollment.programId), selectedAcademicYear));
+    const visibleEnrollmentIds = new Set(visibleEnrollments.map(enrollment => enrollment.id));
+    const visiblePayments = studentPayments.filter(payment => visibleEnrollmentIds.has(payment.enrollmentId));
+    const visibleAttendance = studentAttendance.filter(record => record.date && academicYearForDate(new Date(`${record.date.slice(0, 10)}T12:00:00`)) === selectedAcademicYear);
+    const absenceCount = visibleAttendance.filter(record => record.status === 'absent').length;
+    const lateCount = visibleAttendance.filter(record => record.status === 'late').length;
+    const activeEnrollments = visibleEnrollments.filter(enrollment => getEnrollmentCoverageState(enrollment, programs.find(program => program.id === enrollment.programId), new Date().toISOString().slice(0, 10)) === 'active' && student.status !== 'inactive');
+    const membershipSummaries = visibleEnrollments.map(enrollment => {
+        const program = programs.find(item => item.id === enrollment.programId);
+        return { enrollment, coverage: resolveEnrollmentCoverage(enrollment, program), state: student.status === 'inactive' ? 'paused' : getEnrollmentCoverageState(enrollment, program, new Date().toISOString().slice(0, 10)) };
+    });
     const schedulePrograms = Array.from(new Map(activeEnrollments.map(enrollment => [enrollment.programId || enrollment.programName, {
         id: enrollment.programId || enrollment.programName,
         name: enrollment.programName
@@ -738,14 +772,14 @@ export const StudentDetailsView = ({
         generateStudentSchedulePrint(student, selectedEnrollments, settings);
         setIsSchedulePrintOpen(false);
     };
-    const outstandingBalance = studentEnrollments.reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
-    const attendedSessions = studentAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
-    const attendanceRate = studentAttendance.length > 0 ? Math.round((attendedSessions / studentAttendance.length) * 100) : null;
+    const outstandingBalance = visibleEnrollments.reduce((sum, enrollment) => sum + Math.max(0, Number(enrollment.balance) || 0), 0);
+    const attendedSessions = visibleAttendance.filter(record => ['present', 'late'].includes(record.status)).length;
+    const attendanceRate = visibleAttendance.length > 0 ? Math.round((attendedSessions / visibleAttendance.length) * 100) : null;
     const studentTabs = [
         { label: 'Overview' as const, icon: Users },
-        { label: 'Learning' as const, icon: GraduationCap, count: studentEnrollments.length + publishedProjects.length },
-        { label: 'Attendance' as const, icon: Calendar, count: studentAttendance.length },
-        { label: 'Finance' as const, icon: Wallet, count: studentPayments.length },
+        { label: 'Learning' as const, icon: GraduationCap, count: visibleEnrollments.length + publishedProjects.length },
+        { label: 'Attendance' as const, icon: Calendar, count: visibleAttendance.length },
+        { label: 'Finance' as const, icon: Wallet, count: visiblePayments.length },
         { label: 'Access' as const, icon: UserRoundCog, count: Number(Boolean(student.loginInfo?.email)) + Number(Boolean(student.parentLoginInfo?.email)) }
     ];
     const attentionItems = [
@@ -778,13 +812,14 @@ export const StudentDetailsView = ({
                                 <span data-status={student.status === 'inactive' ? 'inactive' : 'active'}>{student.status === 'inactive' ? 'Inactive' : 'Active'}</span>
                             </div>
                             <p>{student.school || 'School not listed'} <i /> {student.parentName || 'Parent not listed'} {student.birthDate && <><i /> {calculateAge(student.birthDate)} years old</>}</p>
-                            {membershipEndStr && <span className="edu-student-details-v1__membership">STEM program until {membershipEndStr}</span>}
+                            <span className="edu-student-details-v1__membership">{membershipSummaries.find(item => item.state === 'active')?.enrollment.programName || 'Membership'} · {membershipSummaries.find(item => item.state === 'active')?.coverage.endDate ? `valid until ${formatDate(membershipSummaries.find(item => item.state === 'active')!.coverage.endDate!)}` : student.status === 'inactive' ? 'paused' : 'review validity'}</span>
                         </div>
                     </div>
                     <div className="edu-student-details-v1__actions">
                         <button type="button" onClick={openSchedulePrint}><Printer size={17} />Schedule</button>
                         {can('students.edit') && <button type="button" onClick={handleShareSchedule} title={student.lastScheduleSharedAt ? `Last shared: ${formatDate(((student.lastScheduleSharedAt as any).toDate ? (student.lastScheduleSharedAt as any).toDate() : student.lastScheduleSharedAt) as any)}` : 'Share schedule'}>{student.lastScheduleSharedAt ? <CheckCircle2 size={17} /> : <Share2 size={17} />}{student.lastScheduleSharedAt ? 'Shared' : 'Share'}</button>}
                         {can('students.edit') && <button type="button" className="edu-student-details-v1__edit" onClick={handleEditClick}><Pencil size={17} />Edit record</button>}
+                        {can('students.edit') && <button type="button" onClick={() => void handlePauseStudent()}>{student.status === 'inactive' ? <RefreshCw size={17} /> : <Archive size={17} />}{student.status === 'inactive' ? 'Resume' : 'Pause'}</button>}
                     </div>
                 </section>
             ) : <AtlasCommandHeader
@@ -796,7 +831,7 @@ export const StudentDetailsView = ({
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${student.status === 'inactive' ? 'border-red-400/30 bg-red-500/10 text-red-300' : 'border-teal-400/30 bg-teal-400/10 text-teal-200'}`}>
                         {student.status === 'inactive' ? 'Inactive' : 'Active record'}
                     </span>
-                    {membershipEndStr && <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">STEM program until {membershipEndStr}</span>}
+                    <span className="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">{membershipSummaries.find(item => item.state === 'active')?.coverage.endDate ? `Valid until ${formatDate(membershipSummaries.find(item => item.state === 'active')!.coverage.endDate!)}` : student.status === 'inactive' ? 'Paused' : 'Review membership validity'}</span>
                 </>}
                 actions={<>
                     <AtlasActionButton icon={Printer} onClick={openSchedulePrint}>Schedule</AtlasActionButton>
@@ -804,10 +839,19 @@ export const StudentDetailsView = ({
                         {student.lastScheduleSharedAt ? 'Shared' : 'Share'}
                     </AtlasActionButton>}
                     {can('students.edit') && <AtlasActionButton icon={Pencil} onClick={handleEditClick}>Edit</AtlasActionButton>}
+                    {can('students.edit') && <AtlasActionButton icon={student.status === 'inactive' ? RefreshCw : Archive} onClick={() => void handlePauseStudent()}>{student.status === 'inactive' ? 'Resume' : 'Pause'}</AtlasActionButton>}
                     <AtlasActionButton icon={ArrowLeft} variant="quiet" onClick={() => navigateTo('students')} title="Back to students" aria-label="Back to students" />
                 </>}
             />}
 
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[var(--edu-border)] bg-[var(--edu-surface)] px-4 py-3 text-sm text-[var(--edu-ink)]">
+                <label htmlFor="student-academic-year" className="font-semibold">Academic year</label>
+                <select id="student-academic-year" aria-label="Filter student history by academic year" value={selectedAcademicYear} onChange={event => setSelectedAcademicYear(event.target.value)} className="rounded-lg border border-[var(--edu-border)] bg-[var(--edu-surface-muted)] px-3 py-2 text-[var(--edu-ink)]">
+                    {[...academicYears].sort().reverse().map(year => <option key={year} value={year}>{year}</option>)}
+                </select>
+                <span className="text-xs text-[var(--edu-muted)]">Enrollments, payments and attendance for this year</span>
+            </div>
+            {membershipSummaries.length > 0 && <div className="flex flex-wrap gap-2" aria-label="Membership validity">{membershipSummaries.map(({ enrollment, coverage, state }) => <span key={enrollment.id} className="rounded-xl border border-[var(--edu-border)] bg-[var(--edu-surface)] px-3 py-2 text-xs text-[var(--edu-ink)]"><strong>{enrollment.programName}</strong> · {coverage.startDate ? formatDate(coverage.startDate) : 'Start date missing'} → {coverage.endDate ? formatDate(coverage.endDate) : 'End date missing'} · <strong>{state}</strong></span>)}</div>}
             <EducationGuide module="students" state={guideState} mode="compact" message={guideMessage} dismissible={activeTab !== 'Overview'} action={guideState === 'attention' && attentionItems[0] ? { label: attentionItems[0].title, onClick: attentionItems[0].action } : undefined} />
 
             {attentionItems.length > 1 && activeTab === 'Overview' && <section className="edu-student-details-v1__attention" aria-labelledby="student-attention-title"><header><span><AlertTriangle size={18} /></span><div><h3 id="student-attention-title">Also needs attention</h3><p>Review these after the next step above.</p></div></header><div>{attentionItems.slice(1).map(item => { const Icon = item.icon; return <button key={item.id} type="button" onClick={item.action}><span><Icon size={17} /></span><span><strong>{item.title}</strong><small>{item.detail}</small></span><ChevronRight size={17} /></button>; })}</div></section>}
@@ -855,7 +899,7 @@ export const StudentDetailsView = ({
                     <div role="tabpanel" id={`student-panel-${activeTab.toLowerCase()}`} aria-labelledby={`student-tab-${activeTab.toLowerCase()}`} className="edu-student-details-v1__panel min-w-0" tabIndex={0}>
                         {activeTab === 'Overview' && <div className="edu-student-details-v1__overview">
                             <div className="edu-student-details-v1__signals grid grid-cols-2 gap-3 xl:grid-cols-4">
-                                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${studentEnrollments.length} total enrollment${studentEnrollments.length === 1 ? '' : 's'}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Learning')} />
+                                <AtlasSignalCard label="Active learning" value={activeEnrollments.length} detail={`${visibleEnrollments.length} enrollment${visibleEnrollments.length === 1 ? '' : 's'} in ${selectedAcademicYear}`} icon={GraduationCap} tone="teal" onClick={() => setActiveTab('Learning')} />
                                 <AtlasSignalCard label="Balance due" value={formatCurrency(outstandingBalance)} detail={outstandingBalance > 0 ? 'Follow-up may be needed' : 'Account is settled'} icon={Wallet} tone={outstandingBalance > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab('Finance')} />
                                 <AtlasSignalCard label="Attendance" value={attendanceRate === null ? 'No data' : `${attendanceRate}%`} detail={`${absenceCount} absent / ${lateCount} late`} icon={Calendar} tone={absenceCount > 0 ? 'amber' : 'blue'} onClick={() => setActiveTab('Attendance')} />
                                 <AtlasSignalCard label="Published work" value={publishedProjects.length} detail="Portfolio projects" icon={FolderKanban} tone="slate" onClick={() => { setLearningView('portfolio'); setActiveTab('Learning'); }} />
@@ -865,10 +909,10 @@ export const StudentDetailsView = ({
                                 <section><header><span><GraduationCap size={18} /></span><div><h3>Current learning</h3><p>Programs and weekly delivery</p></div><button type="button" onClick={() => setActiveTab('Learning')}>Open</button></header>{activeEnrollments.length ? <div className="edu-student-details-v1__program-list">{activeEnrollments.slice(0, 3).map(enrollment => <button type="button" key={enrollment.id} onClick={() => setActiveTab('Learning')}><span><strong>{enrollment.programName}</strong><small>{enrollment.gradeName || 'Level not set'} · {enrollment.groupName || 'Group not set'}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="edu-student-details-v1__overview-empty"><BookOpen size={24} /><p>No active enrollment.</p>{can('students.enroll') && <button type="button" onClick={() => onQuickEnroll(student.id)}>Add enrollment</button>}</div>}</section>
                             </div>
                         </div>}
-                        {activeTab === 'Learning' && <div className="edu-student-details-v1__learning"><div className="edu-student-details-v1__subtabs" role="group" aria-label="Learning workspace"><button type="button" aria-pressed={learningView === 'enrollments'} onClick={() => setLearningView('enrollments')}><GraduationCap size={16} />Enrollments <span>{studentEnrollments.length}</span></button><button type="button" aria-pressed={learningView === 'portfolio'} onClick={() => setLearningView('portfolio')}><FolderKanban size={16} />Portfolio <span>{publishedProjects.length}</span></button></div>{learningView === 'enrollments' ? <AcademicsTab studentEnrollments={studentEnrollments} onQuickEnroll={onQuickEnroll} navigateTo={navigateTo as any} setEditEnrollment={setEditEnrollment} initiateDeleteEnrollment={initiateDeleteEnrollment} studentId={student.id} canEnroll={can('students.enroll')} canEdit={can('students.enroll')} canDelete={can('students.delete')} /> : <PortfolioTab publishedProjects={publishedProjects} setSelectedProject={setSelectedProject} />}</div>}
+                        {activeTab === 'Learning' && <div className="edu-student-details-v1__learning"><div className="edu-student-details-v1__subtabs" role="group" aria-label="Learning workspace"><button type="button" aria-pressed={learningView === 'enrollments'} onClick={() => setLearningView('enrollments')}><GraduationCap size={16} />Enrollments <span>{visibleEnrollments.length}</span></button><button type="button" aria-pressed={learningView === 'portfolio'} onClick={() => setLearningView('portfolio')}><FolderKanban size={16} />Portfolio <span>{publishedProjects.length}</span></button></div>{learningView === 'enrollments' ? <AcademicsTab studentEnrollments={visibleEnrollments} onQuickEnroll={onQuickEnroll} navigateTo={navigateTo as any} setEditEnrollment={setEditEnrollment} initiateDeleteEnrollment={initiateDeleteEnrollment} studentId={student.id} canEnroll={can('students.enroll')} canEdit={can('students.enroll')} canDelete={can('students.delete')} /> : <PortfolioTab publishedProjects={publishedProjects} setSelectedProject={setSelectedProject} />}</div>}
                         {activeTab === 'Finance' && <FinanceTab
-                            studentPayments={studentPayments}
-                            studentEnrollments={studentEnrollments}
+                            studentPayments={visiblePayments}
+                            studentEnrollments={visibleEnrollments}
                             student={student}
                             programs={programs}
                             onRecordPayment={onRecordPayment}
@@ -879,7 +923,7 @@ export const StudentDetailsView = ({
                             onShareReceipt={handleShareReceipt}
                         />}
                         {activeTab === 'Attendance' && <AttendanceTab
-                            studentAttendance={studentAttendance}
+                            studentAttendance={visibleAttendance}
                             absenceCount={absenceCount}
                             lateCount={lateCount}
                             student={student}

@@ -17,7 +17,7 @@ import { isBiometricAvailable, registerBiometric, isBiometricEnabled, clearBiome
 import { EducationButton, EducationBadge, EducationNotice, EducationState, EducationStatusPill } from '../components/education-ui/EducationPrimitives';
 import { SettingsField, SettingsMetric, SettingsNavigation, SettingsPanel, SettingsToggle, settingsInputClass, type SettingsNavigationItem } from '../components/settings/SettingsUI';
 
-type SettingsSection = 'general' | 'plan' | 'documents' | 'forms' | 'data' | 'api' | 'team' | 'maintenance';
+type SettingsSection = 'general' | 'finance' | 'plan' | 'documents' | 'forms' | 'data' | 'api' | 'team' | 'maintenance';
 
 export const SettingsView = () => {
     const { settings: globalSettings, teamMembers, students, programs, enrollments, payments } = useAppContext();
@@ -205,7 +205,12 @@ export const SettingsView = () => {
         
         setIsSaving(true);
         try {
-            const normalizedSettings = { ...settings, academyName, academicYear };
+            const normalizedSettings = { ...settings, academyName, academicYear,
+                ...(settings.paymentReminderRules ? { paymentReminderRules: {
+                    enabled: Boolean(settings.paymentReminderRules.enabled),
+                    leadDays: [...new Set(settings.paymentReminderRules.leadDays)].filter(day => Number.isInteger(day) && day >= 1 && day <= 30).sort((a, b) => a - b),
+                    dueDayOfMonth: Math.min(28, Math.max(1, Math.trunc(settings.paymentReminderRules.dueDayOfMonth || 1)))
+                } } : {}) };
             const { apiConfig, ...workspaceSettings } = normalizedSettings;
             const batch = writeBatch(db);
             batch.set(doc(db, 'organizations', currentOrganization.id, 'settings', 'global'), { ...workspaceSettings, apiConfig: deleteField() }, { merge: true });
@@ -806,6 +811,7 @@ export const SettingsView = () => {
             ? { status: 'attention', label: 'Needs setup', action: 'Add the academy name and academic year.' }
             : { status: 'success', label: 'Configured', action: 'Review identity and operating defaults when your school changes.' },
         plan: { status: 'info', label: currentOrganization?.subscription?.status || currentOrganization?.status || 'Workspace plan', action: 'Review limits and enabled apps for this organization.' },
+        finance: { status: settings.paymentReminderRules?.enabled ? 'success' : 'neutral', label: settings.paymentReminderRules?.enabled ? 'Reminders on' : 'Reminders off', action: 'Choose when unpaid family installments appear in SparkQuest Parent.' },
         documents: settings.documentConfig?.headerName || settings.documentConfig?.taxId
             ? { status: 'success', label: 'Configured', action: 'Check printed identity and registration details before issuing documents.' }
             : { status: 'attention', label: 'Needs setup', action: 'Add the legal identity used on invoices and certificates.' },
@@ -819,6 +825,7 @@ export const SettingsView = () => {
     };
     const settingsSections: SettingsNavigationItem<SettingsSection>[] = [
         { id: 'general', label: 'Workspace', description: 'Identity and operations', icon: Building2, badge: sectionInsight.general.label, status: sectionInsight.general.status },
+        { id: 'finance', label: 'Finance rules', description: 'Parent payment reminders', icon: CreditCard, badge: sectionInsight.finance.label, status: sectionInsight.finance.status },
         { id: 'plan', label: 'Plan & apps', description: 'Subscription and limits', icon: CreditCard },
         { id: 'documents', label: 'Documents', description: 'Invoices and certificates', icon: Printer, badge: sectionInsight.documents.label, status: sectionInsight.documents.status },
         { id: 'forms', label: 'Enrollment form', description: 'Family information', icon: FileText },
@@ -867,6 +874,18 @@ export const SettingsView = () => {
                 <SettingsNavigation items={settingsSections} activeId={activeTab} onChange={selectSettingsSection} mode="desktop" />
                 <main id="settings-content" className="edu-settings-main">
                 <div className="edu-settings-category-heading"><div><span className="edu-settings-kicker">{settingsSections.find(section => section.id === activeTab)?.description}</span><h2>{settingsSections.find(section => section.id === activeTab)?.label}</h2><p>{sectionInsight[activeTab].action}</p></div><EducationStatusPill status={sectionInsight[activeTab].status}>{sectionInsight[activeTab].label}</EducationStatusPill></div>
+
+                {activeTab === 'finance' && <div className="space-y-4">
+                    <SettingsPanel title="Payment reminder rules" description="Show unpaid installments inside each linked parent's SparkQuest account." icon={CreditCard} accent="blue">
+                        <SettingsToggle checked={Boolean(settings.paymentReminderRules?.enabled)} disabled={!canManageSettings} onChange={() => updateSettings({ ...settings, paymentReminderRules: { enabled: !settings.paymentReminderRules?.enabled, leadDays: settings.paymentReminderRules?.leadDays?.length ? settings.paymentReminderRules.leadDays : [3], dueDayOfMonth: settings.paymentReminderRules?.dueDayOfMonth || 1 } })} label="Show in-app payment reminders" description="Only scheduled, unpaid amounts are shown. No automatic WhatsApp message is sent." />
+                        <div className="mt-5 space-y-3">
+                            <p className="edu-settings-text-strong text-sm font-semibold">Alert before the due date</p>
+                            <div className="flex flex-wrap gap-2">{[1, 2, 3, 7, 14].map(day => <label key={day} className="flex min-h-10 items-center gap-2 rounded-lg border border-[var(--edu-border)] bg-[var(--edu-surface-muted)] px-3 text-sm text-[var(--edu-ink)]"><input type="checkbox" disabled={!canManageSettings} checked={(settings.paymentReminderRules?.leadDays || []).includes(day)} onChange={event => { const days = new Set(settings.paymentReminderRules?.leadDays || []); if (event.target.checked) days.add(day); else days.delete(day); updateSettings({ ...settings, paymentReminderRules: { enabled: Boolean(settings.paymentReminderRules?.enabled), leadDays: [...days], dueDayOfMonth: settings.paymentReminderRules?.dueDayOfMonth || 1 } }); }} />{day} day{day === 1 ? '' : 's'}</label>)}</div>
+                            <SettingsField label="Due day of each promised month" hint="Edufy stores payment promises by month. Choose the contractual due day (1–28)."><input type="number" min="1" max="28" disabled={!canManageSettings} className={settingsInputClass} value={settings.paymentReminderRules?.dueDayOfMonth || 1} onChange={event => updateSettings({ ...settings, paymentReminderRules: { enabled: Boolean(settings.paymentReminderRules?.enabled), leadDays: settings.paymentReminderRules?.leadDays || [3], dueDayOfMonth: Number(event.target.value) } })} /></SettingsField>
+                        </div>
+                    </SettingsPanel>
+                    <EducationNotice status="info">Parents see the reminder when they open SparkQuest. Payment status comes from verified Edufy ledger entries.</EducationNotice>
+                </div>}
 
                 {/* API TAB */}
                 {activeTab === 'api' && (

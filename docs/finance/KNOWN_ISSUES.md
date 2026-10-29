@@ -1,5 +1,10 @@
 # Finance known issues
 
+## 2026-10-29 — Reminder acceptance limits
+
+- In-app reminders require an active linked parent account, a positive enrollment balance, and a valid payment promise or installment start date. They do not send background push or WhatsApp messages.
+- A promise records only a month in existing data; the tenant setting supplies the day. Staff must check contract dates and real payment-ledger reconciliation before relying on live reminders. Real parent account acceptance is still open.
+
 ## 2026-10-20 — Expanded Finance candidate acceptance
 
 - The signed-in app at port 5202 serves an earlier checkout. Its Finance home, loaded Collections and Documents register were inspected read-only, but this patch's styling was verified in synthetic previews.
