@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
-import { arrayUnion, deleteDoc, doc, runTransaction, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../context/AppContext';
 import { ArrowLeft, ArrowRight, Users, DollarSign, Clock, LayoutGrid, List, UserPlus, FileText, CheckCircle2, Printer, Link as LinkIcon, Copy, Tablet, Download, FileSpreadsheet, ExternalLink, BookOpen, Layers3, X, Pencil, AlertCircle, WalletCards, CalendarDays, Gauge, GraduationCap, ChevronDown, Trash2, PauseCircle, PlayCircle } from 'lucide-react';
 import { Program, Lead } from '../types';
@@ -95,7 +95,9 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                 const latest = snapshot.data() as Program;
                 if (latest.organizationId !== organizationId) throw new Error('Ce programme appartient à une autre organisation.');
                 const grade = latest.grades?.find(item => item.id === gradeId);
-                if (!grade?.groups?.some(item => item.id === groupId)) throw new Error('Groupe introuvable.');
+                const group = grade?.groups?.find(item => item.id === groupId);
+                if (!group) throw new Error('Groupe introuvable.');
+                if ((group.instructorId || '') === instructorId) return;
                 const grades = latest.grades.map(item => item.id !== gradeId ? item : {
                     ...item,
                     groups: item.groups.map(group => group.id !== groupId ? group : {
@@ -105,7 +107,19 @@ export const ProgramDetailsView: React.FC<ProgramDetailsViewProps> = ({ onEnroll
                     })
                 });
                 transaction.update(programRef, { grades });
+                const detail = `${latest.name} · ${grade?.name || 'Niveau'} · ${group.name}`;
+                if (group.instructorId) transaction.set(doc(collection(firestore, 'notifications')), {
+                    userId: group.instructorId, organizationId, programGroupId: groupId,
+                    type: 'warning', title: 'Groupe réaffecté', message: `Votre affectation a changé : ${detail}.`,
+                    read: false, createdAt: serverTimestamp()
+                });
+                if (instructor) transaction.set(doc(collection(firestore, 'notifications')), {
+                    userId: instructor.uid, organizationId, programGroupId: groupId,
+                    type: 'info', title: 'Nouveau groupe affecté', message: `${detail}. Retrouvez-le dans votre semaine.`,
+                    read: false, createdAt: serverTimestamp()
+                });
             });
+            await showAlert('Affectation enregistrée', instructor ? `${instructor.name} verra ce groupe dans son Pass.` : 'Le groupe est maintenant sans instructeur.', 'success');
         } catch (error) {
             console.error('Program group instructor assignment failed', error);
             await showAlert('Affectation non enregistrée', error instanceof Error ? error.message : 'Vérifiez votre connexion et réessayez.', 'danger');

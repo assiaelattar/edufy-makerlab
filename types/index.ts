@@ -543,6 +543,7 @@ export interface ClassSession {
   workshopTemplateId?: string;
   instructorId?: string;
   instructorName?: string;
+  instructorOverride?: boolean;
   status: 'scheduled' | 'completed' | 'cancelled';
   color?: string; // Theme color
   createdAt: Timestamp;
@@ -1027,6 +1028,7 @@ export interface AppNotification {
   userId: string;
   organizationId?: string;
   workshopSlotId?: string;
+  programGroupId?: string;
   type: 'info' | 'success' | 'warning' | 'error';
   title: string;
   message: string;

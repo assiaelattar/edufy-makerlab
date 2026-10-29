@@ -1038,6 +1038,9 @@ service cloud.firestore {
 
     match /class_sessions/{sessionId} {
       allow read: if canReadTenantDoc();
+      allow create: if canCreateTenantDoc() && currentUser().data.status == 'active' && currentRole() in ['owner', 'admin', 'instructor', 'admission_officer'];
+      allow update: if canUpdateTenantDoc() && currentUser().data.status == 'active' && currentRole() in ['owner', 'admin', 'instructor', 'admission_officer'];
+      allow delete: if false;
     }
 
     match /enrollments/{enrollmentId} {

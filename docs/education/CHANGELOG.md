@@ -151,3 +151,8 @@ Migrated Digital resources and Hardware inventory to canonical Education surface
 ## 2026-10-26 — Workshop request and instructor release candidate
 
 Integrated the local request/confirmation flow onto current `main` without replacing its atomic public booking repair. Added dated instructor assignment, group assignment, Instructor Pass and a French WhatsApp confirmation draft. The follow-up projects assigned slots despite later template recurrence changes and adds a durable Pass alert inbox for assignment and booking changes. A same-tenant `class_sessions` read rule addresses the Pass's partial feed. Production build, 62 Education checks, focused smokes and emulator checks pass. The rules and client remain local pending protected-path approval; see `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+## 2026-10-29 — Instructor Pass and Calendar repair
+
+Connected the separate Instructor Pass PWA to Edufy's dated workshop and STEMQuest group assignments. Calendar now synchronizes all group blocks and ad hoc slots, displays effective coverage, and saves permitted class-session changes. Group and workshop changes create durable Pass alerts. See `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+\r\n

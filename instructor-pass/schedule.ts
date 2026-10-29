@@ -35,7 +35,7 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
   const dateKeys = new Set(dates.map(date => format(date, 'yyyy-MM-dd')));
   const tenantSessions = sessions.filter(session => session.organizationId === organizationId && dateKeys.has(session.date));
   const result: PassSession[] = tenantSessions
-    .filter(session => session.instructorId === instructorId && session.status !== 'cancelled')
+    .filter(session => session.instructorId === instructorId && session.status !== 'cancelled' && !(session.workshopSlotId && slots.some(slot => slot.organizationId === organizationId && slot.id === session.workshopSlotId)))
     .map(session => ({
       id: session.id,
       date: session.date,
@@ -64,7 +64,7 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
           const dateKey = format(date, 'yyyy-MM-dd');
           if (!['running', 'evergreen'].includes(getProgramOperationalState(program, dateKey))) continue;
           // A materialized occurrence wins, including an explicit reassignment or removal.
-          if (tenantSessions.some(session => session.groupId === group.id && session.date === dateKey && session.startTime === block.startTime && (session.instructorId || session.status === 'cancelled'))) continue;
+          if (tenantSessions.some(session => session.groupId === group.id && session.date === dateKey && session.startTime === block.startTime && (session.instructorId || session.instructorOverride || session.status === 'cancelled'))) continue;
           result.push({
             id: `group:${program.id}:${grade.id}:${group.id}:${block.id}:${dateKey}`,
             date: dateKey,
@@ -93,7 +93,7 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
       // A real dated slot owns this occurrence even if its time differs from the current template.
       if (slots.some(item => item.organizationId === organizationId && item.workshopTemplateId === template.id && item.date === dateKey)) continue;
       if (template.instructorId !== instructorId) continue;
-      if (tenantSessions.some(session => session.date === dateKey && session.startTime === startTime && (session.instructorId || session.status === 'cancelled') && (
+      if (tenantSessions.some(session => session.date === dateKey && session.startTime === startTime && (session.instructorId || session.instructorOverride || session.status === 'cancelled') && (
         session.workshopTemplateId === template.id
       ))) continue;
       result.push({
@@ -112,7 +112,7 @@ export function projectInstructorWeek(programs: Program[], sessions: ClassSessio
   for (const slot of slots) {
     if (slot.organizationId !== organizationId || slot.instructorId !== instructorId || slot.status === 'cancelled' || !dateKeys.has(slot.date)) continue;
     const template = templates.find(item => item.organizationId === organizationId && item.id === slot.workshopTemplateId);
-    if (tenantSessions.some(session => (session.workshopSlotId === slot.id || (session.workshopTemplateId === slot.workshopTemplateId && session.date === slot.date && session.startTime === slot.startTime)) && (session.instructorId || session.status === 'cancelled'))) continue;
+    if (tenantSessions.some(session => session.workshopSlotId === slot.id && session.status === 'cancelled')) continue;
     result.push({
       id: `slot:${slot.id}`,
       date: slot.date,

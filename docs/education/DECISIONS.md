@@ -150,3 +150,8 @@ Toolkit opts into the canonical Education System on both routes, including under
 ## 2026-10-26 — Workshop request transition
 
 Keep a newly submitted public booking and its capacity increment in one idempotent transaction, with status `requested`. During rollout, allow both `confirmed` and `requested` in the public create rule so an open older client remains functional. Assign instructors to dated workshop slots and program groups; confirmation requires an assigned active instructor. A dated slot remains authoritative if the reusable template later changes day or time. Persist instructor alerts atomically with assignment and booking changes; browser notifications supplement the Pass inbox only while it is open. Grant same-tenant staff read access to `class_sessions` for Pass projection; leave its write permissions unchanged. Open WhatsApp as a manual draft without recording delivery. See `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+## 2026-10-29 — Instructor schedule authority
+
+The dated workshop slot is authoritative for workshop coverage; the grade group is authoritative for recurring program coverage unless a materialized class session has an explicit override. The separate Instructor Pass reads both and shows only the signed-in instructor's same-tenant assignments. Group and workshop assignment alerts are persisted as recipient notifications.
+
+\r\n

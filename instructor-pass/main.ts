@@ -63,10 +63,10 @@ function showGate(message = '') {
 }
 
 function renderNotifications() {
-  const items = notifications.filter(item => item.organizationId === profile?.organizationId && Boolean(item.workshopSlotId));
+  const items = notifications.filter(item => item.organizationId === profile?.organizationId && Boolean(item.workshopSlotId || item.programGroupId));
   const unread = items.filter(item => !item.read).length;
   byId('alerts-count').textContent = unread ? `· ${unread} nouvelle${unread > 1 ? 's' : ''}` : '';
-  byId('alerts-list').innerHTML = items.length ? items.slice(0, 5).map(item => `<div class="alert-item ${item.read ? '' : 'unread'} ${item.type === 'warning' ? 'warning' : ''}"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>${item.read ? '' : `<button type="button" data-read-alert="${escapeHtml(item.id)}">Vu</button>`}</div>`).join('') : `<p class="empty-schedule">${notificationsReady ? 'Aucune alerte d’atelier pour le moment.' : 'Chargement des alertes…'}</p>`;
+  byId('alerts-list').innerHTML = items.length ? items.slice(0, 5).map(item => `<div class="alert-item ${item.read ? '' : 'unread'} ${item.type === 'warning' ? 'warning' : ''}"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.message)}</p></div>${item.read ? '' : `<button type="button" data-read-alert="${escapeHtml(item.id)}">Vu</button>`}</div>`).join('') : `<p class="empty-schedule">${notificationsReady ? 'Aucune alerte de planning pour le moment.' : 'Chargement des alertes…'}</p>`;
 }
 
 function showDeviceNotification(item: AppNotification) {
@@ -177,7 +177,7 @@ function subscribeToData(userProfile: UserProfile) {
     notifications = snapshot.docs.map(item => ({ ...item.data(), id: item.id } as AppNotification));
     if (notificationsReady) snapshot.docChanges().filter(change => change.type === 'added').forEach(change => {
       const item = { ...change.doc.data(), id: change.doc.id } as AppNotification;
-      if (item.organizationId === orgId && item.workshopSlotId) showDeviceNotification(item);
+      if (item.organizationId === orgId && (item.workshopSlotId || item.programGroupId)) showDeviceNotification(item);
     });
     notificationsReady = true;
     renderNotifications();

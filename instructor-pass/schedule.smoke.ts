@@ -29,6 +29,8 @@ assert.deepEqual(projectInstructorWeek([program], reassigned, 'makerlab', 'ayoub
 assert.deepEqual(projectInstructorWeek([program], reassigned, 'makerlab', 'ahmed', monday).map(item => item.id), ['override']);
 const unassignedMaterialized = [{ ...reassigned[0], instructorId: '', instructorName: '' }] as ClassSession[];
 assert.deepEqual(projectInstructorWeek([program], unassignedMaterialized, 'makerlab', 'ayoub', monday).map(item => item.date), ['2026-10-26', '2026-10-28']);
+const explicitlyUnassigned = [{ ...unassignedMaterialized[0], instructorOverride: true }] as ClassSession[];
+assert.deepEqual(projectInstructorWeek([program], explicitlyUnassigned, 'makerlab', 'ayoub', monday).map(item => item.date), ['2026-10-28']);
 
 const workshop = [{
   id: 'trial', organizationId: 'makerlab', date: '2026-10-26', startTime: '11:00', endTime: '12:00',
@@ -54,6 +56,10 @@ assert.deepEqual(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [tem
 assert.equal(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [template], movedSlot)[0].title, 'Discovery robotics');
 const pausedTemplate = { ...template, isActive: false } as WorkshopTemplate;
 assert.equal(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [pausedTemplate], movedSlot).length, 1);
+const removedWorkshopCoverage = [{ ...workshop[0], workshopSlotId: 'slot-1', instructorId: '', instructorOverride: true }] as ClassSession[];
+assert.equal(projectInstructorWeek([], removedWorkshopCoverage, 'makerlab', 'ahmed', monday, [template], reassignedSlot).length, 1);
+const cancelledWorkshopSession = [{ ...removedWorkshopCoverage[0], status: 'cancelled' }] as ClassSession[];
+assert.equal(projectInstructorWeek([], cancelledWorkshopSession, 'makerlab', 'ahmed', monday, [template], reassignedSlot).length, 0);
 const adHocSlot = [{ ...reassignedSlot[0], id: 'ad-hoc', workshopTemplateId: 'none', title: 'Discovery lab' }] as WorkshopSlot[];
 assert.equal(projectInstructorWeek([], [], 'makerlab', 'ahmed', monday, [], adHocSlot)[0].title, 'Discovery lab');
 console.log('Instructor Pass schedule smoke passed');

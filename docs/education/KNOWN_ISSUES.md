@@ -133,3 +133,8 @@ The isolated Toolkit fixture covers visual states and in-memory actions, but the
 ## 2026-10-26 — Workshop request release gate
 
 The current-main candidate is locally verified but not live. `firestore.rules` is a protected release path under `$hostinger-main-release`; deploy the transitional public-booking status rule and same-tenant `class_sessions` read rule before the client. Ayoub's existing dated workshop appeared on the signed-in local Pass, but fresh two-instructor, alert, cancellation and physical-phone acceptance remain open. Closed-app push notifications are not configured; the durable inbox is the delivery record. Template-wide default instructor editing is outside this slice. See `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+## 2026-10-29 — Instructor Pass release acceptance
+
+The repaired `class_sessions` rule and app are local until coordinated release. Real Ayoub/second-instructor assignment, reassignment, alert timing, and phone acceptance are still unverified. Pass notifications while the app is closed require a later push implementation; the current in-app inbox is durable and optional browser notifications work while the Pass is open.
+
+\r\n

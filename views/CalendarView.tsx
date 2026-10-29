@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { startOfWeek, addDays, format, isSameDay, addWeeks, subWeeks, parse, getDay, isValid } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, AlertTriangle, RefreshCw, UserPlus, Search, List, LayoutGrid, X } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { ClassSession } from '../types';
-import { collection, updateDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { ClassSession, WorkshopSlot } from '../types';
+import { collection, doc, runTransaction, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -43,12 +43,21 @@ export const CalendarView = () => {
     // --- 2. Filter DB Sessions ---
     const events = useMemo(() => {
         return classSessions
-            .filter(session => {
+            .filter(session => session.organizationId === currentOrganization?.id && (() => {
                 const sessionDate = parse(session.date, 'yyyy-MM-dd', new Date());
                 return weekDays.some(d => isSameDay(d, sessionDate));
+            })())
+            .map(session => {
+                const slot = workshopSlots.find(item => item.id === session.workshopSlotId);
+                if (slot && session.type === 'workshop_trial') return { ...session, instructorId: slot.instructorId || '', instructorName: slot.instructorName || '' };
+                if (session.instructorOverride || session.instructorId) return session;
+                const group = programs.find(program => program.id === session.programId)?.grades
+                    .find(grade => grade.id === session.gradeId)?.groups.find(item => item.id === session.groupId);
+                const template = workshopTemplates.find(item => item.id === session.workshopTemplateId || item.id === slot?.workshopTemplateId);
+                return { ...session, instructorId: group?.instructorId || (slot ? slot.instructorId : template?.instructorId) || '', instructorName: group?.instructorName || (slot ? slot.instructorName : template?.instructorName) || '' };
             })
             .sort((a, b) => a.startTime.localeCompare(b.startTime));
-    }, [classSessions, weekDays]);
+    }, [classSessions, weekDays, currentOrganization?.id, programs, workshopSlots, workshopTemplates]);
 
     const calendarSignals = useMemo(() => ({
         sessions: events.length,
@@ -60,7 +69,7 @@ export const CalendarView = () => {
     const firstCoverageGap = sortedEvents.find(event => !event.instructorId && `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm'))
         || sortedEvents.find(event => !event.instructorId);
     const nextSession = sortedEvents.find(event => `${event.date} ${event.startTime}` >= format(new Date(), 'yyyy-MM-dd HH:mm')) || sortedEvents[0];
-    const assignableTeam = useMemo(() => teamMembers.filter((member): member is typeof member & { uid: string } => Boolean(member.uid) && ['instructor', 'admin', 'admission_officer'].includes(member.role)), [teamMembers]);
+    const assignableTeam = useMemo(() => teamMembers.filter((member): member is typeof member & { uid: string } => Boolean(member.uid) && member.organizationId === currentOrganization?.id && member.status === 'active' && ['instructor', 'admin', 'owner'].includes(member.role)), [teamMembers, currentOrganization?.id]);
 
     const filteredEvents = useMemo(() => {
         const query = sessionQuery.trim().toLocaleLowerCase();
@@ -150,62 +159,52 @@ export const CalendarView = () => {
             let invalidGroups = 0;
 
             // A. Check Programs
-            programs.forEach(program => {
+            programs.filter(program => program.organizationId === currentOrganization.id).forEach(program => {
                 program.grades.forEach(grade => {
                     grade.groups.forEach(group => {
-                        const dayIndex = getSchoolWeekdayIndex(group.day);
-                        
-                        if (dayIndex === -1) {
-                            invalidGroups++;
-                            return;
-                        }
-
-                        const targetDate = weekDays.find(d => getDay(d) === dayIndex);
-                        if (targetDate) {
+                        const blocks = group.scheduleBlocks?.length ? group.scheduleBlocks : [{ id: 'legacy', day: group.day, startTime: group.time, endTime: addMinutesToTime(group.time, 60) }];
+                        blocks.forEach(block => {
+                            const dayIndex = getSchoolWeekdayIndex(block.day);
+                            if (dayIndex === -1) { invalidGroups++; return; }
+                            const targetDate = weekDays.find(day => getDay(day) === dayIndex);
+                            if (!targetDate) return;
                             const dateStr = format(targetDate, 'yyyy-MM-dd');
-                            const operationalState = getProgramOperationalState(program, dateStr);
-                            if (!['running', 'evergreen'].includes(operationalState)) return;
+                            if (!['running', 'evergreen'].includes(getProgramOperationalState(program, dateStr))) return;
                             debugGroupsFound++;
-                            
-                            // Does this session already exist?
-                            const exists = classSessions.some(c => c.groupId === group.id && c.date === dateStr);
-                            if (!exists) {
-                                const newRef = doc(collection(firestore, 'class_sessions'));
-                                batch.set(newRef, {
-                                    organizationId: currentOrganization.id,
-                                    date: dateStr || '',
-                                    startTime: group?.time || '10:00',
-                                    endTime: addMinutesToTime(group?.time || '10:00', 60),
-                                    title: program?.name || 'Untitled Program',
-                                    subTitle: `${grade?.name || 'Level'} - ${group?.name || 'Group'}`,
-                                    type: 'program_class',
-                                    programId: program?.id || '',
-                                    gradeId: grade?.id || '',
-                                    groupId: group?.id || '',
-                                    status: 'scheduled',
-                                    color: program?.themeColor || 'blue',
-                                    createdAt: serverTimestamp()
-                                });
-                                additions++;
-                            } else {
-                                debugAlreadyExists++;
-                            }
-                        }
+                            const exists = classSessions.some(session => session.organizationId === currentOrganization.id && session.groupId === group.id && session.date === dateStr && session.startTime === block.startTime);
+                            if (exists) { debugAlreadyExists++; return; }
+                            const newRef = doc(collection(firestore, 'class_sessions'));
+                            batch.set(newRef, {
+                                organizationId: currentOrganization.id,
+                                date: dateStr,
+                                startTime: block.startTime,
+                                endTime: block.endTime,
+                                title: program.name || 'Untitled Program',
+                                subTitle: `${grade.name || 'Level'} - ${group.name || 'Group'}`,
+                                type: 'program_class',
+                                programId: program.id,
+                                gradeId: grade.id,
+                                groupId: group.id,
+                                status: 'scheduled',
+                                color: program.themeColor || 'blue',
+                                createdAt: serverTimestamp()
+                            });
+                            additions++;
+                        });
                     });
                 });
             });
 
             // B. Check Workshops
-            workshopSlots.forEach(slot => {
+            workshopSlots.filter(slot => slot.organizationId === currentOrganization.id && slot.status !== 'cancelled').forEach(slot => {
                 const template = workshopTemplates.find(t => t.id === slot.workshopTemplateId);
-                if (!template) return;
 
                 const slotDate = parse(slot.date, 'yyyy-MM-dd', new Date());
                 const isInWeek = weekDays.some(d => isSameDay(d, slotDate));
                 
                 if (isInWeek) {
                     debugWorkshopsFound++;
-                    const exists = classSessions.some(c => c.workshopSlotId === slot.id);
+                    const exists = classSessions.some(c => c.organizationId === currentOrganization.id && c.workshopSlotId === slot.id);
                     if (!exists) {
                         const newRef = doc(collection(firestore, 'class_sessions'));
                         batch.set(newRef, {
@@ -213,10 +212,11 @@ export const CalendarView = () => {
                             date: slot?.date || '',
                             startTime: slot?.startTime || '10:00',
                             endTime: slot?.endTime || '12:00',
-                            title: template?.title || 'Workshop',
+                            title: slot.title || template?.title || 'Workshop',
                             subTitle: 'Make & Go Workshop',
                             type: 'workshop_trial',
                             workshopSlotId: slot?.id || '',
+                            workshopTemplateId: template?.id || slot.workshopTemplateId || '',
                             status: 'scheduled',
                             color: 'rose',
                             createdAt: serverTimestamp()
@@ -275,18 +275,51 @@ export const CalendarView = () => {
             });
             if (!approved) return;
         }
-        const instructor = teamMembers.find(t => t.uid === instructorId);
+        const instructor = assignableTeam.find(t => t.uid === instructorId);
         if (instructorId && !instructor) {
             await showAlert('Instructor unavailable', 'That team member is no longer available. Refresh the schedule and choose another instructor.', 'warning');
             return;
         }
         setIsAssigning(true);
         try {
-            await updateDoc(doc(db, 'class_sessions', assignModalSession.id), {
-                instructorId: instructorId,
-                instructorName: instructor ? instructor.name : '',
-                assignedBy: userProfile?.uid || '',
-                updatedAt: serverTimestamp()
+            const firestore = db;
+            const session = assignModalSession;
+            await runTransaction(firestore, async transaction => {
+                const sessionRef = doc(firestore, 'class_sessions', session.id);
+                const snapshot = await transaction.get(sessionRef);
+                if (!snapshot.exists()) throw new Error('Cette séance n’existe plus.');
+                const latest = snapshot.data() as ClassSession;
+                if (latest.organizationId !== currentOrganization.id) throw new Error('Cette séance appartient à une autre organisation.');
+                const slotRef = latest.workshopSlotId ? doc(firestore, 'workshop_slots', latest.workshopSlotId) : null;
+                const slotSnapshot = slotRef ? await transaction.get(slotRef) : null;
+                const slot = slotSnapshot?.exists() ? slotSnapshot.data() as WorkshopSlot : null;
+                if (slotRef && (!slot || slot.organizationId !== currentOrganization.id)) throw new Error('La séance d’atelier est introuvable.');
+                const formerInstructorId = slot ? (slot.instructorId || '') : (latest.instructorId || session.instructorId || '');
+                if (formerInstructorId === instructorId) return;
+                if (slotRef) {
+                    transaction.update(slotRef, { instructorId, instructorName: instructor?.name || '', instructorAssignedAt: serverTimestamp(), instructorAssignedBy: userProfile?.uid || '' });
+                    transaction.update(sessionRef, { instructorId: '', instructorName: '', instructorOverride: false, updatedAt: serverTimestamp() });
+                } else {
+                    transaction.update(sessionRef, {
+                        instructorId,
+                        instructorName: instructor?.name || '',
+                        instructorOverride: true,
+                        assignedBy: userProfile?.uid || '',
+                        updatedAt: serverTimestamp()
+                    });
+                }
+                const detail = `${latest.title} · ${latest.date} ${latest.startTime}–${latest.endTime}`;
+                const alertKey = latest.workshopSlotId ? { workshopSlotId: latest.workshopSlotId } : { programGroupId: latest.groupId || session.id };
+                if (formerInstructorId && formerInstructorId !== instructorId) transaction.set(doc(collection(firestore, 'notifications')), {
+                    userId: formerInstructorId, organizationId: currentOrganization.id, ...alertKey,
+                    type: 'warning', title: 'Séance réaffectée', message: `Votre affectation a changé : ${detail}.`,
+                    read: false, createdAt: serverTimestamp()
+                });
+                if (instructor) transaction.set(doc(collection(firestore, 'notifications')), {
+                    userId: instructor.uid, organizationId: currentOrganization.id, ...alertKey,
+                    type: 'info', title: 'Nouvelle séance affectée', message: `${detail}. Retrouvez-la dans votre semaine.`,
+                    read: false, createdAt: serverTimestamp()
+                });
             });
             setAssignModalSession(null);
             await showAlert(instructor ? 'Instructor assigned' : 'Assignment removed', instructor ? `${instructor.name} is now assigned to ${assignModalSession.title}.` : `${assignModalSession.title} is now unassigned.`, 'success');
@@ -312,6 +345,7 @@ export const CalendarView = () => {
                         <EducationButton variant="secondary" onClick={() => setCurrentDate(addWeeks(currentDate, 1))} title="Next week" aria-label="Next week"><ChevronRight size={18} /></EducationButton>
                     </div>
                     {can('attendance.manage') && <EducationButton variant="primary" icon={RefreshCw} onClick={handleSyncWeek} disabled={isGenerating} title="Create missing sessions from active class groups and workshop slots">{isGenerating ? 'Syncing week…' : 'Sync week'}</EducationButton>}
+                    <a className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-900 shadow-sm hover:bg-slate-50" href="/instructor-pass/" target="_blank" rel="noopener noreferrer">Ouvrir Instructor Pass</a>
                 </div>
             </header>
 

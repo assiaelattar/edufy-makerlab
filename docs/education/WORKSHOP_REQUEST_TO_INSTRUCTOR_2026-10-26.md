@@ -1,5 +1,13 @@
 # Workshop request → instructor handoff (2026-10-26)
 
+## Instructor Pass repair — 2026-10-29
+
+The release candidate was rebased by cherry-picking the five focused workshop/Pass commits onto the current `origin/main`. The first integration check found a real blocker: `class_sessions` had read permission but no client create/update permission, while Edufy Calendar creates and assigns those documents. The new rule permits active same-tenant owner, admin, instructor or admission-officer writes and still denies foreign-tenant writes and client delete. The local Auth/Firestore emulator passed tenant reads/writes, foreign-tenant denials and notification delivery. This is a protected rule change requiring explicit release approval.
+
+Calendar synchronization now materializes every schedule block of each active STEMQuest grade group, includes ad hoc dated workshop slots, and excludes cancelled slots. Calendar displays the live group or dated slot assignment when a materialized session has no explicit override. A manual Calendar reassignment of a workshop updates its dated slot, so Workshops and Instructor Pass agree; a manual group-session override remains on that session. The Pass projects the dated slot as the authority when a class-session copy also exists, preventing stale duplicate coverage. Group assignment/reassignment creates a durable alert for the incoming and outgoing instructor in the same transaction. The Pass inbox includes both group and workshop alerts. Edufy Calendar exposes an Instructor Pass link.
+
+Verification: `npm run build` generated `dist/instructor-pass/index.html`; 62 Education checks passed; schedule and WhatsApp smokes passed. The refreshed emulator verifies active same-tenant class-session writes, foreign-tenant denial, workshop and group assignment notifications, and recipient read acknowledgement. Real-account acceptance with two instructor accounts remains necessary after publication. Browser notifications work only while the Pass is open; closed-app push is not yet implemented.
+
 ## Current-main integration note
 
 The clean release candidate is based on the newer public booking repair. It retains the single Firestore transaction, deterministic slot ID, idempotent attempt ID, capacity guard and French translation protection from `main`. The request status is set inside that transaction. The candidate rule permits both `confirmed` and `requested` during the client transition; tightening to `requested` is a separate later rules release after old clients have stopped submitting. No production rule or frontend has been deployed from this candidate.

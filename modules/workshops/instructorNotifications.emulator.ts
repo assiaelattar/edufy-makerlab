@@ -43,7 +43,11 @@ const managerClient = await makeClient('workshop-manager', 'manager@example.test
 const instructorClient = await makeClient('workshop-instructor', 'instructor@example.test');
 assert.equal((await getDoc(doc(instructorClient.firestore, 'class_sessions', 'session-a'))).data()?.organizationId, 'org-a');
 await assert.rejects(getDoc(doc(instructorClient.firestore, 'class_sessions', 'session-b')));
-await assert.rejects(setDoc(doc(managerClient.firestore, 'class_sessions', 'new-session'), { organizationId: 'org-a' }));
+await setDoc(doc(managerClient.firestore, 'class_sessions', 'new-session'), { organizationId: 'org-a', date: '2030-05-21', groupId: 'group-a', status: 'scheduled' });
+await updateDoc(doc(managerClient.firestore, 'class_sessions', 'new-session'), { instructorId: instructor.uid });
+assert.equal((await getDoc(doc(instructorClient.firestore, 'class_sessions', 'new-session'))).data()?.instructorId, instructor.uid);
+await assert.rejects(setDoc(doc(managerClient.firestore, 'class_sessions', 'foreign-session'), { organizationId: 'org-b' }));
+await assert.rejects(updateDoc(doc(managerClient.firestore, 'class_sessions', 'new-session'), { organizationId: 'org-b' }));
 const slotRef = doc(managerClient.firestore, 'workshop_slots', 'slot-a');
 const notificationRef = doc(managerClient.firestore, 'notifications', 'assignment-a');
 await runTransaction(managerClient.firestore, async transaction => {
@@ -66,7 +70,23 @@ assert.equal(notifications.docs[0].data().workshopSlotId, 'slot-a');
 await updateDoc(doc(instructorClient.firestore, 'notifications', notifications.docs[0].id), { read: true });
 assert.equal((await adminDb.doc('notifications/assignment-a').get()).data()?.read, true);
 
-console.log('Instructor Pass emulator: same-tenant class-session read, foreign/write denial, atomic assignment, inbox query and read acknowledgement passed.');
+await adminDb.doc('programs/program-a').set({ organizationId: 'org-a', name: 'STEMQuest', grades: [{ id: 'grade-a', name: 'Level 1', groups: [{ id: 'group-a', name: 'Makers' }] }] });
+await runTransaction(managerClient.firestore, async transaction => {
+  const programRef = doc(managerClient.firestore, 'programs', 'program-a');
+  const program = await transaction.get(programRef);
+  const grades = program.data()?.grades;
+  grades[0].groups[0].instructorId = instructor.uid;
+  transaction.update(programRef, { grades });
+  transaction.set(doc(managerClient.firestore, 'notifications', 'group-assignment-a'), {
+    userId: instructor.uid, organizationId: 'org-a', programGroupId: 'group-a',
+    type: 'info', title: 'Nouveau groupe affecté', message: 'STEMQuest · Level 1 · Makers',
+    read: false, createdAt: serverTimestamp()
+  });
+});
+assert.equal((await getDoc(doc(instructorClient.firestore, 'programs', 'program-a'))).data()?.grades?.[0]?.groups?.[0]?.instructorId, instructor.uid);
+assert.equal((await getDoc(doc(instructorClient.firestore, 'notifications', 'group-assignment-a'))).data()?.programGroupId, 'group-a');
+
+console.log('Instructor Pass emulator: same-tenant class-session read/write, foreign-tenant denial, atomic workshop/group assignment, inbox query and read acknowledgement passed.');
 await deleteApp(managerClient.app);
 await deleteApp(instructorClient.app);
 await deleteAdminApp(adminApp);

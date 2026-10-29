@@ -371,3 +371,10 @@ The user directed one new SparkQuest parent account for Kamyl and Nassym DAKY an
 The user explicitly lifted the local hold for the DAKY correction and authorized publication of the trusted Parent Access API with the Edufy client. Release only the reviewed parent-account commits through the registered `origin/main` process. Do not create, move, or delete the real DAKY accounts as a deployment test; the signed-in staff workflow and SparkQuest two-child/old-login acceptance follow publication. The separate workshop and wider UI candidates remain outside this release.
 
 ---
+## Active task — Instructor Pass production integration, 2026-10-29
+
+Complete the coordinated Edufy/Instructor Pass release from the clean integration worktree. The app and Firestore rules must be promoted together. After deployment, verify a dated workshop and a STEMQuest group on real instructor accounts, including reassignment and alert visibility. Keep unrelated dirty checkouts untouched. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+---
+
+\r\n

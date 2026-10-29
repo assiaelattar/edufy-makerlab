@@ -798,3 +798,10 @@ The user explicitly authorized publication of the DAKY Parent Access correction:
 An isolated branch adds reversible learner pause with `inactiveAt`, academic-year filters and coverage dates on the student profile, program-scoped student finance, and historical attendance visibility. The Attendance roster now uses Education theme tokens. Edufy Settings has opt-in payment reminder rules; SparkQuest Parent derives a reminder from unpaid promises or installment plans, with no automatic external message. Focused smoke checks, Education System checks and both production builds passed locally. Real tenant acceptance and publication still require the MakerLab release flow.
 
 ---
+## Instructor Pass integration repair — 2026-10-29
+
+Clean worktree: `.release-worktrees/instructor-pass-integration-20261029` from current main plus five focused workshop/Pass commits. Repaired the Calendar `class_sessions` write rule, all-block group sync, same-tenant instructor selector, dated-slot authority across Calendar/Workshops/Pass, and durable group notifications. Build, 62 Education checks, schedule/WhatsApp smokes, and Auth/Firestore emulator pass. Protected `firestore.rules` approval and coordinated production release remain; then test assignment/reassignment with two signed-in instructors. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
+
+---
+
+\r\n
