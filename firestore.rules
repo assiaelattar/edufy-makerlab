@@ -864,12 +864,8 @@ service cloud.firestore {
             after.releasedAt == request.time && after.verifiedByUid == request.auth.uid &&
             after.verifiedPickerName == after.pickerName &&
             after.verificationMethod in ['photo_id', 'known_person'] &&
-            after.verificationNote is string && after.verificationNote.size() >= 8 && after.verificationNote.size() <= 500 &&
+            after.verificationNote is string && after.verificationNote.size() <= 500 &&
             pickupStaff(after) && pickupCurrentAuthorization(after)) ||
-          (before.status == 'released' && after.status == 'confirmed' &&
-            changed.hasOnly(['status', 'confirmedAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
-            after.confirmedAt == request.time &&
-            currentUser().data.get('name', '') == after.pickerName && pickupLinkedGuardian(after)) ||
           (before.status in ['on_the_way', 'arrived', 'ready'] && after.status == 'cancelled' &&
             changed.hasOnly(['status', 'cancelledAt', 'exceptionReason', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
             after.cancelledAt == request.time && after.exceptionReason is string &&
@@ -882,9 +878,15 @@ service cloud.firestore {
         ) && pickupEventMatches(entryId, after.status);
     }
 
-    function pickupReceiptActorMatches() {
-      return !(resource.data.status == 'released' && request.resource.data.status == 'confirmed') ||
-        (hasUserProfile() && currentUser().data.get('name', '') == resource.data.pickerName);
+    function validPickupReceipt(entryId) {
+      let before = resource.data;
+      let after = request.resource.data;
+      return pickupLinkedGuardian(before) && pickupIdentity(entryId, before) &&
+        before.status == 'released' && after.status == 'confirmed' &&
+        after.diff(before).affectedKeys().hasOnly(['status', 'confirmedAt', 'updatedAt', 'lastActorUid', 'lastEventId']) &&
+        after.confirmedAt == request.time && after.updatedAt == request.time &&
+        after.lastActorUid == request.auth.uid && after.lastEventId == 'confirmed' &&
+        pickupEventMatches(entryId, 'confirmed');
     }
 
     function validPickupEventCreate(entryId, eventId) {
@@ -1281,7 +1283,8 @@ service cloud.firestore {
     match /pickup_queue/{entryId} {
       allow read: if resourceHasOrg() && pickupReader(resource.data);
       allow create: if validPickupCreate(entryId);
-      allow update: if pickupReceiptActorMatches() && validPickupUpdate(entryId);
+      allow update: if resource.data.status == 'released' && request.resource.data.status == 'confirmed'
+        ? validPickupReceipt(entryId) : validPickupUpdate(entryId);
       allow delete: if false;
 
       match /events/{eventId} {

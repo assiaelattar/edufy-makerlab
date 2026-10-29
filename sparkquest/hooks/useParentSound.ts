@@ -20,7 +20,7 @@ export const useParentSound = () => {
     try {
       const context = contextRef.current || new AudioContext();
       contextRef.current = context;
-      if (context.state === 'suspended') void context.resume();
+      if (context.state === 'suspended') void context.resume().catch(() => undefined);
       const notes = cue === 'celebrate' ? [523, 659, 784]
         : cue === 'open' ? [440, 587] : cue === 'step' ? [587, 740] : [520];
       const start = context.currentTime + .015;

@@ -40,5 +40,5 @@ export const selectOpenPickup = <T extends { id: string; organizationId: string;
 ): T | null => selectDatedPickup(entries, organizationId, studentId, sessionDate) ||
   (() => {
     const previous = selectDatedPickup(entries, organizationId, studentId, previousPickupDate(sessionDate));
-    return previous && ['on_the_way', 'arrived', 'ready'].includes(previous.status) ? previous : null;
+    return previous && ['on_the_way', 'arrived', 'ready', 'released'].includes(previous.status) ? previous : null;
   })();

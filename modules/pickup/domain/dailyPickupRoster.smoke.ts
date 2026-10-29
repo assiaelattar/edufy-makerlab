@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { projectDailyPickupRoster, selectPresentPickupRoster } from './dailyPickupRoster.ts';
+import { projectDailyPickupRoster, selectPresentPickupRoster, isPickupLobbyActive } from './dailyPickupRoster.ts';
 
 const timestamp = {} as never;
 const students = [
@@ -24,7 +24,7 @@ const roster = projectDailyPickupRoster({
     enrollment('enrollment-b', 'student-b', 'Friday 17:30'),
     enrollment('enrollment-inactive', 'student-inactive', 'Thursday 16:00'),
   ],
-  students: [...students], programs: [...programs],
+  students: [...students], programs: [...programs] as never,
 });
 
 assert.deepEqual(roster.map(item => item.studentId), ['student-a']);
@@ -35,7 +35,7 @@ assert.equal(roster[0].slots[0].programName, 'Robotics');
 const lobbyRoster = projectDailyPickupRoster({
   organizationId: 'org-a', sessionDate: '2026-10-15', weekday: 'Thursday',
   enrollments: [enrollment('enrollment-a', 'student-a', 'Thursday 17:30'), enrollment('enrollment-b', 'student-b', 'Thursday 18:00')],
-  students: [...students], programs: [...programs],
+  students: [...students], programs: [...programs] as never,
 });
 const attendance = [
   { id: 'present-a', organizationId: 'org-a', date: '2026-10-15', studentId: 'student-a', enrollmentId: 'enrollment-a', status: 'present' },
@@ -49,3 +49,16 @@ assert.deepEqual(selectPresentPickupRoster(lobbyRoster, [
 ] as never, 'org-a', '2026-10-15').map(item => item.studentId), ['student-b']);
 
 console.log('Daily Pickup roster smoke passed.');
+
+const structured = projectDailyPickupRoster({
+  organizationId: 'org-a', sessionDate: '2026-10-15', weekday: 'Thursday',
+  students: [...students],
+  enrollments: [{ ...enrollment('enrollment-a', 'student-a', 'Friday 10:00'), groupId: 'group-a' }],
+  programs: [{ ...programs[0], grades: [{ id: 'grade-a', groups: [{ id: 'group-a', name: 'Actual group', scheduleBlocks: [{ id: 'slot-a', day: 'Thursday', startTime: '17:00', endTime: '18:00' }] }] }] }] as never,
+});
+assert.equal(structured[0].slots[0].time, '17:00 – 18:00', 'Structured schedule takes priority over stale text.');
+
+assert.equal(isPickupLobbyActive('released'), true);
+assert.equal(isPickupLobbyActive('confirmed'), false);
+assert.equal(isPickupLobbyActive('cancelled'), true);
+assert.equal(isPickupLobbyActive(), true);

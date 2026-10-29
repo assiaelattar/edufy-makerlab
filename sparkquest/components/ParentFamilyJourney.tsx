@@ -1,3 +1,4 @@
+import { ParentPickupNotice } from './ParentPickupNotice';
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, BookOpen, CalendarDays, Car, Check, ChevronLeft, ChevronRight, CircleAlert, CreditCard, Download, ExternalLink, FileText, Image as ImageIcon, LogOut, RefreshCw, ShieldCheck, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import type { ProjectStep, Resource } from '../types';
@@ -319,6 +320,8 @@ export const ParentFamilyJourney: React.FC<Props> = ({ parentUid, organizationId
   return <main className={`pf-app pf-screen-${screen}${activeChild ? ' pf-has-nav' : ''}`} ref={scrollRef} onScroll={handleScroll}>
     <header className="pf-header"><div className="pf-brand"><span>✳</span><strong>sparkquest<span>.</span></strong></div><div className="pf-header-actions">{previewMode && <span className="pf-preview-badge">Famille exemple</span>}{installPrompt && <button type="button" onClick={requestInstall} aria-label="Installer SparkQuest Famille" title="Installer SparkQuest Famille"><Download size={19} /></button>}<button type="button" className="pf-sound-toggle" onClick={sound.toggle} aria-label={sound.enabled ? 'Désactiver les sons' : 'Activer les sons'} aria-pressed={sound.enabled} title={sound.enabled ? 'Sons activés' : 'Sons désactivés'}>{sound.enabled ? <Volume2 size={19} /> : <VolumeX size={19} />}</button>{!previewMode && <button type="button" onClick={onRefresh} aria-label="Actualiser" disabled={loading}><RefreshCw size={19} /></button>}<button type="button" onClick={onSignOut} aria-label={previewMode ? 'Quitter l’aperçu' : 'Se déconnecter'}><LogOut size={19} /></button></div></header>
     <div className="pf-page">
+      {activeChild && screen !== 'pickup' && <button type="button" className="pf-family-pickup-link" onClick={() => move('pickup')}>Pickup · Suivre la sortie de {firstName(activeChild.name)}</button>}
+      {!previewMode && children.map(child => <ParentPickupNotice key={child.id} child={child} organizationId={organizationId} play={sound.play} onOpen={() => { setSelectedChildId(child.id); move('pickup'); }} />)}
       {loading && children.length > 0 && <div className="pf-refresh-state" role="status"><span className="pf-refresh-spinner" aria-hidden="true" /> On actualise son parcours…</div>}
       {error && <div className="pf-state pf-error" role="alert"><CircleAlert size={25} /><p>{error}</p><button type="button" onClick={onRefresh}>Réessayer</button></div>}
       {!loading && !error && children.length === 0 && <div className="pf-state"><BookOpen size={28} /><h1>Aucun enfant lié à ce compte</h1><p>Demandez à l’académie de relier votre compte parent aux enfants concernés.</p></div>}

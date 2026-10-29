@@ -1,4 +1,5 @@
 import type { AttendanceRecord, Enrollment, Program, Student } from '../../../types';
+import { workshopsOnDateFromSchedule } from '../../../sparkquest/domain/parentNextWorkshop.ts';
 import { isEnrollmentEligibleForAttendance } from '../../../utils/membershipLifecycle.ts';
 
 export interface DailyPickupSlot {
@@ -15,17 +16,6 @@ export interface DailyPickupRosterItem {
   studentName: string;
   slots: DailyPickupSlot[];
 }
-
-const normalize = (value: string) => value.trim().toLocaleLowerCase();
-
-const scheduleContainsDay = (schedule: string | undefined, weekday: string) =>
-  Boolean(schedule && normalize(schedule).includes(normalize(weekday)));
-
-const scheduleTime = (schedule: string, weekday: string) => {
-  const index = normalize(schedule).indexOf(normalize(weekday));
-  if (index < 0) return schedule.trim();
-  return `${schedule.slice(0, index)}${schedule.slice(index + weekday.length)}`.trim();
-};
 
 const timeMinutes = (value: string) => {
   const match = value.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
@@ -67,10 +57,8 @@ export const projectDailyPickupRoster = ({
     const program = programById.get(enrollment.programId);
     if (!student || !isEnrollmentEligibleForAttendance(enrollment, program, sessionDate)) return;
 
-    const schedules = [
-      { value: enrollment.groupTime, groupName: enrollment.groupName || '' },
-      { value: enrollment.secondGroupTime, groupName: enrollment.secondGroupName || '' },
-    ].filter((item): item is { value: string; groupName: string } => scheduleContainsDay(item.value, weekday));
+    const schedules = workshopsOnDateFromSchedule([enrollment], program ? [program] : [], sessionDate)
+      .map(slot => ({ value: `${slot.startTime}${slot.endTime ? ` – ${slot.endTime}` : ''}`, groupName: slot.groupName }));
     if (schedules.length === 0) return;
 
     const item = roster.get(student.id) || {
@@ -86,7 +74,7 @@ export const projectDailyPickupRoster = ({
         programId: enrollment.programId,
         programName: program?.name || enrollment.programName,
         groupName: schedule.groupName,
-        time: scheduleTime(schedule.value, weekday),
+        time: schedule.value,
       };
       const key = `${slot.programId}::${slot.groupName}::${slot.time}`;
       if (!item.slots.some(existing => `${existing.programId}::${existing.groupName}::${existing.time}` === key)) {
@@ -119,3 +107,6 @@ export const selectPresentPickupRoster = (
     .map(record => `${record.studentId}:${record.enrollmentId}`));
   return roster.filter(item => item.slots.some(slot => present.has(`${item.studentId}:${slot.enrollmentId}`)));
 };
+
+/** Release alone is not completion; only a guardian receipt removes an active lobby row. */
+export const isPickupLobbyActive = (status?: string): boolean => status !== 'confirmed' && status !== 'dismissed';

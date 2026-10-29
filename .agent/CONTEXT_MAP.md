@@ -110,3 +110,7 @@ Read `components/finance/AGENT_CONTEXT.md`, `docs/finance/SERVICE_CATALOGUE_PHAS
 ## Current context — Phase 1 shell, Student Details and 011Y review — 2026-10-20
 
 Read `docs/education/EDUFY_SHELL_STUDENT_GUIDE_PHASE_1_2026-10-20.md` before continuing. The current gate covers the global shell, command palette, mobile navigation, Student Details, full student editor and animated contextual 011Y. Preserve broad unfinished module edits but do not treat them as approved. Await user visual approval, then continue Settings → Finance → Expenses. No deploy or push.
+
+## Pickup receipt and workshop prompts — 2026-10-29
+
+`docs/pickup/AUDIT_2026-10-29.md` records the active contract. Parent notices: `sparkquest/components/ParentPickupNotice.tsx`; learner reminders: `sparkquest/components/LearnerWorkshopReminder.tsx`; admin idle/route policy: `components/pickup/PickupWorkshopReminder.tsx`; timetable signal: `sparkquest/domain/workshopPickupTiming.ts`. Existing lifecycle/rules/command adapters remain authoritative.

@@ -1151,6 +1151,8 @@ export interface StaffAttendanceRecord {
 export type ViewState = 'dashboard' | 'classes' | 'students' | 'parents' | 'programs' | 'program-details' | 'finance' | 'expenses' | 'settings' | 'tools' | 'student-details' | 'activity-details' | 'workshops' | 'attendance' | 'team' | 'marketing' | 'learning' | 'toolkit' | 'media' | 'pickup' | 'parent-dashboard' | 'test-design' | 'test-wizard' | 'portfolio' | 'review' | 'arcade-mgr' | 'communications' | 'schedule' | 'archive' | 'saas-admin' | 'app-store' | 'app-details' | 'saas-app' | 'enrollment-forms' | 'staff-attendance' | 'workshop-quality';
 
 export interface ViewParams {
+  /** Explicit staff action to open the Pickup lobby after navigation. */
+  openLobby?: boolean;
   programId?: string; // NEW
   classId?: { pId: string, gId: string, grpId: string };
   studentId?: string;

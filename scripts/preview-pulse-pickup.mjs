@@ -9,12 +9,13 @@ import { execFileSync } from 'node:child_process';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const adapter = resolve(root, 'scripts/fixtures/pulse-pickup-adapter.jsx');
 const baseline = process.argv.includes('--baseline');
-const port = baseline ? 5237 : 5236;
+const port = Number(process.env.PORT) || (baseline ? 5237 : 5236);
 const bundle = await build({
   absWorkingDir: root,
   entryPoints: ['scripts/fixtures/pulse-pickup.jsx'],
   outdir: 'node_modules/.cache/pulse-preview',
   bundle: true, write: false, format: 'esm', jsx: 'automatic',
+  alias: { react: resolve(root, 'node_modules/react'), 'react-dom': resolve(root, 'node_modules/react-dom') },
   define: { 'process.env.NODE_ENV': '"development"', 'import.meta.env': '{}' },
   plugins: [{ name: 'synthetic-pickup-only', setup(builder) {
     builder.onResolve({ filter: /rive\.wasm\?url$/ }, () => ({ path: 'rive-wasm-url', namespace: 'preview-assets' }));

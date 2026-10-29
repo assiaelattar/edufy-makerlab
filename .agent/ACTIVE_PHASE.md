@@ -1,3 +1,9 @@
+## Pickup isolated end-to-end correction — 2026-10-29
+
+User-authorized Pickup scope supersedes unrelated historical module holds for this isolated branch only. See `docs/pickup/AUDIT_2026-10-29.md`. Original mixed checkout and Instructor Pass integration are preserved. No production-family write. Stop at coordinated release handoff after validation.
+
+---
+
 ## Workshop assignment visibility and alerts follow-up — 2026-10-26
 
 The user's 5192 Pass had run an older checkout; that local server was replaced and now serves this clean candidate, also available on port 5174. Dated slots are projected directly and instructor alerts are persisted for assignment, reassignment and booking state changes. Keep this focused phase local until the coordinated Firestore/client rollout and real instructor acceptance. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.

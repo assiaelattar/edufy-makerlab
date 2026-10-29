@@ -1,3 +1,9 @@
+## Pickup isolated end-to-end correction — 2026-10-29
+
+User-authorized Pickup scope supersedes unrelated historical module holds for this isolated branch only. See `docs/pickup/AUDIT_2026-10-29.md`. Original mixed checkout and Instructor Pass integration are preserved. No production-family write. Stop at coordinated release handoff after validation.
+
+---
+
 ## Workshop assignment visibility follow-up — 2026-10-26
 
 Local candidate and alert inbox complete. Port 5192 now serves the current worktree. Next: release integration and a real account check in the current Pass, followed by background push planning if closed-app delivery is required. See the workshop handoff document.

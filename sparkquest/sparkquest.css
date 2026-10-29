@@ -3030,3 +3030,6 @@ button.sq-key-field { grid-template-columns: 55px minmax(0,1fr) auto; }
 .sq-showcase-delete-password { display: grid; gap: 7px; margin-top: 18px; color: var(--kit-ink); font-size: 11px; font-weight: 950; }
 .sq-showcase-delete-password input { box-sizing: border-box; width: 100%; min-height: 48px; border: 2px solid var(--kit-ink); border-radius: 14px 5px 14px 5px; padding: 0 14px; outline: none; color: var(--kit-ink); background: #fff; font: inherit; box-shadow: 3px 3px 0 rgba(25,25,32,.16); }
 .sq-showcase-delete-password input:focus { border-color: #c9364e; box-shadow: 3px 3px 0 #c9364e; }
+
+/* Timetable hints reuse Pickup styling without covering its live status toast. */
+.sq-pickup-toast.sq-workshop-reminder { top: 1rem; bottom: auto; }

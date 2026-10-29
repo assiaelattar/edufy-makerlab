@@ -16,7 +16,7 @@ const notify=()=>{revision++;listeners.forEach(f=>f());};
 const subscribe=f=>{listeners.add(f);return()=>listeners.delete(f);};
 const useRevision=()=>useSyncExternalStore(subscribe,()=>revision);
 export const useAuth=()=>({currentOrganization:scenario==='no-org'?null:{id:'synthetic-only'},userProfile:{uid:'synthetic-staff',role:new URLSearchParams(location.search).get('role')==='readonly'?'parent':'admin'}});
-export const useAppContext=()=>{useRevision();return {pickupQueue:queue,students,enrollments:scenario==='empty'?[]:enrollments,programs};};
+export const useAppContext=()=>{useRevision();return {pickupQueue:queue,students,enrollments:scenario==='empty'?[]:enrollments,programs,attendanceRecords:enrollments.map(e=>({id:`attendance-${e.id}`,organizationId:'synthetic-only',date,studentId:e.studentId,enrollmentId:e.id,status:'present'})),attendanceLoading:false,attendanceError:null};};
 export const useConfirm=()=>({alert:async(title,message)=>{action=`${title}: ${message}`;notify();},confirm:options=>new Promise(resolve=>{confirmation={...options,resolve};notify();})});
 export const advancePickup=async(_db,id,from,to,_uid,evidence)=>{
   if(fail) throw new Error('Synthetic connection failure. No release recorded.');

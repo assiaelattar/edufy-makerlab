@@ -131,3 +131,7 @@ Global shell ownership: `components/layouts/EducationAdminShellV1.tsx` and `comp
 ## Programs Design System v1 acceptance — 2026-10-20
 
 `docs/education/PROGRAMS_DESIGN_SYSTEM_V1_2026-10-20.md` records the latest Programs visual and interactive acceptance, synthetic evidence, decisions and remaining limits. `components/programs/ProgramSetupWizard.tsx`, `components/programs/AcademicYearRolloverModal.tsx`, `views/ProgramsView.tsx`, `views/ProgramDetailsView.tsx` and module-scoped CSS retain presentation ownership; existing AppContext, AuthContext, Firestore handlers and enrollment domain logic remain authoritative. The disposable QA harness is `scripts/preview-pulse-programs.mjs` with `scripts/fixtures/pulse-programs-adapter.jsx`.
+
+## Pickup receipt and workshop prompts — 2026-10-29
+
+`docs/pickup/AUDIT_2026-10-29.md` records the active contract. Parent notices: `sparkquest/components/ParentPickupNotice.tsx`; learner reminders: `sparkquest/components/LearnerWorkshopReminder.tsx`; admin idle/route policy: `components/pickup/PickupWorkshopReminder.tsx`; timetable signal: `sparkquest/domain/workshopPickupTiming.ts`. Existing lifecycle/rules/command adapters remain authoritative.

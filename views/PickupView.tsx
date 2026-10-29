@@ -21,7 +21,7 @@ import { db } from '../services/firebase';
 import { PickupEntry } from '../types';
 import { advancePickup, announcePickup } from '../modules/pickup/services/pickupCommands';
 import { isAuthorizedPicker, isCanonicalPickupEntry, pickupSessionDate } from '../modules/pickup/domain/pickupLifecycle';
-import { projectDailyPickupRoster, selectPresentPickupRoster } from '../modules/pickup/domain/dailyPickupRoster';
+import { projectDailyPickupRoster, selectPresentPickupRoster, isPickupLobbyActive } from '../modules/pickup/domain/dailyPickupRoster';
 import {
     AtlasActionButton,
     AtlasCommandHeader,
@@ -109,7 +109,7 @@ const getRosterStatusClass = (status?: PickupEntry['status']): string => {
 
 export const PickupView = () => {
     const showEducationFamilyJourneyV1 = new URLSearchParams(window.location.search).get('ui') !== 'atlas-legacy';
-    const { pickupQueue, students, enrollments, programs, attendanceRecords, attendanceLoading, attendanceError } = useAppContext();
+    const { pickupQueue, students, enrollments, programs, attendanceRecords, attendanceLoading, attendanceError, viewParams } = useAppContext();
     const { currentOrganization, userProfile } = useAuth();
     const { confirm, alert: showAlert } = useConfirm();
 
@@ -130,6 +130,16 @@ export const PickupView = () => {
     const lobbyExitButtonRef = useRef<HTMLButtonElement>(null);
     const mobileFiltersRef = useRef<HTMLDetailsElement>(null);
     const verificationOpenerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    useEffect(() => {
+        const timer = window.setInterval(() => setDisplayTime(new Date()), 30_000);
+        return () => clearInterval(timer);
+    }, []);
+    useEffect(() => {
+        const open = () => { if (!pendingAction && !verificationEntryId) setIsDisplayMode(true); };
+        window.addEventListener('edufy:open-pickup-lobby', open);
+        return () => window.removeEventListener('edufy:open-pickup-lobby', open);
+    }, [pendingAction, verificationEntryId]);
+    useEffect(() => { if (viewParams?.openLobby) setIsDisplayMode(true); }, [viewParams]);
     const todaySessionDate = pickupSessionDate();
     const todayWeekday = format(new Date(), 'EEEE');
 
@@ -187,7 +197,7 @@ export const PickupView = () => {
     const lobbyRows = useMemo(() => selectPresentPickupRoster(
         dailyRoster, attendanceRecords, organizationId || '', todaySessionDate
     ).map(item => ({ ...item, entry: todayEntryByStudent.get(item.studentId) }))
-        .filter(item => item.entry?.status !== 'confirmed')
+        .filter(item => isPickupLobbyActive(item.entry?.status))
         .sort((a, b) => {
             const rank = (status?: PickupEntry['status']) => status === 'arrived' || status === 'ready' ? 0
                 : status === 'released' ? 1 : status === 'on_the_way' || status === 'waiting' ? 2
@@ -432,7 +442,7 @@ export const PickupView = () => {
             await showAlert('Picker authorization changed', 'The listed picker is no longer authorized. Keep the learner with staff and escalate this pickup.', 'warning');
             return;
         }
-        if (!verificationConfirmed || verificationNote.trim().length < 8) return;
+        if (!verificationConfirmed || verificationNote.trim().length > 500) return;
         setPendingAction(`release:${group.entry.studentId}`);
         setFeedback(null);
         try {
@@ -489,9 +499,9 @@ export const PickupView = () => {
                     verificationEntryId === group.entry.id ? <form aria-label={`Verify pickup for ${group.entry.studentName}`} className="mt-4 space-y-3 rounded-xl border border-teal-300/30 bg-slate-950/60 p-3" onSubmit={event => { event.preventDefault(); void releaseStudent(group); }}>
                         <p className="text-xs font-bold text-teal-200">Match the person in front of you to the authorized picker: {group.entry.pickerName}</p>
                         <EducationField label="How was their identity checked?"><select autoFocus id={`pickup-method-${group.entry.id}`} value={verificationMethod} onChange={event => setVerificationMethod(event.target.value as 'photo_id' | 'known_person')}><option value="photo_id">Photo ID</option><option value="known_person">Known person</option></select></EducationField>
-                        <EducationField label="Verification note" hint="At least 8 characters. Do not enter an ID number."><textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} minLength={8} maxLength={500} required rows={2} placeholder="Record what you checked" /></EducationField>
+                        <EducationField label="Verification note (optional)" hint="Only if useful. Do not enter an ID number."><textarea id={`pickup-note-${group.entry.id}`} value={verificationNote} onChange={event => setVerificationNote(event.target.value)} maxLength={500} rows={2} placeholder="Record what you checked" /></EducationField>
                         <label className="flex items-start gap-2 text-xs leading-5 text-slate-200"><input type="checkbox" checked={verificationConfirmed} onChange={event => setVerificationConfirmed(event.target.checked)} required className="mt-1 accent-teal-400" /><span>I verified this person against the authorized picker list and am handing over {group.entry.studentName}.</span></label>
-                        <div className="edu-pickup__form-actions"><EducationButton type="submit" variant="primary" disabled={pendingAction !== null || verificationNote.trim().length < 8 || !verificationConfirmed}>{isPending ? 'Recording…' : 'Record verified release'}</EducationButton><EducationButton onClick={() => { setVerificationEntryId(null); requestAnimationFrame(() => verificationOpenerRefs.current[group.entry.id]?.focus()); }}>Cancel</EducationButton></div>
+                        <div className="edu-pickup__form-actions"><EducationButton type="submit" variant="primary" disabled={pendingAction !== null || verificationNote.trim().length > 500 || !verificationConfirmed}>{isPending ? 'Recording…' : 'Record verified release'}</EducationButton><EducationButton onClick={() => { setVerificationEntryId(null); requestAnimationFrame(() => verificationOpenerRefs.current[group.entry.id]?.focus()); }}>Cancel</EducationButton></div>
                     </form> : <button ref={node => { verificationOpenerRefs.current[group.entry.id] = node; }} type="button" aria-label={`Verify picker and release ${group.entry.studentName}`} className="edu-ds-button edu-pickup-pulse__verify mt-4 w-full" data-edu-variant="primary" onClick={() => { setVerificationEntryId(group.entry.id); setVerificationMethod('photo_id'); setVerificationNote(''); setVerificationConfirmed(false); }} disabled={pendingAction !== null}><CheckCircle2 size={16} /> Verify picker and release</button>
                 ) : <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-500">Authorized pickup staff must complete release.</div>}
             </article>

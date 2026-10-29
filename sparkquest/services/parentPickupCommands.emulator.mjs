@@ -51,7 +51,7 @@ const cancelled = (actor, entryId, expected = 'on_the_way') =>
 
 try {
   const primary = await client('sparkquest-primary', 'parent', 'Maya');
-  const secondary = await client('sparkquest-secondary', 'parent', 'Uncle Sam');
+  const secondary = await client('sparkquest-secondary', 'parent', 'Second Parent');
   const staff = await client('sparkquest-staff', 'instructor');
   const learner = await client('sparkquest-learner', 'student');
   for (const studentId of ['learner-sq-a', 'learner-sq-b', 'learner-sq-c']) {
@@ -88,7 +88,7 @@ try {
   await release.commit();
   console.log('Adapter check: second guardian receipt.');
   await assert.rejects(
-    advanceParentPickup(primary.db, 'org-sparkquest-pickup', firstId, primary.uid, 'released', 'confirmed'),
+    advanceParentPickup(staff.db, 'org-sparkquest-pickup', firstId, staff.uid, 'released', 'confirmed'),
     error => error?.code === 'permission-denied'
   );
   await advanceParentPickup(secondary.db, 'org-sparkquest-pickup', firstId, secondary.uid, 'released', 'confirmed');

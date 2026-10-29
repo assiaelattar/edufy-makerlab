@@ -51,7 +51,7 @@ const writeTransition = async (client, id, status, fields = {}, eventFields = {}
 
 try {
   const parent = await client('pickup-parent', 'parent', 'org-pickup', 'Maya');
-  const secondParent = await client('pickup-second-parent', 'parent', 'org-pickup', 'Uncle Sam');
+  const secondParent = await client('pickup-second-parent', 'parent', 'org-pickup', 'Second Parent');
   const otherParent = await client('pickup-other-parent', 'parent', 'org-pickup');
   const portfolioParent = await client('pickup-portfolio-parent', 'parent', 'org-pickup');
   const aliasParent = await client('pickup-alias-parent', 'parent', 'org-pickup');
@@ -137,11 +137,15 @@ try {
   const concurrent = await Promise.allSettled([writeTransition(instructor, id, 'released', releaseFields, releaseEvent), writeTransition(instructor, id, 'released', releaseFields, releaseEvent)]);
   assert.equal(concurrent.filter(result => result.status === 'fulfilled').length, 1, 'Only one concurrent release may commit.');
   assert.equal((await getDoc(entry)).data()?.status, 'released');
+  await denied(updateDoc(entry, { studentName: 'Forged learner' }), 'Immutable learner identity');
   await denied(deleteDoc(entry), 'Released history deletion');
   await denied(updateDoc(doc(parent.db, 'pickup_queue', id, 'events', 'released'), { verificationNote: 'Changed later' }), 'Audit event mutation');
   await denied(writeTransition(instructor, id, 'arrived', { arrivedAt: serverTimestamp() }), 'Status reversal');
-  await denied(writeTransition(otherParent, id, 'confirmed', { confirmedAt: serverTimestamp() }), 'Unlinked parent confirmation');
-  await denied(writeTransition(parent, id, 'confirmed', { confirmedAt: serverTimestamp() }), 'Guardian who is not the selected picker cannot confirm receipt');
+  await denied(writeTransition(otherParent, id, 'confirmed', { confirmedAt: serverTimestamp() }), 'Unlinked parent confirmation', true);
+  await denied(writeTransition(instructor, id, 'confirmed', { confirmedAt: serverTimestamp() }), 'Staff cannot replace parent receipt', true);
+  await admin.doc(`guardian_links/${secondParent.uid}_learner-a`).update({ status: 'revoked' });
+  await denied(writeTransition(secondParent, id, 'confirmed', { confirmedAt: serverTimestamp() }), 'Revoked parent receipt', true);
+  await admin.doc(`guardian_links/${secondParent.uid}_learner-a`).update({ status: 'active' });
   await writeTransition(secondParent, id, 'confirmed', { confirmedAt: serverTimestamp() });
   assert.equal((await getDoc(entry)).data()?.status, 'confirmed');
   assert.equal((await getDoc(entry)).data()?.parentUid, parent.uid, 'Receipt preserves the original initiator.');
@@ -175,10 +179,11 @@ try {
   const fourthId = await announcePickup(parent.db, { id: 'learner-d', organizationId: 'org-pickup', name: 'Learner D', parentName: 'Maya', authorizedPickups: ['Uncle Sam'] }, parent.uid, 'Uncle Sam', new Date(), parent.uid);
   await advancePickup(secondParent.db, fourthId, 'on_the_way', 'arrived', secondParent.uid);
   await advancePickup(learner.db, fourthId, 'arrived', 'ready', learner.uid);
-  await advancePickup(instructor.db, fourthId, 'ready', 'released', instructor.uid, { verificationMethod: 'photo_id', verificationNote: 'Photo ID matched the list.' });
+  await advancePickup(instructor.db, fourthId, 'ready', 'released', instructor.uid, { verificationMethod: 'photo_id' });
+  assert.equal((await getDoc(doc(parent.db, 'pickup_queue', fourthId))).data()?.verificationNote, '');
   await advancePickup(secondParent.db, fourthId, 'released', 'confirmed', secondParent.uid);
   assert.equal((await getDoc(doc(parent.db, 'pickup_queue', fourthId))).data()?.status, 'confirmed', 'Edufy command batch completes the cross-guardian handoff.');
-  console.log('Pickup Auth/Firestore emulator passed: parent arrival, optional learner-ready signal, direct verified staff release, selected-picker receipt, private parent-learner notes, tenant/role denials, append-only events, and concurrent release.');
+  console.log('Pickup Auth/Firestore emulator passed: parent arrival, optional learner-ready signal, direct verified staff release, linked-parent receipt, private parent-learner notes, tenant/role denials, append-only events, and concurrent release.');
 } finally {
   await Promise.all(clients.map(deleteApp));
   await deleteAdmin(adminApp);

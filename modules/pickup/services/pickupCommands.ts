@@ -58,15 +58,15 @@ export async function advancePickup(
   if (next === 'arrived') update.arrivedAt = serverTimestamp();
   if (next === 'ready') update.readyAt = serverTimestamp();
   if (next === 'released') {
-    if (!details.verificationMethod || !details.verificationNote?.trim() || details.verificationNote.trim().length < 8) {
+    if (!details.verificationMethod || (details.verificationNote?.trim().length || 0) > 500) {
       throw new Error('Record how the authorized picker was verified before release.');
     }
     update.releasedAt = serverTimestamp();
     update.verifiedPickerName = entry.pickerName;
     update.verifiedByUid = actorUid;
     update.verificationMethod = details.verificationMethod;
-    update.verificationNote = details.verificationNote.trim();
-    Object.assign(eventDetails, { verifiedPickerName: entry.pickerName, verificationMethod: details.verificationMethod, verificationNote: details.verificationNote.trim() });
+    update.verificationNote = (details.verificationNote || '').trim();
+    Object.assign(eventDetails, { verifiedPickerName: entry.pickerName, verificationMethod: details.verificationMethod, verificationNote: (details.verificationNote || '').trim() });
   }
   if (next === 'confirmed') update.confirmedAt = serverTimestamp();
   if (next === 'cancelled' || next === 'exception') {

@@ -1,3 +1,7 @@
+## Pickup isolated end-to-end correction — 2026-10-29
+
+User-authorized Pickup scope supersedes unrelated historical module holds for this isolated branch only. See `docs/pickup/AUDIT_2026-10-29.md`. Original mixed checkout and Instructor Pass integration are preserved. No production-family write. Builds, SparkQuest TypeScript, both localhost emulator suites, three domain suites, 62 Education checks and synthetic mobile/browser checks pass. Global Edufy tsc remains failing outside the new Pickup files. Stop at coordinated release handoff.
+
 ## Pickup parent receipt and present-only lobby — 2026-10-28
 
 The focused Pickup branch keeps the existing staff `released` → selected guardian `confirmed` lifecycle. SparkQuest now puts the arrival/receipt action near the top and keeps it visible while scrolling; Edufy's lobby shows only active scheduled learners marked present or late, removes completed pickups, and displays live gate/receipt status without a picker's name. Staff still see the full operational roster. Both app builds, SparkQuest TypeScript, the Pickup roster smoke, desktop/phone local preview, and diff checks pass. See `docs/pickup/PARENT_RECEIPT_LOBBY_2026-10-28.md` for decisions and release checks.

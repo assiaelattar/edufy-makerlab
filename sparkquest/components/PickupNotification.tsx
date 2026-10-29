@@ -20,6 +20,8 @@ export const PickupNotification: React.FC = () => {
     const [statusError, setStatusError] = useState<string | null>(null);
     const [notice, setNotice] = useState<PickupNotice | null>(null);
     const [isOpen, setIsOpen] = useState(false);
+    const [today, setToday] = useState(pickupSessionDate);
+    useEffect(() => { const timer = setInterval(() => setToday(pickupSessionDate()), 30_000); return () => clearInterval(timer); }, []);
     const previous = useRef<{ id: string; status: string; pickerName: string } | null>(null);
 
     useEffect(() => {
@@ -35,7 +37,6 @@ export const PickupNotification: React.FC = () => {
         if (!user || userProfile?.role !== 'student' || !userProfile.organizationId || !db) return;
         const studentId = userProfile.studentId || user.uid;
         const organizationId = userProfile.organizationId;
-        const today = pickupSessionDate();
         setLoading(true);
         const pickupQuery = query(
             collection(db, 'pickup_queue'),
@@ -67,7 +68,7 @@ export const PickupNotification: React.FC = () => {
             setLoading(false);
             setStatusError('Live pickup status is unavailable. Stay with a MakerLab team member.');
         });
-    }, [user, userProfile?.organizationId, userProfile?.role, userProfile?.studentId]);
+    }, [user, userProfile?.organizationId, userProfile?.role, userProfile?.studentId, today]);
 
     useEffect(() => {
         if (!notice) return;

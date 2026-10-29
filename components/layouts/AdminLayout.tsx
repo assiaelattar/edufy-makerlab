@@ -1,3 +1,4 @@
+import { PickupWorkshopReminder } from '../pickup/PickupWorkshopReminder';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Box,
@@ -271,7 +272,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                 signOut={signOut}
                 signOutLabel={t('menu.signout')}
             >
-                {children}
+                <PickupWorkshopReminder />{children}
             </EducationAdminShellV1>
         );
     }
@@ -597,7 +598,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
                     aria-label={`${activeModule?.label || 'Workspace'} content`}
                 >
                     <div className="mx-auto w-full max-w-[1680px]">
-                        {children}
+                        <PickupWorkshopReminder />{children}
                     </div>
                 </div>
             </main>

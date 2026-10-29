@@ -58,12 +58,11 @@ interface Props {
 const steps = [
   { status: 'on_the_way', label: 'En route', icon: Car },
   { status: 'arrived', label: 'Sur place', icon: MapPin },
-  { status: 'ready', label: 'Enfant prêt (facultatif)', icon: PackageCheck },
   { status: 'released', label: 'Remise équipe', icon: ShieldCheck },
   { status: 'confirmed', label: 'Terminé', icon: CheckCircle2 },
 ] as const;
 
-const statusPosition = (status?: string) => steps.findIndex(step => step.status === status);
+const statusPosition = (status?: string) => steps.findIndex(step => step.status === (status === 'ready' ? 'arrived' : status));
 const activeStatuses = ['waiting', 'on_the_way', 'arrived', 'ready', 'released'];
 
 const friendlyError = (error: unknown) => {
@@ -121,8 +120,7 @@ export const ParentPickupControl: React.FC<Props> = ({
     ...(child.pickupProfile?.authorizedPickups || []),
   ].map(name => name?.trim()).filter((name): name is string => Boolean(name)))), [child.pickupProfile]);
   const [pickerName, setPickerName] = useState(pickerOptions[0] || '');
-  const canConfirmReceipt = Boolean(entry?.pickerName && currentParentName &&
-    entry.pickerName === currentParentName);
+  const canConfirmReceipt = allowed;
 
   useEffect(() => setPickerName(pickerOptions[0] || ''), [child.id, pickerOptions]);
   useEffect(() => {
@@ -229,7 +227,7 @@ export const ParentPickupControl: React.FC<Props> = ({
         : action === 'arrive'
           ? 'L’équipe voit maintenant que la personne autorisée est sur place.'
           : action === 'confirm'
-            ? 'Réception confirmée. La remise d’aujourd’hui est terminée.'
+            ? 'Réception enregistrée.'
             : 'La demande a été annulée et conservée dans l’historique.');
       if (action === 'cancel') {
         setCancelReason('');
@@ -255,7 +253,7 @@ export const ParentPickupControl: React.FC<Props> = ({
       : entry.status === 'arrived' ? `${firstName} vous rejoint`
         : entry.status === 'ready' ? 'Prêt pour la remise'
         : entry.status === 'released' ? 'Remise enregistrée'
-          : entry.status === 'confirmed' ? 'Sortie terminée'
+          : entry.status === 'confirmed' ? 'Bonne route !'
             : entry.status === 'cancelled' ? 'Sortie annulée'
               : 'Vérification nécessaire par l’équipe';
 
@@ -286,8 +284,8 @@ export const ParentPickupControl: React.FC<Props> = ({
         {entry.status === 'on_the_way' ? <button type="button" className="sq-pickup-primary" onClick={() => void perform('arrive')} disabled={pending !== null}>
           {pending === 'arrive' ? <Loader2 className="sq-spin" size={18} /> : <MapPin size={18} />} Je suis sur place
         </button> : canConfirmReceipt ? <button type="button" className="sq-pickup-primary" onClick={() => void perform('confirm')} disabled={pending !== null}>
-          {pending === 'confirm' ? <Loader2 className="sq-spin" size={18} /> : <CheckCircle2 size={18} />} J’ai récupéré {firstName}
-        </button> : <small>Seule la personne choisie et liée au compte familial peut confirmer.</small>}
+          {pending === 'confirm' ? <Loader2 className="sq-spin" size={18} /> : <CheckCircle2 size={18} />} Je confirme la réception de {firstName}
+        </button> : <small>Un parent lié avec l’autorisation Pickup doit confirmer.</small>}
       </div>}
 
     {position >= 0 && <div className="sq-pickup-progress-summary" aria-label={`Étape ${position + 1} sur ${steps.length} : ${steps[position].label}`}><span>ÉTAPE {position + 1} / {steps.length}</span><strong>{steps[position].label}</strong><div className="sq-pickup-progress-bars" aria-hidden="true">{steps.map((step, index) => <i key={step.status} className={position >= index ? 'is-done' : ''} />)}</div></div>}
@@ -300,18 +298,19 @@ export const ParentPickupControl: React.FC<Props> = ({
 
     {!loading && !readError && <div className="sq-pickup-actions">
       {!entry && <>
-        <label htmlFor={`sq-picker-${child.id}`}>Qui récupère {child.name} ?</label>
+        <label htmlFor={`sq-picker-${child.id}`}>Qui récupère {child.name} ? (parent ou personne autorisée)</label>
         {pickerOptions.length > 0 ? <select id={`sq-picker-${child.id}`} value={pickerName} onChange={event => setPickerName(event.target.value)}>
           {pickerOptions.map(name => <option key={name} value={name}>{name}</option>)}
         </select> : <p className="sq-pickup-inline-warning">Aucune personne autorisée n’est enregistrée. Demandez à l’académie de mettre la fiche à jour.</p>}
+        <p className="sq-pickup-receipt-note">Un parent ou gardien manque dans la liste ? Demandez à l’équipe de l’ajouter aux personnes autorisées.</p>
         <button type="button" className="sq-pickup-primary" onClick={() => void perform('announce')} disabled={pending !== null || conflicts.length > 0 || !pickerOptions.length}>
           {pending === 'announce' ? <Loader2 className="sq-spin" size={17} /> : <Car size={17} />} Je suis en route
         </button>
       </>}
       {entry?.status === 'arrived' && <div className="sq-pickup-wait"><UserCheck size={22} /><div><strong>Merci d’attendre l’équipe d’accueil.</strong><p>L’équipe doit vérifier {entry.pickerName || 'la personne autorisée'} avant de remettre {child.name}.</p></div></div>}
       {entry?.status === 'ready' && <div className="sq-pickup-wait is-released"><PackageCheck size={22} /><div><strong>{child.name} est prêt.</strong><p>Son projet et ses affaires sont rangés. L’équipe doit maintenant vérifier {entry.pickerName || 'la personne autorisée'} avant le départ.</p></div></div>}
-      {entry?.status === 'released' && <p className="sq-pickup-receipt-note">Confirmez uniquement lorsque {firstName} est bien avec vous.</p>}
-      {entry?.status === 'confirmed' && <div className="sq-pickup-complete"><CheckCircle2 size={26} /><div><strong>La remise d’aujourd’hui est terminée.</strong><p>La remise par l’équipe et la confirmation familiale restent dans l’historique.</p></div></div>}
+      {entry?.status === 'released' && <p className="sq-pickup-receipt-note">Confirmez à la porte uniquement lorsque {firstName} est bien avec la personne autorisée : {entry.pickerName}.</p>}
+      {entry?.status === 'confirmed' && <div className="sq-pickup-complete"><CheckCircle2 size={26} /><div><strong>Merci pour votre confirmation.</strong><p>La remise par l’équipe et la confirmation familiale restent dans l’historique.</p></div></div>}
       {(entry?.status === 'cancelled' || entry?.status === 'exception') && <div className="sq-pickup-wait"><AlertCircle size={22} /><div><strong>{entry.status === 'cancelled' ? 'Cette sortie a été annulée.' : 'Une vérification par l’équipe est nécessaire.'}</strong><p>Contactez l’académie avant tout départ avec {child.name}.</p></div></div>}
 
       {entry && ['on_the_way', 'arrived', 'ready'].includes(entry.status) && <details className="sq-pickup-cancel">

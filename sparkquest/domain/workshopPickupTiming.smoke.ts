@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { workshopPickupSignal } from './workshopPickupTiming.ts';
+const slot = { date: '2026-10-29', startTime: '15:00', endTime: '16:00', timezone: 'Africa/Casablanca' };
+assert.equal(workshopPickupSignal(slot, new Date('2026-10-29T14:49:00Z')), null);
+assert.equal(workshopPickupSignal(slot, new Date('2026-10-29T14:50:00Z')), 'proof');
+assert.equal(workshopPickupSignal(slot, new Date('2026-10-29T15:00:00Z')), 'pickup');
+assert.equal(workshopPickupSignal(slot, new Date('2026-10-29T15:15:00Z')), null);
+assert.equal(workshopPickupSignal({ ...slot, endTime: null }, new Date('2026-10-29T15:00:00Z')), null);
+assert.equal(workshopPickupSignal({ ...slot, timezone: 'invalid' }), null);
+assert.equal(workshopPickupSignal(slot, new Date('2026-10-30T15:00:00Z')), null);
+console.log('Workshop proof/Pickup timing smoke passed.');

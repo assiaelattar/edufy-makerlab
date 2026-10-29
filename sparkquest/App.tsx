@@ -1,3 +1,4 @@
+import { LearnerWorkshopReminder } from './components/LearnerWorkshopReminder';
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { isChunkLoadError, recoverFromChunkError } from './utils/chunkRecovery';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -660,7 +661,7 @@ const App: React.FC = () => {
                 <SessionProvider>
                   <SessionOverlay />
                   <InactivityMonitor />
-                  <PickupNotification />
+                  <PickupNotification /><LearnerWorkshopReminder />
                   <SessionControls />
                   <SparkQuestApp />
                 </SessionProvider>
