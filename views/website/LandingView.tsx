@@ -18,6 +18,7 @@ import {
     Zap
 } from 'lucide-react';
 import { Logo } from '../../components/Logo';
+import './landing-page-duo.css';
 
 const centerTypes = [
     'Centres de langues',
@@ -108,12 +109,12 @@ export const LandingView = () => {
     };
 
     return (
-        <div className="atlas-marketing-shell min-h-screen text-[#08111f] font-sans selection:bg-[#14b8a6]/25">
-            <header className="fixed inset-x-0 top-0 z-50 border-b border-[#08111f]/10 bg-[#f7f1e4]">
+        <div className="atlas-marketing-shell edufy-public-landing min-h-screen text-[#08111f] font-sans selection:bg-[#58CC02]/25">
+            <header className="edufy-public-landing__header fixed inset-x-0 top-0 z-50 border-b border-[#08111f]/10 bg-[#f7f1e4]">
                 <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-                    <button onClick={handleGetStarted} className="flex items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-[#1f9d8e] focus:ring-offset-2" aria-label="Edufy home">
-                        <Logo className="h-8 w-8" />
-                        <span className="text-xl font-black tracking-tight text-[#08111f]">Edufy</span>
+                    <button onClick={handleGetStarted} className="edufy-public-brand flex items-center gap-3 text-left focus:outline-none focus:ring-2 focus:ring-[#58CC02] focus:ring-offset-2" aria-label="Edufy home">
+                        <span className="edufy-public-brand__mark"><Logo alt="Edufy" className="h-8 w-8" /></span>
+                        <span className="edufy-public-brand__wordmark">Edufy</span>
                     </button>
 
                     <nav className="hidden items-center gap-7 text-sm font-semibold text-[#5d6760] md:flex">
@@ -126,15 +127,15 @@ export const LandingView = () => {
                         <button onClick={handleLogin} className="hidden text-sm font-bold text-[#334155] transition-colors hover:text-[#08111f] sm:inline-flex">
                             Sign in
                         </button>
-                        <button onClick={handleGetStarted} className="inline-flex items-center gap-2 rounded-lg bg-[#08111f] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#10213a] focus:outline-none focus:ring-2 focus:ring-[#08111f] focus:ring-offset-2">
-                            Book demo <ArrowRight size={16} />
+                        <button onClick={handleGetStarted} className="edufy-public-landing__header-cta inline-flex items-center gap-2 rounded-lg bg-[#08111f] px-4 py-2 text-sm font-black text-white transition-colors hover:bg-[#10213a] focus:outline-none focus:ring-2 focus:ring-[#08111f] focus:ring-offset-2">
+                            Book a guided demo <ArrowRight size={16} />
                         </button>
                     </div>
                 </div>
             </header>
 
             <main>
-                <section className="relative overflow-hidden pt-28 sm:pt-32">
+                <section className="edufy-public-hero relative overflow-hidden pt-28 sm:pt-32">
                     <div className="absolute inset-x-0 top-0 h-[680px] bg-[#08111f]" />
                     <div className="atlas-grid-field absolute inset-x-0 top-0 h-[680px] opacity-70" />
 
@@ -142,23 +143,23 @@ export const LandingView = () => {
                         <div className="grid gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
                             <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
                                 <div className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/8 px-3 py-2 text-xs font-black uppercase tracking-[0.18em] text-[#f2c766]">
-                                    <Sparkles size={14} /> AI autopilot for education centers
+                                    <Sparkles size={14} /> The school-day command view
                                 </div>
 
                                 <h1 className="mt-6 max-w-3xl text-5xl font-black leading-[0.94] tracking-tight text-white sm:text-6xl lg:text-7xl">
-                                    Your center, finally under control.
+                                    Your school day, with a next move.
                                 </h1>
 
                                 <p className="mt-6 max-w-2xl text-lg leading-8 text-[#d8e1dc] sm:text-xl">
-                                    Edufy shows what is happening in the business, what needs attention, and what action your team should take next.
+                                    Edufy turns students, sessions, families and payments into one calm route for the team: see what matters, then move it forward.
                                 </p>
 
                                 <div className="mt-8 grid gap-3 sm:grid-cols-[auto_auto] sm:justify-start">
-                                    <button onClick={handleGetStarted} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#14b8a6] px-6 py-4 text-sm font-black text-[#08111f] transition-colors hover:bg-[#5eead4] focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#08111f]">
-                                        See the autopilot demo <ArrowRight size={18} />
+                                    <button onClick={handleGetStarted} className="edufy-public-hero__primary inline-flex items-center justify-center gap-2 rounded-lg bg-[#14b8a6] px-6 py-4 text-sm font-black text-[#08111f] transition-colors hover:bg-[#5eead4] focus:outline-none focus:ring-2 focus:ring-[#14b8a6] focus:ring-offset-2 focus:ring-offset-[#08111f]">
+                                        See the school-day demo <ArrowRight size={18} />
                                     </button>
-                                    <button onClick={handleLogin} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/18 bg-white/8 px-6 py-4 text-sm font-black text-white transition-colors hover:bg-white/14 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-[#08111f]">
-                                        Open demo space <PhoneCall size={18} />
+                                    <button onClick={handleLogin} className="edufy-public-hero__secondary inline-flex items-center justify-center gap-2 rounded-lg border border-white/18 bg-white/8 px-6 py-4 text-sm font-black text-white transition-colors hover:bg-white/14 focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-[#08111f]">
+                                        Open the demo space <PhoneCall size={18} />
                                     </button>
                                 </div>
 
@@ -169,6 +170,15 @@ export const LandingView = () => {
                                         </span>
                                     ))}
                                 </div>
+
+                                <div className="edufy-public-route" aria-label="Edufy school-day route">
+                                    <span className="edufy-public-route__label">A calmer day</span>
+                                    <span className="edufy-public-route__step edufy-public-route__step--green">Notice</span>
+                                    <ArrowRight aria-hidden="true" size={14} />
+                                    <span className="edufy-public-route__step edufy-public-route__step--blue">Prioritise</span>
+                                    <ArrowRight aria-hidden="true" size={14} />
+                                    <span className="edufy-public-route__step edufy-public-route__step--purple">Follow through</span>
+                                </div>
                             </motion.div>
 
                             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.1 }} className="relative">
@@ -176,7 +186,7 @@ export const LandingView = () => {
                             </motion.div>
                         </div>
 
-                        <div className="relative mt-12 overflow-hidden rounded-lg border border-[#08111f]/10 bg-white shadow-[0_30px_100px_rgba(8,17,31,0.18)]">
+                        <div className="edufy-public-devices relative mt-12 overflow-hidden rounded-lg border border-[#08111f]/10 bg-white shadow-[0_30px_100px_rgba(8,17,31,0.18)]">
                             <img src="/images/hero-devices.png" alt="Edufy dashboard preview on multiple devices" className="h-auto w-full object-cover" />
                         </div>
                     </div>

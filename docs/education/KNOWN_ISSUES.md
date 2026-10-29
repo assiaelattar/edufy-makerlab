@@ -137,4 +137,8 @@ The current-main candidate is locally verified but not live. `firestore.rules` i
 
 The repaired `class_sessions` rule and app are local until coordinated release. Real Ayoub/second-instructor assignment, reassignment, alert timing, and phone acceptance are still unverified. Pass notifications while the app is closed require a later push implementation; the current in-app inbox is durable and optional browser notifications work while the Pass is open.
 
+## 2026-10-30 — Public landing release boundary
+
+The light, screenshot-free public landing is verified locally through the isolated preview fixture and production build. Live CDN/browser-cache verification remains required after this release. Existing Firebase mixed-import and large-chunk warnings remain unrelated.
+
 \r\n

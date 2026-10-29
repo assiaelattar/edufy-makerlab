@@ -807,5 +807,10 @@ An isolated branch adds reversible learner pause with `inactiveAt`, academic-yea
 Clean worktree: `.release-worktrees/instructor-pass-integration-20261029` from current main plus five focused workshop/Pass commits. Repaired the Calendar `class_sessions` write rule, all-block group sync, same-tenant instructor selector, dated-slot authority across Calendar/Workshops/Pass, and durable group notifications. Build, 62 Education checks, schedule/WhatsApp smokes, and Auth/Firestore emulator pass. Protected `firestore.rules` approval and coordinated production release remain; then test assignment/reassignment with two signed-in instructors. See `docs/education/WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
 
 ---
+## Public landing light day-path release — 2026-10-30
+
+The pre-auth Edufy landing page now uses a light, from-scratch HTML/CSS day-path illustration instead of a dark dashboard or product screenshot. The Edufy logo lockup, Notice → Prioritise → Follow through rail, balanced semantic palette and auth actions remain intact. Local 390px/desktop checks, the Education System checks and the production build pass. This release is limited to the public landing; no auth, permission, data or production-record behavior changed.
+
+---
 
 \r\n

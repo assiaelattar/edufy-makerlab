@@ -1,0 +1,185 @@
+/*
+ * Edufy public landing — Duolingo-inspired school-team direction.
+ * The signature is the route rail: Notice → Prioritise → Follow through.
+ * It translates the internal dashboard's next-action model into a welcoming
+ * first impression without changing the public navigation or auth handlers.
+ */
+.edufy-public-landing {
+  --edu-public-ink: #11233a;
+  --edu-public-muted: #5d6d78;
+  --edu-public-paper: #f7fbf5;
+  --edu-public-paper-warm: #fffdf5;
+  --edu-public-green: #58cc02;
+  --edu-public-green-deep: #3aa300;
+  --edu-public-blue: #1cb0f6;
+  --edu-public-yellow: #ffc800;
+  --edu-public-orange: #ff9600;
+  --edu-public-purple: #ce82ff;
+  background: var(--edu-public-paper) !important;
+  color: var(--edu-public-ink) !important;
+  font-family: 'DM Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.edufy-public-landing :is(h1, h2, h3, .font-black) {
+  font-family: 'Nunito', 'DM Sans', ui-rounded, system-ui, sans-serif;
+  letter-spacing: -0.045em;
+}
+
+.edufy-public-landing__header {
+  border-color: rgba(17, 35, 58, 0.12) !important;
+  background: color-mix(in srgb, var(--edu-public-paper) 90%, transparent) !important;
+  box-shadow: 0 8px 24px rgba(17, 35, 58, 0.045);
+  backdrop-filter: blur(16px);
+}
+
+.edufy-public-brand { border-radius: 16px; }
+.edufy-public-brand__mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 2px solid var(--edu-public-green-deep);
+  border-bottom-width: 4px;
+  border-radius: 14px;
+  background: var(--edu-public-green);
+  box-shadow: 0 5px 0 rgba(58, 163, 0, 0.18);
+}
+.edufy-public-brand__mark img { width: 27px; height: 27px; border-radius: 8px; }
+.edufy-public-brand__wordmark {
+  color: var(--edu-public-ink);
+  font-family: 'Nunito', ui-rounded, sans-serif;
+  font-size: 23px;
+  font-weight: 950;
+  letter-spacing: -0.06em;
+}
+.edufy-public-landing__header-cta {
+  border-radius: 999px !important;
+  background: var(--edu-public-blue) !important;
+  color: #07263b !important;
+  box-shadow: 0 4px 0 #0c8dc9;
+}
+.edufy-public-landing__header-cta:hover { background: #43baf4 !important; }
+
+.edufy-public-hero { padding-bottom: 38px; }
+.edufy-public-hero > div:first-child {
+  height: 860px !important;
+  background:
+    radial-gradient(circle at 74% 18%, rgba(88, 204, 2, 0.18), transparent 24rem),
+    linear-gradient(135deg, #11233a 0%, #0a1a2b 65%, #152d45 100%) !important;
+}
+.edufy-public-hero > .atlas-grid-field {
+  opacity: 0.42 !important;
+  background-size: 42px 42px;
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255,255,255,.04) 1px, transparent 1px);
+}
+.edufy-public-hero h1 { max-width: 720px; font-size: clamp(3.2rem, 7vw, 6.6rem) !important; line-height: 0.92 !important; }
+.edufy-public-hero h1::after {
+  content: '';
+  display: block;
+  width: min(180px, 40%);
+  height: 9px;
+  margin-top: 19px;
+  border-radius: 999px;
+  background: var(--edu-public-green);
+  box-shadow: 0 4px 0 var(--edu-public-green-deep);
+  transform: rotate(-1.5deg);
+}
+.edufy-public-hero p { max-width: 590px; color: #d9e8ef !important; }
+.edufy-public-hero [class*='text-[#d8e1dc]'] { color: #d9e8ef !important; }
+.edufy-public-hero [class*='border-white'] { border-color: rgba(255,255,255,.18) !important; }
+.edufy-public-hero [class*='bg-white'] { background: rgba(255,255,255,.08) !important; }
+.edufy-public-hero__primary {
+  border-radius: 999px !important;
+  background: var(--edu-public-green) !important;
+  color: #173300 !important;
+  box-shadow: 0 5px 0 var(--edu-public-green-deep);
+}
+.edufy-public-hero__primary:hover { background: #7be329 !important; }
+.edufy-public-hero__secondary { border-radius: 999px !important; }
+
+.edufy-public-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 22px;
+  color: #d9e8ef;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .02em;
+}
+.edufy-public-route__label {
+  margin-right: 3px;
+  color: #a8bdc8;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.edufy-public-route__step {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px;
+  padding: 0 10px;
+  background: rgba(255,255,255,.08);
+}
+.edufy-public-route__step--green { color: #b7f28a; }
+.edufy-public-route__step--blue { color: #9ddcff; }
+.edufy-public-route__step--purple { color: #ebcfff; }
+
+.edufy-public-landing .edufy-public-devices {
+  border-radius: 28px !important;
+  border-color: rgba(17,35,58,.12) !important;
+  box-shadow: 0 24px 70px rgba(17,35,58,.17) !important;
+}
+.edufy-public-landing .edufy-public-devices img { display: block; }
+
+.edufy-public-landing main > section:not(.edufy-public-hero) { position: relative; }
+.edufy-public-landing main > section:not(.edufy-public-hero) h2 { max-width: 760px; }
+.edufy-public-landing main > section:not(.edufy-public-hero) [class*='rounded-lg'] { border-radius: 22px !important; }
+.edufy-public-landing main > section:not(.edufy-public-hero) [class*='border-black'] { border-color: rgba(17,35,58,.12) !important; }
+.edufy-public-landing main > section:not(.edufy-public-hero) [class*='bg-white'] { background: #fff !important; }
+.edufy-public-landing main > section:not(.edufy-public-hero) [class*='text-[#17a08f]'] { color: var(--edu-public-green-deep) !important; }
+.edufy-public-landing main > section:not(.edufy-public-hero) [class*='text-[#9f6b10]'] { color: #9b6500 !important; }
+
+.edufy-public-landing main > section:nth-of-type(2) { background: var(--edu-public-paper-warm); }
+.edufy-public-landing main > section:nth-of-type(2) [class*='bg-white'] { box-shadow: 0 5px 0 rgba(17,35,58,.08); }
+.edufy-public-landing main > section:nth-of-type(2) svg { color: var(--edu-public-green-deep) !important; }
+.edufy-public-landing main > section:nth-of-type(3) { background: var(--edu-public-ink) !important; }
+.edufy-public-landing main > section:nth-of-type(3) [class*='text-[#f1d17a]'] { color: var(--edu-public-yellow) !important; }
+.edufy-public-landing main > section:nth-of-type(4) svg { color: var(--edu-public-blue) !important; }
+.edufy-public-landing main > section:nth-of-type(4) [class*='bg-white'] { box-shadow: 0 5px 0 rgba(17,35,58,.08); }
+.edufy-public-landing main > section:nth-of-type(5) { background: #f1f7ff !important; }
+.edufy-public-landing main > section:nth-of-type(5) [class*='bg-[#101411]'] { background: var(--edu-public-ink) !important; }
+.edufy-public-landing main > section:nth-of-type(6) { background: var(--edu-public-ink) !important; }
+.edufy-public-landing main > section:nth-of-type(6) [class*='text-[#20c7b0]'] { color: var(--edu-public-blue) !important; }
+.edufy-public-landing main > section:nth-of-type(7) svg { color: var(--edu-public-orange) !important; }
+.edufy-public-landing main > section:nth-of-type(8) { background: var(--edu-public-paper-warm); }
+.edufy-public-landing main > section:nth-of-type(8) [class*='bg-[#101411]'] { background: var(--edu-public-ink) !important; }
+
+.edufy-public-landing footer { border-color: rgba(17,35,58,.12) !important; background: #edf5ed !important; }
+.edufy-public-landing footer .edufy-public-brand__wordmark { font-size: 18px; }
+
+@media (max-width: 700px) {
+  .edufy-public-landing__header nav { display: none; }
+  .edufy-public-landing__header > div { height: 68px; }
+  .edufy-public-brand__mark { width: 34px; height: 34px; border-radius: 12px; }
+  .edufy-public-brand__wordmark { font-size: 21px; }
+  .edufy-public-landing__header-cta { padding: 9px 13px !important; font-size: 11px !important; }
+  .edufy-public-hero { padding-top: 104px !important; }
+  .edufy-public-hero > div:first-child { height: 790px !important; }
+  .edufy-public-hero h1 { font-size: clamp(3rem, 15vw, 4.6rem) !important; }
+  .edufy-public-hero h1::after { height: 7px; margin-top: 15px; }
+  .edufy-public-route { gap: 5px; line-height: 1.2; }
+  .edufy-public-route__step { padding: 0 8px; }
+  .edufy-public-devices { margin-top: 28px !important; border-radius: 20px !important; }
+  .edufy-public-landing main > section:not(.edufy-public-hero) { padding-top: 60px !important; padding-bottom: 60px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edufy-public-landing *, .edufy-public-landing *::before, .edufy-public-landing *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

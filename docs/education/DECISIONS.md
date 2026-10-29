@@ -154,4 +154,8 @@ Keep a newly submitted public booking and its capacity increment in one idempote
 
 The dated workshop slot is authoritative for workshop coverage; the grade group is authoritative for recurring program coverage unless a materialized class session has an explicit override. The separate Instructor Pass reads both and shows only the signed-in instructor's same-tenant assignments. Group and workshop assignment alerts are persisted as recipient notifications.
 
+## 2026-10-30 — Public landing is a light brand touchpoint
+
+Express the public “next useful action” promise as a welcoming school-day route: Edufy logo → school-day thesis → illustrated day path → guided demo/sign-in. Keep the full semantic palette in role-based accents, but keep the public canvas light and screenshot-free. Do not couple the visual layer to auth implementation details.
+
 \r\n

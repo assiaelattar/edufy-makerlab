@@ -155,4 +155,8 @@ Integrated the local request/confirmation flow onto current `main` without repla
 
 Connected the separate Instructor Pass PWA to Edufy's dated workshop and STEMQuest group assignments. Calendar now synchronizes all group blocks and ad hoc slots, displays effective coverage, and saves permitted class-session changes. Group and workshop changes create durable Pass alerts. See `WORKSHOP_REQUEST_TO_INSTRUCTOR_2026-10-26.md`.
 
+## 2026-10-30 — Public landing light day path
+
+Rebuilt the pre-auth Edufy landing page with a light, from-scratch HTML/CSS school-day route, Edufy logo lockup and tactile semantic colour roles. Removed the product screenshot dependency; authentication and public actions remain unchanged. See `PUBLIC_LANDING_DUO_DIRECTION_2026-10-29.md`.
+
 \r\n
