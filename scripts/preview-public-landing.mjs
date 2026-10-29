@@ -36,8 +36,7 @@ const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta n
 
 const staticFiles = new Map([
   ['/index.css', ['text/css', 'index.css']],
-  ['/icon.svg', ['image/svg+xml', 'icon.svg']],
-  ['/images/hero-devices.png', ['image/png', 'public/images/hero-devices.png']]
+  ['/icon.svg', ['image/svg+xml', 'icon.svg']]
 ]);
 
 createServer(async (req, res) => {

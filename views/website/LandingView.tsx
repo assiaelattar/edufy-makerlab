@@ -53,13 +53,6 @@ const clarityCards = [
     }
 ];
 
-const cockpitMetrics = [
-    { label: 'Leads to call', value: '24', tone: 'amber' },
-    { label: 'To collect', value: '18.4k', tone: 'teal' },
-    { label: 'Students at risk', value: '7', tone: 'rose' },
-    { label: 'Posts ready', value: '12', tone: 'blue' }
-];
-
 const autopilotActions = [
     { icon: Target, title: 'Sell smarter', desc: 'Edufy shows which leads, workshops, and campaigns deserve attention first.' },
     { icon: Wallet, title: 'Collect faster', desc: 'See balances, pending payments, checks, transfers, and reminders in one view.' },
@@ -182,12 +175,15 @@ export const LandingView = () => {
                             </motion.div>
 
                             <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.1 }} className="relative">
-                                <CommandCenterMockup />
+                                <EdufyDayPathMockup />
                             </motion.div>
                         </div>
 
-                        <div className="edufy-public-devices relative mt-12 overflow-hidden rounded-lg border border-[#08111f]/10 bg-white shadow-[0_30px_100px_rgba(8,17,31,0.18)]">
-                            <img src="/images/hero-devices.png" alt="Edufy dashboard preview on multiple devices" className="h-auto w-full object-cover" />
+                        <div className="edufy-public-proof-strip relative mt-12" aria-label="Edufy workspace capabilities">
+                            <span><CheckCircle2 size={17} /> Students and families</span>
+                            <span><Target size={17} /> Today’s priorities</span>
+                            <span><Sparkles size={17} /> Learning moments</span>
+                            <span><Clock size={17} /> Follow-through</span>
                         </div>
                     </div>
                 </section>
@@ -394,60 +390,22 @@ export const LandingView = () => {
     );
 };
 
-const CommandCenterMockup = () => (
-    <div className="rounded-lg border border-white/14 bg-white/[0.08] p-3 shadow-[0_40px_120px_rgba(0,0,0,0.35)] backdrop-blur">
-        <div className="rounded-lg bg-[#07110f] p-5">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-[#f1d17a]">Live command center</p>
-                    <h2 className="mt-2 text-2xl font-black text-white">Today at your center</h2>
-                </div>
-                <div className="rounded-md bg-[#20c7b0]/12 px-3 py-2 text-xs font-black text-[#64e8d7]">AI ready</div>
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-3">
-                {cockpitMetrics.map((metric) => (
-                    <MetricCard key={metric.label} {...metric} />
-                ))}
-            </div>
-
-            <div className="mt-5 rounded-lg bg-white/[0.06] p-5">
-                <div className="flex items-center gap-2 text-[#f1d17a]">
-                    <Sparkles size={18} />
-                    <span className="font-black">Edufy recommendation</span>
-                </div>
-                <p className="mt-3 text-lg font-semibold leading-7 text-white">
-                    Call the 6 hot leads from robotics week, send 9 payment reminders, and publish the summer camp post today.
-                </p>
-            </div>
-
-            <div className="mt-5 grid gap-2">
-                {['Lead follow-up prepared', 'Payment messages ready', 'Parent updates suggested'].map((item) => (
-                    <div key={item} className="flex items-center justify-between rounded-md bg-white/[0.04] px-4 py-3 text-sm font-bold text-[#d8e1dc]">
-                        <span>{item}</span>
-                        <Clock size={16} className="text-[#20c7b0]" />
-                    </div>
-                ))}
-            </div>
+const EdufyDayPathMockup = () => (
+    <div className="edufy-day-path" aria-label="Illustrated Edufy school-day route">
+        <div className="edufy-day-path__topline">
+            <div><span className="edufy-day-path__eyebrow">EDUFY ROUTE</span><strong>Tuesday at the academy</strong></div>
+            <span className="edufy-day-path__today">TODAY</span>
         </div>
+        <div className="edufy-day-path__track">
+            <div className="edufy-day-path__node edufy-day-path__node--green"><span className="edufy-day-path__time">08:30</span><span className="edufy-day-path__dot"><CheckCircle2 size={16} /></span><strong>Welcome learners</strong><small>12 checked in</small></div>
+            <div className="edufy-day-path__connector" aria-hidden="true" />
+            <div className="edufy-day-path__node edufy-day-path__node--blue"><span className="edufy-day-path__time">10:00</span><span className="edufy-day-path__dot"><Target size={16} /></span><strong>Robotics workshop</strong><small>3 groups · 42 learners</small></div>
+            <div className="edufy-day-path__connector" aria-hidden="true" />
+            <div className="edufy-day-path__node edufy-day-path__node--purple"><span className="edufy-day-path__time">16:30</span><span className="edufy-day-path__dot"><Sparkles size={16} /></span><strong>Share progress</strong><small>4 family follow-ups</small></div>
+        </div>
+        <div className="edufy-day-path__next"><span><span className="edufy-day-path__next-label">NEXT USEFUL MOVE</span><strong>Review the 4 family follow-ups</strong></span><ArrowRight size={20} aria-hidden="true" /></div>
     </div>
 );
-
-const MetricCard = ({ label, value, tone }: { label: string; value: string; tone: string }) => {
-    const colors: Record<string, string> = {
-        amber: 'text-[#f1d17a]',
-        teal: 'text-[#64e8d7]',
-        rose: 'text-[#ff9b82]',
-        blue: 'text-[#8ab4ff]'
-    };
-
-    return (
-        <div className="rounded-lg bg-white/[0.055] p-4">
-            <p className="text-xs font-black uppercase tracking-[0.12em] text-[#93a29a]">{label}</p>
-            <p className={`mt-2 text-3xl font-black ${colors[tone]}`}>{value}</p>
-        </div>
-    );
-};
 
 const ClarityCard = ({ icon: Icon, label, title, points }: { icon: React.ElementType; label: string; title: string; points: string[] }) => (
     <div className="rounded-lg border border-white/12 bg-white/[0.055] p-7">

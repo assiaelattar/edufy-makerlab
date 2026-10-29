@@ -11,13 +11,13 @@ The page now introduces Edufy as a school-day route rather than a generic SaaS d
 - The Edufy logo is the primary brand lockup in the header, footer and public preview.
 - The hero thesis is **“Your school day, with a next move.”**
 - A signature route rail makes the operating promise visible: **Notice → Prioritise → Follow through**.
-- The locked Edufy palette is assigned by role: green identity and progress, blue primary action, yellow highlight, orange follow-up, purple learning context, and navy operational surfaces.
-- The command-center mockup keeps real Edufy vocabulary (leads, payments, students, posts, family updates) while using rounded, tactile, outlined surfaces inspired by Duolingo.
+- The locked Edufy palette is assigned by role: green identity and progress, blue primary action, yellow highlight, orange follow-up, and purple learning context. The public canvas stays light so the colours remain legible and welcoming for school teams.
+- The hero is built from scratch as an illustrated **Edufy day path** in HTML/CSS: welcome learners → robotics workshop → share progress. It uses rounded, tactile, outlined surfaces inspired by Duolingo, without reusing a dashboard screenshot or product image.
 
 ## Responsive behavior
 
-- Desktop: split hero with command-center preview, route rail and dashboard image.
-- 390px mobile: compact logo/CTA header, stacked hero actions and cards, no horizontal overflow.
+- Desktop: split hero with the day-path illustration, route rail and four capability chips.
+- 390px mobile: compact logo/CTA header, stacked hero actions, vertical day path and two-column capability chips, with no horizontal overflow.
 - Reduced motion: public animations and transitions collapse to near-still behavior.
 
 ## Verification
